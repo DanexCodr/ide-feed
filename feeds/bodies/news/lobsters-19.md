@@ -1,279 +1,2121 @@
-I've been working on [vic-2350](https://github.com/raphlinus/vic-2350), a re-envisioning of an 80s home computer on an RP2350 microcontroller board.
-Of course, such a project needs text rendering.
-Though bitmap fonts are now out of favor, I chose them both for efficiency and because, at low resolutions, I prefer the aesthetic of a crisp, intentionally designed bitmap font over the blurry mush of antialiased font rendering.
-They still have a niche, if a narrow one.
+Here is the third 2026 status report, with 51 entries.
 
-I also wanted proportional spacing and kerning, again because I love the aesthetic of early Macintosh and its predecessors.
-Most text rendering in RP2350 projects is based on a fixed character cell, as achieving good performance is tricky.
+This report is published a bit later than the last few, but we are finally here!
+The main reason for the delay is the recent PHP vulnerabilities issue: [https://reviews.freebsd.org](https://reviews.freebsd.org) had to be taken down for a little while, and unfortunately some reports were still being reviewed there.
+But the problem is now fixed and we are back on track.
+As this happened in October, do not expect to read about it in this status report however.
+This will be material for the last 2026 status report: do not miss it!
 
-![Demo of bitmap text rendering on RP2350](https://linebender.org/blog/jit-bitmap-text/textdemo.png)
+Have a nice read!
 
-This blog post presents a technique for extremely fast rendering of bitmap text on microcontrollers such as the RP2350.
-I've implemented it as part of my race-the-beam renderer, but the same technique would work when writing into a framebuffer as well.
-The core idea is a JIT to generate highly optimized code on the fly for rendering a string.
+Lorenzo Salvadore, on behalf of Status Team
 
-## Racing the beam
+## FreeBSD Team Reports
 
-Around the mid-80s, a split was happening in the way computers displayed text.
-The established technique was a fixed cell size, and hardware that looked up characters in a font ROM on the fly as the image was scanned out to the monitor.
-The advantage was very fast update and responsiveness with limited hardware.
-A lot of terminals worked this way, as did home computers.
-The downside was the lack of flexibility.
-In particular, only monospace fonts were supported.
+### FreeBSD Core Team
 
-The newer technique was a bitmap framebuffer, as pioneered on a line of computers originating with the [Xerox Alto](https://en.wikipedia.org/wiki/Xerox_Alto), continuing through the Apple Lisa, and finally becoming popular with the Macintosh.
-The framebuffer was vastly more flexible, but required a lot more computing power to keep updated.
-In the early 80s, you would generally watch text progressively render.
-I should also mention, graphics modes were generally available on home computers, but they were typically lower resolution than text mode and a 1MHz 6502 (or similar) was just not powerful enough, so serious text-based programs like word processors and spreadsheets used text mode.
+The FreeBSD Core Team is the governing body of FreeBSD.
 
-Fast forward to the RP2350.
-It is capable of DVI video out with the help of the HSTX peripheral, but it is still entirely up to software to fill the video buffer.
-Some projects choose a framebuffer, but there's only 520kB of SRAM on the chip, so a framebuffer must be limited in either resolution or bit depth or both, and it would also be good for that RAM to be available to the app for other purposes.
-I've chosen instead to race the beam, filling a video buffer each scanline.
-That allows more visual richness and much lower latency, but is a hard performance constraint on the renderer.
-There's a budget of approximately 6 cycles per pixel.
-The lower we come in under budget, the more is available for rendering other graphical objects, and for other app functions.
+#### Completed items
 
-Rust is not capable of meeting the performance requirement, so I started writing ARM assembly language.
-The renderer, and much of vic-2350, is now written in [symbolasm](https://github.com/raphlinus/symbolasm), a programming language I've created for extremely high performance Cortex-M33 programming.
-Employing a JIT speeds up rendering further.
+We completed the following items:
 
-## The rendering pipeline
+##### Handover from the previous Core Team
 
-Rendering is often modeled as a pipeline, and the vic-2350 renderer is no exception.
-The interface between application and renderer is a *display list.* At heart, that's just what it says, a list of *display objects.* The display list is double-buffered; one is being rendered and scanned out, and the other is built by the application.
-At each vsync, if the app is ready, the display list is swapped.
-Building the display list is not computationally intensive, but of course the app might be busy doing other things.
+The handover from core.13 was completed: mail aliases, the LDAP group, and the Phabricator group now contain only core.14 members.
 
-As the display list is of unknown size at compile time, it allocates.
-Display objects are packed into two vectors; one holds the display objects themselves, the other a list of indices into the first vector.
-A display object consists of a vtable, a bounding rectangle, and the object-specific payload.
-Allocation is acceptable because *building* the display list is not timing critical.
-Rendering is a different story.
-That said, it is important for the display list to be memory efficient, especially as there are two copies.
+##### Core liaisons
 
-Before presenting, the indices are sorted into ascending y0 order.
+- FreeBSD Foundation: bapt@ (with most of core@ participating in monthly Foundation meetings)
+- secteam: kevans@
+- clusteradm: adrian@
+- srcmgr: imp@
+- portmgr: adamw@, olivier@
+- doceng: hrs@
+- re: hrs@
 
-During rendering, the renderer maintains an *active list,* which is just the subset of display objects that intersect the current scanline.
-At each scanline, objects for which y1 = y are deleted from the active list, and new objects with y0 = y are inserted, which is the reason for the sort earlier; it is exactly the order objects are inserted into the active list.
-The active list is kept in display object order.
+##### Public meeting minutes
 
-Then the renderer just calls the `render` method for each display object in the active list.
-I'll do a bit more optimization soon, tracking opaque spans and eliding rendering work for spans of pixels that will be overwritten later, but that's not fundamental to the text rendering as presented here.
+##### FreeBSD Developer AI survey
 
-At the start and end of an object (when it's inserted and deleted) the renderer calls `start` and `end` methods on the display object.
-These methods can allocate scratch space and do other work to set up rendering of the object.
-There's a specialized bitmap allocator, which is both fast and deterministic.
+bapt@ created a survey for FreeBSD developers on the use of AI and LLMs.
+He presented the results to core@, and a summary was shared with developers.
+140 developers responded.
 
-### Text display objects
+- Policy: 88% want the Project to adopt a policy, either a formal, written policy (49%) or light guidance and best practices (39%). 6% said that AI should be explicitly discouraged, and 3% that the existing contribution rules are sufficient.
+- AI-assisted code: 35% said it must be disclosed, 25% that it must be reviewed more strictly than human code, 22% that it should be treated like any other contribution, and 16% that it should be rejected outright.
+- Safeguards: mandatory human review (78%) and mandatory disclosure (69%) were requested most often, followed by provenance or licensing documentation (47%) and mandatory testing (39%).
+- Disclosure: 84% want AI use disclosed, either always (48%) or when its involvement is significant (36%). 79% want AI-assisted commits marked in the commit log, and 56% prefer a tag that names the tool.
+- Concerns: the main concerns about quality are correctness and subtle bugs (39%), licensing and provenance (26%), and maintainability (21%). 75% are somewhat or very concerned about copyright and licensing.
+- Principles: accountability, meaning that a human remains responsible (91%), and transparency (78%) were selected most often, and preserving code quality was the top-ranked goal for a policy.
+- Other uses: 65% would allow AI-generated documentation with human review. 54% would allow AI tools on Project infrastructure, most of them with restrictions, and 29% would not.
 
-All this gives us everything we need to implement text rendering as an instance of display objects.
+##### Community survey committee
 
-The text object itself contains the string (1 byte per character), a pointer to the font, and foreground and background colors.
-RAM is precious, and more so for the display list because it's double buffered.
-In an earlier iteration of the renderer, I had an expanded version of the text stored in the display list, and that created unacceptable memory pressure when the screen was filled with text.
+The FreeBSD Foundation asked for a core representative on the committee for the upcoming user survey.
+jrm@ volunteered.
 
-The `start` method allocates scratch space for both the JIT code and a 1 bit per pixel intermediate buffer, and invokes the JIT compiler, expanding the string into code.
+##### Ports repository freeze and history rewrite
 
-The `render` method calls that code, which fills the 1 bit per pixel buffer, then runs a second pass to expand that 1 bit per pixel buffer into 16 bit per pixel RGB (565 format).
-This second pass runs at a sustained rate of 1.75 cycles per pixel.
+On 2026-07-20, a 150 MB binary file was mistakenly committed to the ports tree.
+The commit broke mirroring to GitHub, which rejects files larger than 100 MB, and added a file of questionable licensing to the repository history.
+On 2026-07-21, core@ decided to freeze the ports repository to limit the number of commits that would need to be rewritten, and worked out a plan with clusteradm@, portmgr@, and the Git administrators.
+kevans@ published a [signed statement](https://people.freebsd.org/~kevans/core/ports-freeze-20260722.txt.asc) on 2026-07-22 to explain the freeze and to make clear that the ports tree had not been compromised.
+The offending commits were removed by rewriting the history of the main branch, and package builds from the old hashes were stopped.
+New server-side hooks now guard against a recurrence.
 
-The font is stored in extremely packed format.
-All the "ink" for glyphs is stored in a wide bitmap image, same height as the font.
-The packing also makes sure no glyph straddles a 32-pixel chunk boundary, so one row of font pixels can always be read with a single 32 bit load.
-If a glyph has space on either side of the glyph, that's not stored in the packed bitmap; rather, the space is in the per-glyph metadata.
+##### EU Cyber Resilience Act (CRA) statement
 
-In the spirit of micro-optimization, the packing algorithm also detects overlaps, as there's no requirement that pixels be unique to a single glyph.
-This optimization reduces the size of the font bitmap from 1140 to 960 bytes.
-Every byte counts, and more so as we add more fonts.
-The font bitmap needs to live in SRAM, as having it in flash could cause stalls during rendering at video rate.
+##### Releases
 
-![A bitmap font packed very tightly into 32 bit words, with overlap. Word boundaries are alternating blue and yellow shading, and overlap is slightly darker shading](https://linebender.org/blog/jit-bitmap-text/font-shared-grid-marked-4x.png)
+We reviewed the draft announcement for 14.5-RELEASE and the proposed schedule for 15.2-RELEASE.
 
-I especially liked the `{][}` sequence (near the start of the second row).
-Any glyph contained within another glyph doesn't need to be packed separately.
-There are a few examples, some surprising.
-For example, `l` is the left side of `U`, and `0` is identical to `()` with the space between them removed.
+##### Developer and contributor conflicts
 
-The per-glyph metadata (not counting kerning) is conceptually four fields: the x position and width of the ink within the bitmap, the space on the left, and the advance.
-All this is tightly packed into a 32 bit integer.
+We dealt with conflicts between developers and external contributors.
+Decisions were communicated to the parties involved.
 
-## JIT
+##### Correspondence
 
-In the generated JIT code, registers are assigned as follows:
+We handled correspondence on a number of topics, including the current and future AI policy work and the impact of increased AI/bot-driven scraping on FreeBSD infrastructure.
 
-- r0 points to the beginning of the row of the packed font bitmap
-- r1 is the output buffer, a one-line 1 bit per pixel image buffer
-- r2 is the accumulator for the output bitmap
-- r3 holds the bits of one glyph, extracted from r4
-- r4 holds 32 bits loaded from the glyph bitmap
+#### Work in progress
 
-In the simplest case, we add one glyph to the accumulator.
-The code looks like this:
+##### Core secretary role
 
-```asm
-    ldr r4, [r0, #(x_offset / 32 * 4)]
-    ubfx r3, r4, #(x_offset % 32), #(width)
-    orr r2, r3, lsl #(x % 32)
+We are defining the scope of a funded secretary role, which may serve the whole project rather than only core@.
+Examples from other non-profits and FreeBSD working groups are being used as a reference.
+There is rough consensus to move the role towards a project management assistant.
+A proposal was shared with the FreeBSD Foundation and feedback is pending.
+
+##### AI policy
+
+imp@ created an AI working group made up of people with diverse opinions on the topic.
+The working group will use the developer survey results as input for a policy on the use of AI/LLMs.
+The kickoff meeting of the group will be held on October 7.
+Final reports are expected in Q4.
+
+##### Bylaws and core terms
+
+We are continuing the previous Core Team’s work on staggered terms.
+We consider ourselves a transitional Core Team and plan to invoke the bylaws' staggering provision, with the change taking effect in 2027.
+Before the 2027 election, we will designate which members step down after one year and which serve a full two-year term; the vacated seats will be filled in that election.
+
+##### Regularizing policy
+
+Efforts are underway to modernize and centralize the FreeBSD Project’s policy documentation, which is currently inconsistent, poorly visible, and reliant on unwritten "tribal knowledge."
+imp@ is working to consolidate existing guidelines, resolve policy contradictions between project groups, and formally record long-standing traditions.
+Additionally, this initiative will identify gaps where new, formal policies are needed to ensure smooth, efficient operations.
+We hope to have this wrapped up by the end of Q1 2027.
+
+##### Liaison expectations
+
+We are documenting the responsibilities of each liaison role and will publish the document once it is complete.
+
+##### Workflow organization
+
+We are evaluating tooling to track our tasks, documents, and correspondence.
+We began using a CryptPad instance set up by bapt@ and clusteradm@.
+
+##### Policy on reasonable content for Project spaces
+
+We discussed writing down the Project norms for what content is reasonable for Project spaces, such as the wiki and repository metadata.
+Over the years, we have developed a tradition of avoiding politics, religion, and other contentious issues unrelated to the Project, and need to write it down and bring it in line with open source norms.
+
+##### portmgr structure
+
+We are discussing the structure of portmgr@ and how to revamp the team.
+
+##### Cluster administration planning
+
+adrian@ and some clusteradm@ members are preparing a budget, prioritizing work, improving documentation and processes, and planning to recruit new team members in 2027.
+
+##### Returning developers
+
+srcmgr@ has a new policy for returning developers, which asks for some recent work or plans before access is restored, and portmgr@ has something similar.
+We are discussing whether it makes sense for these policies to be aligned across teams.
+
+##### Privacy requests
+
+core@ received a GDPR erasure request covering mailing list posts from more than twenty years ago.
+Removing content from public mailing list archives is not practical, especially for archives the Project does not control.
+The Project has a [privacy policy](https://www.freebsd.org/privacy/), which should be extended to cover mailing lists, Bugzilla, and other services.
+We communicated this to the person requesting the removal.
+
+##### Core and FreeBSD Foundation meetings
+
+Monthly meetings are scheduled through December 2026.
+
+##### Bay Area Vendor Summit in November
+
+We are planning a short introduction and update followed by a question and answer session.
+
+### FreeBSD Foundation
+
+Links:  
+
+[FreeBSD Foundation](https://freebsdfoundation.org/) URL: [https://freebsdfoundation.org/](https://freebsdfoundation.org/)  
+
+[Technology Roadmap](https://freebsdfoundation.org/blog/technology-roadmap/) URL: [https://freebsdfoundation.org/blog/technology-roadmap/](https://freebsdfoundation.org/blog/technology-roadmap/)  
+
+[Donate](https://freebsdfoundation.org/donate/) URL: [https://freebsdfoundation.org/donate/](https://freebsdfoundation.org/donate/)  
+
+[Foundation Partnership Program](https://freebsdfoundation.org/our-donors/freebsd-foundation-partnership-program/) URL: [https://freebsdfoundation.org/our-donors/freebsd-foundation-partnership-program/](https://freebsdfoundation.org/our-donors/freebsd-foundation-partnership-program/)  
+
+[FreeBSD Journal](https://freebsdfoundation.org/journal/) URL: [https://freebsdfoundation.org/journal/](https://freebsdfoundation.org/journal/)  
+
+[Foundation Events](https://freebsdfoundation.org/our-work/events/) URL: [https://freebsdfoundation.org/our-work/events/](https://freebsdfoundation.org/our-work/events/)
+
+The FreeBSD Foundation is a 501(c)(3) non-profit dedicated to advancing FreeBSD through both technical and non-technical support.
+Funded entirely by donations, the Foundation supports software development, infrastructure, security, and collaboration efforts; organizes events and developer summits; provides educational resources; and represents the FreeBSD Project in legal matters.
+
+#### OS Improvements
+
+In the third quarter of 2026, there were 530 `src`, 82 `ports`, and 19 `doc` commits sponsored by the FreeBSD Foundation.
+
+Refer to these report entries describing much of that sponsored development work:
+
+- [Adopt -fbounds-safety in the FreeBSD Kernel TCP/IP Stack](https://www.freebsd.org/status/report-2026-07-2026-09/#_adopt_fbounds_safety_in_the_freebsd_kernel_tcpip_stack)
+- [Audio Stack Improvements](https://www.freebsd.org/status/report-2026-07-2026-09/#_audio_stack_improvements)
+- [CUSE Improvements](https://www.freebsd.org/status/report-2026-07-2026-09/#_cuse_improvements)
+- [Desktop Script for bsdinstall](https://www.freebsd.org/status/report-2026-07-2026-09/#_desktop_script_for_bsdinstall)
+- [Dockerbox](https://www.freebsd.org/status/report-2026-07-2026-09/#_dockerbox)
+- [ext2fs user space tools](https://www.freebsd.org/status/report-2026-07-2026-09/#_ext2fs_user_space_tools)
+- [FreeBSD, CRA, EuroBSDCon, and Security Team](https://www.freebsd.org/status/report-2026-07-2026-09/#_freebsd_cra_eurobsdcon_and_security_team)
+- [FreeBSD Software Bill of Materials (SBOM)](https://www.freebsd.org/status/report-2026-07-2026-09/#_freebsd_software_bill_of_materials_sbom)
+- [Full CPUID Control for bhyve](https://www.freebsd.org/status/report-2026-07-2026-09/#_full_cpuid_control_for_bhyve)
+- [Improve libvirt support for bhyve hypervisor](https://www.freebsd.org/status/report-2026-07-2026-09/#_improve_libvirt_support_for_bhyve_hypervisor)
+- [Improve OpenJDK on FreeBSD](https://www.freebsd.org/status/report-2026-07-2026-09/#_improve_openjdk_on_freebsd)
+- [LinuxKPI 802.11 and Native Wireless Update](https://www.freebsd.org/status/report-2026-07-2026-09/#_linuxkpi_802_11_and_native_wireless_update)
+- [LLDB Improvement on FreeBSD](https://www.freebsd.org/status/report-2026-07-2026-09/#_lldb_improvement_on_freebsd)
+- [Procdesc: debugging API](https://www.freebsd.org/status/report-2026-07-2026-09/#_procdesc_debugging_api)
+- [ROCm Support on FreeBSD](https://www.freebsd.org/status/report-2026-07-2026-09/#_rocm_support_on_freebsd)
+- [Scheduler](https://www.freebsd.org/status/report-2026-07-2026-09/#_scheduler)
+- [Suspend/Resume Improvements](https://www.freebsd.org/status/report-2026-07-2026-09/#_suspendresume_improvements)
+- [Sylve — A Unified System Management Platform for FreeBSD](https://www.freebsd.org/status/report-2026-07-2026-09/#_sylvea_unified_system_management_platform_for_freebsd)
+- [Vision Accessibility](https://www.freebsd.org/status/report-2026-07-2026-09/#_vision_accessibility)
+- [x86 splitlocks detection support](https://www.freebsd.org/status/report-2026-07-2026-09/#_x86_splitlocks_detection_support)
+
+Other highlights:
+
+- The Foundation is supporting two projects: the Laptop Support and Usability project (in collaboration with [Quantum Leap Research](https://www.ql-research.com/)), and a [Cyber Resilience Act (CRA) Readiness Project](https://www.freebsd.org/status/report-2026-07-2026-09/#_cyber_resilience_act_cra_readiness_project).
+- For background on the Laptop Support and Usability project, refer to the [2025Q1 quarterly status report](https://www.freebsd.org/status/report-2025-01-2025-03/#_freebsd_foundation).
+- FreeBSD completed participation in [Google Summer of Code (GSoC)](https://summerofcode.withgoogle.com/) 2026. Refer to the [FreeBSD Summer of Code 2026 Projects Wiki Page](https://wiki.freebsd.org/SummerOfCode2026Projects) for information about each project.
+
+#### Advocacy
+
+In the third quarter of 2026, our advocacy efforts focused on expanding our educational video content, engaging with the FreeBSD community, and preparing for the upcoming FreeBSD Vendor Summit.
+We also continued highlighting the people, projects, and initiatives that support FreeBSD’s growth and long-term success.
+Here are a few of the ways the Foundation advocated for FreeBSD in Q3 2026:
+
+- Represented FreeBSD at [EuroBSDCon 2026](https://events.eurobsdcon.org/2026/), with Alice Sowerby, Program Manager at the FreeBSD Foundation, joining Pierre Pronchery and Peter Hansteen to present a full-day tutorial, [The Night Before CRAmas — Why EU Regulations Are a Gift to Open Source](https://events.eurobsdcon.org/media/2026/submissions/RER8UZ/resources/The_Night_Before_CRA-mas_VIvaRzT.pdf), covering the EU Cyber Resilience Act (CRA) and its implications for FreeBSD vendors.
+- Published the following blogs and videos to help to inform and educate the community: [Represent FreeBSD in Your Community](https://freebsdfoundation.org/blog/represent-freebsd-in-your-community/) [FreeBSD Foundation Welcomes New Board Member: Dave Cottlehuber](https://freebsdfoundation.org/blog/freebsd-foundation-welcomes-new-board-member-dave-cottlehuber/) [Understanding the Foundation Board’s Role in the FreeBSD Ecosystem](https://freebsdfoundation.org/blog/understanding-the-foundation-boards-role-in-the-freebsd-ecosystem/) [BSDCan 2026 Trip Report — ShengYi Hung](https://freebsdfoundation.org/blog/bsdcan-2026-trip-report-shengyi-hung/) [BSDCan 2026 Travel Report — Patrick McEvoy](https://freebsdfoundation.org/blog/bsdcan-2026-travel-report-patrick-mcevoy/) [BSDCan 2026 Travel Report — Novković](https://freebsdfoundation.org/blog/bsdcan-2026-travel-report-novkovic/) [An Update on the FreeBSD Journal: New Editor, New Format](https://freebsdfoundation.org/blog/an-update-on-the-freebsd-journal-new-editor-new-format/) [FreeBSD Foundation Intern Jim Huang Chen on Raspberry Pi Support and Open Source](https://freebsdfoundation.org/blog/freebsd-foundation-intern-jim-huang-chen-on-raspberry-pi-support-and-open-source/) [FreeBSD Foundation Intern Sourojeet Adhikari on Bringing ROCm to FreeBSD](https://freebsdfoundation.org/blog/freebsd-foundation-intern-sourojeet-adhikari-on-bringing-rocm-to-freebsd/) [Learning at Scale: FreeBSD Foundation Intern Nimish Jain on Exploring the FreeBSD Codebase](https://freebsdfoundation.org/blog/learning-at-scale-freebsd-foundation-intern-nimish-jain-on-exploring-the-freebsd-codebase/) [Worry-Free Upgrades with FreeBSD](https://www.youtube.com/watch?v=MfHCXEzRfao)
+- Published the [June/July 2026](https://freebsdfoundation.org/news-and-events/newsletter/june-july-newsletter/) and [August/September 2026](https://freebsdfoundation.org/news-and-events/newsletter/august-september-newsletter/) FreeBSD Foundation Newsletters.
+- Released the [April/May/June 2026](https://freebsdfoundation.org/our-work/journal/browser-based-edition/improving-software-quality/) and [July/August/September 2026](https://freebsdfoundation.org/our-work/journal/browser-based-edition/production-deployments/) issues of the FreeBSD Journal with HTML versions of the articles.
+
+#### Continuous Integration and Workflow Improvement
+
+The Foundation supports a full-time staff member dedicated to improving the Project’s continuous integration system and test infrastructure.
+
+#### Legal/FreeBSD IP
+
+The Foundation owns the FreeBSD trademarks, and it is our responsibility to protect them.
+We also provide legal support for the core team to investigate questions that arise.
+
+Go to [https://freebsdfoundation.org](https://freebsdfoundation.org) to find more about how we support FreeBSD and how we can help you!
+
+### FreeBSD Release Engineering Team
+
+Links:  
+
+[FreeBSD 14.5-RELEASE announcement](https://www.freebsd.org/releases/14.5R/announce/) URL: [https://www.freebsd.org/releases/14.5R/announce/](https://www.freebsd.org/releases/14.5R/announce/)  
+
+[FreeBSD 15.2-RELEASE schedule](https://www.freebsd.org/releases/15.2R/schedule/) URL: [https://www.freebsd.org/releases/15.2R/schedule/](https://www.freebsd.org/releases/15.2R/schedule/)  
+
+[FreeBSD releases](https://download.freebsd.org/releases/ISO-IMAGES/) URL: [https://download.freebsd.org/releases/ISO-IMAGES/](https://download.freebsd.org/releases/ISO-IMAGES/)  
+
+[FreeBSD development snapshots](https://download.freebsd.org/snapshots/ISO-IMAGES/) URL: [https://download.freebsd.org/snapshots/ISO-IMAGES/](https://download.freebsd.org/snapshots/ISO-IMAGES/)
+
+The FreeBSD Release Engineering Team is responsible for setting and publishing release schedules for official project releases of FreeBSD, announcing code freezes and maintaining the respective branches, among other things.
+
+The Team managed 14.5-RELEASE, leading to the official RELEASE build and announcement in September.
+Planning has started for the upcoming 15.2-RELEASE, which is due to arrive in December.
+
+The Release Engineering Team continued providing weekly development snapshot builds for the **main**, **stable/15**, and **stable/14** branches.
+
+### Cluster Administration Team
+
+Links:  
+
+[Cluster Administration Team members](https://www.freebsd.org/administration/#t-clusteradm) URL: [https://www.freebsd.org/administration/#t-clusteradm](https://www.freebsd.org/administration/#t-clusteradm)
+
+Contact: Cluster Administration Team <[clusteradm@FreeBSD.org](mailto:clusteradm@FreeBSD.org)>  
+
+Contact: Philip Paeps <[philip@FreeBSD.org](mailto:philip@FreeBSD.org)>
+
+FreeBSD Cluster Administration Team members are responsible for managing the machines the Project relies on to synchronize its distributed work and communications.
+
+In this quarter, the team has worked on the following:
+
+- Regular support for FreeBSD.org user accounts.
+- Regular disk and parts support (and replacement) for all physical hosts and mirrors.
+- Cluster software refresh.
+- Coordinate community mirrors.
+- Ports repository history rewrite.
+- Frequent interventions to thwart denial of service by bots.
+- Improvements to cgit on our global mirror network.
+
+#### Cluster refresh
+
+Work continues to refresh the software running on FreeBSD.org cluster machines.
+We have started putting production workloads on stable/15.
+As part of this work some workloads are being moved around to different machines.
+This work is ongoing at the end of the quarter.
+
+The clusteradm team refreshes the production package builders (circa 35 physical machines) on a roughly six- to eight-week cadence.
+These machines run FreeBSD current snapshots.
+
+Other machines are upgraded on an as-needed basis, keeping up with security fixes depending on how exposed they are.
+
+At the time of this writing there are 143 physical machines in the cluster.
+We have 45 machines on current, 33 on stable/15 and 59 on stable/14.
+
+Most of the remaining stable/13 installations will be upgraded to stable/15 or decommissioned.
+
+```
+ 12.x: Regular   0, Jails   7
+ 13.x: Regular   6, Jails  28
+ 14.x: Regular  59, Jails 223
+ 15.x: Regular  33, Jails  60
+>16.x: Regular  45, Jails   6
+Total: Regular 143, Jails 324
+Total installations: 467
+Running -RELEASE|{-p*}: 0
+Total geographic sites: 14
 ```
 
-There's additional code to output a word when it's finished (`stmia r1!, {r2}`), and to handle cases when a glyph straddles a 32 bit boundary.
-These are documented in [text.sy](https://github.com/raphlinus/vic-2350/blob/62f2fae7e672b9a01011cdc320b031cda29fb5c8/text.sy).
-But there is one trick I do want to mention here: the code as above has a result-use delay between the `ldr` and `ubfx` (unsigned bit field extract).
-This is solved by shuffling the order of instructions somewhat: the last instruction for glyph `i` is reordered to follow the first instruction (`ldr`) of glyph `i + 1`, filling the delay slot, and reducing the cycle cost from 4 to 3.
+#### FreeBSD official mirrors
 
-Here's the inner loop of the code generator, focusing only on the case where the glyph doesn't straddle the accumulator.
-For each glyph, several values are packed into the `g` variable, then unpacked below: the offset within the packed font bitmap (which further breaks down into a bit offset and a word offset), the width of the inked part, the left side bearing, and the advance.
+Current locations are Australia, Brazil, Japan (two full mirror sites), Malaysia, South Africa, Sweden, Taiwan and United States of America — California, Chicago, New Jersey, and Washington.
 
-```rust
-    loop {
-        g @r12 = *(glyphs + c * 4)
-        // the next character, reading one past the end
-        c = *text++
-        width @r7 = g[20..26]
-        bit_offset @r4 = g & 31
-        if width == 0 goto blank
-        // ubfx r3, r4, #offset % 32, #width
-        ubfx_instr @r11 = *(ubfx_table + bit_offset * 4)
-        // ldr r4, [r0, #offset / 32]; the font is narrower than 32 words,
-        // so the offset fits, and strh leaves out what's above it.
-        word_offset @r4 = g >> 5
-        ldr @r4 = ldr_base + (word_offset << 6)
-        ubfx_instr += width << 16
-        *slot = ldr
-        // left side bearing
-        left @r4 = (g as i32)[16..20]
-        *(code as *u32) = ubfx_instr
-        // shift: where the glyph starts, relative to the word in r2. Branch is
-        // also taken if negative.
-        shift @r4 = pen + left
-        room @r7 = 32 - width
-        pen += g >> 26
-        #(shift - room)
-        if #hi goto off_word
-        // the delay: orr r2, r2, r3, lsl #shift
-        d @r12 = *(orr_table + shift * 4)
-        *((code + 6) as *u32) = d
-        slot = code + 4
-        code += 10
-        #(n -= 1)
-        if #ne goto loop
-    }
+Our mirror site in Taiwan is experiencing an extended outage.
+A new mirror site in Taiwan is being deployed at the beginning of 2026Q4.
+
+One of our mirror sites in Japan will get a complete hardware refresh in 2026Q4.
+
+The hardware and network connection have been generously provided by:
+
+- Cloud and SDN Laboratory at [BroadBand Tower, Inc](https://www.bbtower.co.jp/en/corporate/)
+- [Department of Computer Science, National Yang Ming Chiao Tung University](https://www.cs.nycu.edu.tw/)
+- [Internet Association of Australia](https://internet.asn.au/)
+- [Internet Systems Consortium](https://www.isc.org/)
+- [INX-ZA](https://www.inx.net.za/)
+- [KDDI Web Communications Inc](https://www.kddi-webcommunications.co.jp/english/)
+- [Malaysian Research & Education Network](https://www.mohe.gov.my/en/services/research/myren)
+- [MetaPeer](https://www.metapeer.com/)
+- [New York Internet](https://www.nyi.net/)
+- [NIC.br](https://nic.br/)
+- [Sonic](https://sonic.net)
+- [Teleservice Skåne AB](https://www.teleservice.net/)
+- [Your.Org](https://your.org/)
+
+New official mirrors are always welcome.
+We have noted the benefits of hosting single mirrors at Internet Exchange Points globally, as evidenced by our existing mirrors in Australia, Brazil, and South Africa.
+If you are affiliated with or know of any organizations willing to sponsor a single mirror server, please contact us.
+We are particularly interested in locations in Europe.
+
+#### Ports repository history rewrite
+
+In July a committer inadvertently pushed a large binary file to the ports repository, necessitating a freeze and subsequent rewrite of the history.
+The clusteradm team rewrote the history of the ports tree and ensured that the new history was visible on all our internal and external mirrors in the shortest possible time.
+Improvements were made to our Git infrastructure and automation to prevent this happening again.
+
+#### Large language model scraping
+
+The FreeBSD Project’s infrastructure continues to be under constant attack from scrapers collecting training data for large language models ("AI").
+The companies training these models have largely moved scraping operations from their own — easy to identify — infrastructure to botnets ("residential proxies"), making them difficult to block at the network edges without significant collateral damage.
+The Cluster Administration Team spent a considerable amount of time again this quarter mitigating these distributed denial of service attacks.
+
+#### Improvements to cgit on our global mirror network
+
+[https://cgit.FreeBSD.org](https://cgit.FreeBSD.org) is a particularly popular target for trainers of probabilistic malware.
+We experience a constant torrent of scrapers running on infected computers and appliances all around the world.
+To spread the load of these attacks, the clusteradm team increased the number of cgit nodes on our mirrors.
+This quarter we deployed additional [https://cgit.FreeBSD.org](https://cgit.FreeBSD.org) mirrors in California and in Paris.
+
+### Bugmeister Team
+
+Links:  
+
+[FreeBSD Bugzilla](https://bugs.freebsd.org/) URL: [https://bugs.freebsd.org/](https://bugs.freebsd.org/)  
+
+[Total Open Bugs Over Time](https://bugs.freebsd.org/bugzilla/page.cgi?id=showreport.html&type=total_open_bugs_over_time) URL: [https://bugs.freebsd.org/bugzilla/page.cgi?id=showreport.html&type=total_open_bugs_over_time](https://bugs.freebsd.org/bugzilla/page.cgi?id=showreport.html&type=total_open_bugs_over_time)
+
+#### Decisions that require community feedback
+
+A new section was added to [https://wiki.freebsd.org/Bugmeister/ActionItems](https://wiki.freebsd.org/Bugmeister/ActionItems):  
+
+[https://wiki.freebsd.org/Bugmeister/ActionItems#Decisions_That_Require_Community_Feedback](https://wiki.freebsd.org/Bugmeister/ActionItems#Decisions_That_Require_Community_Feedback).
+
+Comments welcome.
+The list is not complete.
+
+Item #1 is the big priority, the Web Crawlers problem.
+
+tl:dr; we know about it; we have spent a great deal of time analyzing it; since we know its cause, the symptoms are not particularly interesting; and this has been raised and acknowledged as a serious issue to/by core@.
+There is not much more that Bugmeisters themselves can do here.
+
+Item #2 is generating a policy about LLM-derived contributions.
+
+This depends on portmgr feedback which Mark Linimon requested quite some time ago.
+
+Item #3 is owned by Mark Linimon.
+
+The overview is that the *contents* of patches in the Bugzilla database is in much better shape than it was two years ago, and Mark continues to try to triage them weekly; but also that Mark keeps getting dragged away from working on this by other issues.
+
+Item #4 is conference calls.
+
+We still have not set up weekly conference calls or some other method of coordination.
+Without that, these issues tend to just remain stuck.
+We could definitely use help here.
+
+#### Statistics
+
+In this quarter we slightly increased the Problem Report count.
+The throughput, however, is much higher, especially for ports.
+This may be due to the auto-notifier customizations we previously implemented.
+
+For the src tree, in the last 90 days we have received 329 new
+Problem Reports and closed 269.
+For ports, the count was 2208 and 2138 respectively.
+
+We do not currently maintain statistics about how many of these actually generate commits, although we do believe the number to be non-trivial.
+
+Mark Linimon has taken on the long-term project of making sure that the submitted patches all apply.
+However, he does not claim to be a QA person and to be able to evaluate their aptness by himself.
+He is out of his depth here.
+
+The general takeaway is that, with user education, we are getting better-quality Problem Reports this year.
+In particular, the ones with patches are being tested for applicability within a week or two of their arrival, and corrected if needed.
+
+We have created many new Bugzilla accounts by user request.
+The number of new-account requests has increased this quarter.
+In Q3 2026 we added 164, which is not quite 2 per day.
+
+#### Additional updates
+
+Some annoying script permission problems on production were fixed.
+This re-enabled the weekly reports.
+
+Base system version 14.3 was disabled for new bugs, and version 14.5-STABLE was created.
+
+Minor updates where made to:
+
+The following page was factored out of the above:
+
+Thanks to Alexander Ziaee and the many others who have helped to bring us up to our current state.
+
+## Projects
+
+Projects that span multiple categories, from the kernel and userspace to the Ports Collection or external projects.
+
+### FreeBSD, CRA, EuroBSDCon, and Security Team
+
+Links:  
+
+[Alpha-Omega — Linux Foundation Project](https://alpha-omega.dev) URL: [https://alpha-omega.dev](https://alpha-omega.dev)  
+
+[FreeBSD Foundation](https://freebsdfoundation.org) URL: [https://freebsdfoundation.org](https://freebsdfoundation.org)  
+
+[FreeBSD Security Information](https://www.freebsd.org/security/) URL: [https://www.freebsd.org/security/](https://www.freebsd.org/security/)
+
+This is my second quarter in the FreeBSD Foundation as part of Alpha-Omega’s Security Engineers In Residence (SEIRs) initiative.
+Thanks to the input received from the Security Team, I have integrated a staging instance of [Forgejo](https://forgejo.org) with a self-hosted LLM, demonstrating the potential of new capabilities for the Security Team, without breaching any confidentiality requirements.
+This system is capable of dealing with incoming security vulnerability reports, by:
+
+- Drafting an initial response for the submitter
+- Issuing an immediate, automated analysis of the issue submitted
+- Preparing a template for an eventual Security Advisory (SA) or Errata Notice (EN)
+- Checking the SA or EN drafts for conformity
+- Automatically signing the final SA, EN, and corresponding assets
+- Uploading the outcome where appropriate
+
+This is implemented like a typical, modern CI/CD system with Forgejo’s runner tool as a GitHub-compatible workflow.
+The aim is to leverage LLM capabilities for our processes, in accordance with the current workflow, without compromising on confidentiality nor on the necessity for quality review by us mortal members of the security team.
+
+Significant polishing is still required, but the corresponding instance in production should be useful even without the LLM part.
+The automation of the more repetitive tasks of the workflow is expected to help us deal with the steady amount of incoming reports, and to extend capabilities from our individual minds into the team as a whole.
+
+In parallel, I have not spared my efforts towards compliance with the European [Cyber Resilience Act](https://en.wikipedia.org/wiki/Cyber_Resilience_Act) (CRA) for the FreeBSD Project.
+After importing [pkgconf](http://pkgconf.org) in FreeBSD’s base system during the last quarter, I went through a number of iterations for the framework generating [Software Bill of Material](https://en.wikipedia.org/wiki/Software_supply_chain) (SBOM) artefacts during the build.
+Prepared together with Tuukka Pasanen, the framework is available for review in [D56474](https://reviews.freebsd.org/D56474) and I now believe it to be a serious candidate for integration.
+I would like to thank everyone who has been providing feedback already!
+This has helped tremendously to find a balance that feels more right than at any time earlier — at least to me.
+A separate request for review for the meta-data is now available as well, [D60352](https://reviews.freebsd.org/D60352), which currently generates a total of 218 artefacts for an amd64 build.
+The balance consists of about one artefact per base package generated, as well as one artefact per library actually used during the build.
+This way, the complete chain of dependencies can be tracked, while keeping the granularity close to individual third-party projects or internal components.
+
+I would also like to extend my thanks to Alice Sowerby and to Peter Hansteen for an [awesome workshop about CRA compliance](https://events.eurobsdcon.org/2026/talk/RER8UZ/) during [EuroBSDCon 2026](https://2026.eurobsdcon.org) in Brussels, this past September 2026.
+If you have missed it, you may be in luck, as we are gearing up to deliver it again at a future event.
+Do not hesitate to reach out to us if you are interested, together with your rough location and flexibility for travel, so we can have a more accurate impression of the times and places we should aim for.
+
+Sponsor: Alpha-Omega, The FreeBSD Foundation
+
+### Cyber Resilience Act (CRA) Readiness Project
+
+Links:  
+
+[Cyber Resilience Act Readiness](https://github.com/FreeBSDFoundation/all-projects/tree/main/Cyber%20Resilience%20Act%20Readiness) URL: [https://github.com/FreeBSDFoundation/all-projects/tree/main/Cyber%20Resilience%20Act%20Readiness](https://github.com/FreeBSDFoundation/all-projects/tree/main/Cyber%20Resilience%20Act%20Readiness)
+
+The Foundation is running a project through 2026 to actively prepare the FreeBSD Foundation, Project, and community for the EU Cyber Resilience Act.
+There are six main areas of focus: Security and Vulnerability Handling, SBOM Toolchain, Public Documentation, Community Legislative Engagement, Public Project Repository, and Communications.
+
+Over Q3, the project has continued to move from planning into implementation, with particular focus on readiness for the CRA’s vulnerability and incident reporting requirements that came into force for manufacturers on September 11, 2026.
+
+The Foundation has created a cyber security policy and CRA reporting protocol to support the Foundation in meeting its obligations as an open source software steward.
+Both have been developed with input from the FreeBSD Core and Security Teams and document how the Foundation will work with the Project and respond if CRA reporting obligations are triggered for the Foundation as a steward.
+Note that the European Commission has clarified that reporting obligations for stewards begin on December 11, 2027.
+These documents will remain internal resources for the time being.
+
+Technical work on the Software Bill of Materials (SBOM) toolchain has continued through development, testing, and review.
+The proposed approach for generating SBOMs for the FreeBSD base system is being refined in response to feedback and still requires further review and supporting changes before integration.
+Work is also progressing across the wider SBOM ecosystem, both through the Foundation and in the community, including planned support for ports, SPDX-compatible license information, and CycloneDX and SPDX SBOM support in pkgconf.
+
+Public CRA guidance is now available on the FreeBSD Foundation website, providing an overview of the legislation alongside dedicated [guidance for FreeBSD business users](https://freebsdfoundation.org/guide-to-the-cra-for-freebsd-business-users/) and [community members](https://freebsdfoundation.org/guide-to-the-cra-for-freebsd-community-members/).
+This gives FreeBSD users clearer information about how the CRA may affect them, where their responsibilities may sit, and [how to work with FreeBSD in meeting their CRA obligations](https://freebsdfoundation.org/eu-cyber-resilience-act-cra/).
+
+The Foundation has continued to engage with the FreeBSD and wider open source communities, especially the Eclipse Foundation’s Open Regulatory Compliance (ORC) working group.
+At EuroBSDCon 2026, we collaborated with Peter Hansteen to run a day-long [CRA and SBOM tutorial](https://events.eurobsdcon.org/2026/talk/RER8UZ/).
+We also presented an update on this project at the [FreeBSD Developer Summit](https://wiki.freebsd.org/DevSummit/202609).
+
+Project updates and meeting notes continue to be published through the public [project repository](https://github.com/FreeBSDFoundation/all-projects/tree/main/Cyber%20Resilience%20Act%20Readiness).
+As we move into Q4, the focus will be on progressing the SBOM implementation and upstream work, improving the discoverability of our public CRA guidance, and working with the FreeBSD Project to identify key manufacturer needs that relate to their CRA obligation to adopt a secure software lifecycle by December 11, 2027.
+
+### FreeBSD Software Bill of Materials (SBOM)
+
+Open upstream SPDX license identifier PRs:  
+
+[ATF PR#128](https://github.com/freebsd/atf/pull/128) URL: [https://github.com/freebsd/atf/pull/128](https://github.com/freebsd/atf/pull/128)  
+
+[bmake NetBSD GNATS#60308](https://gnats.netbsd.org/60308) URL: [https://gnats.netbsd.org/60308](https://gnats.netbsd.org/60308)  
+
+[LDNS ISSUE#305](https://github.com/NLnetLabs/ldns/issues/305) URL: [https://github.com/NLnetLabs/ldns/issues/305](https://github.com/NLnetLabs/ldns/issues/305)  
+
+[Less PR#792](https://github.com/gwsw/less/pull/792) URL: [https://github.com/gwsw/less/pull/792](https://github.com/gwsw/less/pull/792)  
+
+[Libarchive PR#3129](https://github.com/libarchive/libarchive/pull/3129) URL: [https://github.com/libarchive/libarchive/pull/3129](https://github.com/libarchive/libarchive/pull/3129)  
+
+[LibCBOR ISSUE#430](https://github.com/PJK/libcbor/issues/430) URL: [https://github.com/PJK/libcbor/issues/430](https://github.com/PJK/libcbor/issues/430)  
+
+[Libevent ISSUE#1864](https://github.com/libevent/libevent/issues/1864) URL: [https://github.com/libevent/libevent/issues/1864](https://github.com/libevent/libevent/issues/1864)  
+
+[LibPCAP PR#1689](https://github.com/the-tcpdump-group/libpcap/pull/1689) URL: [https://github.com/the-tcpdump-group/libpcap/pull/1689](https://github.com/the-tcpdump-group/libpcap/pull/1689)  
+
+[LibUCL PR#386](https://github.com/vstakhov/libucl/pull/386) URL: [https://github.com/vstakhov/libucl/pull/386](https://github.com/vstakhov/libucl/pull/386)  
+
+[TCSH Mantis#777](https://bugs.astron.com/view.php?id=777) URL: [https://bugs.astron.com/view.php?id=777](https://bugs.astron.com/view.php?id=777)
+
+The FreeBSD Software Bill of Materials (SBOM) effort has been continued during Q3 2026.
+At last, getting SBOM into FreeBSD source is manifesting itself and hopefully will be finalized in Q4.
+Thanks to Pierre Pronchery, there is a Phabricator review ongoing: [D60352](https://reviews.freebsd.org/D60352) for FreeBSD source.
+Also, ports have one for reviewing: [D60441](https://reviews.freebsd.org/D60441) made by Mathieu Arnold.
+
+As an option for SBOM output, there are currently available SPDX 2.2 and Lite 3.0.1.
+CycloneDX SBOM tool is in work in progress and still needs some love to be as qualified as the output for SPDX.
+In the future, all SBOM outputs will be under one tool, which will be named `sbomtool`, and as both solutions rely on pkgconf, they will have CycloneDX when it lands in FreeBSD source.
+
+Additionally, several new SPDX License Identifiers have been accepted. All three are in FreeBSD source:
+* [BSD-2-Clause-pos-unchanged](https://github.com/spdx/license-list-XML/issues/3007)
+* [BSD-Source-Code-no-disclaimer](https://github.com/spdx/license-list-XML/issues/3000)
+* [BSD-Source-alt-GPL](https://github.com/spdx/license-list-XML/issues/2939)
+
+There are several updates from `BSD-2-Clause` to `BSD-Source-beginning-file` in review:
+
+- [sys/arm/arm/busdma_machdep.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59528)
+- [sys/powerpc/powerpc/busdma_machdep.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59527)
+- [sys/powerpc/powerpc/busdma_bounce.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59526)
+- [sys/x86/x86/busdma_machdep.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59525)
+- [sys/x86/x86/busdma_bounce.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59524)
+- [sys/kern/subr_busdma_bounce.c: Correct SPDX-License-Identifier](https://reviews.freebsd.org/D59523)
+
+Additionally, many third-party repositories have received SPDX License Identifiers, such as libxo (thanks to Juniper for that), and others.
+Some projects do not want headers, and some are still in active development.
+
+If you want to help with this effort:
+
+- Review Phabricator changes. SPDX License Identifier corrections are at a very low level to review.
+- When pkgconf CycloneDX is available, help review and test it.
+
+Sponsor: FreeBSD Foundation
+
+### Capsicumize fts(3)
+
+The [fts(3)](https://man.freebsd.org/cgi/man.cgi?query=fts&sektion=3&format=html) directory traversal library, used by [find(1)](https://man.freebsd.org/cgi/man.cgi?query=find&sektion=1&format=html), [rm(1)](https://man.freebsd.org/cgi/man.cgi?query=rm&sektion=1&format=html), [ls(1)](https://man.freebsd.org/cgi/man.cgi?query=ls&sektion=1&format=html), [chflags(1)](https://man.freebsd.org/cgi/man.cgi?query=chflags&sektion=1&format=html) and other utilities, historically relied on path-based syscalls that fail in [capsicum(4)](https://man.freebsd.org/cgi/man.cgi?query=capsicum&sektion=4&format=html) capability mode.
+
+This quarter fts gained a new `fts_openat()` entry point that accepts a pre-opened directory descriptor, a per-entry `fts_dirfd` field, and a conversion of its internals to fd-relative operations, with ABI compatibility preserved through ELF symbol versioning.
+A traversal can now run entirely inside a Capsicum sandbox.
+
+As a first consumer, chflags was capsicumized to perform its work through `chflagsat()` on descriptors opened before entering capability mode, confining it to the hierarchies named on its command line.
+
+This work was completed as a Google Summer of Code 2026 project.
+
+Sponsor: Google Summer of Code 2026
+
+### Full CPUID Control for bhyve
+
+#### Project Overview
+
+Ongoing work on this project aims to integrate the existing proof-of-concept work into FreeBSD, and to add the following usability features:
+
+- a user-friendly configuration method to override individual bits, parts or even whole CPUID functions as needed, while keeping the rest of the host CPUID information or a pre-defined CPUID configuration
+- a user-friendly configuration method for the hypervisor signature reported by bhyve
+- a set of predefined CPUID configurations based on common x86 architecture levels, perhaps also including a set of CPUID data for a few real CPU models, and a user-friendly configuration method to choose one for a VM
+
+#### Changes during the last quarter
+
+##### Changes to the bhyve configuration syntax
+
+There was a last minute change to the configuration syntax.
+Instead of using two different options `cpuid.enable` and `cpuid.disable` to enable or disable features by name, there is now a single `cpuid.features` option.
+This option accepts feature name, either prefixed with `-` to disable them, or prefixed with `+` or no prefix to enable a feature.
+
+##### Pre-defined CPU Models
+
+In addition to the abstract x86 architecture models, a number of CPU models have been implemented as pre-defined configuration file snippets.
+This currently ends with the Icelake generation for Intel and the Bulldozer generation for AMD.
+
+Many more cpuid configuration options have been introduced to ease writing of CPU model configurations, such as `cpuid.brand` for the CPU Brand String or `cpuid.vendor` to override the vendor identification.
+
+##### CPUID Constraints checks
+
+The constraints checks have been extended to allow defining bitmasks for values that can only be numerically lowered.
+
+A new configuration option `cpuid.check` has been introduced to override the default action regarding the constraints checks.
+It takes the values `fail` (the default), `warn`, `none`, and `fix`.
+
+##### Cache Configuration
+
+Default cache configurations have been added to the x86 architecture models and all pre-defined CPU models.
+
+##### Hypervisor Identification
+
+A new `cpuid.hypervisor` option allows easy overriding of the hypervisor identification in CPUID function 0x40000000.
+The real hypervisor identification and feature flags can still be queried by guests from CPUID function 0x40000100.
+
+#### Plans for the next quarter
+
+### A bhyve management GUI written in Freepascal/Lazarus
+
+Links:  
+
+[Bhyvemgr](https://github.com/alonsobsd/bhyvemgr) URL: [https://github.com/alonsobsd/bhyvemgr/](https://github.com/alonsobsd/bhyvemgr/)  
+
+[Bhyvemgrd](https://github.com/alonsobsd/bhyvemgrd) URL: [https://github.com/alonsobsd/bhyvemgrd/](https://github.com/alonsobsd/bhyvemgrd/)
+
+Bhyvemgr is a bhyve management GUI written in Freepascal/Lazarus on FreeBSD.
+It needs a bunch of tools, mostly installed on base system, and some installed from ports/packages.
+The main goal is to be a desktop application with focus on desktop users to easily and quickly setup and run virtual machines on FreeBSD hosts.
+
+Starting with version v2.0.0, bhyvemgr was migrated to client/server architecture.
+As a result, a server component was developed.
+This new component is called bhyvemgrd.
+
+Bhvemgrd supports two ways to run privileged tasks: mac_do/mdo (FreeBSD >= 140000) and mac_do/setcred/exec_paths (only for FreeBSD >= 1501501).
+The process itself run under an unprivileged bhyvemgrd user.
+
+During last two quarters, there were many bugfixes and improvements to Bhyvemgr.
+
+These are some highlights that were added:
+
+- Add new operating system options
+- Add support to use VNC unix sock (vnc.sock) when FreeBSD >= 1500509
+- Add support for storage snapshot (only if zfs is enable)
+- Improve TPM support
+- Move to client/server architecture (unixsocket, json, etc). The bhyvemgr keeps like a client and a new bhyvemgrd app is used like a server.
+- Remove privileged functions/procedures. Now they are part of bhyvemgrd.
+- Remove sudo/doas support. It is not necessary anymore because privileged tasks will trigger from bhyvemgrd service.
+- Remove FreeBSD 13.x support
+- Replace remote-viewer support (virt-viewer) with vncviewer (tigervnc-viewer). The vncviewer needs less dependencies and it can be ligther than virt option.
+- Other fixes, improvements and changes
+
+Bhyvemgr and Bhyvemgrd supports aarch64 from 15.x to 16-CURRENT and amd64 from FreeBSD 14.x to 16-CURRENT.
+Bhyvemgr can be compiled or installed from [sysutils/bhyvemgr](https://cgit.freebsd.org/ports/tree/sysutils/bhyvemgr/) with gtk2, qt5, or qt6 interface support.
+Bhyvemgrd can be compiled or installed from [sysutils/bhyvemgrd](https://cgit.freebsd.org/ports/tree/sysutils/bhyvemgrd/).
+
+People interested in helping or supporting the projects are welcome.
+
+Current bhyvemgr version: 2.1.0
+Current bhyvemgrd version: 1.2.0
+
+### Desktop Script for bsdinstall
+
+Links:  
+
+[Laptop Support and Usability Project Task](https://github.com/FreeBSDFoundation/proj-laptop/issues/25) URL: [https://github.com/FreeBSDFoundation/proj-laptop/issues/25](https://github.com/FreeBSDFoundation/proj-laptop/issues/25)  
+
+[Project repository](https://gitlab.com/alfix/kde-installer-dialogs) URL: [https://gitlab.com/alfix/kde-installer-dialogs](https://gitlab.com/alfix/kde-installer-dialogs)
+
+Contact: Alfonso S. Siciliano <[asiciliano@FreeBSD.org](mailto:asiciliano@FreeBSD.org)>
+
+The goal of this project is to provide a simple feature in [bsdinstall(8)](https://man.freebsd.org/cgi/man.cgi?query=bsdinstall&sektion=8&format=html), the FreeBSD system installer, to install and configure a graphical environment.
+The installer should ask users whether they want to install a desktop environment and, if so, automatically install and configure everything needed with minimal or no user intervention.
+After reboot, users should be presented with a graphical login screen.
+
+In the first 2026 status report, a possible solution was described: a shell script of approximately 400 lines of code to install and automatically configure the components required for a graphical desktop environment, including GPU drivers, Xorg, KDE Plasma, and SDDM.
+After a call for testing, which received a significant amount of feedback from users, review D56167 was submitted to add the new desktop script to bsdinstall.
+
+After the review was submitted, several discussions took place about the proposed implementation.
+As a result of the review, it was requested to split the script into smaller components and move part of its functionality into separate ports.
+The review, D56167, is now obsolete.
+Several possible approaches were then analyzed and tested.
+
+The chosen solution is to create new ports with flavors.
+
+The base port provides the tools to build menus and/or return to the script a list of packages to install.
+The menu utilities are implemented as shell scripts because the design of a Lua API for the text user interfaces is still in progress.
+
+Each flavor provides a [pkg-post-install-lua(5)](https://man.freebsd.org/cgi/man.cgi?query=pkg-post-install-lua&sektion=5&format=html) script to configure the package installed on the new system.
+pkg-post-install-lua was chosen instead of the [pkg-post-install(5)](https://man.freebsd.org/cgi/man.cgi?query=pkg-post-install&sektion=5&format=html) shell script because it will make it easier to reuse the code if it becomes necessary to use [pkg-trigger(5)](https://man.freebsd.org/cgi/man.cgi?query=pkg-trigger&sektion=5&format=html) in the future.
+
+The following four new ports with flavors, with a total of 26 packages, have been created and submitted to Bugzilla:
+
+- x11/bsdinstall-desktop PR298402 Base port utilities: bsdinstall-desktop-checks, bsdinstall-desktop-users with menu support. Flavor: -audio.
+- graphics/bsdinstall-gpu PR298413 Base port utility: bsdinstall-gpu with menu support. Flavors: -amd, -drm, -intel, -nv304, -nv340, -nv390, -nv470, -nv580, -nv595, -nv610, -nvaddons, -nvoptimus, -radeon, -scfb, -vbox, -vesa, -vmware.
+- x11/bsdinstall-de PR298442 Base port utility: bsdinstall-de. Flavors: -kde, -wireplumber.
+- x11/bsdinstall-dm PR298455 Base port utility: bsdinstall-dm with menu support. Flavors: -ly, -sddm.
+
+A new draft of the desktop script has also been completed in the project repository.
+It is significantly different from the original script and is now approximately 100 lines of code.
+A new review to add the desktop script to bsdinstall will be submitted after the new ports have been added to the Ports Collection.
+
+This is still an experimental feature.
+In the future, depending on user interest and feedback, the desktop script can be further improved to support additional desktop environments and graphical tools.
+
+Sponsor: The FreeBSD Foundation
+
+### Sylve — A Unified System Management Platform for FreeBSD
+
+Links:  
+
+[Website](https://sylve.io) URL: [https://sylve.io](https://sylve.io)  
+
+[GitHub](https://github.com/AlchemillaHQ/Sylve) URL: [https://github.com/AlchemillaHQ/Sylve](https://github.com/AlchemillaHQ/Sylve)  
+
+[CI](https://sylve-ci.alchemilla.io) URL: [https://sylve-ci.alchemilla.io](https://sylve-ci.alchemilla.io)  
+
+[Discord](https://discord.gg/bJB826JvXK) URL: [https://discord.gg/bJB826JvXK](https://discord.gg/bJB826JvXK)
+
+Sylve is a modern, unified system management platform for FreeBSD.
+It provides an integrated web interface for managing virtual machines (via Bhyve), Jails, the networking around them, and ZFS storage.
+
+The backend is implemented in Go, while the frontend is built with Svelte.
+The project emphasizes a minimal system footprint.
+By default, it does not require any packages outside of the base system.
+
+Optional runtime dependencies, required only when their respective features are used, include:
+
+- [devel/libvirt](https://cgit.freebsd.org/ports/tree/devel/libvirt/) for virtualization
+- [devel/qemu](https://cgit.freebsd.org/ports/tree/devel/qemu/) for disk image management
+- Samba 4.x (for example [net/samba424](https://cgit.freebsd.org/ports/tree/net/samba424/)) for SMB file sharing
+- [sysutils/swtpm](https://cgit.freebsd.org/ports/tree/sysutils/swtpm/) for TPM emulation support
+- [dns/dnsmasq](https://cgit.freebsd.org/ports/tree/dns/dnsmasq/) for DHCP and DNS services
+
+The port pulls in these dependencies for convenience to the user, but by itself, Sylve needs no dependencies to run.
+
+#### Q3 Progress Highlights
+
+We published two tagged releases this quarter: v0.3.0 on August 24, which shipped the networking, migration, replication, and backup work reported last quarter, and v0.3.1 on September 7, the latter improving cluster recovery, backups, migration, and guest storage management.
+
+##### Data Center / Cluster
+
+- Migration between cluster nodes now transfers the bulk of the ZFS data while the workload is still online, followed by a final incremental transfer and a guarded cutover.
+- Backups now commit related datasets and VM disks as coordinated generations, with stronger restore and recovery workflows.
+
+##### Storage
+
+- Deeper ZFS and ARC telemetry and scheduled S.M.A.R.T. tests were added.
+- VM storage workflows were redesigned in v0.3.1, with explicit semantics for ejecting and deleting attachments.
+
+##### Operations
+
+- A protected local CLI and interactive console were added for common VM, Jail, networking, and lifecycle operations.
+- Certificate and Dynamic DNS management are built in, including free Sylve.app hostnames with managed TLS, plus Cloudflare and Namecheap support.
+
+##### General
+
+- The user documentation received a major overhaul, with task-oriented guides for all major features.
+- Sylve now requires libvirt 12.5.0 or newer for VM management; FreeBSD 15.0 or newer remains required.
+
+##### Roadmap Update
+
+The FreeBSD Foundation has expanded its support for Sylve with a new grant for parts of the next phase of the platform.
+
+The next quarter(s) will bring:
+
+- Native OCI container management through Podman.
+- An App Gallery with templates for deploying applications in Jails and containers.
+- NFS sharing and automatic ZFS dataset tuning.
+- A mobile app for managing clusters, operating-system updates from the interface, and ZFS scrub schedules.
+- End-to-end testing and clearer migration documentation.
+- A simplified interface for beginners.
+
+Sponsors: The FreeBSD Foundation, Alchemilla Ventures (Development), IPTechnics LLC (Infrastructure & Testing)
+
+### Vision Accessibility
+
+Links:  
+
+[Accessibility Handbook](https://docs.freebsd.org/en/books/accessibility/) URL: [https://docs.freebsd.org/en/books/accessibility/](https://docs.freebsd.org/en/books/accessibility/)  
+
+[Project repository](https://gitlab.com/alfix/freebsd-accessibility/) URL: [https://gitlab.com/alfix/freebsd-accessibility/](https://gitlab.com/alfix/freebsd-accessibility/)  
+
+[LearnBraille](https://gitlab.com/-/snippets/6065143) URL: [https://gitlab.com/-/snippets/6065143](https://gitlab.com/-/snippets/6065143)  
+
+[bsddialog](https://gitlab.com/alfix/bsddialog) URL: [https://gitlab.com/alfix/bsddialog](https://gitlab.com/alfix/bsddialog)
+
+Contact: Accessibility <[accessibility@FreeBSD.org](mailto:accessibility@FreeBSD.org)>  
+
+Contact: Alfonso S. Siciliano <[asiciliano@FreeBSD.org](mailto:asiciliano@FreeBSD.org)>
+
+Vision Accessibility is a project focused on improving visual accessibility in FreeBSD by documenting, developing, and integrating assistive technologies for blind and visually impaired users.
+
+#### High-contrast Theme
+
+During this quarter, work focused mainly on Milestone 2: creating new accessible themes for TUI utilities in the FreeBSD base system, with the ability to select one during the OS installation.
+
+The next version of bsddialog was developed as part of this work, with a focus on improving its theming support.
+The theming code was reorganized and improved, and the bsddialog_theme.h API was extended to allow applications to select and customize themes more easily and automatically.
+
+In particular, the library initialization process now uses **bsddialog_get_auto_theme()**, which automatically detects the theme to use.
+If available, the theme can be selected through a centralized system-wide or user-specific configuration file.
+This allows utilities in the FreeBSD base system, such as [tzsetup(8)](https://man.freebsd.org/cgi/man.cgi?query=tzsetup&sektion=8&format=html) and [bsdinstall(8)](https://man.freebsd.org/cgi/man.cgi?query=bsdinstall&sektion=8&format=html), as well as ports such as [ports-mgmt/portconfig](https://cgit.freebsd.org/ports/tree/ports-mgmt/portconfig/), to use the same theme configuration without requiring individual changes to each application.
+
+Several accessibility-oriented themes were also improved or added:
+
+- Improved the built-in black-and-white theme. It was originally designed for terminals without color support, but it is also useful for presenting information without relying on colors alone.
+- Added a theme without red, using black, blue, cyan, white, and yellow.
+- Added a theme without yellow and blue, using black, green, red, and white.
+- Added a new high-contrast theme, using black, magenta, white, and yellow.
+
+The new functionality has been documented in the manual pages, with new examples, and in the bsddialog CHANGELOG.
+
+The design and implementation phases have been completed, and testing is now starting.
+The new functionality is currently available only in the main branch of the bsddialog repository.
+
+#### Braille display devices
+
+During this quarter, a HumanWare BrailleNote Apex was acquired for use in the upcoming milestones.
+A suitable charger was received and the device was successfully tested.
+The Braille display and keyboard are working, as is the built-in speech synthesizer.
+
+Although the Braille subsystem is planned for a future milestone, initial experimentation has already started because designing and integrating such a subsystem is a complex task.
+These first tests are intended to provide practical information for its future design and implementation.
+
+The BrailleNote Apex is not simply a Braille display, but a Braille notetaker running Windows Embedded CE 6.0.
+It provides a one-dimensional user interface through KeySoft, with applications such as a word processor, email, web browsing, and other functionality.
+The Apex was also connected to an external monitor through VGA, which made it easier to explore and better understand its functionality.
+
+Using the Apex requires familiarity with Braille, both for writing through the Braille keyboard and for reading through the Braille display.
+For this reason, LearnBraille was also developed and used.
+It is a simple Lua script that uses [devel/liblouis](https://cgit.freebsd.org/ports/tree/devel/liblouis/) to provide a quiz for practicing Braille characters.
+
+The Apex was connected to FreeBSD through USB and used in its "Screen Reader Terminal" mode, which allows the device to operate as a Braille display connected to another computer.
+The device is recognized by [uipaq(4)](https://man.freebsd.org/cgi/man.cgi?query=uipaq&sektion=4&format=html), and communication is provided through the man:ucom interface[4].
+This is consistent with the device’s architecture, as the Apex runs Windows Embedded CE 6.0.
+
+Initial communication tests were successful in both directions.
+Data was sent from FreeBSD to the Braille display, including a simple "Hello World, FreeBSD!" message rendered on the Braille cells.
+Characters typed on the Braille keyboard were also received by FreeBSD.
+In this direction, each Braille character is represented by one byte, with its bits corresponding to the Braille dots.
+
+Further tests, documentation, and information about the progress and results of this work will be provided in future reports.
+
+Sponsor: The FreeBSD Foundation
+
+### x11appjail: Tool for creating, verifying, installing, and running AppJails
+
+Links:  
+
+[x11appjail on GitHub](https://github.com/DtxdF/x11appjail) URL: [https://github.com/DtxdF/x11appjail](https://github.com/DtxdF/x11appjail)  
+
+Contact: Jesús Daniel Colmenares Oviedo <[dtxdf@FreeBSD.org](mailto:dtxdf@FreeBSD.org)>
+
+**x11appjail** is a specialized tool for creating, verifying, installing, and running AppJails.
+An AppJail is a CLI, TUI or X11 application that runs inside a FreeBSD jail but is perceived by the end user as identical (or at least very similar) to an application running directly on the host system.
+
+This tool makes extensive use of [appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=appjail&sektion=1&format=html) as its engine; however, unlike the latter, the primary user in **x11appjail** is neither root nor a privileged user, but rather an unprivileged user.
+The fundamental goal of this project is to grant the user limited access to the jail, restricted solely to the execution of a CLI, TUI or X11 application.
+
+This project began months ago as a prototype to establish a workflow leveraging [appjail-x11(1)](https://man.freebsd.org/cgi/man.cgi?query=appjail-x11&sektion=1&format=html); however, starting with version 1.0.0, it was rewritten from scratch into a unified tool that integrates all its projects, such as [sysutils/appjail](https://cgit.freebsd.org/ports/tree/sysutils/appjail/), [sysutils/unixexec](https://cgit.freebsd.org/ports/tree/sysutils/unixexec/), [archivers/appscript](https://cgit.freebsd.org/ports/tree/archivers/appscript/), and [sysutils/jtransfer](https://cgit.freebsd.org/ports/tree/sysutils/jtransfer/), among others.
+Even better, it allows for the execution of not only X11 applications but also CLI and TUI programs.
+
+The most relevant project for [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) is not only [appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=appjail&sektion=1&format=html), but also [appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html).
+My goal with [appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html) is to create an ultra-lightweight alternative to AppImage for FreeBSD that does not depend on FUSE, thus eliminating the need to configure `vfs.usermount=1`.
+[appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html) allows you to create an [elf(5)](https://man.freebsd.org/cgi/man.cgi?query=elf&sektion=5&format=html) executable that contains everything necessary to run a self-contained executable.
+
+- Executables created by [appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html) extract the payload cooperatively: the leader process extracts the payload once using an exclusive lock, while other processes (if any) wait using a shared lock. Unlike previous versions, where the payload was extracted to a random directory upon every execution, this significantly improves performance by extracting the payload only once; furthermore, the resulting directory is removed by the last remaining process once no running processes remain.
+- [appscript-verify(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript-verify&sektion=1&format=html) is a new command installed by [archivers/appscript](https://cgit.freebsd.org/ports/tree/archivers/appscript/) to verify executables signed with [signify(1)](https://man.freebsd.org/cgi/man.cgi?query=signify&sektion=1&format=html); it is particularly relevant to [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html)'s `veriexec` (see below).
+- [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html)'s `veriexec` is an internal tool used by [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) to run an AppJail in portable mode only if it is signed with a trusted key. This tool is unrelated to NetBSD’s `veriexec`.
+- Both tools support the classic, battle-tested SHA-256 algorithm and the faster yet secure BLAKE3 algorithm. When [sysutils/b3sum](https://cgit.freebsd.org/ports/tree/sysutils/b3sum/) is available (the default if [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) was installed from ports), BLAKE3 is the default choice, unless SHA-256 is explicitly specified in [rc.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=rc.conf&sektion=5&format=html). The checksum algorithm is fundamental to both [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) and [appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html). In the case of [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html), the algorithm is used in internal operations such as `veriexec`, whereas [appscript(1)](https://man.freebsd.org/cgi/man.cgi?query=appscript&sektion=1&format=html) uses it to verify executables. BLAKE3 has been selected as the default option because it offers greater speed without compromising security.
+- Attributes have been implemented in [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) as a means for both the user and the system operator to manipulate the behavior of an AppJail. For example, a system operator can create the system attribute **users**.uid.**perms**, the content of which might be "**enable_3d** **sound** **usb** **webcam**". An unprivileged user can create the user attributes appname:profile.**allow**.**enable_3d** and appname:profile.**allow**.**sound**. Subsequently, when executing an AppJail, devices become visible or remain hidden depending on whether the user holds the corresponding permission and has authorized those permissions for the jail being created. In this case, the hardware acceleration and sound devices will become visible, provided the AppJail has incorporated the necessary logic to make them visible.
+
+Another notable change worth mentioning for [x11appjail(1)](https://man.freebsd.org/cgi/man.cgi?query=x11appjail&sektion=1&format=html) are the examples added in `${EXAMPLESDIR}/Apps`: `badwolf`, `chromium`, `evince`, `feh`, `firefox`, `htop`, `linux-brave`, `mpv`, `nanonote`, `telegram-desktop` and `thunderbird`.
+Beyond the applications themselves, the key factor is the deployment method.
+`htop` is an example of a CLI application, `linux-brave` is a Linux application, and the others are X11 applications.
+Web browsers, Mpv, and Thunderbird are the most interesting examples, as they demonstrate how an AppJail can use VirtualGL to properly enable hardware acceleration within a FreeBSD jail, something that would not normally be possible given that Xephyr is the backend used by [appjail-x11(1)](https://man.freebsd.org/cgi/man.cgi?query=appjail-x11&sektion=1&format=html).
+Best of all, from the end-user’s perspective, all of this is transparent.
+
+### Port of rdma-core project to FreeBSD
+
+Links:  
+
+link: [The commit series of the port](https://github.com/linux-rdma/rdma-core/pull/1778) URL: [https://github.com/linux-rdma/rdma-core/pull/1778](https://github.com/linux-rdma/rdma-core/pull/1778)  
+
+link: [LinuxAPI project](https://github.com/freebsd/linuxapi) URL: [https://github.com/freebsd/linuxapi](https://github.com/freebsd/linuxapi)
+
+Contact: Konstantin Belousov <[kib@FreeBSD.org](mailto:kib@FreeBSD.org)>
+Contact: Ariel Ehrenberg <[aehrenberg@nvidia.com](mailto:aehrenberg@nvidia.com)>
+Contact: Slava Shwartsman <[slavash@nvidia.com](mailto:slavash@nvidia.com)>
+Contact: Gleb Popov <[arrowd@FreeBSD.org](mailto:arrowd@FreeBSD.org)>
+
+The Remote Direct Memory Access (RDMA) infrastructure provides high-performance interconnect between computing and storage nodes.
+It can operate over different physical networks, for instance Ethernet and Infiniband.
+
+The implementation of the RDMA stack consists of several components.
+There is the core kernel infrastructure, and drivers for Host Channel Adapters (HCAs), providing access to the kernel verbs.
+Userspace applications never interact with the kernel devices directly, the core libibverbs library and vendor-specific userspace drivers provide unified and device-specific verbs.
+
+Since RDMA intent of providing low-latency low-overhead operations, performant HCAs offload a lot of operations from CPU.
+Also, typical in-line operations like send and receive can be initiated and completed in userspace, where kernel only assists in the connection establishment and teardown.
+Due to this, the userspace RDMA software stack is crucial for its operations.
+
+FreeBSD base system includes port of the so called OFED kernel core component, kernel drivers, as well as userspace core (libibverbs) and userspace drivers, for instance libmlx5 for managing Nvidia Connect-X4 and later HCAs.
+Over time, the kernel parts get some significant updates from the infiniband code in the Linux kernel, which become the home for updated OFED.
+Userspace part of OFED was converted into the rdma-core userspace project, that only supports Linux (and glibc).
+Since userspace drivers in rdma-core provide essential functionality, and since FreeBSD userspace RDMA components are quite outdated, the situation overall needs a resolution.
+
+We attempted to update the in-tree userspace components by importing the series of rdma-core commits with dependencies, but it quickly proved to be not feasible.
+Instead we started looking at what it would take to make rdma-core compile and run on FreeBSD.
+
+First, there were a number of missing glibc-specific APIs that were used in rdma-core, for instance, strdupa() and friends, main:tdestroy(3), some pthread functions.
+These were easy to handle in the base system, and addition of them benefited the whole FreeBSD porting story.
+
+Next, and more serious, the unportable features of glibc were used everywhere in the sources, and trying to cover them all would cause huge porting patch, which is problematic to push upstream, even for cooperating upstream.
+Instead, the idea of using an approach similar to LinuxKPI for kernel code, was formed and developed, called LinuxAPI.
+Unlike LinuxKPI, which handles architectural mismatches between Linux kernel and FreeBSD kernel, in addition to the different C interfaces, LinuxAPI needs to smooth out the differences around extensions to the same core functionality defined by POSIX.
+It is mostly about bits that are not defined by POSIX but needed for RDMA to function, like networking interface enumeration, or discovery of the rdma-capable devices and their capabilities etc.
+
+It seems that people consider the LinuxAPI useful outside the rdma-core porting efforts already, there is a project github.com/freebsd/linuxapi which takes the developed set of headers and extends it further.
+We are currently working on providing the permissive license to make the library useful without additional strings attached.
+
+Our initial goal, also limited by the available hardware, is to have rdma-core work with the ConnectX-4 cards.
+Of course we welcome all vendors interested in RDMA on FreeBSD to improve the port to properly support their cards.
+
+The result of the porting is available as the repository.
+Also we try to upstream the changes so that FreeBSD would become the second natively supported platform for rdma-core.
+The Pull Request to the github project is submitted.
+There is currently a blocking discussion about the way to organize CI for FreeBSD platform.
+Gleb Popov created the [net/rdma-core](https://cgit.freebsd.org/ports/tree/net/rdma-core/) port from the forked sources, which is already in the ports tree.
+
+The kernel changes to get the port working were surprisingly small and contained.
+They mostly consisted of bug fixes for the code paths not previously exercised by userspace since there were no userspace.
+Most interesting part was perhaps the difference in [ioctl(2)](https://man.freebsd.org/cgi/man.cgi?query=ioctl&sektion=2&format=html) behavior between Linux and FreeBSD, where Linux can both return an error and copyout the data structure.
+The issue was already observed in the LinuxKPI, and the porting work provided the generic solution there.
+
+Sponsor: Nvidia networking
+
+### NFS over Remote Direct Memory Access (RDMA)
+
+Links:  
+
+[Up-to-date NFS server sources in branch freebsd-rdma](https://github.com/viniciusferrao/freebsd-src.git) URL: [https://github.com/viniciusferrao/freebsd-src.git](https://github.com/viniciusferrao/freebsd-src.git)
+[nfs-over-rdma-setup.txt](https://people.freebsd.org/~rmacklem/nfs-over-rdma-setup.txt) URL: [https://people.freebsd.org/~rmacklem/nfs-over-rdma-setup.txt](https://people.freebsd.org/~rmacklem/nfs-over-rdma-setup.txt)
+
+Currently FreeBSD’s NFS is supported over TCP (and UDP for NFSv3).
+This project adds support for NFS over RDMA, as described by RFC-8166 and RFC-8267.
+This should allow RDMA aware NICs to offload most of the network transport and improve performance over fast LAN fabrics.
+
+Thanks to Vinicius, a lot of progress has been made.
+He has the NFS server side working, and quite well from what I know.
+
+The client side is now testing quite well against Vinicius’s server and both client and server are now ready for third party testing.
+To test, a client and server with Mellanox ConnectX4→6 NICs running a kernel built from recent FreeBSD main sources is needed.
+
+See nfs-over-rdma-setup.txt for information on setting up a testing environment.
+
+A stable/15 kernel should be sufficient for the loadable modules in a few weeks.
+The client code should also be committed to FreeBSD’s main in a few weeks, with an MFC to stable/15 be the end of 2026.
+The server code was created via generative AI and the FreeBSD project is working on a policy for handling generative AI submissions.
+In the meantime, the server code will be available as an "unofficial port" that builds a kernel loadable module.
+
+Third party testing would be appreciated.
+
+Thanks go to Vinicius for the NFS server work and to the FreeBSD Netperf cluster folk, without which I would have never gotten this code tested.
+
+Sponsor for the NFS server code: Verastus HPC
+
+### nfsdtop(8) shows who is using the NFS server
+
+Links:  
+
+[D59438](https://reviews.freebsd.org/D59438) URL: [https://reviews.freebsd.org/D59438](https://reviews.freebsd.org/D59438)  
+
+[rG60c7313074b9](https://cgit.freebsd.org/src/commit/?id=60c7313074b93adf4ea70ff44b78b3b4fc15c29f) URL: [https://cgit.freebsd.org/src/commit/?id=60c7313074b93adf4ea70ff44b78b3b4fc15c29f](https://cgit.freebsd.org/src/commit/?id=60c7313074b93adf4ea70ff44b78b3b4fc15c29f)
+
+[nfsstat(1)](https://man.freebsd.org/cgi/man.cgi?query=nfsstat&sektion=1&format=html) reports the server as a whole.
+[nfsdtop(8)](https://man.freebsd.org/cgi/man.cgi?query=nfsdtop&sektion=8&format=html) reports the user, the group, or the client behind the reads and writes.
+It is a top-like display, taken with [dtrace(1)](https://man.freebsd.org/cgi/man.cgi?query=dtrace&sektion=1&format=html) from the [nfsd(8)](https://man.freebsd.org/cgi/man.cgi?query=nfsd&sektion=8&format=html) paths `nfsrvd_read`, `nfsvno_read`, `nfsrvd_write`, and `nfsvno_write`.
+
+The default view is per user.
+`-g` coalesces by group, and `-c` by IPv4 client.
+Each interval prints a total, then the rows that did the I/O, sorted by combined read and write volume.
+The default interval is two seconds.
+The columns are humanized bandwidth unless `-b` asks for the bytes moved in that interval.
+WRITE(IN) is data the clients sent.
+READ(OUT) is data the server sent.
+
+```
+nfsdtop
+nfsdtop -c
+nfsdtop -g -G wheel
 ```
 
-Here's the compiled ARM assembly code from the above symbolasm code, along with cycle count analysis from the symbolasm analysis tool:
+A UID, GID, or client address on those paths belongs to the client, not to the server.
+[nfsdtop(8)](https://man.freebsd.org/cgi/man.cgi?query=nfsdtop&sektion=8&format=html) does not ask [getent(1)](https://man.freebsd.org/cgi/man.cgi?query=getent&sektion=1&format=html) to name them while it samples.
+Names come from map files in the current directory: .nfsd.passwd, .nfsd.group, and .nfsd.hosts.
+A filter (`-U`, `-G`, or `-C`) is resolved once, from those maps and then with [getent(1)](https://man.freebsd.org/cgi/man.cgi?query=getent&sektion=1&format=html) or [host(1)](https://man.freebsd.org/cgi/man.cgi?query=host&sektion=1&format=html), and the result is compiled into the [dtrace(1)](https://man.freebsd.org/cgi/man.cgi?query=dtrace&sektion=1&format=html) predicate.
+
+`-j` emits one JSON object for the view total and one per key, each interval, with the byte counts and the rates.
+`-J` samples the client, group, and user views together:
 
 ```
-  134: f859 c028           1 ldr r12, [r9, r8, lsl #2]
-  136: f811 8b01           1 ldrb r8, [r1], #1
-  137: f3cc 5705           1 ubfx r7, r12, #20, #6
-  138: f00c 041f           1 and r4, r12, #31
-  139: b387              1/2 cbz r7, .Ljit_text.blank
-  141: f855 b024           1 ldr r11, [r5, r4, lsl #2]
-  144: ea4f 145c H         1 lsr r4, r12, #5
-  145: eb0a 1484           1 add r4, r10, r4, lsl #6
-  146: eb0b 4b07           1 add r11, r11, r7, lsl #16
-  147: 801c                1 strh r4, [r3]
-  149: f34c 4403           1 sbfx r4, r12, #16, #4
-  150: f8c0 b000 H         1 str r11, [r0]
-  153: 1934                1 adds r4, r6, r4
-  154: f1c7 0720           1 rsb r7, r7, #32
-  155: eb06 669c           1 add r6, r6, r12, lsr #26
-  156: 42bc                1 cmp r4, r7
-  157: d821        K     0/2 bhi .Ljit_text.off_word
-  159: f85e c024           1 ldr r12, [lr, r4, lsl #2]
-  160: f8c0 c006           1 str r12, [r0, #6]
-  161: 1d03                1 adds r3, r0, #4
-  162: 300a                1 adds r0, r0, #10
-  163: 3a01                1 subs r2, r2, #1
-  164: d1da        K     0/2 bne .Ljit_text_0_loop
-   loop 134-164: 23 cycles per iteration
+nfsdtop -J -N 1
 ```
 
-The `K` flags indicate a possible delay in branches because the condition isn't known until the cycle before the branch.
-Here, `0/2` indicates 0 cycles if the branch is not taken, and 2 if it is.
-Neither of these can be optimized.
-The `H` flag indicates the instruction is 32 bits rather than 16 because of the use of "hi" registers (r8-r15).
-These are available in the LSP as well.
+Only root, or a user who can run [dtrace(1)](https://man.freebsd.org/cgi/man.cgi?query=dtrace&sektion=1&format=html), can run it.
+The client view and `-C` are IPv4 only.
+`-R`, or a non-empty `NFSDTOP_REDACT`, replaces names that are not well-known system accounts with random strings of the same length.
 
-Without a JIT, it would be possible to write text rendering as a loop, but in the proportionally spaced case, there'd be a huge amount of setup to work out the shift amounts, plus branching to handle cases like straddling a 32 bit boundary.
-Earlier implementations of the idea in [pico-dvi-rs](https://github.com/DusterTheFirst/pico-dvi-rs) struggled to display a full screen of text.
-Of course, for fixed width text all that is known statically, so a tight loop without JIT is fine.
+The introduction is in HEAD as of 60c7313074b9 ([D59438](https://reviews.freebsd.org/D59438)), and [nfsdtop(8)](https://man.freebsd.org/cgi/man.cgi?query=nfsdtop&sektion=8&format=html) makes its first release in FreeBSD 16.0.
 
-## Performance
+Thanks to Alexander Ziaee and Benedict Reuschling for the man page, to Adrian Chadd for review, and to Rick Macklem for a look at the NFS side.
 
-The basic loop is 23 cycles per glyph for the JIT plus 3 cycles times height for the bitmap generation.
-There's an additional cost of about 20 cycles for JIT and 2 cycles times height per 32 bits of output width.
+Run it on a server that is already busy.
+If the row you need is not a user, a group, or a client, please write.
 
-This is astonishingly fast.
-The textdemo in vic-2350 takes about 21k cycles for the JIT and 42k cycles to run the JIT code.
-That adds up to about 2.6% of the available throughput of a single core of the RP2350.
-Expanding to 565 is actually about 3x more expensive.
-So it's fair to say it's as optimized as it can get.
+### Enhancing Zoned Storage support
 
-While this was designed for race-the-beam rendering, it would work just as well writing into a framebuffer, especially a one bit per pixel framebuffer.
-Just generate the code, run it for each scanline.
+Links:  
 
-It's tempting to cache the JIT output, but saving RAM is more important.
-The JIT output is about a 10x expansion over the input string.
-And, from the numbers above, it's clear that the cost of running the JIT is minimal.
+[GSoC project Wiki page](https://wiki.freebsd.org/SummerOfCode2026Projects/EnhancingZonedStorageSupportOnFreeBSD) URL: [https://wiki.freebsd.org/SummerOfCode2026Projects/EnhancingZonedStorageSupportOnFreeBSD](https://wiki.freebsd.org/SummerOfCode2026Projects/EnhancingZonedStorageSupportOnFreeBSD)
 
-The name "just in time" is apt; in the implementation in vic-2350, the JIT compiler runs under 100µs before scanout of the video line.
+#### Project Overview
 
-I wasn't able to find a direct performance comparison to an existing RP2350 text renderer.
-Probably the closest is [dvhstx](https://github.com/adafruit/Adafruit-DVI-HSTX) by Michael Bell and forked by Adafruit.
-That also ends up spending approximately 2-2.5 cycles total per pixel, but is limited to a 14x24 grid and also uses an RGB 222 mode, so its output bandwidth is only half as much (and this is where the lion's share of the time goes).
+Work on this project intends to enhance Zoned Storage support in FreeBSD, by adding the following new features:
 
-## Dot Product Kerning
+- New [gzoned(8)](https://man.freebsd.org/cgi/man.cgi?query=gzoned&sektion=8&format=html) GEOM driver for emulating zoned devices.
+- Zoned Namespaces (ZNS) support for zoned NVMe drives.
+- Improved Zoned Storage handling for [gconcat(8)](https://man.freebsd.org/cgi/man.cgi?query=gconcat&sektion=8&format=html), [glabel(8)](https://man.freebsd.org/cgi/man.cgi?query=glabel&sektion=8&format=html), and [gpart(8)](https://man.freebsd.org/cgi/man.cgi?query=gpart&sektion=8&format=html).
 
-Kerning is a very important refinement for text rendering, otherwise the spacing looks irregular.
-The general mechanism in OpenType fonts is quite complex.
-For this project, I wanted something simple and efficient, so dusted off an idea that was originally motivated by trying to do text layout on GPU.
+The work was carried out as part of Google Summer of Code 2026.
 
-Basically, each glyph has two bitvectors, one each for the left and right side.
-To kern two glyphs, take the `and` of the right bitvector of the first glyph and the left bitvector of the second, then the popcount (number of `1` bits) of that, resulting in the number of pixels to kern.
-That's actually just the dot product of the two vectors, bits interpreted as 0 and 1.
-The kern tables require only two bytes per glyph, and kerning is super fast to evaluate.
+#### Importance to FreeBSD
 
-Even so, kerning evaluation is done at display list build time, not racing the beam.
-When the kern is nonzero, a special negative space character is inserted into the string in the text display object.
+The new [gzoned(8)](https://man.freebsd.org/cgi/man.cgi?query=gzoned&sektion=8&format=html) driver emulates Zoned Storage on top of regular, non-zoned drives, allowing for development, testing, and integration of Zoned Storage without zoned hardware.
 
-For this font, I built the [kerning table](https://github.com/raphlinus/vic-2350/blob/62f2fae7e672b9a01011cdc320b031cda29fb5c8/fonts/vic-sans-14.kern) manually.
-Each bit is a specific feature, for example bit 0 represents the top right of the first glyph projecting out, and a corresponding lack of ink in the top left of the next glyph.
-So it is set for the right of `T` and `Y`, and also at the left of most lowercase letters and also `A`.
-It's not hard to imagine a tool that might help automate this, perhaps distilling kerning information prepared in other ways.
+ZNS support enables using Zoned Storage on NVMe SSDs.
 
-I haven't done a real implementation yet, but I suspect this idea might scale to real fonts: instead of bits and an integer kerning amount, the vectors would store continuous values (reasonably quantized).
-An additional nonlinear step after the multiplication but before the sum may also help.
-Dot products are of course ridiculously efficient to compute on GPU, while doing index chasing through OpenType tables is not.
-But that exploration is for another day.
+Zone-aware GEOM classes let host-managed drives be used with the usual storage tools.
 
-Kerning improves quality considerably:
+#### Status
 
-![Comparison of kerning, first line is not kerned, second is](https://linebender.org/blog/jit-bitmap-text/kern.png)
+ZNS support was added to the [nda(4)](https://man.freebsd.org/cgi/man.cgi?query=nda&sektion=4&format=html) driver, while [nvd(4)](https://man.freebsd.org/cgi/man.cgi?query=nvd&sektion=4&format=html) support is not planned due to its barebones nature.
 
-## AI disclosure
+Host-managed devices can now be concatenated through [gconcat(8)](https://man.freebsd.org/cgi/man.cgi?query=gconcat&sektion=8&format=html), while [glabel(8)](https://man.freebsd.org/cgi/man.cgi?query=glabel&sektion=8&format=html) will cleanly refuse them for automatic labeling due to its metadata requirement.
+[gpart(8)](https://man.freebsd.org/cgi/man.cgi?query=gpart&sektion=8&format=html) can now create GPT partition schemes on host-managed drives by not writing the backup GPT table.
 
-This work is a refinement of the text rendering in [pico-dvi-rs](https://github.com/DusterTheFirst/pico-dvi-rs), which was hand-written.
-My draft of the JIT core was hand-written in Rust, then I used Claude to translate it to symbolasm and refine and optimize it.
-This blog is hand-written.
+### LLDB Improvement on FreeBSD
 
-The symbolasm compiler and analysis tool is heavily LLM assisted, though it too evolved from an initial hand-written version.
+I was off for university from May to August and I am back to working on this now.
+Since I could not accomplish this task for LLVM 23, the target release for completion has changed to LLVM 24.
 
-I did a [microtypography](https://en.wikipedia.org/wiki/Microtypography) experiment that was a pretty cool result, but decided not to include it, partially because it would have increased the fraction of LLM content.
+armv7 and powerpc64be are support candidates now.
+Once LLDB refactoring is done, I will implement support for those architectures.
 
-Like most other people in the industry, I struggle with the balance between quality and the acceleration that LLMs provide.
-Claude is exceedingly good at the low level tasks of coding; it easily found an edge case in my draft of the JIT compiler.
-I find that when used judiciously, LLM can improve quality, and I strive for that.
+Unlike KGDB that uses custom frame sniffer for trapframe unwinding, LLDB uses DWARF CFI instead.
+DWARF CFI works on KGDB as well; when a frame is not recognized by KGDB’s frame sniffer, it will fall back to CFI.
+Thus, no change on the KGDB side is needed.
 
-## Related work
+Sponsor: The FreeBSD Foundation
 
-I wasn't able to find much precedent for JIT specifically for text rendering.
-Of course, there is a massive literature on JIT in general.
-On-the-fly code generation for bitblt was done for the [Blit](https://en.wikipedia.org/wiki/Blit_(computer_terminal)) around 1982.
-See [Bitmap Graphics SIGGRAPH 84](https://pdos.csail.mit.edu/%7Ersc/pike84bitblt.pdf) for more.
-An interesting detail is that they claim about 2500 characters per second; the raw performance of this on RP2350 hardware is almost 3 orders of magnitude greater, just counting the output to 1bpp (which is how the Blit's framebuffer was configured).
+### Procdesc: debugging API
 
-Edit added later: David Fuchs pointed out [US Patent 6377261], filed in 1996, which compiled glyphs to machine code.
-It's highly optimized for speed, and has a lot in common with the idea here, but depends on a cache to be reasonably RAM efficient.
-Even so, it absolutely counts as prior art.
+Contact: Konstantin Belousov <[kib@FreeBSD.org](mailto:kib@FreeBSD.org)>
+
+The process descriptors API enhancements project continued, with the goal to allow complete process control using descriptors, in particular, debugging.
+I wanted to make it possible to stop reference pids as the process identifiers.
+The milestone for it should be a demonstration of enabling the capsicum mode for some non-trivial debugger, I selected [truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) because it does not need neither filesystem nor network namespace accesses after attached to the target.
+
+The semi-obvious solution there is to introduce [pdptrace(2)](https://man.freebsd.org/cgi/man.cgi?query=pdptrace&sektion=2&format=html), which is equivalent to [ptrace(2)](https://man.freebsd.org/cgi/man.cgi?query=ptrace&sektion=2&format=html) but takes the process descriptor as the process designator.
+We need to be able to obtain the notifications of the process debugging events, which are provided by waitpid[2] syscall family for pid-based controls.
+And, we need a way to obtain the process descriptor for a new child forked from the debuggee, to continue tracing of all descendants.
+
+Previously, the [pdopenpid(2)](https://man.freebsd.org/cgi/man.cgi?query=pdopenpid&sektion=2&format=html) system call was added, which allows to get a handle on an arbitrary process.
+Existing operations on the process descriptors are somewhat limited: handle owner can wait for the exit notification using [kqueue(2)](https://man.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2&format=html), and with some luck retrieve the process exit status.
+
+The last point requires some elaboration.
+Since the [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html) call was added recently, there were some amount of hacks in the kernel to allow [waitpid(2)](https://man.freebsd.org/cgi/man.cgi?query=waitpid&sektion=2&format=html) calls on pid’s of processes created with [pdfork(2)](https://man.freebsd.org/cgi/man.cgi?query=pdfork&sektion=2&format=html).
+As result, the [waitpid(2)](https://man.freebsd.org/cgi/man.cgi?query=waitpid&sektion=2&format=html) caller might have reaped the process before owner of the process descriptor could call [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html).
+Similarly, if there is more than one process descriptor opened on the same process, only the first [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html) caller could retrieve the exit status with [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html), making other descriptors useless.
+
+The listed set of problems also made it very hard to correctly use the proposed [pdptrace(2)](https://man.freebsd.org/cgi/man.cgi?query=pdptrace&sektion=2&format=html).
+The process being debugged could steal events from process descriptors and vice versa.
+Simply disallowing [wait(2)](https://man.freebsd.org/cgi/man.cgi?query=wait&sektion=2&format=html) on processes with the opened descriptors is not an option for two reasons:
+* backward compatibility, [waitpid(2)](https://man.freebsd.org/cgi/man.cgi?query=waitpid&sektion=2&format=html) was already allowed and existing binaries relied on it
+* if the debuggee used [fork(2)](https://man.freebsd.org/cgi/man.cgi?query=fork&sektion=2&format=html) to create a child, it expects to get the exit notification (e.g. SIGCHLD) and exit status from [wait(2)](https://man.freebsd.org/cgi/man.cgi?query=wait&sektion=2&format=html)
+
+The solution was manyfold.
+First, we have to postpone reaping if there are either opened process descriptors, or if the process was created with [fork(2)](https://man.freebsd.org/cgi/man.cgi?query=fork&sektion=2&format=html), we should not reap until [wait(2)](https://man.freebsd.org/cgi/man.cgi?query=wait&sektion=2&format=html) is called on pid by the parent.
+Second, the exit status needs to be preserved in the process descriptors private data even after reaping, to allow [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html) on any of the descriptors.
+This was implemented by providing a bitmap of the 'zombie refs' on the kernel struct proc.
+Each zombie reference prevents reaping, and cleared by corresponding call to [waitpid(2)](https://man.freebsd.org/cgi/man.cgi?query=waitpid&sektion=2&format=html) or [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html).
+Only when all registered references are cleared, zombie can be reaped.
+If the process is created with [pdfork(2)](https://man.freebsd.org/cgi/man.cgi?query=pdfork&sektion=2&format=html) or opened with pdopenpid[2], it gets the procdesc zombie reference.
+If the process was created with [fork(2)](https://man.freebsd.org/cgi/man.cgi?query=fork&sektion=2&format=html), it gets the 'parent' zombie reference.
+By default, pdfork[2] also sets the parent reference to allow the [waitpid(2)](https://man.freebsd.org/cgi/man.cgi?query=waitpid&sektion=2&format=html), for compatibility.
+The new [pdfork(2)](https://man.freebsd.org/cgi/man.cgi?query=pdfork&sektion=2&format=html) flag PD_NOWAITPID prevents that.
+
+Then, wait-like events must work with the process descriptors.
+The procdesc [kqueue(2)](https://man.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2&format=html) event filter was extended with NOTE_PDSIGCHLD hints to report that [pdwait(2)](https://man.freebsd.org/cgi/man.cgi?query=pdwait&sektion=2&format=html) can retrieve tracing or exiting event on the descriptor.
+
+Then, the [pdptrace(2)](https://man.freebsd.org/cgi/man.cgi?query=pdptrace&sektion=2&format=html) was able to usefully control the target.
+A new ptrace call to retrieve the list of the attached processes PT_GET_CHILDREN allowed [pdptrace(2)](https://man.freebsd.org/cgi/man.cgi?query=pdptrace&sektion=2&format=html) to get hold of forks.
+
+With all the features implemented, it was possible to convert [truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) to use only process descriptors to control the traced processes.
+The existing mode of using pids was preserved, and can be selected with the '-y' option as an emergency switch and to easy comparison and debugging of the new mode.
+
+Sponsor: The FreeBSD Foundation
+
+## Userland
+
+Changes affecting the base system and programs in it.
+
+### Scheduler
+
+Links:  
+
+[EuroBSDCon 2026 DevSummit Wiki page](https://wiki.freebsd.org/DevSummit/202609) URL: [https://wiki.freebsd.org/DevSummit/202609](https://wiki.freebsd.org/DevSummit/202609)  
+
+[Slides](https://wiki.freebsd.org/DevSummit/202609?action=AttachFile&do=view&target=EuroBSDCon2026-Scheduler.pdf) URL: [https://wiki.freebsd.org/DevSummit/202609?action=AttachFile&do=view&target=EuroBSDCon2026-Scheduler.pdf](https://wiki.freebsd.org/DevSummit/202609?action=AttachFile&do=view&target=EuroBSDCon2026-Scheduler.pdf)
+
+This quarter, a number of fixes and cleanups were merged to ULE and 4BSD:
+
+- Fix priority conflation of differently-niced CPU-bound threads (4BSD).
+- Fix priority diminishing too slowly when consuming CPU, because of some obsolete SMP scaling (4BSD).
+- Fix selecting lowest priority thread early in some corner cases (ULE).
+- Only allocate local runqueues (used for pinning/bound threads) for CPUs that are actually present (4BSD).
+- Removal of unused `hlt_cpus_mask` and `sched_do_timer_acccounting()`.
+- Removal of unused `kern.sched.4bsd.followon` (4BSD).
+- When setting `kern.sched.{4bsd,ule}.slice`, check the value makes sense and make sure to update dependent internal constants such as `hogticks` and `sched_slice_min`.
+- Ensure `sched_slice_min` and the quantum computation stay sane for small quantum values (ULE).
+- Update some comments.
+
+Work is on-going and nearing completion on cleaning up the machinery allowing multiple scheduler implementations (a.k.a., "instances") to co-exist in the same kernel.
+From a single list of function descriptors, it now automatically produces the declaration of functions in the scheduler interface and in scheduler instances, the fields of the scheduler instance descriptor structure and the dispatching functions.
+A second round of changes is in preparation, with the aim to potentially remove implementation functions' namespacing (e.g., having `ule` or `4bsd` in their names) in the source code, in effect renaming them back to their old names, which are those of the interface functions, while keeping the namespacing for C symbols which is required for debugging and in general manipulation by various ELF tools.
+
+Work continues in the background on solutions to long-standing shortcomings in the ULE scheduler such as unfairness for non-interactive threads in certain particular circumstances and the very weak effect of nice values.
+For more information, please consult the [previous report](https://www.freebsd.org/status/report-2026-01-2026-03/#_scheduler), and the [slides](https://wiki.freebsd.org/DevSummit/202609?action=AttachFile&do=view&target=EuroBSDCon2026-Scheduler.pdf) of the latest presentation at [EuroBSDCon2026’s DevSummit](https://wiki.freebsd.org/DevSummit/202609).
+
+Sponsor: The FreeBSD Foundation
+
+### Syscall filtering for truss(1)
+
+Links:  
+
+[D59275](https://reviews.freebsd.org/D59275) URL: [https://reviews.freebsd.org/D59275](https://reviews.freebsd.org/D59275)  
+
+[rGaf25f2476230](https://cgit.freebsd.org/src/commit/?id=af25f24762307bf606690c0aca6a3205a0515914) URL: [https://cgit.freebsd.org/src/commit/?id=af25f24762307bf606690c0aca6a3205a0515914](https://cgit.freebsd.org/src/commit/?id=af25f24762307bf606690c0aca6a3205a0515914)
+
+[truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) traces the system calls a process makes.
+Until this quarter it reported every call, which for anything larger than a toy program buries the calls of interest.
+
+HEAD now accepts `-t` with a comma-separated expression naming the system calls to report.
+The option letter is the one System V Release 4 and SunOS `truss` use for this.
+A term may be a system call name, an [fnmatch(3)](https://man.freebsd.org/cgi/man.cgi?query=fnmatch&sektion=3&format=html) glob (`readlink*`), a system call number in the traced process’s ABI, or `@group` for a family of related calls.
+A leading `!` excludes what that one term matches and applies to no other term — unlike SVR4 `truss` and Linux `strace`, where `!` is sticky for the rest of the list.
+Terms apply in order; the last match wins.
+`truss -t` with no expression lists the groups and exits.
+
+Groups are themselves `-t` expressions, so they compose without a second language.
+`@desc` is built from `@read` and `@write` rather than repeating their members.
+Member lists are patterns (`extattr_*file`*, `sctp`*`*`) rather than frozen name lists, so a later system call that follows the same naming convention joins the right group without a source change here.
+
+Thirteen groups ship to start: `@all`, `@creds`, `@desc`, `@file`, `@ipc`, `@memory`, `@net`, `@none`, `@proc`, `@read`, `@signal`, `@time`, and `@write`.
+They are not a clone of Linux `strace’s `%` classes: `@read` and `@write` split descriptor data-in from data-out, and `@time` covers clocks, timers, and sleeping rather than clocks alone.
+
+Show only the file and network activity of a command:
+
+```
+truss -t @file,@net fetch https://www.freebsd.org/
+```
+
+Show everything a command does except its memory management:
+
+```
+truss -t '!@memory' make buildworld
+```
+
+Show the descriptor activity of a running process apart from the data transfers themselves:
+
+```
+truss -t '@desc,!@read,!@write' -p 34
+```
+
+```
+truss -c -t 'readlink*' /bin/ls
+```
+
+A system call excluded by `-t` is not decoded, so the filter also skips the cost of formatting arguments that would never be printed, and it is left out of the `-c` summary.
+Without `-t`, behaviour is unchanged.
+
+The work is in HEAD as of af25f2476230, with an MFC planned after two weeks.
+Thanks to Robert Clausecker for review, and to Alexander Ziaee for the man page pass.
+
+If a call you care about is in the wrong group, or a group you would use is missing, please write.
+
+### sysconf(8) completes the configuration trinity
+
+Links:  
+
+[D58066](https://reviews.freebsd.org/D58066) URL: [https://reviews.freebsd.org/D58066](https://reviews.freebsd.org/D58066)  
+
+[rG3fe5961a0b70](https://cgit.freebsd.org/src/commit/?id=3fe5961a0b708da599d42cbb6b5e4f030c28ea45) URL: [https://cgit.freebsd.org/src/commit/?id=3fe5961a0b708da599d42cbb6b5e4f030c28ea45](https://cgit.freebsd.org/src/commit/?id=3fe5961a0b708da599d42cbb6b5e4f030c28ea45)
+
+[sysctl(8)](https://man.freebsd.org/cgi/man.cgi?query=sysctl&sektion=8&format=html) speaks to the running kernel.
+[sysrc(8)](https://man.freebsd.org/cgi/man.cgi?query=sysrc&sektion=8&format=html) speaks to [rc.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=rc.conf&sektion=5&format=html).
+This quarter the set became three, and the new tool is a pleasure to use.
+[sysconf(8)](https://man.freebsd.org/cgi/man.cgi?query=sysconf&sektion=8&format=html) reads and writes the rest of the base configuration: [loader.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=loader.conf&sektion=5&format=html), [sysctl.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=sysctl.conf&sektion=5&format=html), and the [make.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=make.conf&sektion=5&format=html) family (make.conf, src.conf, and src-env.conf).
+The syntax is the one your fingers already know.
+Given simply a name, reads back the value of the given name.
+`name=value` writes, and the reply comes back in the familiar line: `name: old → new`.
+
+The next boot setting fits on one line:
+
+```
+sysconf loader zfs_load
+sysconf loader zfs_load="YES"
+```
+
+```
+sysconf sysctl kern.maxfiles=65536
+```
+
+```
+sysconf loader kernels+=kernel_test
+```
+
+```
+sysconf make CFLAGS+=-DDEBUG
+sysconf src -s WITHOUT_LLDB
+```
+
+[rc.conf(5)](https://man.freebsd.org/cgi/man.cgi?query=rc.conf&sektion=5&format=html) keeps the tool that already does it best.
+`sysconf rc sshd_enable=YES` hands every argument after `rc` straight to [sysrc(8)](https://man.freebsd.org/cgi/man.cgi?query=sysrc&sektion=8&format=html).
+One front door, and the right specialist behind it.
+
+Under the utility is [bsdconf(3)](https://man.freebsd.org/cgi/man.cgi?query=bsdconf&sektion=3&format=html), the figpar engine brought forward as one reader and one writer, co-authored with Faraz Vahedi.
+Each file family is a small descriptor: the keyword, the files, and the quoting rules of the program that will actually read them.
+Loader values are written quoted, because that is what the boot loader accepts.
+Sysctl values are quoted only when the round trip needs it.
+The make family keeps its real operators (`+=`, `?=`, `:=`, `!=`) and the empty `WITH_` / `WITHOUT_` assignment, because for those knobs presence is the setting.
+You name the format with the target.
+`-f` names the path, so a loader-formatted file staged anywhere is still a loader file, and a `generic` target covers a file that matches no built-in.
+
+Where the boot reads several files, sysconf reads those same files, in that same order.
+The loader target starts where the loader starts, at /boot/defaults/loader.conf, and follows `loader_conf_files`, `loader_conf_dirs`, and `local_loader_conf_files`, including a layout that points those lists somewhere else.
+The value you read is the value that takes effect.
+The value you write is stored where it will still take effect on the next boot.
+A removal clears every file that lists the directive, so that an earlier setting does not simply get unmasked.
+The same command lists the files and dumps the effective set:
+
+```
+sysconf loader -l
+sysconf loader -a
+```
+
+`-d` reports the descriptions carried in the defaults file.
+`-A` widens a dump so directives still at their default are part of the picture.
+
+A write replaces the file whole.
+The new text goes to a temporary in the same directory, is fsynced, and is renamed over the original, with mode and ownership preserved.
+If the machine stops halfway, the previous file is the one still on disk.
+Read-only use, a `-c` check included, runs inside a [capsicum(4)](https://man.freebsd.org/cgi/man.cgi?query=capsicum&sektion=4&format=html) sandbox: the files are opened, every other capability is dropped, and only then is a line parsed.
+
+The sysctl target asks the running kernel before it stores anything.
+An unknown OID, a read-only OID, a loader-only tunable, or a value outside the type’s range is reported and skipped, and a loader-only tunable is pointed at the loader target, where a boot setting belongs.
+Every other assignment in the same command still applies.
+On make and src, `WITH_foo=no` is written and you are told at once to use `WITHOUT_foo=1` instead.
+That is the advice in share/mk/bsd.mkopt.mk, delivered at the keyboard, and repeated on a later read with the file and line so an old `WITH_*=no` stays in view.
+
+`-j` and `-R` aim the same sentences at a jail or another root.
+
+The introduction is in HEAD as of 3fe5961a0b70 ([D58066](https://reviews.freebsd.org/D58066)), and [sysconf(8)](https://man.freebsd.org/cgi/man.cgi?query=sysconf&sektion=8&format=html) makes its first release in FreeBSD 16.0.
+It has already grown since that commit.
+A unique prefix of a target is enough (`lo` is loader, `sy` is sysctl, `sr` is src), and a poudriere target carries the same verbs to poudriere.conf and the make overlays under poudriere.d.
+
+Thanks to Robert Clausecker and Faraz Vahedi for review, and to Alexander Ziaee for the release notes.
+
+Try it on HEAD against a file you usually open by hand.
+If a format you live in is missing, please write.
+The descriptor layer is how the next one joins, and it would be good to hear which file you want next.
+
+### CUSE Improvements
+
+At the end of this quarter, I started working on improving [cuse(3)](https://man.freebsd.org/cgi/man.cgi?query=cuse&sektion=3&format=html).
+Apart from minor fixes and refactors, I fixed known hangs in the kernel module during I/O ([872c36cb6f2d](https://cgit.freebsd.org/src/commit/?id=872c36cb6f2de17278c559a300c2163d8b39b3c6)) and module hot-unload ([d38ef1aca969](https://cgit.freebsd.org/src/commit/?id=d38ef1aca969f9a79572958c06bc4a4e03f053c2)).
+
+You can also follow the development process on the FreeBSD Foundation’s [status-updates repository](https://github.com/FreeBSDFoundation/status-updates/tree/main/Christos_Margiolis), where I post weekly reports.
+
+Sponsor: The FreeBSD Foundation
+
+### ext2fs user space tools
+
+The goal of this project is to implement tools for managing ext2fs filesystems in base FreeBSD.
+
+The project includes the following:
+- [dumpfs_ext2fs(8)](https://man.freebsd.org/cgi/man.cgi?query=dumpfs_ext2fs&sektion=8&format=html)
+- [newfs_ext2fs(8)](https://man.freebsd.org/cgi/man.cgi?query=newfs_ext2fs&sektion=8&format=html)
+- [fsck_ext2fs(8)](https://man.freebsd.org/cgi/man.cgi?query=fsck_ext2fs&sektion=8&format=html)
+- [tunefs_ext2fs(8)](https://man.freebsd.org/cgi/man.cgi?query=tunefs_ext2fs&sektion=8&format=html)
+- libext2fs (same idea as libufs)
+- integration into makefs
+- tests for the mentioned components
+
+Sponsor: The FreeBSD Foundation
+
+## Kernel
+
+Updates to kernel subsystems/features, driver support, filesystems, and more.
+
+### Boot Loader Improvements
+
+Links:  
+
+[Boot loader test framework](https://reviews.freebsd.org/D58008) URL: [https://reviews.freebsd.org/D58008](https://reviews.freebsd.org/D58008)  
+
+[XZ decompression for EFI memory disks](https://reviews.freebsd.org/D58073) URL: [https://reviews.freebsd.org/D58073](https://reviews.freebsd.org/D58073)  
+
+[Dynamic loader memory disks](https://reviews.freebsd.org/D59418) URL: [https://reviews.freebsd.org/D59418](https://reviews.freebsd.org/D59418)  
+
+[Independent EFI HTTP devices](https://reviews.freebsd.org/D59423) URL: [https://reviews.freebsd.org/D59423](https://reviews.freebsd.org/D59423)  
+
+[DHCP initial memory-disk option](https://reviews.freebsd.org/D59428) URL: [https://reviews.freebsd.org/D59428](https://reviews.freebsd.org/D59428)  
+
+[EFI chain-boot partition fix](https://cgit.freebsd.org/src/commit/?id=9ecc2493ca5fbba852e175674b5cb8975b99af84) URL: [https://cgit.freebsd.org/src/commit/?id=9ecc2493ca5fbba852e175674b5cb8975b99af84](https://cgit.freebsd.org/src/commit/?id=9ecc2493ca5fbba852e175674b5cb8975b99af84)
+
+Work this quarter expanded the boot loader’s support for compressed images, memory disks, and HTTP network booting, with an eye to both iPXE integration, and [loader.efi(8)](https://man.freebsd.org/cgi/man.cgi?query=loader.efi&sektion=8&format=html) completeness.
+It also introduced a QEMU-based test framework covering many of FreeBSD’s boot combinations.
+
+The loader can now read files compressed with XZ or Zstandard in the same way that it already handled gzip and bzip2 files.
+XZ support is enabled by default in the BIOS and EFI loaders, including support for compressed memory-disk images such as FreeBSD installation images.
+Zstandard support is available as a build option.
+
+Memory-disk handling was generalized so that the loader can create an `md` device dynamically.
+This provides a fallback on systems whose UEFI firmware does not implement the RamDisk protocol, a situation found on some smaller and embedded systems.
+The resulting memory disk is exported to the kernel and can contain both the kernel and the root filesystem.
+Downloaded memory-disk images now use the correct UEFI memory type, and downloads can be interrupted with Escape.
+This replaces the need to use the memdisk_uefi.efi third-party add-in that people needed previously for iPXE integration.
+Now loader.efi can also download images via iPXE’s download services, requiring only basic networking DXE modules in the UEFI firmware image.
+
+EFI HTTP support previously depended on the firmware having loaded loader.efi through UEFI HTTP Boot and was restricted to the server selected by the firmware.
+The loader now accepts arbitrary `http[N]://host[:port]/path` device specifications.
+These can be used as `rootdev`, in loader.conf, or interactively, regardless of how the loader itself was started.
+The implementation can either reuse an existing loader network configuration or ask the firmware network stack to perform DHCP.
+
+The DHCP client now requests a FreeBSD vendor option containing the URL of an initial memory-disk image.
+With this option, a machine can start loader.efi directly over the network, discover a detached root image through DHCP, retrieve that image over HTTP, and boot from it.
+Care was taken to transfer ownership of the network interface between the loader’s native network stack and the UEFI HTTP stack.
+This is necessary because each stack needs different access to the firmware’s network protocols.
+
+A new tools/boot/boot-test.sh framework uses QEMU to test booting across aarch64, amd64, armv7, powerpc64, powerpc64le, and riscv64.
+It exercises the applicable BIOS, UEFI, OpenFirmware, and PReP environments with CD, MBR, GPT, network, and memory-disk configurations, as well as the Lua, Forth, and simple loaders.
+HTTP network-boot and gptboot.efi chain-boot tests were added later in the quarter.
+The framework is not yet an installed test because it builds and tests several target architectures from one host.
+
+The chain-boot tests accompanied a fix for systems that use gptboot.efi to select between A/B system partitions.
+After being chain-loaded, loader.efi could skip the selected partition and boot the other system partition instead.
+The selected partition is now tried first, while the normal search of sibling partitions remains as a fallback.
+A separate loader change that interfered with some ZFS chain-boot configurations was reverted.
+
+Other work added a [loader.kboot(8)](https://man.freebsd.org/cgi/man.cgi?query=loader.kboot&sektion=8&format=html) manual page, build knobs for omitting the x86 BIOS and userboot loaders from UEFI-only systems, and defensive checks for firmware that advertises unusable graphics output protocols.
+
+Sponsor: Netflix
+
+### Suspend/Resume Improvements
+
+Links:  
+
+[Blog](https://obiw.ac/s0ix/) URL: [https://obiw.ac/s0ix/](https://obiw.ac/s0ix/)  
+
+[BSDCan talk on s2idle/S0ix](https://youtu.be/RCjPc4X2Edc) URL: [https://youtu.be/RCjPc4X2Edc](https://youtu.be/RCjPc4X2Edc)  
+
+[Working branch](https://github.com/obiwac/freebsd-s0ix/pull/15) URL: [https://github.com/obiwac/freebsd-s0ix/pull/15](https://github.com/obiwac/freebsd-s0ix/pull/15)
+
+Suspend-to-idle and support for S0ix sleep is in the process of being added to FreeBSD.
+
+This will allow modern Intel and AMD laptops, some of which do not support ACPI S3 sleep, to enter low power states to increase battery life.
+
+[amdsmu(4)](https://man.freebsd.org/cgi/man.cgi?query=amdsmu&sektion=4&format=html) now proactively diagnoses S0i3 entry after resuming from suspend-to-idle with a new eventhandler.
+If S0i3 was not entered, it will print the IP blocks that were blocking entry to dmesg, along with hints on how to resolve them.
+
+The [acpi_spmc(4)](https://man.freebsd.org/cgi/man.cgi?query=acpi_spmc&sektion=4&format=html) driver now checks Intel and AMD constraint packages.
+Malformed constraints are skipped instead of crashing.
+
+Various improvements were made to the [thunderbolt(4)](https://man.freebsd.org/cgi/man.cgi?query=thunderbolt&sektion=4&format=html) driver: support for writing to router config space, controller resets, and a CRC accounting fix for config write messages.
+Thunderbolt controllers can now be resumed (in review), which allows multiple suspend-resume cycles without needing to reload the kernel module.
+
+At this point modern standby works reliably on target laptops and most panics have been ironed out.
+The primary issue being worked on is GPE events generated while the machine is suspended — such as plugging or unplugging AC power — causing panics.
+
+Sponsor: The FreeBSD Foundation
+
+### Audio Stack Improvements
+
+I have been working on the audio stack since 2024Q1.
+Below is a list of the previous status reports:
+
+- Ongoing locking refactor in [sound(4)](https://man.freebsd.org/cgi/man.cgi?query=sound&sektion=4&format=html).
+- Initial refactor of [sound(4)](https://man.freebsd.org/cgi/man.cgi?query=sound&sektion=4&format=html)'s mixer code.
+- [snd_uaudio(4)](https://man.freebsd.org/cgi/man.cgi?query=snd_uaudio&sektion=4&format=html) bug fixes, and better device support.
+- As always, more incremental [sound(4)](https://man.freebsd.org/cgi/man.cgi?query=sound&sektion=4&format=html), device drivers, and [virtual_oss(8)](https://man.freebsd.org/cgi/man.cgi?query=virtual_oss&sektion=8&format=html) cleanups, fixes and improvements.
+
+You can also follow the development process on the FreeBSD Foundation’s [status-updates repository](https://github.com/FreeBSDFoundation/status-updates/tree/main/Christos_Margiolis), where I post weekly reports.
+
+Sponsor: The FreeBSD Foundation
+
+### Adopt -fbounds-safety in the FreeBSD Kernel TCP/IP Stack
+
+Links:  
+
+[Wiki page](https://wiki.freebsd.org/BoundsSafety) URL: [https://wiki.freebsd.org/BoundsSafety](https://wiki.freebsd.org/BoundsSafety)  
+
+[Project page](https://freebsdfoundation.org/project/adopt-fbounds-safety-in-the-freebsd-kernel-tcp-ip-stack/) URL: [https://freebsdfoundation.org/project/adopt-fbounds-safety-in-the-freebsd-kernel-tcp-ip-stack/](https://freebsdfoundation.org/project/adopt-fbounds-safety-in-the-freebsd-kernel-tcp-ip-stack/)
+
+Clang’s -fbounds-safety lets C code state a buffer’s length, as in `__counted_by(len)`.
+The compiler then checks accesses through that pointer.
+An out-of-bounds access traps instead of corrupting memory.
+The TCP/IP stack parses untrusted network input, so it is a good place to start.
+This project adds the macros and build support, then converts TCP files one at a time.
+Without the flag the annotations expand to nothing.
+The tree still builds with the base system compiler and with GCC.
+
+#### This quarter
+
+- External toolchain builds GENERIC on amd64, recipe on the wiki.
+- Macros, build knob and soft traps posted, four reviews accepted.
+- `tcp_ecn.c` runs checked, kernel boots and passes netinet tests.
+- mbuf accessor RFC on arch@ and net@, discussion ongoing.
+
+Sponsor: The FreeBSD Foundation
+
+### Netlink Support for Tunnel Interfaces
+
+Following the [geneve(4)](https://man.freebsd.org/cgi/man.cgi?query=geneve&sektion=4&format=html) work, I have been migrating our other tunnel drivers to the new if_clone KPI and adding netlink support for them, both in kernel and in [ifconfig(8)](https://man.freebsd.org/cgi/man.cgi?query=ifconfig&sektion=8&format=html).
+They are now available on CURRENT.
+
+So far, I have added the support for:
+
+- Netlink support for [gif(4)](https://man.freebsd.org/cgi/man.cgi?query=gif&sektion=4&format=html) with tests. [(D57666)](https://reviews.freebsd.org/D57666)
+- Netlink support for [gre(4)](https://man.freebsd.org/cgi/man.cgi?query=gre&sektion=4&format=html) with a regression test. [(D55366)](https://reviews.freebsd.org/D55366)
+- IFLAF_GROUP, a FreeBSD-specific netlink attribute to carry the interface groups, since IFLA_GROUP only works with a single numeric group id. [ifconfig(8)](https://man.freebsd.org/cgi/man.cgi?query=ifconfig&sektion=8&format=html) now reads the interface groups from it. [(D58643)](https://reviews.freebsd.org/D58643)
+
+While here, I fixed the following bugs:
+
+Ongoing work:
+
+### Netlink Payload Decoding Infrastructure for FreeBSD Tracing Tools
+
+PF uses Netlink to communicate between userland tools and the kernel, but before this work, [truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) could not meaningfully decode the payloads of PF Netlink messages and would instead display much of the message as raw data.
+
+This project adds a reusable Netlink payload decoding infrastructure to `libsysdecode` and integrates it with [truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html), allowing structured decoding of Netlink messages rather than exposing only their raw contents.
+
+The core of the infrastructure is a generic attribute decoder based on decoder tables.
+The infrastructure supports decoding different attribute types, including integer values, strings, booleans, and nested attributes.
+Netlink commands can then provide their own decoder tables describing the attributes they contain, without requiring a separate decoding mechanism for each command.
+
+The infrastructure has been used to add decoding for several PF Netlink commands, including `PFNL_CMD_KILLSTATES`, `PFNL_CMD_GETRULES`, and `PFNL_CMD_GET_LIMIT`.
+
+For example, a PF Netlink message that previously appeared largely as an opaque buffer:
+
+```
+recvmsg(3,{0x90d83dda940,12,[{"@\^A\0\0\^P\0\^C\^C\^A\0\0\0\0\0"...,65536}],1,{},0,0},0) = 1060 (0x424)
+```
+
+With the new decoding infrastructure, [truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) can decode the Netlink message and PF payload into meaningful fields, for example:
+
+```
+sendto(5,netlink{flags=NLM_F_REQUEST|NLM_F_ACK|NLM_F_ROOT|NLM_F_MATCH,seq=8,pid=0,len=92,type=18,pfctl={cmd=PFNL_CMD_GETSTATES{ifname=,proto=0,af=0,filter_addr=::,filter_mask=::,include_rule=FALSE}}},92,0,NULL,0) = 92 (0x5c)
+```
+
+[truss(1)](https://man.freebsd.org/cgi/man.cgi?query=truss&sektion=1&format=html) was also extended to track the protocol associated with `AF_NETLINK` sockets so that messages can be passed to the appropriate decoder.
+Netlink message flags are decoded as combinations of `NLM_F_*` flags, while unknown bits are preserved.
+
+The work in this quarter established the infrastructure needed to continue adding PF Netlink payload decoders without duplicating parsing logic for each command.
+
+Sponsor: Google LLC (GSoC 2026)
+
+### LinuxKPI 802.11 and Native Wireless Update
+
+Contact: Bjoern A. Zeeb <[bz@FreeBSD.org](mailto:bz@FreeBSD.org)>  
+
+Contact: The FreeBSD wireless mailing list <[wireless@FreeBSD.org](mailto:wireless@FreeBSD.org)>
+
+This report focuses on the efforts using permissively licensed Linux wireless drivers, mostly unmodified, on FreeBSD, as well as preparing the native net80211 stack for support of newer standards.
+
+#### Mediatek mt76 support
+
+A call for testing was put out for mt7921 based PCIe chipsets (MT7920E; MT7921E, also known as AMD RZ608; MT7922E ,also known as AMD RZ616).
+This is based on ongoing reviews, mostly to replace an old shortcut in LinuxKPI for struct page.
+Despite great interest in the driver the previous years we have not had a lot of feedback.
+
+Work to support further mt76 chipsets will continue.
+
+#### Realtek rtw8x support
+
+Thanks to the debugging of users the situation has slightly improved.
+It is expected that Linux v7.3 has a lot of bug fixes in the drivers but due to the timeline of Linux and FreeBSD release schedules may only hit main once again.
+Further issues have to worked on and fixed still.
+
+#### LinuxKPI USB support
+
+In previous reports we have reported that this was blocked on a compiler option.
+During Q3 we found a way which can limit the scope to just LinuxKPI USB drivers.
+There is ongoing work to simplify the build framework for this.
+While there are rough edges still, especially around teardown and unplug we hope to put out a stack of changes for review or a tree for testing during October.
+
+#### Native net80211 updates (tech debt)
+
+Initial work to remove workarounds from LinuxKPI and fix net80211 are ongoing.
+
+#### Espressif Systems ESP32-E22 support
+
+The current upstream driver from Espressif Systems on Github v0.6 has been ported to FreeBSD.
+Initial changes to fix compiler warnings were submitted back as pull requests.
+The driver is currently awaiting a vendor import and to be followed by an unifdef within the FreeBSD tree as upstream supports a wide range of Linux versions.
+Special thanks go to Espressif Systems for providing me with two E22 sample cards in order to test the port.
+
+Sponsor: The FreeBSD Foundation
+Sponsor: Espressif Systems (Hardware)
+
+### Series of IPv6 Improvements
+
+Since the last report, I have continued refreshing our IPv6 stack and implementing pending RFCs, and the results are now available on CURRENT.
+
+So far, I have added the support for:
+
+- RFC 8925: IPv6-Only Preferred Option in [dhclient(8)](https://man.freebsd.org/cgi/man.cgi?query=dhclient&sektion=8&format=html). When the option is received and IPv6 connectivity is available, dhclient stops the DHCPv4 configuration, releases the previous lease and waits for the duration specified by the server before restarting discovery. Netlink is used to check for IPv6 connectivity. [(D56637)](https://reviews.freebsd.org/D56637)
+- RFC 6275 (Section 8.3) and RFC 9762 (Section 7.1): The R-bit and P-bit of the Prefix Information option are now exposed to userland for future implementations. [(D56207)](https://reviews.freebsd.org/D56207)
+
+I also fixed a few bugs in the stack:
+
+Ongoing work:
+
+### Series of Routing Stack Improvements
+
+For the past 3 months, I have worked on improving the resilience of our routing stack, and the results are now available on CURRENT.
+
+Previously, the reachability of every nexthop was checked against the interface link status for each packet.
+Now, nexthops subscribe to interface link events and only the reachability flag of the final nexthop is checked in the forwarding path.
+When a nexthop becomes unreachable, the nexthop groups that contain it are recompiled immediately by replacing the unreachable nexthops with the reachable ones.
+Once the link comes back, the nexthops return to their normal slots in the nexthop group.
+This means a multipath route keeps forwarding traffic when one of its links goes down, without deleting the route.
+I am really proud of this one.
+
+So far, I have added the support for:
+
+- Subscription of nexthops to interface link events. [(D57375)](https://reviews.freebsd.org/D57375)
+- Replacement of unreachable nexthops in nexthop groups. [(D57389)](https://reviews.freebsd.org/D57389)
+- RTA_PREFSRC in netlink and the prefsrc option in [route(8)](https://man.freebsd.org/cgi/man.cgi?query=route&sektion=8&format=html), to select the source address of outgoing packets even when it is configured on another interface. This is frequently used on unnumbered interfaces and L3 multi-homed hosts. [(D58294)](https://reviews.freebsd.org/D58294)
+- FIB-aware ifa lookups via ifa_ifwithaddr_fib(), and used it in route installation, source address selection and ICMP redirect verification. [(D58305)](https://reviews.freebsd.org/D58305)
+- Nexthop statistics in [netstat(1)](https://man.freebsd.org/cgi/man.cgi?query=netstat&sektion=1&format=html) with the -os flag. [(D58538)](https://reviews.freebsd.org/D58538)
+- A new [nhop(9)](https://man.freebsd.org/cgi/man.cgi?query=nhop&sektion=9&format=html) manual to replace the outdated nexthop information in [rtentry(9)](https://man.freebsd.org/cgi/man.cgi?query=rtentry&sektion=9&format=html). [(D58564)](https://reviews.freebsd.org/D58564)
+
+I also fixed a couple of bugs in fib_algo:
+
+I want to especially thank [Gleb Smirnoff](mailto:glebius@FreeBSD.org), [Alexander Chernikov](mailto:melifaro@FreeBSD.org) and [Mark Johnston](mailto:markj@FreeBSD.org) for their reviews and guidance on these works.
+
+### BPF/ifnet Contract Hardening: D59140
+
+Links:  
+
+[Phabricator revision](https://reviews.freebsd.org/D59140) URL: [https://reviews.freebsd.org/D59140](https://reviews.freebsd.org/D59140)  
+
+[Reproducer and epistemic record](https://github.com/LuisCastellanos-dev/vtr-sentinel-kmod/tree/vtr-sentinel-14.5/reproducers/D59140) URL: [Reproducer and epistemic record](https://github.com/LuisCastellanos-dev/vtr-sentinel-kmod/tree/vtr-sentinel-14.5/reproducers/D59140)
+
+#### Description
+
+During Q3 2026, a review of the `bpf_movein()` path in sys/net/bpf.c was conducted following an observed failure when writing to a BPF descriptor on `lo0` (FreeBSD 14.4-RELEASE-p8).
+
+The initial observation was a [write(2)](https://man.freebsd.org/cgi/man.cgi?query=write&sektion=2&format=html) returning `EAFNOSUPPORT` when sending a packet through a BPF descriptor bound to `lo0` (DLT_NULL).
+The original attribution — missing `sa_len` initialization in `if_output` drivers — was not sustained after independent review by [Gleb Smirnoff](mailto:glebius@FreeBSD.org).
+
+Review established that the reproducer violated the DLT_NULL contract: a [write(2)](https://man.freebsd.org/cgi/man.cgi?query=write&sektion=2&format=html) on a BPF descriptor must prepend a 32-bit word in host byte order containing the address family.
+The `sa_len` check proposed in the individual drivers (if_disc.c, if_gif.c, if_loop.c, if_me.c, if_tuntap.c) is not required because the existing BPF/ifnet interface contract is already defined at the BPF boundary in `bpf_movein()`.
+
+Following that review, D59140 was updated to add a defensive assertion in `bpf_movein()` per Gleb’s suggestion:
+
+```
+MPASS(hlen <= sizeof(sockp->sa_data));
+```
+
+This makes the existing BPF/ifnet contract explicit through a defensive assertion at the point where the contract is consumed.
+The assertion protects the `sa_data` bounds invariant at the point where the computed header length is consumed.
+
+#### Work Completed
+
+- Identified and reproduced `EAFNOSUPPORT` on `lo0` with BPF [write(2)](https://man.freebsd.org/cgi/man.cgi?query=write&sektion=2&format=html) on FreeBSD 14.4-RELEASE-p8.
+- Submitted D59140 to Phabricator with initial fix targeting five `if_output` drivers.
+- Received review from Gleb Smirnoff identifying the reproducer defect: missing 32-bit DLT_NULL address-family header in the packet.
+- Corrected the reproducer and verified locally on FreeBSD 14.5-RELEASE.
+- Updated D59140 to replace the driver-level checks with a single `MPASS` assertion in `bpf_movein()` (Diff 186596).
+- Updated Summary and Test Plan in D59140 to document the complete investigation history: observed failure → initial attribution → independent falsification → corrected reproducer → local verification → upstream hardening proposal.
+
+#### Work in Progress
+
+- D59140 (Diff 186596) is under upstream review.
+
+#### Open Tasks
+
+- Await upstream review and disposition of Diff 186596.
+
+### Storage Discovery and Diagnostics Improvements
+
+Links:  
+
+[CAM lifecycle DTrace probes](https://reviews.freebsd.org/D58523) URL: [https://reviews.freebsd.org/D58523](https://reviews.freebsd.org/D58523)  
+
+[CAM peripheral invalidation events](https://reviews.freebsd.org/D58527) URL: [https://reviews.freebsd.org/D58527](https://reviews.freebsd.org/D58527)  
+
+[mpsutil discovery information](https://reviews.freebsd.org/D58528) URL: [https://reviews.freebsd.org/D58528](https://reviews.freebsd.org/D58528)
+
+Several changes this quarter made storage-device discovery easier to observe and diagnose, particularly during boot.
+
+The CAM DTrace provider gained probes for peripheral I/O errors, error recovery, and peripheral invalidation.
+Additional probes report when CAM holds or releases the boot process and when a new bus is registered.
+Together these probes cover much more of the path from initial bus discovery through the creation of disk peripherals.
+They can also be used with DTrace anonymous tracing to investigate problems that happen before the system reaches multi-user operation.
+The new probes are documented in [dtrace_cam(4)](https://man.freebsd.org/cgi/man.cgi?query=dtrace_cam&sektion=4&format=html).
+
+CAM now sends a [devctl(4)](https://man.freebsd.org/cgi/man.cgi?query=devctl&sektion=4&format=html) notification when a peripheral is invalidated.
+The notification includes the device serial number when available, or its CAM path otherwise, so system-management software can identify the device that disappeared.
+The common code used to construct CAM notifications was factored out to support this and future event types.
+
+Two fixes improved the handling of disks that fail during probing.
+CAM now stops probing after a peripheral has been invalidated instead of sending more commands to an abandoned device, where they could cause long timeouts and confusing errors.
+A related condition for deciding when to invalidate a disk was corrected.
+Errors reported for NVMe disks through the CAM `nda` peripheral now identify the command set, making command opcodes easier to interpret.
+
+[mpsutil(8)](https://man.freebsd.org/cgi/man.cgi?query=mpsutil&sektion=8&format=html) gained a `show discovery` command that prints the controller’s discovery tables.
+This exposes the controller’s view of attached SAS devices and expanders and is useful when diagnosing devices that are missing or attached through an unexpected path.
+
+Finally, [nvmecontrol(8)](https://man.freebsd.org/cgi/man.cgi?query=nvmecontrol&sektion=8&format=html) received correctness fixes for Autonomous Power State Transition data.
+Transition values are now encoded without intermediate integer overflow, and identify data reporting an excessive number of power states is handled with a bounds check rather than an assertion.
+
+Sponsor: Netflix
+
+### x86 splitlocks detection support
+
+Contact: Konstantin Belousov <[kib@FreeBSD.org](mailto:kib@FreeBSD.org)>
+
+Most non-x86 platforms are relatively strict with regard to the proper alignment of the data types.
+On the other hand, x86 ISA allows any alignment for the operands of integer scalar operations.
+
+Still, there is an AC control bit in the processor flags register which causes alignment exception (fault) on unaligned operations.
+Practically the bit is not too useful because most of the compilers generate code that relies on the freedom of the working unaligned access on x86.
+
+Particularly interesting case of the unaligned access is when the disposition of the operand causes it to span two cache lines (which is impossible for naturally aligned data).
+Normal (unlocked) operations cause so called torn reads and writes.
+This effect become observable starting with Core2 Intel microarchitecture.
+
+Even more interesting case is provided by the locked operations using the LOCK prefix on read-modify-write instruction with the mis-aligned data.
+To satisfy ISA guarantees in this case, the CPU has to either take more than one cache line for exclusive ownership in MESI-like cache coherence protocol, or exercise so called bus lock ensuring global cache ownership.
+Either option has very high cost and causes observable detrimental effects on other processes and virtual machines executing on the same physical host.
+
+Since some time Intel provides a control for the lock operations that need to span more than one cache line (split locks).
+Turning the control on causes split locks to generate the same #AC exception as done by the AC flag, but only for the split locks, instead of all unaligned accesses.
+
+The feature is controlled by the platform MSR and is per-CPU global, which precludes making the MSR directly available to userspace.
+The new [sysarch(2)](https://man.freebsd.org/cgi/man.cgi?query=sysarch&sektion=2&format=html) operation I386_SET_SPLITLOCK was developed that enables the control for the calling thread.
+The control is part of the machine state maintained on the context switch.
+
+The intent is mainly to assist in catching bugs where improperly alignment locking structures are created, unlike Linux, which uses the feature to artificially penalize such processes by slowing them down.
+If the program code modifications are not possible, users and administrators can LD_PRELOAD a trivial shared object that turns the control on.
+
+Sponsor: The FreeBSD Foundation
+
+### Aquantia / Marvell aq(4) Device Driver
+
+Aquantia (now Marvell) AQtion devices are multi-gigabit PCIe Ethernet controllers supporting speeds up to 10 Gb/s.
+They are found on workstation and desktop motherboards, and add-in NICs.
+
+Aquantia published a FreeBSD driver for its first-generation "Atlantic" controllers, but it was unmaintained for some time.
+FreeBSD developers contributed some fixes to the vendor’s repository, but several pull requests were never addressed.
+The driver was available in the ports collection as [net/aquantia-atlantic-kmod](https://cgit.freebsd.org/ports/tree/net/aquantia-atlantic-kmod/), with some additional patches, but it was not part of the base system and lacked support for newer devices.
+
+Ed Maste imported a snapshot of the vendor driver, applied patches from unmerged pull requests and the port, wrote an [aq(4)](https://man.freebsd.org/cgi/man.cgi?query=aq&sektion=4&format=html) man page, and connected it to the build.
+
+Since then, Nick Price added support for the second-generation Atlantic 2 (AQC113) controllers, and has made extensive fixes and improvements throughout the driver.
+These include enabling jumbo frames, software LRO, and suspend/resume; correcting RSS queue distribution and honouring the kernel RSS policy; expanding and fixing checksum and VLAN offloads and VLAN/multicast filtering, hardening the attach, detach, reset, interrupt and RX/TX paths; handling PHY thermal shutdown; and improving diagnostics and link-state reporting.
+
+The driver is available in -CURRENT snapshot images, and has been MFC’d to stable/15 to be included in FreeBSD 15.2.
+
+Sponsor: The FreeBSD Foundation (Ed’s work)
+
+## Architectures
+
+Updating platform-specific features and bringing in support for new hardware platforms.
+
+### FreeBSD Driver Development for BananaPi R2 / R64 / R2 Pro
+
+This project adds FreeBSD support for three Banana Pi router boards: the BPI-R2 (MediaTek MT7623, armv7), the BPI-R64 (MediaTek MT7622, arm64) and the BPI-R2 Pro (Rockchip RK3568, arm64).
+
+#### BPI-R2 (MT7623) Introduction
+
+The Banana Pi BPI-R2 is a MediaTek MT7623N-based router board (quad-core ARM Cortex-A7, up to 1.3 GHz) with 2 GB DDR3, 8 GB eMMC, 4x Gigabit LAN and 1x Gigabit WAN driven by the built-in MT7530 switch, two SATA ports, two USB 3.0 ports, a mini PCIe slot, HDMI output, MIPI DSI/CSI connectors and the usual UART, I2C, SPI, PWM and GPIO headers.
+Because the MT7623 is an armv7 part, it is the only board of the three that is built from the 32-bit `GENERIC` kernel configuration.
+
+#### Current State of FreeBSD Support BPI-R2
+
+Implemented so far:
+
+- Platform / machdep support — device map, early console, late init and SoC reset, plus the `SOC_MEDIATEK` kernel option and a DTB build for `mt7623n-bananapi-bpi-r2.dts`
+- SMP startup for the four Cortex-A7 cores
+- UART driver
+- Clock management — shared MediaTek clock infrastructure (gates, muxes, fixed factors) used by the topckgen, infracfg, pericfg, hifsys, bdpsys, imgsys, vdecsys and audsys clock controllers
+- PLL clocks (apmixedsys)
+- System configuration registers (syscfg/syscon)
+- Pinctrl
+- GPIO
+
+#### Development roadmap BPI-R2
+
+Implement missing drivers:
+
+- Storage controller (eMMC/SD/MMC)
+- Ethernet (GMAC) and the MT7530 switch
+- USB 3.0 (xHCI) and T-PHY
+- SATA / AHCI
+- PCIe
+- Watchdog
+- I2C
+- SPI
+- PWM
+
+#### BPI-R64 Introduction
+
+The Banana Pi BPI-R64 is a MediaTek MT7622-based development board (dual-core ARM Cortex-A53, ~1.35 GHz) featuring 4x Gigabit LAN, 1x Gigabit WAN, 802.11n 4x4 Wi-Fi, Bluetooth 5.0 and a range of peripheral interfaces (UART, SPI, I2C, GPIO, SATA, mini PCIe, eMMC and others).
+
+#### Current State of FreeBSD Support BPI-R64
+
+Implemented so far:
+
+- UART driver
+- Clock management (clocks)
+- Pinctrl
+- Storage controller (eMMC/SD/MMC)
+- Ethernet driver for the MT7622 GMAC
+- USB 3.0 (xHCI) driver
+- T-PHY (USB and PCIe PHY)
+- Watchdog driver
+- RTC driver
+- Random number generator driver
+- PCIe configuration space driver (pciecfg)
+- sysirq — the interrupt polarity controller
+- PCIe — experimental
+- Wi-Fi — experimental
+
+#### Development roadmap BPI-R64
+
+Implement missing drivers:
+
+- SATA / AHCI, including SATA mode for the T-PHY
+- GPIO
+- I2C
+- SPI
+- PWM
+
+Work in progress:
+
+- Review and rework of the clock drivers
+- MT7531 Ethernet switch
+
+#### BPI-R2 Pro Introduction
+
+The Banana Pi BPI-R2 Pro is the next generation smart router development
+board, powered by a Rockchip RK3568 processor.
+
+It carries 2 GB LPDDR4 memory and 16 GB eMMC storage, and offers two USB 3.0 ports, five Gigabit Ethernet ports, an M.2 Key-E and a mini PCIe slot, two MIPI DSI interfaces (one of which can be switched to LVDS in software), one MIPI CSI camera interface and one HDMI output.
+
+#### Current State of FreeBSD Support BPI-R2 Pro
+
+Implemented so far:
+
+- UART driver
+- Clock management (clocks)
+- Pinctrl
+- GPIO
+- Storage controller (eMMC/SD/MMC)
+- USB 3.0 (xHCI) driver
+- Watchdog driver
+- PCIe driver
+
+#### Development roadmap BPI-R2 Pro
+
+Implement missing drivers:
+
+- HDMI
+- MIPI DSI/CSI
+
+Work in progress:
+
+- AHCI / SATA
+- PCIe
+
+### ROCm Support on FreeBSD
+
+Links:  
+
+[rocm-systems fork with FreeBSD support](https://github.com/Yohello1/rocm-systems/tree/rebase-systems) URL: [https://github.com/Yohello1/rocm-systems/tree/rebase-systems](https://github.com/Yohello1/rocm-systems/tree/rebase-systems)  
+
+[drm-kmod fork with partial amdkfd support](https://github.com/Yohello1/drm-kmod-rocm/tree/super-special) URL: [https://github.com/Yohello1/drm-kmod-rocm/tree/super-special](https://github.com/Yohello1/drm-kmod-rocm/tree/super-special)
+
+ROCm is AMD’s compute platform, which is the set of libraries, drivers, and tooling used to program their AI accelerators, and/or GPUs.
+On FreeBSD there are only a few ways to run compute workloads (AI/ML, graphics, and so on) on the GPU, and to my knowledge those are Vulkan and OpenGL.
+Both are fine for graphics, and sometimes machine learning too, but a lot of workloads are just not well suited to them, and end up being done in ROCm or CUDA instead, since those give the developer a lot more control over how the task is actually executed.
+
+So I have been slowly porting the ROCm toolchain over to FreeBSD, which would let the AI accelerator ecosystem run natively here.
+
+Most of my time recently has been spent getting rocr-runtime working from my rocm-systems fork, whilst upstreaming the changes needed in the FreeBSD kernel.
+Once the kernel side is done, I can merge the amdkfd code into drm-kmod (after a lot of cleaning up), and from there it is mostly a matter of time getting the remaining pieces of rocr-runtime running.
+
+#### Work completed
+
+- amdkfd driver The amdkfd driver now compiles, links, and loads. Ported the v11 platform files for certain AMDGPU generations. `/dev/kfd` is now exposed, and interactable. Cleaned up undefined symbols which are not used as of now.
+- ROCm systems Fixed initialisation issues. Refactoring all changes before doing a large upstream push of code which can be upstreamed.
+- FreeBSD kernel The linux/util_macros.h` (D57465) has been committed to the kernel. Added `jiffies64_to_msecs` (D58075) has been committed to the kernel. Added `compat_ptr_ioctl` (D58076) has been committed to the kernel. Added `tgid` to `task_struct` under LinuxKPI (D58228) has been committed to the kernel. Various other LinuxKPI-related changes are still under review (D58207, D58222, D58845, D60275).
+
+There have been about two pull requests accepted to rocm-systems, otherwise I am still working on the large one which merges in FreeBSD support.
+That code has not been completed yet, so I have not opened it.
+
+#### Work in progress
+
+- Fixing initialisation issues in rocr-runtime, and working through whatever else shows up once it runs further.
+- Getting the large rocm-systems pull request finished and opened upstream.
+- Fixing issues with Sysfs within amdkfd. Still diagnosing issues, and figuring out what exactly the issue is.
+
+#### Help needed
+
+- Support for RDNA 1 and RDNA 2: I had commented/stubbed out all the structs and functions related to RDNA 1 and 2, because I do not have the cards, nor the time right now to test them properly. If you have the cards and the time to test them, please reach out and I can tell you exactly how to do it.
+
+This work has been sponsored by The FreeBSD Foundation!
+Thank you to the FreeBSD Foundation!!
+
+Sponsor: The FreeBSD Foundation
+
+## Cloud
+
+Updating cloud-specific features and bringing in support for new cloud platforms.
+
+### FreeBSD on EC2
+
+Links:  
+
+[Launching FreeBSD/EC2 desktop AMIs](https://www.daemonology.net/blog/2026-09-24-Launching-FreeBSD-EC2-desktop-AMIs.html) URL: [https://www.daemonology.net/blog/2026-09-24-Launching-FreeBSD-EC2-desktop-AMIs.html](https://www.daemonology.net/blog/2026-09-24-Launching-FreeBSD-EC2-desktop-AMIs.html)
+
+FreeBSD is available on both amd64 (Intel and AMD) and arm64 (Graviton) EC2 instances.
+
+A fix to [ena(4)](https://man.freebsd.org/cgi/man.cgi?query=ena&sektion=4&format=html) taskqueue NUMA binding has been applied, resulting in significant improvements in network throughput on c8gn.48xlarge systems starting with 14.5-RELEASE.
+
+EC2 now supports automatically growing filesystems when EBS volumes are expanded; this is enabled by default in 16.0-CURRENT and will be available as a non-default option in 15.2-RELEASE.
+
+The `ebsnvme` tool which ships in EC2 images now supports the "ebsnvme stats" command, compatible with Amazon Linux.
+
+A new "desktop" flavour of AMI is now available for FreeBSD 15, which uses xrdp to expose a KDE environment.
+
+## Documentation
+
+Noteworthy changes in the documentation tree, manual pages, or new external books/documents.
+
+### Documentation Engineering Team
+
+Links:  
+
+[Documentation Project Portal](https://docs.freebsd.org/) URL: [https://docs.freebsd.org/](https://docs.freebsd.org/)  
+
+[Documentation Project Primer for New Contributors](https://docs.freebsd.org/en/books/fdp-primer/) URL: [https://docs.freebsd.org/en/books/fdp-primer/](https://docs.freebsd.org/en/books/fdp-primer/)  
+
+[Documentation Engineering Team](https://www.freebsd.org/administration/#t-doceng) URL: [https://www.freebsd.org/administration/#t-doceng](https://www.freebsd.org/administration/#t-doceng)
+
+The Documentation Engineering Team is responsible for defining and following up documentation goals for the committers in the Documentation Project.
+The doceng team charter describes the duties and responsibilities of the Documentation Engineering Team in greater detail.
+
+This quarter in the Documentation Project, in addition to routine maintenance, several projects have come to fruition or were underway:
+
+- Dave Cottlehuber <[dch@FreeBSD.org](mailto:dch@FreeBSD.org)> added an [OCI container chapter](https://docs.freebsd.org/en/books/handbook/containers) to the Handbook.
+- Benedict Reuschling <[bcr@FreeBSD.org](mailto:bcr@FreeBSD.org)> and Sergio Carlavilla Delgado <[carlavilla@FreeBSD.org](mailto:carlavilla@FreeBSD.org)> refreshed the [ZFS chapter](https://docs.freebsd.org/en/books/handbook/zfs) of the Handbook.
+- Danilo G. Baio <[dbaio@FreeBSD.org](mailto:dbaio@FreeBSD.org)> improved handbook examples to have a clickable copy button which omits the shell prompt.
+- Danilo G. Baio <[dbaio@FreeBSD.org](mailto:dbaio@FreeBSD.org)> updated [textproc/po4a](https://cgit.freebsd.org/ports/tree/textproc/po4a/), the translation toolchain, to version 0.74.
+- Älven <[alven@FreeBSD.org](mailto:alven@FreeBSD.org)> updated [textproc/groff](https://cgit.freebsd.org/ports/tree/textproc/groff/), the GNU manual page toolchain, to version 1.24.2.
+- Fernando Apesteguia <[fernape@FreeBSD.org](mailto:fernape@FreeBSD.org)> updated [www/gohugo](https://cgit.freebsd.org/ports/tree/www/gohugo/), the website generator, to version 1.76.0.
+- Wolfram Schneider <[wosch@FreeBSD.org](mailto:wosch@FreeBSD.org)> updated [man.FreeBSD.org](https://man.FreeBSD.org), the oldest and largest manual pages archive on the internet.
+- Alexander Ziaee <[ziaee@FreeBSD.org](mailto:ziaee@FreeBSD.org)> updated the [guidelines for device driver manuals](https://docs.freebsd.org/en/books/fdp-primer/manual-pages/#manual-pages-sample-structures-section-4), updating all manuals to this format is underway.
+- Alexander Ziaee <[ziaee@FreeBSD.org](mailto:ziaee@FreeBSD.org)> is improving manual page compatibility for the upcoming [textproc/mandoc](https://cgit.freebsd.org/ports/tree/textproc/mandoc/) version 1.15.
+- Vladlen Popolitov <[vladlen@FreeBSD.org](mailto:vladlen@FreeBSD.org)> and Sergio Carlavilla Delgado <[carlavilla@FreeBSD.org](mailto:carlavilla@FreeBSD.org)> have invested considerable work in code-correctness for the Project website.
+- Vladlen Popolitov <[vladlen@FreeBSD.org](mailto:vladlen@FreeBSD.org)> and Andrey Zakhvatov <[andy@FreeBSD.org](mailto:andy@FreeBSD.org)> have been hard at work keeping the Russian translation up to date.
+
+This quarter, Vladlen Popolitov <[vladlen@FreeBSD.org](mailto:vladlen@FreeBSD.org)> was promoted to a doc commit bit.
+No other commit bits have been granted or taken in for safekeeping during this quarter.
+
+### The FreeBSD Russian Documentation Project
+
+Links:  
+
+[The FreeBSD Official Website in Russian](https://www.freebsd.org/ru/) URL: [https://www.freebsd.org/ru/](https://www.freebsd.org/ru/)  
+
+[FAQ](https://docs.freebsd.org/ru/books/faq/) URL: [https://docs.freebsd.org/ru/books/faq/](https://docs.freebsd.org/ru/books/faq/)  
+
+[The FreeBSD Russian Documentation Project site](https://github.com/freebsd-doc-ru/freebsd-doc/discussions) URL: [https://github.com/freebsd-doc-ru/freebsd-doc/discussions](https://github.com/freebsd-doc-ru/freebsd-doc/discussions)
+
+The FreeBSD Russian Documentation Project’s current goal is to provide up-to-date Russian translations of the most important parts of the FreeBSD documentation (FAQ, Handbook, website content).
+It is essential to support Russian-speaking users with high-quality official technical materials and to increase the adoption of the operating system worldwide.
+We hope this initiative will gain support within the Russian-speaking FreeBSD community and lead to an increase in translated materials.
+
+During the last quarter:
+
+- The project to translate FreeBSD man pages has moved beyond its initial stages: approximately 300 documents from Section 1 (General Commands) have been published in the [russian/freebsd-man](https://cgit.freebsd.org/ports/tree/russian/freebsd-man/) port (with man pages for versions 15.0 and above). Many thanks to [Gleb Popov](mailto:arrowd@FreeBSD.org) for preparing and publishing the port.
+- For the FreeBSD 14.5 release, the complete set of release documentation (release notes, errata, etc.) has been translated into Russian in a timely manner alongside the English originals.
+- 100% of the text in Weblate has been translated and synchronized with the English version (in August).
+- The Russian language section of [www.FreeBSD.org/ru](https://www.FreeBSD.org/ru) has been kept fully translated and synchronized with the English version.
+- Russian pages on the website and documentation have been validated by the HTML validator vnu, and all errors have been fixed.
+
+Plan for the next quarter:
+
+- Continue the ongoing efforts to translate FreeBSD man pages.
+
+We would appreciate your assistance:
+
+- Install the [russian/freebsd-man](https://cgit.freebsd.org/ports/tree/russian/freebsd-man/) port and use the Russian-language manual pages. It is available on all FreeBSD versions.
+- Submit corrections and new translations as pull requests to the [translation repository on GitHub](https://github.com/freebsd-doc-ru/freebsd-man-ru).
+- See [CONTRIBUTING.md](https://github.com/freebsd-doc-ru/freebsd-man-ru/blob/main/CONTRIBUTING.md) for details on how to contribute.
+
+## Ports
+
+Changes affecting the Ports Collection, whether sweeping changes that touch most of the tree, or individual ports themselves.
+
+### FreshPorts: Translations
+
+Links:  
+
+[FreshPorts](https://www.freshports.org/) URL: [https://www.freshports.org/](https://www.freshports.org/)  
+
+[FreshPorts test site, with translations](https://test.freshports.org/) URL: [https://test.freshports.org/](https://test.freshports.org/)  
+
+[How to translate FreshPorts](https://github.com/FreshPorts/freshports/tree/main/locale) URL: [https://github.com/FreshPorts/freshports/tree/main/locale](https://github.com/FreshPorts/freshports/tree/main/locale)  
+
+[Translation support issue](https://github.com/FreshPorts/freshports/issues/678) URL: [https://github.com/FreshPorts/freshports/issues/678](https://github.com/FreshPorts/freshports/issues/678)
+
+FreshPorts, and its sister site, FreshSource, have reported upon FreeBSD commits for over 25 years.
+They cover all commits, but their primary focus is ports.
+
+FreshPorts tracks the commits and extracts data from the port Makefiles to create a database of information useful to both port developers and port users.
+For example, [https://www.freshports.org/security/acme.sh/](https://www.freshports.org/security/acme.sh/) shows the history of this port, back to its creation in May 2017.
+
+Until now, the website was available only in English.
+
+#### FreshPorts can now be translated
+
+Nearly all of the website’s own text has been prepared for translation using gettext, including:
+
+- the page header, sidebar, and footer
+- the account pages, and the signup and password emails
+- the commit, port, and category pages
+- search and the port lists
+- the watch list pages
+- the FAQ and the other information pages
+
+The language is chosen from the browser’s settings, and can be changed with a language picker at the bottom of every page.
+Day and month names follow the chosen language too, so "Saturday, 3 Oct 2026" becomes "2026年10月3日星期六" in Chinese.
+Port descriptions, commit messages, and ports framework terms such as `BROKEN` and `USES` come from the ports tree and remain in English.
+The legal and privacy pages also remain in English, so the English text stays authoritative.
+
+Two translations have already been contributed: Simplified Chinese by ykla, and Turkish by Yusuf Yaman.
+Thank you to both.
+
+#### This work is not in production yet
+
+#### Help is wanted
+
+There are about 1,180 strings to translate.
+Each translation is a single `.po` file, so no knowledge of PHP is needed, and editors such as Poedit make the work straightforward.
+To contribute, see the instructions at the link above and send a pull request:
+
+- Translate FreshPorts into a new language.
+- Help finish the Simplified Chinese and Turkish translations, which need the newest strings.
+- Review existing translations and report mistranslations as GitHub issues.
+
+Thank you to everyone who has helped so far.
+
+### Brave Browser on FreeBSD: Status Report
+
+#### Summary
+
+A native FreeBSD port, [www/brave](https://cgit.freebsd.org/ports/tree/www/brave/), is available in the {repo}[FreeBSD-Ports overlay].
+It builds Brave **1.94.120**, based on Chromium **152.0.7977.76**, for amd64 and aarch64.
+The build uses only the release tarballs and the ports toolchain (LLVM 22, Rust, Node 24).
+It does not use depot_tools, gclient, CIPD or siso, and it does not need the Linuxulator.
+
+#### Status
+
+#### Open issues
+
+- **Services key.** Without it, component updates return 403, so there is no ad block catalog and no CRLSet. The port currently uses the same key that Arch ships.
+- Leo, Brave Search and speech-to-text have no keys, so they do not work.
+- The updater and remoting are disabled. Updates come through pkg.
+- The Brave version is tied to the Chromium version in [www/chromium](https://cgit.freebsd.org/ports/tree/www/chromium/).
+
+### Dockerbox
+
+Links:  
+
+[freebsd-dockerbox Github](https://github.com/leafoliage/freebsd-dockerbox) URL: [https://github.com/leafoliage/freebsd-dockerbox](https://github.com/leafoliage/freebsd-dockerbox)  
+
+[dockerbox-broker Github](https://github.com/leafoliage/dockerbox-broker) URL: [https://github.com/leafoliage/dockerbox-broker](https://github.com/leafoliage/dockerbox-broker)  
+
+[freebsd-dockerbox-debian Github](https://github.com/leafoliage/freebsd-dockerbox-debian) URL: [https://github.com/leafoliage/freebsd-dockerbox-debian](https://github.com/leafoliage/freebsd-dockerbox-debian)
+
+Dockerbox is a virtualized Docker daemon.
+Although the Docker daemon is not natively available on FreeBSD, Dockerbox runs it inside a Debian Bhyve virtual machine to provide access to it.
+
+#### Status Updates
+
+- Dockerbox now supports 2 kinds of underlaying file sharing for bind mounts: virtio-9p, NFS Both ways share host paths into the dockerbox guest. For paths on host, only paths shared into dockerbox can be bind mounted.
+- Dockerbox now supports publishing port to a customized binding host IP Before, only binding to `0.0.0.0` was supported. This is because dockerbox, as a virtual machine guest, does not share host’s IP addresses. Now binding only to selected IP on host is supported, with the help of dockerbox-broker. Example usage: `docker run --label dockerbox.bind=192.168.88.100:8080 -p 8080:80 nginx`
+- Dockerbox now supports customizable IP address and gateway
+- [sysutils/dockerbox-broker](https://cgit.freebsd.org/ports/tree/sysutils/dockerbox-broker/) is now in the ports tree
+- Dockerbox-broker now supports udp port forwarding
+
+Sponsor: The FreeBSD Foundation
+
+### KDE on FreeBSD
+
+Links:  
+
+[KDE/FreeBSD initiative](https://freebsd.kde.org/) URL: [https://freebsd.kde.org/](https://freebsd.kde.org/)  
+
+[FreeBSD — KDE Community Wiki](https://community.kde.org/FreeBSD) URL: [https://community.kde.org/FreeBSD](https://community.kde.org/FreeBSD)
+
+The KDE on FreeBSD project packages CMake, Qt, and software from the KDE Community, for the FreeBSD ports tree.
+The software includes a full desktop environment called KDE Plasma (for both X11 and Wayland) and hundreds of applications that can be used on any FreeBSD machine.
+The [KDE team](mailto:kde@FreeBSD.org) is part of [desktop@](mailto:desktop@FreeBSD.org), building the software stack to make FreeBSD beautiful and usable as a daily driver graphical desktop workstation.
+
+#### Infrastructure
+
+#### KDE Stack
+
+KDE Frameworks, Plasma, and Gear release happen very regularly.
+[KDE team](mailto:kde@FreeBSD.org) usually lands these updates shortly after their upstream release.
+
+- KDE Frameworks ports were updated to 6.31.0.
+- KDE Plasma Desktop was updated to 6.7.5.
+- KDE Gear was updated to 26.08.2.
+
+Plasma 6.7 is the last release supporting X11 session.
+Future KDE Plasma 6.8 release will be Wayland-exclusive, support for X11 applications will be fully entrusted to Xwayland.
+See [KDE blog post](https://blogs.kde.org/2025/11/26/going-all-in-on-a-wayland-future/) for details.
+
+#### Related Ports
+
+#### Sunsetting Qt5 ports
+
+Deprecated Qt5 is still used by approximately 340 ports.
+During this quarter the [www/qt5-webengine](https://cgit.freebsd.org/ports/tree/www/qt5-webengine/) port for Qt5WebEngine has been removed, and most of its consumers have been upgraded to use Qt6.
+KDE team encourages maintainers to migrate their Qt5 ports to Qt6 and KDE Frameworks 6 and to deprecate abandoned by upstream software.
+
+### Improve OpenJDK on FreeBSD
+
+Links:  
+
+[Project description](https://freebsdfoundation.org/project/improving-openjdk-on-freebsd/) URL: [https://freebsdfoundation.org/project/improving-openjdk-on-freebsd/](https://freebsdfoundation.org/project/improving-openjdk-on-freebsd/)  
+
+[Project repository](https://github.com/freebsd/openjdk) URL: [https://github.com/freebsd/openjdk](https://github.com/freebsd/openjdk)  
+
+[Upstream BSD port repo](https://github.com/openjdk/bsd-port) URL: [https://github.com/openjdk/bsd-port](https://github.com/openjdk/bsd-port)
+
+Contact:  
+
+Harald Eilertsen <[haraldei@FreeBSD.org](mailto:haraldei@FreeBSD.org)>  
+
+FreeBSD Java mailing list <[freebsd-java@lists.freebsd.org](mailto:freebsd-java@lists.freebsd.org)>
+
+The goal of this project is to improve OpenJDK support for FreeBSD/amd64 and FreeBSD/arm64.
+
+Java is an important runtime environment for many high performance, critical enterprise systems.
+Making sure Java based applications run correctly and efficiently on FreeBSD is important to ensure that FreeBSD will continue to be a viable and attractive platform for enterprises, as well as businesses and organizations of all sizes.
+
+This quarter, a few rather big, invasive features have been merged upstream ([JEP 401: Value Objects](https://openjdk.org/jeps/401) and [JEP 539: Strict Field Initialization](https://openjdk.org/jeps/539)), meaning that it has been difficult to get reviews and acceptance for our changes in this period.
+We have spent the time on fixing issues with the BSD port, as well as keeping it up to date with the upstream changes as they have appeared.
+
+The following fixes/improvements have been done in this quarter:
+
+- Various fixes and enhancements [Bug 296945](https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=296945): The `wxneeded` ELF flag is now set on the JDK binaries, allowing java to run on systems with W^X protection enabled. [Bug 294358](https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=294358): really build headless without installing Xorg libs [Removed `USE_LDCONFIG` from OpenJDK 8 and 11 ports](https://reviews.freebsd.org/D58841). Fixes [Bug 297282](https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=297282): java/openjdk25 - libjava.so does not find libjvm.so Only return symbols that match the requested address for [dladdr(3)](https://man.freebsd.org/cgi/man.cgi?query=dladdr&sektion=3&format=html) on BSD. This also reverts the default visibility of libjvm symbols back to hidden to avoid exposing internal symbols. This should also make the library faster to load, and less resource hungry. [Fix debugd connect test on FreeBSD](https://github.com/battleblow/jdk/pull/79).
+- Upstream BSD Port: [Submitted draft JEP](https://bugs.openjdk.org/browse/JDK-8390768) for BSD port upstreaming effort.
+- Ports: [New port for OpenJDK 27 released](https://cgit.freebsd.org/ports/commit/?id=642e35da1071). OpenJDK 26: [Update to version 26.0.2](https://cgit.freebsd.org/ports/commit/?id=80f1e6b5d140) OpenJDK 25: [Update to version 25.0.4](https://cgit.freebsd.org/ports/commit/?id=2583bd8561d2) OpenJDK 21: [Update to version 21.0.12](https://cgit.freebsd.org/ports/commit/?id=a86e7f3b7b3b) OpenJDK 17: [Update to version 17.0.20](https://cgit.freebsd.org/ports/commit/?id=ea43accd8d00) OpenJDK 11: [Update to version 11.0.32](https://cgit.freebsd.org/ports/commit/?id=88a1cd69ff7e)
+
+Sponsor: The FreeBSD Foundation
+
+### FreeBSD HPC Ports Modernization
+
+This report continues the FreeBSD HPC Ports Modernization initiative, which aims to make FreeBSD a practical and maintainable platform for modern high-performance computing (HPC) software stacks.
+Previous quarters focused on bringing the Slurm, PMIx, PRRTE and UCX stack up to date and filling gaps in the surrounding ecosystem.
+This quarter’s work centered on three things: keeping the scheduler and communication libraries current (including security fixes), deepening FreeBSD-specific runtime support in UCX and enabling the Open MPI/UCX combination, and taking the first FreeBSD-native Slurm features upstream to SchedMD.
+
+#### Work completed
+
+- Updated [sysutils/slurm-wlm](https://cgit.freebsd.org/ports/tree/sysutils/slurm-wlm/) three times, from 26.05.1 to 26.05.2 and then to 26.05.4, tracking upstream releases. The 26.05.4 update also addresses seven CVEs. Thanks to the configure-time HDF5 probe merged upstream last quarter, the obsolete downstream HDF5 patches could be removed and the downstream `patch-configure` was substantially reduced. The remaining FreeBSD conmgr patch was rebased and a missing `<signal.h>` include was added so the test suite builds on FreeBSD.
+- Enabled `slurmrestd` in [sysutils/slurm-wlm](https://cgit.freebsd.org/ports/tree/sysutils/slurm-wlm/). It had been disabled because it was believed not to build on FreeBSD, but with current Slurm it builds without any additional portability patches. The port now ships `slurmrestd` together with the REST/OpenAPI plugins.
+- Updated [net/ucx](https://cgit.freebsd.org/ports/tree/net/ucx/) from 1.20.1 to 1.22.0. Earlier in the quarter the port gained a guard around the Linux-specific netlink implementation, and `ucx_vfs` support was improved for FreeBSD by replacing `fusermount3` with `mount_fusefs`/`umount`, using FreeBSD-compatible FUSE capability detection and fixing UNIX socket ancillary data handling (`SCM_RIGHTS` and peer credentials). A follow-up fix for the VFS inotify watch was contributed by Laurent Chardon.
+- Introduced a UCX option in [net/openmpi](https://cgit.freebsd.org/ports/tree/net/openmpi/), allowing Open MPI to be built against [net/ucx](https://cgit.freebsd.org/ports/tree/net/ucx/) on FreeBSD (work by Laurent Chardon, based on testing and reports from this initiative). This also fixed an OMPIO `sharedfp/sm` crash.
+- Updated [benchmarks/py-reframe-hpc](https://cgit.freebsd.org/ports/tree/benchmarks/py-reframe-hpc/) twice, from 4.10.0 to 4.10.2 and then to 4.10.3.
+- Updated [sysutils/py-clustershell](https://cgit.freebsd.org/ports/tree/sysutils/py-clustershell/) from 1.9.3 to 1.10.1, including fixes for unportable tests.
+- Submitted `proctrack/freebsd-reaper` to SchedMD, a new Slurm process-tracking plugin built on FreeBSD’s `procctl()` process-reaper APIs. The step daemon acquires reaper status, tracks descendants across process-group changes and nested reapers, and signals the tracked process tree during cleanup. On a FreeBSD test node it cleaned up orphaned, SIGTERM-resistant and nested children like `proctrack/pgid`, and additionally handled `setsid`, `setpgid`, double-fork and nested-daemon escapes, which `proctrack/pgid` does not. A zombie regression was retested and the node returned to IDLE without timing out or draining.
+- Submitted `%o` support for `Include` filenames in Slurm configuration to SchedMD. `Include slurm-%o.conf` selects `slurm-FreeBSD.conf` on FreeBSD and `slurm-Linux.conf` on Linux, so a heterogeneous configless cluster can keep one authoritative configuration on `slurmctld`. This has been running on a mixed FreeBSD/Fedora cluster using the corresponding port patches.
+
+#### Work in progress
+
+- Addressing review feedback on the open UCX (UCS/SYS portability for non-Linux platforms) and mpifileutils (Linux-only API guards) upstream pull requests, to shrink the local patchsets of the ports further.
+- Following up with SchedMD on the `proctrack/freebsd-reaper` and configless `%o` Include submissions.
+
+#### Future plans
+
+- Land the outstanding upstream pull requests and keep identifying FreeBSD portability issues to fix upstream rather than patch locally.
+- Carry the Slurm patches accepted by SchedMD into the port and drop the corresponding downstream changes.
+- Continue tracking upstream Slurm, UCX, Open MPI, PMIx and PRRTE releases closely.
+- Document a reference Slurm + Open MPI + PMIx + PRRTE + UCX deployment on FreeBSD, including a mixed FreeBSD/Linux configless setup, to lower the barrier for new sites.
+
+### Improve libvirt support for bhyve hypervisor
+
+#### Completed work
+
+- libvirt/bhyve driver: Added support for VLAN configuration, VLAN filtering, and isolated bridge ports on FreeBSD. Added boot order configuration for disk devices. Implemented several new APIs: domain renaming, lifecycle management, getting guest info using the QEMU Guest Agent, and setting QEMU Guest Agent response timeout. Added serial number configuration for SATA disks and NVMe controllers, as well as EUI-64 configuration for NVMe disks. Fixed several issues related to transient and persistent domain handling, monitor events, startup error reporting, and TAP device cleanup.
+- Added `guest-get-fsinfo` support for FreeBSD to the QEMU Guest Agent.
+- Extended libvirt-tck coverage for libvirt/bhyve.
+- Work in progress on unprivileged `bhyve:///session` support.
+
+#### Plans for the next quarter
+
+- Complete unprivileged `bhyve:///session` support.
+- Add support for TPM devices.
+- Complete suspend/resume support.
+- Continue implementing features based on the QEMU Guest Agent.
+- Continue extending CI and cover the new guest-agent-based features with new tests.

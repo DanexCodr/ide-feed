@@ -1,97 +1,167 @@
-Since the [initial release of GraphQL in 2015](https://github.com/graphql/graphql-spec/releases/tag/July2015), the GraphQL specification has always been transport agnostic.
+Baochip is the latest open/trustable hardware venture by living legend
+[Andrew "bunnie" Huang](https://en.wikipedia.org/wiki/Andrew_Huang_(hacker)) (wikipedia.org).
 
-Most of the GraphQL specification is about “services”, taking “requests” in, executing them, and producing “responses”. How those requests and responses are sent and received is up to the implementer.
+Here’s the official website:
 
-This is generally useful. You can use GraphQL on your local machine, over raw TCP, [avian carriers](https://en.wikipedia.org/wiki/IP_over_Avian_Carriers), or anywhere else. For the large crowd using GraphQL over HTTP, though, the lack of a specification made interoperability with other HTTP tools and observability more difficult than it should have been.
+But I recommend bunnie’s write-ups on his blog as an introduction:
 
-This is changing today with the first release of the [GraphQL over HTTP specification](https://http-spec.graphql.org/September2026/)!
+- [Baochip-1x: A Mostly-Open, 22nm SoC for High Assurance Applications](https://www.bunniestudios.com/blog/2026/baochip-1x-a-mostly-open-22nm-soc-for-high-assurance-applications/) (bunniestudios.com)
+- [BIO: The Bao I/O Coprocessor](https://www.bunniestudios.com/blog/2026/bio-the-bao-i-o-coprocessor/) (bunniestudios.com)
 
-The GraphQL specification stays transport agnostic; the GraphQL over HTTP specification is a new document, supplementary to the main GraphQL specification.
+What makes the Baochip1x special is that it is an SoC (system on chip) with:
 
-If you’re using GraphQL over HTTP, follow the guidance from the specification and ensure your servers, clients, proxies, and other services play well together.
+- A RISC-V core
+- An MMU (memory management unit, allows for hardware support of virtual memory, a feature normally reserved for "real" computers)
+- I/O coprocessor (BIO)
+- Hardware support for a bunch of security-focused features such as a TRNG (true random number generator), AES encryption, and a ton of cryptographic hashes
+- It is intentionally inspectable with inexpensive infra-red cameras so you can visibly verify the structure of the chip yourself! (See [Infra-Red, In Situ (IRIS) Inspection of Silicon](https://www.bunniestudios.com/blog/2023/infra-red-in-situ-iris-inspection-of-silicon/) (bunniestudios.com)
 
-The GraphQL over HTTP specification includes a new `application/graphql-response+json` media type.
+It was made specifically to be able to run Xous, a microkernel OS written in Rust originally written for bunnie’s Precursor device. See
+[Xous 0.10.0 - Introducing Baochip-1x Support](https://www.crowdsupply.com/sutajio-kosagi/precursor/updates/xous-0-10-0-introducing-baochip-1x-support) (crowdsupply.com).
 
-Previously, a lot of GraphQL servers were using `application/json` for their responses. This made it hard for clients to differentiate between a well-formed GraphQL response from the origin server and an error response from a proxy, cache, or other network intermediary.
+I’m mostly here because I think bunnie is great and I’m interested in RISC-V as a platform.
 
-As a workaround, most implementations set the status code to `200`: if a client received a `200` status code, it knew the response wasn’t tampered with and was safe to parse as a GraphQL response.
+(I’ve been a fan of bunnie since his
+[On MicroSD Problems](https://www.bunniestudios.com/blog/on-microsd-problems/) (bunniestudios.com)
+investigation and write-up, but especially after I read his book *The Hardware Hacker: Adventures in Making and Breaking Hardware* in 2019.)
 
-This is not ideal from an observability point of view and led to [some jokes about `200 Not OK`](https://graphql.org/blog/2026-04-01-a-new-era-for-graphql-observability/). It’s hard to get the status of your service if everything is a 200…
+## The Dabao evaluation board
 
-This is now fixed!
+My Dabao board with the Baochip1x arrived today from Crowd Supply.
 
-When a client receives an `application/graphql-response+json` body, it knows it can parse it as a well-formed GraphQL over HTTP response, regardless of the status code.
+Here’s a crummy image of the chip itself, so tiny and so shiny!:
 
-The general rule is:
+It’s shiny because there’s no package, that’s the actual silicon
+polished to a perfect mirror finish.
 
-- If the request returned data, return a 2xx status code.
-- If the request returned only errors, return a 4xx or 5xx status code.
+## Let’s connect to it!
 
-The specification includes [detailed guidance on which status codes should be used](https://http-spec.graphql.org/September2026/#sec-Status-Codes), but implementers may choose to use an alternative status code if it better fits the situation, so long as it is consistent with the general rule. Common status codes include:
+I found this pair of READMEs in the Xous repo most helpful:
 
-- 405 when attempting a mutation over GET
-- 406 when requesting an unsupported media type
-- 415 when providing an unsupported media type
-- 431 when headers are excessively large
-- 500 when a server error occurs
+> "Regardless of the board, the bao1x chip comes from the factory programmed
+> with boot0 and boot1 stages. The code for these can be found in bao1x-boot/."
 
-A successful response would look like this:
+> "boot1 contains a USB driver, serial-over-USB driver, and serial driver capable of accepting code updates in the form of .u2f files or serial commands. It also contains a small command terminal for managing configurations, keys, and device lifecycle state."
+
+> "Baochip relies primarily upon a "virtual serial console", which is a USB
+> CDC-ACM device. In short, when you plug a Baochip into your computer, you will
+> get something similar to either a COM port (on windows) or a tty node (on
+> Linux)."
+
+Sure enough, I plugged it into my Linux PC and there it is:
 
 ```
-HTTP/1.1 200 OK
-Content-Type: application/graphql-response+json
+$ sudo dmesg
 ...
+[41412.220396] usb 3-4: Product: Baochip-1x
+[41412.220400] usb 3-4: Manufacturer: Baochip
+[41412.220404] usb 3-4: SerialNumber: YH1DTN
+[41412.307486] usb-storage 3-4:1.2: USB Mass Storage device detected
+[41412.307677] scsi host9: usb-storage 3-4:1.2
+[41412.307824] usbcore: registered new interface driver usb-storage
+[41412.308600] cdc_acm 3-4:1.0: ttyACM0: USB ACM device
+...
+```
 
-{
-  "data": {
-    "hello": "world"
-  }
+Using GNU `screen` is how I’m used to speaking to serial devices and
+that’s what the README recommended as well. Depending on your distro’s
+setup, it may be easiest to simply run `screen` as root.
+
+Without root:
+
+```
+$ screen /dev/ttyACM0 1000000
+[screen is terminating]
+```
+
+With root:
+
+```
+$ sudo screen /dev/ttyACM0 1000000
+(terminal goes blank - we're connected!)
+```
+
+The boot1 REPL (which we can think of here as nothing more than a simple
+command-line interface) presents a completely blank terminal with no prompt.
+Hit Enter or trying typing a command and you’ll see a reply if everything’s
+working:
+
+```
+Command not recognized:
+Commands include: altboot, audit, boot, boardtype, bootwait, echo, idmode, ifr, localecho, lockdown, paranoid, reset, self_destruct, skipping, uf2
+```
+
+The easiest commmand to use is `echo`:
+
+```
+echo Hello World!
+Hello World!
+```
+
+Some of the others are mysterious or scary like `paranoid` or even `self_destruct`.
+
+Since the source for both boot stages are in the Xous repo, I cloned it and searched
+for the REPL commands. Sure enough, I found them in: `xous-core/bao1x-boot/boot1/src/repl.rs`.
+
+Here’s the `echo` command:
+
+```
+"echo" => {
+    for word in args {
+        crate::print!("{} ", word);
+    }
+    crate::println!("");
 }
 ```
 
-A request error would look like this:
+And `self_destruct` is *not* a joke:
 
 ```
-HTTP/1.1 422 Unprocessable Content
-Content-Type: application/graphql-response+json
-...
-
-{
-  "errors": [{
-    "message": "Cannot query field 'foo' on type 'Query'."
-  }]
+"self_destruct" => {
+    if !matches!(args.as_slice(), [s] if s == "void_my_warrantee") {
+        return Err(Error::help(
+            "Usage: 'self_destruct void_my_warrantee'. This PERMANENTLY wipes the chip and bricks it. No returns or exchanges are allowed after executing this command.",
+        ));
+    }
+    let mut rram = bao1x_hal::rram::Reram::new();
+    unsafe { rram.self_destruct() }
+    // ... and all was null and void!
 }
 ```
 
-The specification also introduces a new `294 Partial Success` status code for use when both `data` and `errors` are present; you can [read more about 294 Partial Success in the non-normative notes](https://http-spec.graphql.org/September2026/#sec-Partial-success).
+I didn’t see any easter eggs and `echo` is the only real command one would "play" with.
 
-“200 Not OK” issues aside, a lot of things have been working really well for GraphQL over HTTP over the past decade.
+Exit from the `screen` session with the screen prefix command `CTRL+A` followed by the `\` key.
 
-This specification documents all those things::
+## Where to go from here?
 
-- URL
-- GET requests
-- POST requests
-- JSON encoding
-- Headers
-- and more
+I’m just happy this thing exists and that I could talk with it right away. I think this is
+my first interactions with a computer running a RISC-V architecture?
 
-It also includes non-normative notes about [security](https://http-spec.graphql.org/September2026/#sec-Security), [partial success](https://http-spec.graphql.org/September2026/#sec-Partial-success), and [future compatibility](https://http-spec.graphql.org/September2026/#sec-Future-compatibility)
+It looks like the Xous ecosystem is very well planned, with a focus on having a
+toolchain that doesn’t rely on a ton of fragile C tooling setup.
+I thought this was particularly insightful (from bunnie’s blog post about the BIO coprocessor linked above):
 
-This is just the beginning!
+> "…​one of the key benefits of the Xous ecosystem being pure Rust is that we don’t have to maintain any tooling. We’d like to keep it so that the only tool required to build a Xous image is stable Rust. The moment a C compiler is introduced into the build process, we have to wade through a hodge-podge of distribution-specific C toolchains, greatly increasing developer friction and maintenance burden."
 
-The IETF just moved the [QUERY HTTP verb](https://www.rfc-editor.org/info/rfc10008/) to a proposed standard.
+As an aside, here’s an interesting tidbit for Zig fans:
 
-`QUERY` is the perfect fit for GraphQL, and we already have [plans to support it](https://github.com/graphql/graphql-over-http/pull/411). We didn’t want to postpone this initial release or rush the implementation, but we hope to include it in the next revision of the GraphQL over HTTP specification.
+> "Our solution to this problem, at least for now, is to borrow the Zig ecosystem’s clang C
+> compiler. …​ As a side-effect, this also paves an on-ramp for Zig developers to write BIO code."
 
-Another thing that will benefit from standardization is [Persisted documents](https://github.com/graphql/graphql-over-http/pull/264).
-The technique of persisting GraphQL documents (“persisted queries”) has been in use since before GraphQL was open sourced in 2015, with different implementations solving different problems: performance, security, observability.
-We are eager to work with the community to build a standard approach that can solve all these issues whilst retaining future extensibility.
+But I really think it would be interesting to learn how to work within the Xous system as intended.
 
-Finally, [request batching](https://github.com/graphql/graphql-over-http/pull/307) will be a big win, particularly in the context of composite schemas (Federation) or when making requests to schemas you do not control.
+Since the Dabao board has a "PROG" (Program) button, programming is as simple as holding down the
+button while connecting the USB-C cable to the PC. It shows up as a USB Mass Storage device:
 
-If you are a GraphQL user, chances are you are already using the new specification without being aware of it! Most GraphQL frameworks and libraries out there already support the new specification.
+I should be able to just drag UF2 files (USB Flashing Format - a standard for
+packaging binary program images into 512 byte blocks so they can be written to
+memory via a virtual file system) to the Baochip to program it.
 
-If you are a library author, give the new specification a try!
+So now I "just" need to re-learn enough Rust to blink an LED.
 
-In all cases, [let us know what you think](https://github.com/graphql/graphql-over-http/issues/new)!
+After that, who knows? I’m in absolutely no hurry and I have a lot of other projects to complete first.
+
+Anyway, I’ll never stop being enchanted by by the fact that we have computers the size of a grain of rice
+that cost as much as a bag of rice. That’s *way* more interesting to me than the brute-force computing
+currently en vogue.

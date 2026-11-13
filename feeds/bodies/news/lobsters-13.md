@@ -1,35 +1,35 @@
-Every screen was captured in ScummVM, except the Atari ST monochrome screens, which come from the Hatari emulator. Each capture was scaled to 1600x1200 with nearest-neighbour pixels and 4:3 aspect correction, so every original pixel keeps the shape it had on a period monitor.
+I like Gemini. Not the Google Chatbot but the network that existed before Google named its product. If you are enough of a geek, you may want to give it a try.
 
-The twelve moments are the same in every version, with the same framing, so switching versions changes the machine, not the moment. The PC 16-color screens come from a Spanish copy and the Atari ST mono ones from a French copy; all the others are in English.
+Eoin is counting the number of "capsules" on the Gemini network. A capsule is the equivalent of a "website" on the Web or a "hole" on Gopher. It’s a personal space, a bunch of pages. Blogs become "gemlogs".
 
-### Table of contents
+Eoin’s first observation is that the number of active capsules is slowly growing. The network is healthy.
 
-Drag a title bar to move a window. Press Esc to go back to the viewer.
+But his second observation is really interesting: there’s absolutely no correlation between the number of new capsules in a given month and articles about the Gemini protocol being promoted on the first page of Hacker News.
 
-Char:    Decimal:   0  Hex: 00
+This is a confirmation of what I’ve been trying to explain for years: your metrics and web statistics are completely useless. The number of visitors, the number of clicks are worthless if you are not a marketer trying to extract money from a big brand. They don’t mean anything.
 
-PxPlus IBM VGA 9x16 by VileR (int10h.org), CC BY-SA 4.0. Stretched x1.35 here for 4:3, shared under the same licence.
+By the way: you should really avoid Hacker News these days. The front page is heavily manipulated to promote pro-AI stuff and bury everything that might question wether fascism-capitalism is good.
 
-[**X**] Nearest-neighbour scaling
+A Mozilla employee is leaving after 15 years and comes to a similar conclusion. Mozilla is awesome because it has always been abnormal. It is mostly used by abnormal people. This means that hiring "normal managers" who try to make it "normal" and chase "normal" metrics is, of course, a recipe for failure.
 
-[**X**] 4:3 aspect correction
+I always failed to understand those marketing people who try to be "like others but a bit cheaper". While all the value is being different enough to nurture your own niche.
 
-[**X**] The same 12 moments in every version
+I completely removed statistics from my blog in 2013. At the time, I had a very strong realisation that the blog posts that mattered most, those I was proudest of, and those that prompted people to mail me even years later all had mediocre statistics.
 
-The Mac draws a 640x400 picture inside a 640x480 screen, so it shows black bars. The Hercules picture uses the middle 640 of its 720 columns.
+On the contrary, most of my hit, my "buzz", were quickly forgotten. But, being addicted to statistics, I was unconsciously adapting my writing style to improve those numbers. I was scrolling through social media posts that were highly popular while trying to create some myself.
 
-The CRT monitors of DOSBox Staging, ported to WebGL2: its presets for Hyllian's CRT shader, and its own VGA shaders where a screen has few pixels. Each version is drawn from its native pixels on the monitor closest to its own, with a whole number of screen pixels for every scanline where the size allows.
+Closing my social media accounts and, instead, procrastinating on Gemini had the opposite effect: making me read other ideas without caring about reactions, about popularity. Jsreed5 made the same observation while he was trying the Nostr protocol. While Nostr’s technicalities may be interesting by themselves, the content on it is similar to the one found of mainstream social networks. And our smolnet Gemini-formatted brains cannot take it anymore!
 
-[**X**] On in the viewer: the CRT button under the picture, or R
+We really need a simple Gemini hosting provider that would also provide a Web version, to welcome less technical-minded people who still may want to access a quieter, non-commercial, out-of-time virtual space.
 
-[**X**] Scanlines need pixels: zoom in where the window is too small
+Lot of people are trying Gemini and find that there’s no content on it, that they can’t have their news and dopamine hit on it. Well, that’s exactly the point.
 
-[**X**] Every setting in the CRT lab, on the menu bar
+The fact that only a niche minority want to use it is also part of the point. Gemini might not be for you. That’s fine. The modern Web and even the real world (where every device is actively working against me and every human interaction seems to be about AI) is increasingly not for me. So let me have my strange niche space.
 
-crt-hyllian and its presets: Copyright (C) 2011-2020 Hyllian, Copyright (C) 2020-2024 The DOSBox Staging Team, MIT. VGA 1080p shaders: Copyright (C) 2020-2024 The DOSBox Staging Team, GNU GPL v2 or later. Curvature and corners from crt-guest-advanced-hd: Copyright (C) 2018-2025 guest(r); its vignette: Copyright (C) 2019-2025 guest(r) and Dr. Venom; GNU GPL v2 or later. The port, [crt.js](https://monkeyisland.pages.dev/crt.js), is shared under the [GNU GPL v2 or later](https://monkeyisland.pages.dev/licenses/GPL-2.0.txt); here are [all the notices](https://monkeyisland.pages.dev/licenses/crt-shaders-GPL.txt).
+UPDATE: Those Gemini hosting providers exist:
 
-We are **The Paninos off-line**: two brothers, and that's the whole team. We made this site, with the help of AI.
+### About the author
 
-We are also remaking Sierra's **The Black Cauldron** (1986) in Adventure Game Studio, free and non-commercial. Its website opens soon.[Visit its website](https://monkeyisland.pages.dev/#)
+I’m [Ploum](https://fr.wikipedia.org/wiki/Ploum), a writer and an engineer. I like to explore how technology impacts society. You can subscribe [by email](https://listes.ploum.net/mailman3/lists/en.listes.ploum.net/) or [by rss](https://ploum.net/atom_en.xml). I value privacy and never share your adress.
 
-A fan-made reference. Not affiliated with or endorsed by Lucasfilm Games, LucasArts or Disney.
+I write [science-fiction novels in French](https://pvh-editions.com/ploum). For [Bikepunk](https://bikepunk.fr), my new post-apocalyptic-cyclist book, my publisher is looking for contacts in other countries to distribute it in languages other than French. If you can help, [contact me](https://ploum.net/about.html)!

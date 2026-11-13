@@ -1,139 +1,179 @@
-I started running decoded.legal - a small English law firm, focussing
-on Internet, telecoms, and tech law - on Free software, both client and
-server side, around five years ago. I have used Free software in my
-personal life for a lot longer than that.
+Ufuk made a comment that he enjoyed my description of SSA from bytecode in
+[Aaron’s livestream with me](https://www.youtube.com/watch?v=h9_FyHYUhww).
+While filming the livestream—an intro to ZJIT internals—I got a little
+nervous that people would shy away from our 1900 line `add_iseq_to_hir`
+function. This function is responsible for converting CRuby’s stack based
+bytecode for the YARV virtual machine into a high-level SSA IR for ZJIT to
+analyze and optimize.
 
-Back in 2022, [I
-wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
+It takes bytecode that looks roughly like this:
 
-I wrote [an
-update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
+```
+push 3
+push 4
+add
+```
 
-Someone asked me recently what I am doing now, and, while it is
-mostly the same, some bits have changed. So here is the 2026 update.
+into SSA form, giving an SSA value to each stack slot, ish:
 
-## Client-side stuff
+```
+v0 = const 3
+v1 = const 4
+v2 = add v0, v1
+```
 
-I am still using Debian, with GNOME, and it works well for me.
+While our function is 2000 lines long because it handles a lot of specific
+opcodes and weird facts about those opcodes, the core of it is small. Here is
+that core.
 
-I’m using it [on
-a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
-version, I rather like being able to fold the screen back and write on
-it to mark up documents. ([Here
-are my thoughts on the different “Active Pens” available for
-it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
+The bytecode assumes that when it is run, it will be operating on a stack. This
+means that every opcode has implicit stack inputs and implicit stack outputs.
 
-However, the machine itself seems to have a hardware problem with the
-Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
-I might need to replace it. And I have *no* idea what laptop I
-might get.
+`push 3`, for example, has empty stack inputs and one stack output. By
+contrast, `add` has two stack inputs and one stack output. Some instructions
+such as `nop` are empty on both counts. As far as I can tell, all instructions
+have *at most* one output.
 
-- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
-  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
-  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
-- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
-- Presentations: **reveal.js**
-  - I absolutely love this.
-  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
-  - Blogpost about reveal.js
-  - Here are some presentations I’ve given, using reveal.js
-- File manager: **Nautilus**
-  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
-- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
-- Text expansion: **espanso**
-  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
-- Browser: **Firefox** or **links**
-  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
-  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
-- Local wiki / knowledge management: **vimwiki**
-  - because I use vim so much, vimwiki was quite an obvious choice.
-  - I use this for keeping track of my professional development, and for various notes
-- Disk encryption: **LUKS**
-- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
-- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
-  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
-- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
-- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
-- Scanning: **paperless-ngx**
-- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
+These counts are known when looking at the bytecode: we can reason statically
+about how many inputs and outputs each opcode has. Some are variadic, such as
+`send` (call), but they come bearing an argument count in a nearby field.
 
-Why so many terminal-based tools? The simple answer is that I am very
-comfortable in a terminal, and I like them. They have fewer distractions
-and, when compared with most GUI software, are just - IMHO - easier to
-use, especially when I don’t need to move my hands away from the
-keyboard. So, while I don’t use them exclusively, I use
-`mutt`, `vim`, `ikhal`,
-`ncmpcpp`, `newsboat`, `toot`,
-`links`, and various other TUIs, frequently.
+Let’s model how the first example runs on the VM by adding a view of the stack
+after each instruction has run. The stack will be displayed as a list
+left-to-right, where the left is the bottom and the right is the top.
 
-## Server-side stuff
+```
+       ; []
+push 3 ; [3]
+push 4 ; [3, 4]
+add    ; [7]
+```
 
-Everything here - other than Signal - is self-hosted, and I’m mostly
-using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
-than I did.
+Because the input counts and output counts are static, when ZJIT reads through
+the bytecode, we can run the stack parts of it at compile-time.
 
-(Again, this doesn’t list everything; just the main
-applications.)
+We don’t *really* need to know what the values on the stack are; we only need
+to keep track of where they came from. And when I say “where they came from”, I
+mean that we name each instruction and refer to its output by the instruction’s
+name. I like how the paper [Design of the Java HotSpot™ Client Compiler for
+Java 6](https://bernsteinbear.com/assets/img/design-hotspot-client-compiler.pdf) (PDF) puts it:
 
-- Email (MTA): **postfix / dovecot**
-  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
-- File synchronisation: **Syncthing**
-  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
-- Video conferencing: **Signal**
-  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
-- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
-- Time tracking: **Kimai**
-  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
-- “Case management” / “Matter management”: **EspoCRM**
-- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
-- Vulnerability scanning: **greenbone/OpenVAS**
-- Monitoring: **Uptime Kuma**
-  - I implemented this not long after the last update. It … just works?
-- Forge / hosted git repository: **Forgejo**
-  - I use this for version tracking the website, and for a couple of template projects
-  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
-- SIEM: **Wazuh**
-- Password manager: **vaultwarden**
-- Website: it is a static site built via **mkdocs**, hosted on **apache2**
-  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
-  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
-- Blog: **BSSG**
-  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
-  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
-  - I tend to use my personal blog for posts about the more technical bits and pieces
-  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
-- Fediverse: I am using the *glitch-soc Mastodon** fork
-  - Switching from normal Mastodon to glitch-soc Mastodon was easy
-  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
-  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
-- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
-- DNS: **unbound**, with **Pi-Hole** in front of it
-  - I used to run a doh server, but I’ve stopped doing that.
-- Backups: **restic** and **rsync**
-  - Notes on restic
-- Forms: **LiberaForms**
-  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
-  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
-- Collaborative document editing: I don’t.
-  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
+> An instruction that loads or computes a value represents both the operation
+> and its result, so that operands can be represented as pointers to previous
+> instructions.
 
-## AI tools
+Here is what that looks like for the above example. In addition to the run-time
+stack, I will also write the SSA instruction to indicate that we are generating
+new code:
 
-## Mobile device
+```
+       ; []
+push 3 ; v0 = const 3
+       ; [v0]
+push 4 ; v1 = const 4
+       ; [v0, v1]
+add    ; v2 = add v0, v1
+       ; [v2]
+```
 
-I’m using a Pixel running GrapheneOS for my mobile device.
+This is neat! We have transformed stack based bytecode to a form where
+instructions can directly reference their inputs. You may notice, though, that
+`v0` and `v2` both end up in the same stack slot (the first element). This is
+why I said earlier “giving an SSA value to each stack slot, *ish*”.
 
-I use F-Droid as the main app store.
+The difference between the two is *time*. `v0` was in the operand stack at one
+point but now `v2` is. This is kind of why I describe SSA as “pushing time
+through the IR”.
 
-Using Android doesn’t thrill me, especially given Google’s direction
-of travel, but at the moment - despite trying quite a lot of different
-OSs and devices, including postmarketOS and Ubuntu Touch, as well as
-SailfishOS previously - I have not found something that does what I need
-better than GrapheneOS.
+Alright, let’s implement it.
 
-## Working with others
-(who don’t use FOSS tools)
+We’ll start with the real (“concrete”) interpreter of the bytecode, which
+operates on a value stack. This gives you a simplified version of how Ruby
+internals work:
 
-No change here: zero problems.
+```
+def interpret(bytecode)
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      stack << c
+    in [:add]
+      right = stack.pop
+      left = stack.pop
+      stack << left + right
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  stack.pop
+end
 
-Many of my clients use Microsoft’s software, or Apple’s software.
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts interpret(bytecode)  # 7
+```
+
+Now let’s look at the abstract intepreter, which by contrast operates on an SSA
+stack. You can see that they are quite similar looking:
+
+```
+def to_ssa(bytecode)
+  code = []
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      name = :"v#{code.length}"
+      code << "#{name} = const #{c}"
+      stack << name
+    in [:add]
+      name = :"v#{code.length}"
+      right = stack.pop
+      left = stack.pop
+      code << "#{name} = add #{left}, #{right}"
+      stack << name
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  code
+end
+
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts to_ssa(bytecode)
+# v0 = const 3
+# v1 = const 4
+# v2 = add v0, v1
+```
+
+The `name`s could be anything as long as they are unique. For simplicity and
+ease of reading, I picked the length of the `code` array, which grows
+monotonically. This is an array/vector-based analogue to the real-pointer
+approach in the HotSpot paper from above.
+
+Ta da! You have built a small abstract interpreter.
+
+Now to make it global (to handle control flow) you need some kind of
+inter-basic-block data flow mechanism such as phi nodes or basic block
+parameters. Perhaps more on that in another post, but for now, you may enjoy
+[my collection of other people’s writing](https://bernsteinbear.com/blog/ssa/) about that.
+
+I originally wanted to title this blog post “you could have invented abstract
+interpretation” or similar, but I decided that I find those titles obnoxious
+because they assume the reader is or thinks of themself as unintelligent.
+Perhaps *we* could have invented it.
+
+The title is a bit of a tongue-in-cheek nod to the “functional pearl” papers
+that I always felt should be simpler than they are but leave me confused. And
+also kind of a nicer nod to [SSA is Functional
+Programming](https://bernsteinbear.com/assets/img/appel-basic-block-arguments.pdf) (PDF) by Andrew Appel.

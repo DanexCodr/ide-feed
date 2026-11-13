@@ -1,73 +1,214 @@
-Across a [large range of scales and datasets](https://e-means.github.io/#validation), e-means reaches a test loss below Lloyd's at 25 epochs, in 1.2 to 3 epochs. Measured end to end, that is a 10–45× wall-clock reduction on GPU against the state-of-the-art Lloyd implementation (Flash-KMeans<sup>[[2]](https://e-means.github.io/#ref2)</sup>), and 8–15× on CPU against Faiss<sup>[[1]](https://e-means.github.io/#ref1)</sup>. Speed and quality usually trade against each other in k-means, while e-means achieves both better speed and loss.
+Many<sup>[[1]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn1)[[2]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn2)[[3]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn3)[[4]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn4)[[5]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn5)[[6]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn6)[[7]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn7)[[8]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn8)[[9]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn9)</sup> Linux distributions and package managers audit just-built binaries for non-relocatable absolute paths. If a binary contains a path `/path/from/build/machine`, it might not run on the end-user's machine.
 
-![e-means against Lloyd’s k-means, in epochs, CPU time and GPU time](https://e-means.github.io/assets/emeans_vs_lloyd_readme_v9.png)
+Now, a basic `grep` on the binary, or a slightly more sophisticated
 
-## The k-means problem
+```
+$ strings bin/app | grep /path/from/build/machine
+```
 
-Given a fixed dataset of n points X = {x<sub>1</sub>, ..., x<sub>n</sub>} ⊂ R<sup>d</sup> and an integer k, the k-means problem is to find k centroids C = (c<sub>1</sub>, ..., c<sub>k</sub>) minimizing the mean squared distance between each point and its nearest centroid:
+using GNU binutils's `strings` will detect these paths, right?
 
-It's a static dataset, unlike codebook learning inside VQ-VAEs, where the distribution to cluster is constantly moving.
+The answer is *no*, at least when using GCC and targeting `x86-64`: you should *not* assume that string constants end up literally in the binary.
 
-## The e-means project
+## Basic example
 
-The goal of e-means is to provide a modern optimization rule for the k-means problem. We started this project from the following observations:
+In this C++ source we create a `std::string` from a string constant:
 
-For e-means, we chose to do mini-batch updates with exponential moving averages<sup>[[6]](https://e-means.github.io/#ref6)</sup>, which we found to be most efficient for the k-means problem. Contrary to previous mini-batch approaches, e-means requires no hyperparameter tuning because it automatically sets the batch size and step size with scaling laws (see [Automatic hyperparameter tuning with scaling laws](https://e-means.github.io/#scaling-laws)). In addition, e-means improves the initialization and the dead-cluster revival strategy, adds a cosine-scheduled decay rate, and introduces a finalization stage that reduces the training loss for a negligible runtime penalty at the end of training. e-means is highly parallelizable, and comes with specialized kernels that translate its algorithmic advantage into wall-clock speedups.
+```
+#include <iostream>
+#include <string>
 
-The centroid update rule is the central component of e-means. This section aims to provide an overview of update rules for k-means clustering. All methods maintain, for each cluster j, a sum S<sub>j</sub> and a count N<sub>j</sub> of the points assigned to it, and take the centroid as their ratio:
+#define PREFIX "/home/linuxbrew/.linuxbrew"
 
-They differ only in how S<sub>j</sub> and N<sub>j</sub> are updated. Below, s<sub>j</sub> and n<sub>j</sub> denote the sum and the count of the points in the current batch that are assigned to cluster j (both zero if none are).
+int main() {
+  std::string prefix{PREFIX};
+  std::cout << prefix << '\n';
+}
+```
 
-**Lloyd’s algorithm**<sup>[[7]](https://e-means.github.io/#ref7)</sup> assigns every point to its nearest centroid and recomputes the statistics from scratch, using the full dataset as the batch:
+Compile with GCC 12 or later and run, which prints the path:
 
-so c<sub>j</sub> is the exact mean of the points currently assigned to it. Each update costs one full pass over the data, and the procedure is repeated a fixed number of times (typically 20 to 50 iterations).
+```
+$ g++ -O2 main.cpp -o main
+$ ./main
+/home/linuxbrew/.linuxbrew
+```
 
-**MacQueen’s update**<sup>[[3]](https://e-means.github.io/#ref3)</sup> accumulates the statistics without ever discarding them:
+But the path occurs precisely 0 times in the binary itself:
 
-so c<sub>j</sub> is the uniform mean of every point assigned to cluster j since the start of training, including points assigned under earlier, possibly poor, centroid positions. This was later partially addressed by Staleness-Reduction Mini-Batch K-Means<sup>[[8]](https://e-means.github.io/#ref8)</sup>, a hybrid method between k-means and MacQueen. They obtained important speedups, but only on very low numbers of clusters.
+```
+$ grep -acF /home/linuxbrew/.linuxbrew main
+0
+$ strings ./main | grep -cF /home/linuxbrew/.linuxbrew
+0
+```
 
-**e-means** works on mini-batches and replaces this sum with an exponential moving average:
+Surely these bytes must be part of the binary *somewhere*? Let's run `strings` on it and grep just for the `/home` prefix:
 
-so older assignments are forgotten at rate α, and the centroid tracks recent assignments rather than the whole history. This update rule is typically used for moving distributions, hence their adoption for training VQ-VAEs<sup>[[6]](https://e-means.github.io/#ref6)</sup>. What we found is that it’s also extremely efficient for static datasets if it’s combined with e-means’ other components, and hyperparameters are properly tuned.
+```
+$ strings ./main | grep /home
+/home/linuxbrew/xbrew/.linuxbrew
+```
 
-The e-means project started from previous work at Meta FAIR by Hugo Touvron and Hervé Jégou, who had found that mini-batch k-means by gradient descent could beat Lloyd’s algorithm. While I could reproduce these results, I found that the performance of gradient-descent based centroid updates is unstable at large learning rates, unlike exponential moving average updates. I suspect that is because EMA updates guarantee that the centroid is always in the convex hull of points assigned to it, while gradient descent updates may overshoot past that hull.
+Wait, did GCC just turn
 
-In order to achieve the lowest loss at a fixed number of epochs, we chose exponential moving average updates, hence the name e-means for our method.
+```
+/home/linuxbrew/.linuxbrew
+```
 
-If you set the batch to the full dataset, B = n, *and* α = 1, then N<sub>j</sub> and S<sub>j</sub> become exactly the count and sum of the whole cluster, so one e-means iteration becomes exactly one Lloyd iteration. Lloyd is an extreme case of e-means without cosine scheduling on the learning rate. However, our hyperparameter search found that this extreme setting is highly suboptimal, which explains why e-means largely outperforms Lloyd. Below, the loss is measured for every batch size B and step α: Lloyd lands in a corner, well outside the region where the loss is lowest.
+into an entirely *different* path
 
-This hyperparameter study motivated us to derive scaling laws that automatically pick the optimal batch size B and step size α.
+```
+/home/linuxbrew/xbrew/.linuxbrew
+```
 
-To better understand why e-means reaches better losses than Lloyd at convergence, we plotted a few trainings on toy datasets to evaluate their ability to escape local minima. Repeating trainings over 200 seeds, we found that e-means is much less likely to fall in pathological configurations compared to Lloyd.
+with a made-up subdirectory `xbrew`? How?
 
-Our explanation for that is that mini-batches provide more noisy updates that are more likely to explore the optimization landscape and escape local minima. Lloyd, with its always decreasing loss, is more likely to exploit found local minima and never escape them.
+## Store by pieces
 
-## Automatic hyperparameter tuning with scaling laws
+The answer is that GCC optimizes our `std::string{PREFIX}`. The fact that we see something that looks like the prefix is merely a coincidence.
 
-An essential property of e-means is that practitioners don't need to set any additional hyperparameter compared to Lloyd's algorithm. We fitted two scaling laws to set the batch size `B` and step size α<sub>0</sub> from any problem's characteristics `(n, k, T)`, and found them to exhibit strong generalization on unseen datasets and problem scales.
+GCC splits our string up into two (overlapping) pieces of 16 bytes, like so
 
-| law | constant | exponent of | regret, held-out datasets | regret, held-out size | R² |  |  |  |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| k | B | n | T |  |  |  |  |  |
-| step α<sub>0</sub> | 0.824 | −0.46 | 0.90 | −0.45 | −0.11 | 0.07% | 0.07% | 0.95 |
-| batch B, default | 0.035 | 0.13 | n/a | 0.88 | 0.81 | 0.19% | 0.20% | 0.96 |
-| batch B, quality law | 0.0044 | 0.13 | n/a | 0.88 | 0.81 | 0.07% | 0.06% | n/a |
+```
+/home/linuxbrew/.linuxbrew
+|--------------|..........  - constant 1
+..........|--------------|  - constant 2
+```
 
-We propose two equations to choose the batch, the default law and the quality law. The “quality law” trades off throughput for better clustering quality against the “default” law. Below we plot the training data for our scaling laws: validation MSE against step size α<sub>0</sub> (left) and batch size B (right).
+which fit exactly in `xmm` registers, so that it can copy our string to the `std::string` buffer using vectorized move instructions.
 
-![The two scaling laws fit on deep1b](https://e-means.github.io/assets/paper_laws.svg)
+Filtering the relevant bits from `g++ -O2 -S -masm=intel`, we get
 
-The main issue with mini-batch k-means is that it is prone to “dead” clusters, centroids that end up with zero assigned points during optimization. This reduces the effective size of the codebook, which is especially problematic for the large codebooks increasingly used today.
+```
+movdqa  xmm0, XMMWORD PTR .LC0[rip]
+movups  XMMWORD PTR [rax], xmm0
+movdqa  xmm0, XMMWORD PTR .LC1[rip]
+movups  XMMWORD PTR 10[rax], xmm0
+```
 
-A common mitigation is to reinitialize clusters that fall below a certain size threshold, as done in EnCodec<sup>[[10]](https://e-means.github.io/#ref10)</sup>, where dead centroids are simply replaced by random samples drawn from the incoming batch. While this helps, it does not fully resolve the issue. Instead of sampling arbitrary points from the batch, we revive dead clusters by splitting large, existing ones: we sample an active cluster with probability proportional to its size and split it into two. We found this approach, adapted from Faiss k-means, to be significantly more effective at eliminating dead clusters and preserving codebook capacity.
+and our string is stored at `.LC0` and `.LC1` as constants, which just happen to be next to each other in the binary:
 
-| dataset | revival policy | dead clusters | of codebook | imbalance | test MSE |
-| --- | --- | --- | --- | --- | --- |
-| DEEP | **proportional split** | **47** | **0.3%** | **1.194** | **0.38762** |
-| resample from batch (EnCodec) | 2,343 | 14.3% | 1.423 | 0.39124 |  |
-| off | 4,313 | 26.3% | 1.647 | 0.39448 |  |
-| SIFT | **proportional split** | **10** | **0.1%** | **1.186** | **0.19623** |
-| resample from batch (EnCodec) | 750 | 4.6% | 1.233 | 0.19684 |  |
-| off | 2,080 | 12.7% | 1.404 | 0.19797 |  |
+```
+.LC0:
+.quad 7596498784141404207
+.quad 3420313983963919726
+.LC1:
+.quad 7795220194874516088
+.quad 8603408430414524009
+```
 
-We validated e-means on 24 different embedding and synthetic datasets and configurations (see [paper](https://arxiv.org/abs/2611.09501)). For the video we ran 234 configurations of e-means against k-means (16 datasets, 100k to 100M points): explore every curve in the [results map](https://e-means.github.io/results-map.html).
+In general, this happens when a string constant is copied into a buffer, as with `std::string`, `strcpy` or `memcpy`; strings that are only passed around as pointers, like in `fopen(PREFIX "/x", "r")`, stay intact.
+
+## Deduplication
+
+Some package managers like Conda and Spack install packages into a padded prefix during their builds, with the idea that they can be “relocated” to a shorter prefix of the user's choice: the binaries are patched in-place. Conda uses a repeated string `_placehold` in a directory name to make the prefix long enough.
+
+Now, even if we pick a 256-byte path (a convenient multiple of all x86-64 register widths) by padding the path Conda-style
+
+```
+#define PREFIX "/home/conda/feedstock_root/build_artifacts/" \
+               "foo_1699999999999/_h_env" \
+               "_placehold_placehold_placehold_placehold_placehold" \
+               "_placehold_placehold_placehold_placehold_placehold" \
+               "_placehold_placehold_placehold_placehold_placehold" \
+               "_placehold_placehold_placehold_placeho/"
+```
+
+and keep our fingers crossed that GCC puts the pieces of the path contiguously in the binary, we do *not* see our prefix back in the binary. What we get instead is a much shorter string of only 176 bytes (that is 11 times 16):
+
+```
+$ strings main | grep /home
+/home/conda/feedstock_root/build_artifacts/foo_1699999999999/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/
+```
+
+This is thanks to a further optimization: since the string `_placehold` repeats every 10 bytes, the 16-byte pieces repeat every `lcm(10, 16) = 80` bytes, and GCC needs to store only 5 distinct 16-byte constants for the padding:
+
+```
+/home/conda/feed
+stock_root/build
+_artifacts/foo_1
+699999999999/_h_
+env_placehold_pl
+acehold_placehol  # note
+d_placehold_plac  # that
+ehold_placehold_  # this
+placehold_placeh  # is
+old_placehold_pl  # cyclic
+acehold_placeho/
+```
+
+## Is this optimization helpful?
+
+For string literals, I don't think so. Clang does not split strings into constants, yet it generates essentially the same instructions. For example, take a longer path, and target AVX2 with `-march=x86-64-v3`:
+
+```
+#define PREFIX "/home/linuxbrew/.linuxbrew/Cellar/foo/1.2.3/share/foo"
+```
+
+Clang simply puts the string in a section dedicated to strings, `.rodata.str1.1`:
+
+```
+.L.str:
+.asciz "/home/linuxbrew/.linuxbrew/Cellar/foo/1.2.3/share/foo"
+```
+
+and copies its 53 bytes with two overlapping 32-byte `ymm` loads and stores, at offsets 21 and 0:
+
+```
+vmovups ymm0, ymmword ptr [rip + .L.str+21]
+vmovups ymmword ptr [rax + 21], ymm0
+vmovups ymm0, ymmword ptr [rip + .L.str]
+vmovups ymmword ptr [rax], ymm0
+```
+
+That isn't particularly different from GCC's version, which loads the same two pieces from constants in `.rodata.cst32` instead:
+
+```
+vmovdqa ymm0, YMMWORD PTR .LC0[rip]
+vmovdqu YMMWORD PTR [rax], ymm0
+vmovdqa ymm0, YMMWORD PTR .LC1[rip]
+vmovdqu YMMWORD PTR 21[rax], ymm0
+```
+
+So what does GCC gain? In terms of performance, probably nothing measurable: both do the same loads and stores. With repeated pieces, GCC might have a slight edge, because a repeated piece is loaded once and stored multiple times (11 loads for 16 stores in the earlier example). It also uses aligned reads, but that matters only for ancient CPUs.
+
+In terms of size, GCC's pieces can take more space than the string itself: overlapping bytes are stored twice, and the pieces are aligned to 16, 32 or 64 bytes. The 53-byte path above takes 64 bytes as two pieces, against 54 bytes as a string. It only pays off if it results in deduplication, for example when many strings share a prefix of at least 16 bytes for SSE2, 32 bytes for AVX2, and 64 bytes for AVX-512. Presumably deduplication does not save much in practice, especially now that some distributions use AVX2 as their baseline.
+
+## Can I disable this optimization?
+
+Other than compiling with `-Os`, not really. From GCC 10 onwards (maybe older versions too?) the split-into-pieces optimization triggers for strings up to 256 bytes even without specifying `-march`. From GCC 12 it is relative to the target's vector width, so longer strings get split too: up to 512 bytes for AVX2 and 1024 bytes for AVX-512.
+
+I believe the only control you have over this is setting the maximum vector width to 128 bits (forcing `xmm` operations), by passing `-mstore-max=128`. But this merely restores old defaults, and means strings of up to 256 bytes are still stored in pieces.
+
+## Maybe post-hoc scanning is bad practice?
+
+These post-build audits for absolute paths are popular, but you could argue that they are too brittle to start with, so why expect them to work at all?
+
+Indeed, Debian goes much further than a bad-path scan. Their audit asserts that a package can be rebuilt bit for bit in different circumstances: on a different machine, with a different user, time and date, hostname, locale, etc. That is a much more reliable way to keep machine-specific details out of binaries.<sup>[[10]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn10)</sup>
+
+I would argue that, despite that, it is *still* useful to keep string constants literally in the binary, even on Debian, because it improves interpretability of binaries. Running `strings ./binary` is such a simple and convenient way to get insight into an opaque binary blob, that it outweighs the marginal savings that come with splitting and deduplication. It is reminiscent of Fedora and Ubuntu turning frame pointers back on by default, despite the small overhead, just to make profilers and tracing tools work more reliably.
+
+Other than that, there is the argument of binary patching, which — despite being considered somewhat brittle — is common practice in Conda and Spack: upon install to a user-specified location, the absolute paths are patched in-place accordingly, through what can be seen as a glorified `sed` invocation. This only works if the path is stored in one piece.
+
+If you'd like to discuss this, a good place is the [gcc-patches thread](https://gcc.gnu.org/pipermail/gcc-patches/2026-November/738364.html) that I started recently, with an initial attempt at a patch that adds a way to opt out.
+
+[[1]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref1) [RPM (Fedora, RHEL, openSUSE)](https://github.com/rpm-software-management/rpm/blob/4187d693cfd4704e3ffdf6483ea91a0d56134333/scripts/check-buildroot#L30-L42): `check-buildroot` greps every installed file for the build root.
+
+[[2]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref2) [Arch Linux](https://gitlab.archlinux.org/pacman/pacman/-/blob/a6f7467d8c7c4d7e9cc846884e74c0ab7215c48d/scripts/libmakepkg/lint_package/build_references.sh.in#L30-L41): `makepkg` warns about references to `$srcdir` and `$pkgdir`.
+
+[[3]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref3) [Yocto / OpenEmbedded](https://git.openembedded.org/openembedded-core/tree/meta/classes-global/insane.bbclass?id=c2ea9568b768de7c479aba22f15520793a7dace4#n427): the `buildpaths` QA check.
+
+[[4]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref4) [FreeBSD ports](https://github.com/freebsd/freebsd-ports/blob/7ea5a0ba45376d1ca480b274157370705d3d01b2/Mk/Scripts/qa.sh#L201-L223): the stage QA greps for the staging directory.
+
+[[5]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref5) [pkgsrc](https://github.com/NetBSD/pkgsrc/blob/e9b59cbd05f2c2ab1c37f8a8524bd38b1e256de8/mk/check/check-wrkref.mk#L90-L113): `CHECK_WRKREF`, off unless a package developer turns it on.
+
+[[6]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref6) [Homebrew](https://github.com/Homebrew/brew/blob/8679d30f156018b0b184c64ab21a784f64b1d880/Library/Homebrew/keg_relocate.rb#L702-L775): `brew bottle` scans for the prefix to decide whether a bottle is relocatable.
+
+[[7]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref7) [conda-build](https://github.com/conda/conda-build/blob/7dd6a86caf822254aac3217c5fded17cb915e004/conda_build/build.py#L1014-L1080): files containing the build prefix are listed in `info/has_prefix`, to be rewritten on install.
+
+[[8]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref8) [rattler-build](https://github.com/prefix-dev/rattler-build/blob/0252f9ca2c5f8a9ab039b96ef09dc1d52d17de7d/crates/rattler_build_package/src/prefix/detector.rs#L15-L24): the same scheme as conda-build, with `memmem`.
+
+[[9]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref9) [Julia's BinaryBuilder](https://github.com/JuliaPackaging/BinaryBuilder.jl/blob/d2b11c267ef8029af0f46a88b767246d7b9df1d1/src/auditor/filesystems.jl#L25-L45): `check_absolute_paths` warns about the build prefix in any file.
+
+[[10]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref10) Even Debian keeps one path fixed: since early 2024 both builds use the [same build directory](https://tests.reproducible-builds.org/debian/index_variations.html), because it is recorded in the `.buildinfo` file and reused when rebuilding. So a build path embedded in a binary goes unnoticed there too.

@@ -1,179 +1,37 @@
-Ufuk made a comment that he enjoyed my description of SSA from bytecode in
-[Aaron’s livestream with me](https://www.youtube.com/watch?v=h9_FyHYUhww).
-While filming the livestream—an intro to ZJIT internals—I got a little
-nervous that people would shy away from our 1900 line `add_iseq_to_hir`
-function. This function is responsible for converting CRuby’s stack based
-bytecode for the YARV virtual machine into a high-level SSA IR for ZJIT to
-analyze and optimize.
+The 1980s and 1990s PC viruses were a special breed. The MS-DOS operating system wasn’t particularly secure – few home computer operating systems were back then – so viruses could spread quickly, and many did.
 
-It takes bytecode that looks roughly like this:
+Some of the viruses focused more on actually wreaking havoc and destroying things, and some primarily on effective propagation that served no additional purpose. The last group was viruses that were maybe… a little bit exhibitionist, announcing themselves with various audio-visual effects of the kind of quality you might expect from vintage computers in the hands of bored programmers.
 
-```
-push 3
-push 4
-add
-```
+Various antivirus programs were as much a necessity back then as ad blockers feel today. In Poland, the most popular one was called MkS_Vir – named after its creator, Marek Sell.
 
-into SSA form, giving an SSA value to each stack slot, ish:
+I believe MkS_Vir had a reputation for being great at detecting the viruses and disinfecting machines, but part of its appeal was that it also hosted something that you could call a virus zoo – a few actual viruses, completely defanged but still presenting their audio-visual effects, so you could experience them without any fear.
 
-```
-v0 = const 3
-v1 = const 4
-v2 = add v0, v1
-```
+I emulated MkS_Vir just to show you. Here’s a virus that once in a while would make all your letters uppercase:
 
-While our function is 2000 lines long because it handles a lot of specific
-opcodes and weird facts about those opcodes, the core of it is small. Here is
-that core.
+Here’s one that would rotate your screen on Fridays:
 
-The bytecode assumes that when it is run, it will be operating on a stack. This
-means that every opcode has implicit stack inputs and implicit stack outputs.
+Here’s one that a month after the infection would show flames – and render your computer unbootable:
 
-`push 3`, for example, has empty stack inputs and one stack output. By
-contrast, `add` has two stack inputs and one stack output. Some instructions
-such as `nop` are empty on both counts. As far as I can tell, all instructions
-have *at most* one output.
+Here’s one that laughed at you:
 
-These counts are known when looking at the bytecode: we can reason statically
-about how many inputs and outputs each opcode has. Some are variadic, such as
-`send` (call), but they come bearing an argument count in a nearby field.
+Here’s one that waited three months and then ate your letters:
 
-Let’s model how the first example runs on the VM by adding a view of the stack
-after each instruction has run. The stack will be displayed as a list
-left-to-right, where the left is the bottom and the right is the top.
+This one was a true classic, making your letters fall:
 
-```
-       ; []
-push 3 ; [3]
-push 4 ; [3, 4]
-add    ; [7]
-```
+And this one flushed your screen like a toilet:
 
-Because the input counts and output counts are static, when ZJIT reads through
-the bytecode, we can run the stack parts of it at compile-time.
+These all seem retro and cute today. I don’t want to trivialize them, though, even those that “only” messed up your screen. Imagine being new to home computers – already a petrifying proposition – and then seeing something like that, not knowing whether computers were even *meant to do this*.
 
-We don’t *really* need to know what the values on the stack are; we only need
-to keep track of where they came from. And when I say “where they came from”, I
-mean that we name each instruction and refer to its output by the instruction’s
-name. I like how the paper [Design of the Java HotSpot™ Client Compiler for
-Java 6](https://bernsteinbear.com/assets/img/design-hotspot-client-compiler.pdf) (PDF) puts it:
+Turns out, there were a lot more “virus zoo” efforts.
 
-> An instruction that loads or computes a value represents both the operation
-> and its result, so that operands can be represented as pointers to previous
-> instructions.
+A Czech antivirus program called AVG also had a built-in one; YouTube has [a video walking your through a lot of them in sequence](https://www.youtube.com/watch?v=lb1qEFig4qU).
 
-Here is what that looks like for the above example. In addition to the run-time
-stack, I will also write the SSA instruction to indicate that we are generating
-new code:
+The Internet Archive has a [malware museum](https://archive.org/details/malwaremuseum), created by Mikko Hypponen in 2016. What’s particularly interesting about this effort is that these 87 entries are not screenshots or videos – they are actually emulated malware, rendered inert in part by emulation’s inherent sandboxing, and in part by some careful preparation, likely similar to the ones above.
 
-```
-       ; []
-push 3 ; v0 = const 3
-       ; [v0]
-push 4 ; v1 = const 4
-       ; [v0, v1]
-add    ; v2 = add v0, v1
-       ; [v2]
-```
+Lastly, danooct1 has been collecting and showcasing viruses, [trojans](https://en.wikipedia.org/wiki/Trojan_horse_(computing)), and [worms](https://www.geeksforgeeks.org/computer-networks/difference-between-worms-and-virus/) [on his YouTube channel](https://www.youtube.com/@danooct1/videos). These are not the most gripping narratively, but at 672 videos (sic!), one has to admire the sheer effort. They extend the timeframe from the DOS era to early Windows, and occasionally even more platforms. This makes it possible to see more modern takes on the viruses above, like a [melting screen worm](https://www.youtube.com/watch?v=HajECunjYjM), now in true graphics mode…
 
-This is neat! We have transformed stack based bytecode to a form where
-instructions can directly reference their inputs. You may notice, though, that
-`v0` and `v2` both end up in the same stack slot (the first element). This is
-why I said earlier “giving an SSA value to each stack slot, *ish*”.
+…or the legendary (in the derogatory sense) [YouAreAnIdiot trojan](https://www.youtube.com/watch?v=LSgk7ctw1HY):
 
-The difference between the two is *time*. `v0` was in the operand stack at one
-point but now `v2` is. This is kind of why I describe SSA as “pushing time
-through the IR”.
+Just [visit the channel](https://www.youtube.com/@danooct1/videos), click on Popular, and enjoy from the comfort of your timeshifted and airgapped chair.
 
-Alright, let’s implement it.
-
-We’ll start with the real (“concrete”) interpreter of the bytecode, which
-operates on a value stack. This gives you a simplified version of how Ruby
-internals work:
-
-```
-def interpret(bytecode)
-  stack = []
-  bytecode.each do |op|
-    case op
-    in [:push, c]
-      stack << c
-    in [:add]
-      right = stack.pop
-      left = stack.pop
-      stack << left + right
-    else
-      raise "Unknown op #{op}"
-    end
-  end
-  stack.pop
-end
-
-bytecode = [
-  [:push, 3],
-  [:push, 4],
-  [:add],
-]
-
-puts interpret(bytecode)  # 7
-```
-
-Now let’s look at the abstract intepreter, which by contrast operates on an SSA
-stack. You can see that they are quite similar looking:
-
-```
-def to_ssa(bytecode)
-  code = []
-  stack = []
-  bytecode.each do |op|
-    case op
-    in [:push, c]
-      name = :"v#{code.length}"
-      code << "#{name} = const #{c}"
-      stack << name
-    in [:add]
-      name = :"v#{code.length}"
-      right = stack.pop
-      left = stack.pop
-      code << "#{name} = add #{left}, #{right}"
-      stack << name
-    else
-      raise "Unknown op #{op}"
-    end
-  end
-  code
-end
-
-bytecode = [
-  [:push, 3],
-  [:push, 4],
-  [:add],
-]
-
-puts to_ssa(bytecode)
-# v0 = const 3
-# v1 = const 4
-# v2 = add v0, v1
-```
-
-The `name`s could be anything as long as they are unique. For simplicity and
-ease of reading, I picked the length of the `code` array, which grows
-monotonically. This is an array/vector-based analogue to the real-pointer
-approach in the HotSpot paper from above.
-
-Ta da! You have built a small abstract interpreter.
-
-Now to make it global (to handle control flow) you need some kind of
-inter-basic-block data flow mechanism such as phi nodes or basic block
-parameters. Perhaps more on that in another post, but for now, you may enjoy
-[my collection of other people’s writing](https://bernsteinbear.com/blog/ssa/) about that.
-
-I originally wanted to title this blog post “you could have invented abstract
-interpretation” or similar, but I decided that I find those titles obnoxious
-because they assume the reader is or thinks of themself as unintelligent.
-Perhaps *we* could have invented it.
-
-The title is a bit of a tongue-in-cheek nod to the “functional pearl” papers
-that I always felt should be simpler than they are but leave me confused. And
-also kind of a nicer nod to [SSA is Functional
-Programming](https://bernsteinbear.com/img/appel-basic-block-arguments.pdf) (PDF) by Andrew Appel.
+The title of the post comes from the description of danooct1’s channel.

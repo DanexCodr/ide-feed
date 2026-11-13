@@ -1,18 +1,299 @@
-Open models should outlive the places that host them. LibreAGI is a private BitTorrent
-				tracker where members keep copies of the models most likely to disappear.
+I’ve been exploring Rust, and one topic that got me intrigued is pointer
+provenance, particularly because it’s not easy to visualize.
 
-$ mktorrent -p -s libreagi -l 24 ./model
+To get a feel for
+[vtables](https://sofiabelen.github.io/projects/visualizing-rusts-vtables-how-dyn-trait-works-in-memory/),
+what I wanted was to look at the actual memory, to see what it really looked
+like and prove that I could in fact call these functions through their
+respective function pointers. With provenance, I wanted to take it apart the
+same way, but it turns out it’s not so straightforward. This only got me more
+intrigued, so let’s see what we can find!
 
-![A grid of torrent pieces, sparse on the left and solid on the right.](https://libreagi.com/piecemap.svg)
+My first time hearing about provenance, I wondered, why hadn’t I heard about it
+before? It seems so crucial, yet a bit of an obscure concept.
 
-*1 copy12 copies*
+## What is Provenance: Pointers Are Not Just Glorified Ints
 
-## Seeding pays by scarcity
+Let’s start by taking a good look at this snippet. It’s short, but our intuition
+can trick us if it’s our first time coming across this concept. `void opaque(int*)` is forward declared here, so for us it’s a black box. Neither we
+nor the compiler can rule out that this function dereferences `p` and writes to
+memory.
 
-Credit grows with size and time, and a model with one copy earns four times the base rate. The rare ones need the most help.
+```cpp
+void opaque(int*);
 
-Any format, from safetensors and GGUF to ONNX, under Apache-2.0, MIT or the Qwen Community License. Each file is checked against its source commit, and staff review every model.
+int f(int* p) {
+    int x = 1;
+    opaque(p);
+    return x;
+}
+```
 
-A [signed public catalog](https://libreagi.com/catalog.json) lists every model, hash and source, so anyone can rebuild the swarms if this site goes away.
+If we compile this with `-O2`, Clang optimizes this to return 1. Let’s try this
+on Godbolt:
 
-The public channel is open to anyone, with no account needed. Come and ask questions before you apply.
+The question is, how does it know that `int* p` doesn’t point to the same memory
+address where `x` lives (meaning that `opaque(p)` could end up modifying `x`)?
+
+The compiler assumes `p` can’t equal `&x` because `p` wasn’t *derived* from `x`.
+
+When I first heard about this, I thought it was a bit of a strange concept. What
+does it mean that something is *derived* from something?
+
+I mean, if pointers were just numbers (memory addresses), `p` could
+theoretically happen to hold the same memory address as `x`’s allocation on the
+stack. Good thing they’re not just numbers!
+
+Let us follow the white rabbit.
+
+This brings us to the core of provenance. <mark>That “*derived from*” relation
+is **provenance**: for every pointer, the compiler keeps track of which
+allocation it belongs to and may, therefore, touch.</mark>
+
+I tried to find a way to print this mysterious provenance, but it turns out that
+it’s purely a compiler abstraction. It does not exist as an actual data field
+stored alongside the memory address. (There are exceptions though: feel free to
+look up the CHERI architecture to go down another rabbit hole).
+
+## Inspecting Provenance: LLVM IR
+
+So what can we do to inspect it? If the compiler knows about it then it must
+exist somewhere. If so, there must be a way to *see* it.
+
+This is how I learned about LLVM IR (intermediate representation), which is
+essentially a low-level programming language that acts as a bridge between
+high-level languages (like Rust, C++, etc) and machine code.
+
+Let’s try it for this code instead, where we also pass `&x` to `opaque` to see
+what happens when the compiler doesn’t optimize that part away:
+
+```c++
+void opaque(int*);
+
+int f(int* p) {
+    int x = 1;
+    opaque(p);
+    opaque(&x);
+    return x;
+}
+```
+
+We can use the `-emit-llvm` flag on Godbolt to [see the LLVM
+IR](https://godbolt.org/#g:!%28%28g:!%28%28g:!%28%28h:codeEditor,i:%28filename:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,selection:%28endColumn:2,endLineNumber:8,positionColumn:2,positionLineNumber:8,selectionStartColumn:2,selectionStartLineNumber:8,startColumn:2,startLineNumber:8%29,source:%27void+opaque%28int*%29%3B%0A%0Aint+f%28int*+p%29+%7B%0A++++int+x+%3D+1%3B%0A++++opaque%28p%29%3B%0A++++opaque%28%26x%29%3B%0A++++return+x%3B%0A%7D%27%29,l:%275%27,n:%270%27,o:%27C%2B%2B+source+%231%27,t:%270%27%29%29,k:44.33887569279493,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29,%28g:!%28%28h:compiler,i:%28compiler:clang2310,filters:%28b:%270%27,binary:%271%27,binaryObject:%271%27,commentOnly:%270%27,debugCalls:%271%27,demangle:%270%27,directives:%270%27,execute:%271%27,intel:%270%27,libraryCode:%270%27,trim:%271%27,verboseDemangling:%270%27%29,flagsViewOpen:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,libs:!%28%29,options:%27-O2++-emit-llvm%27,overrides:!%28%29,selection:%28endColumn:29,endLineNumber:24,positionColumn:1,positionLineNumber:1,selectionStartColumn:29,selectionStartLineNumber:24,startColumn:1,startLineNumber:1%29,source:1%29,l:%275%27,n:%270%27,o:%27+x86-64+clang+23.1.0+%28Editor+%231%29%27,t:%270%27%29%29,k:55.66112430720507,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29%29,l:%272%27,n:%270%27,o:%27%27,t:%270%27%29%29,version:4):
+
+```
+
+define dso_local noundef i32 @f(int*)(ptr noundef %0) local_unnamed_addr #0 !dbg !14 {
+  %2 = alloca i32, align 4 // --> root of %2 allocation (x)
+    #dbg_assign(i1 poison, !22, !DIExpression(), !23, ptr %2, !DIExpression(), !24)
+    #dbg_value(ptr %0, !21, !DIExpression(), !24)
+  call void @llvm.lifetime.start.p0(ptr nonnull %2) #3, !dbg !25
+  store i32 1, ptr %2, align 4, !dbg !26
+    #dbg_assign(i32 1, !22, !DIExpression(), !28, ptr %2, !DIExpression(), !24)
+  tail call void @opaque(int*)(ptr noundef %0), !dbg !29
+  call void @opaque(int*)(ptr noundef nonnull %2), !dbg !30
+  %3 = load i32, ptr %2, align 4, !dbg !31
+  call void @llvm.lifetime.end.p0(ptr nonnull %2) #3, !dbg !32
+  ret i32 %3, !dbg !33
+}
+
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #1
+
+declare !dbg !34 void @opaque(int*)(ptr noundef) local_unnamed_addr #2
+
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #1
+
+attributes #0 = { mustprogress uwtable "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+attributes #1 = { mustprogress nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #2 = { "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+attributes #3 = { nounwind }
+```
+
+What the compiler does is to conceptually construct a DAG (directed acyclic
+graph), to answer the question of where a pointer comes from and whether two
+pointers can touch the same memory.
+
+If the root origins don’t match, LLVM can guarantee that writing through `%0`
+will never alter the value stored at `%2`.
+
+There is so much more to explore here that it’s hard not to get carried away
+because it’s truly fascinating. However, my original goal was to compare how C++
+and Rust handle this, so let’s continue.
+
+## C++: What Happens If We Cast to an Integer?
+
+If we were to cast `&x` to an integer, then LLVM must assume that anyone could
+rebuild a pointer to `x` from that integer.
+
+```cpp
+#include <cstdint>
+
+void g(std::uintptr_t);
+void opaque(int*);
+
+int f(int* p) {
+    int x = 1;
+    g(reinterpret_cast<std::uintptr_t>(&x)); // address of x is now 'exposed'
+    opaque(p);
+    return x;
+}
+```
+
+The result is that the compiler gives up the optimization:
+
+That’s a pity if we only wanted to read the address and never intended to cast
+it back to a pointer. Wouldn’t it be nice if we could communicate this intent to
+the compiler?
+
+## Rust: Making Your Intent Explicit
+
+This is exactly what Rust provides with its powerful provenance APIs.
+
+### Inspecting Without Exposing
+
+```rust
+let p: *const u32 = &x;
+let a: usize = p.addr();
+```
+
+`p.addr()` extracts the raw memory address integer while telling Rust’s abstract
+machine:
+
+> I am reading this numeric address for inspection, but I guarantee I WILL NOT
+> cast it back to a valid pointer.
+
+Provenance is therefore not exposed.
+
+To mirror our previous experiments, we can try to see if the optimization was
+avoided or not:
+
+What we see is that `mov eax, dword ptr [rsp + 12]` reloads `x` after
+`opaque(p)`, meaning that, at least for now, the optimization is given up. Same
+as in the C++ case.
+
+Still, we can benefit from using the more expressive API, and not relying on
+exposure semantics. It gives the compiler room to optimize in the future, and,
+by telling Miri explicitly what we mean, it can better help us catch bugs.
+
+### Preserving Provenance
+
+In lock-free data structures, we sometimes need to store status flags in the
+lower unused bits of a pointer. It’s a very cool trick, which left me with my
+eyes wide open for a minute when I first read about it. I talk more about it in
+[this
+post](https://sofiabelen.github.io/projects/visualizing-crossbeam-epoch-based-reclamation/#q2-dissecting-crossbeamepochshared).
+Essentially, due to alignment, the lower bits of pointers are “wasted” (always
+0), so we can use them to store flags.
+
+What we can do is work with an intermediate pointer value, which will have the
+flag bit set BUT that also inherits provenance from the original pointer. This
+is exactly the functionality that `with_addr` provides us. After we’re done, we
+can recreate our valid initial pointer.
+
+The tagged value is stays a pointer rather than ‘usize’ because an integer is
+just a number and can’t carry provenance.
+
+```rust
+let tagged: *const u32 = p.with_addr(p.addr() | 1);
+// ...
+let revived_ptr: *const u32 = tagged.with_addr(tagged.addr() & !1);
+```
+
+Keep in mind that `tagged` isn’t dereferenceable, given that `p.addr() | 1` is
+misaligned for `u32`. Dereferencing it would be UB.
+
+In short:
+
+- `addr()` reads the address without exposing provenance.
+- `with_addr()` builds a new pointer with a new address but the *same* provenance as the original.
+
+### Legacy Rust, Similar To C++
+
+In legacy code, we’d have to do something like this:
+
+```rust
+let addr = p as usize;
+let tagged_addr = addr | 1;
+let revived_ptr = (tagged_addr & !1) as *const u32;
+println!("*revived_ptr: {}", unsafe { *revived_ptr});
+```
+
+This code will run, but if we run it with Miri, it emits a warning:
+
+```mysql
+warning: integer-to-pointer cast
+ --> src/main.rs:6:22
+  |
+6 |     let revived_ptr = (tagged_addr & !1) as *const u32;
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ integer-to-pointer cast
+  |
+  = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
+  = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
+  = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
+  = help: you can then set `MIRIFLAGS=-Zmiri-strict-provenance` to ensure you are not relying on `with_exposed_provenance` semantics
+  = help: alternatively, `MIRIFLAGS=-Zmiri-permissive-provenance` disables this warning
+
+*revived_ptr: 1
+warning: 1 warning emitted
+```
+
+Actually, the reason that it runs is also interesting. What happens is similar
+to the C++ example. `p as usize` exposes the provenance of `p`, and since the
+reconstructed pointer points to the same allocation, provenance is recovered.
+
+Provenance would be lost if we did some pointer arithmetic and landed in a
+different allocation.
+
+### Casting Without Exposing Provenance
+
+To see what happens when provenance is **not** exposed, we can use
+`ptr::without_provenance`, which creates a bare address with no allocation
+behind it. (It’s useful for dangling or sentinel pointers, but it can’t be
+dereferenced).
+
+```rust
+let bare_ptr = std::ptr::without_provenance::<u32>(p.addr());
+println!("*tagged_ptr: {}", unsafe { *bare_ptr});
+```
+
+As expected, Miri complains about a <mark>*dangling pointer*</mark> and tells us explicitly that <mark>it has no provenance.</mark>
+
+```
+
+error: Undefined Behavior: memory access failed: attempting to access 4 bytes, but got 0x20b28[noalloc] which is a dangling pointer (it has no provenance)
+  --> src/main.rs:11:42
+   |
+11 |     println!("*tagged_ptr: {}", unsafe { *bare_ptr});
+   |                                          ^^^^^^^^^ Undefined Behavior occurred here
+   |
+   = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
+   = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
+
+note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
+
+error: aborting due to 1 previous error
+```
+
+## Recap
+
+Provenance, in short, is a hidden piece of information tracking “which
+allocation” a pointer originates from, which LLVM uses for optimizations.
+
+In C++, `uintptr_t` casts force the optimizer to prepare for the worst case by
+disabling some optimizations.
+
+In Rust, `addr()`, `with_addr()` and `without_provenance()` let you state your
+intent explicitly: you only want the number, or you are deriving a new pointer
+from an existing one. In principle, that gives the compiler room to optimize
+more aggressively. In our experiment, however, the Rust version is unoptimized
+too: `x` was still reloaded from the stack. Using more expressive
+APIs is still valuable though, as Miri can enforce the rules and catch bugs that
+stem from unintended usage.
+
+I had planned to compare what Miri and ASan can catch, but I’ll save that for
+another post. It was enough new info as it is and it takes some time to fully
+wrap my head around it.
+
+I’m currently between jobs and looking for a Rust role, so writing these posts
+keeps me motivated and has helped me find a sense of community. Thank you for
+reading, and I hope you enjoyed it!

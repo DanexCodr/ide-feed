@@ -1,979 +1,191 @@
-Earlier this year I [wrote a post on
-yk](https://tratt.net/laurie/blog/2026/retrofitting_jit_compilers_into_c_interpreters.html),
-which can automatically add JIT compilers to C interpreters. Since then we’ve
-applied yk to more interpreters, fixed various bugs, and improved
-performance notably. Towards the end of October I showed some data where on our
-benchmark suite[1](javascript:;) yklua is 2× faster than the PUC Lua interpreter it takes as a
-base.
+I got a part time job writing a Lisp compiler, so I’m going to talk about that.
 
-I was quite pleased with myself until someone brought me down to earth by
-asking “how do you know if this works for large interpreters?” It’s a fair
-question: PUC Lua is at least an order of magnitude smaller[2](javascript:;) than CPython or CRuby and who’s
-to say if it would work with much bigger interpreters? We had looked at CPython a year or so ago, but
-at that point yk was missing several obvious things that CPython would need, so
-we quickly moved on. A lot has changed since then, and a quick LLM experiment
-got far enough to suggest it would be worth looking again.
+This post might be hard to understand if you do not program. Or if you do. There’s a fair amount of background required.
 
-Happily, having taken a deeper look, CPython not only works when adapted for yk
-as [ykcpython](https://github.com/ykjit/ykcpython)[3](javascript:;), but there are
-meaningful performance gains to be had — not only relative to normal CPython,
-but also relative to Python’s experimental JIT[4](javascript:;). Roughly speaking,
-this is the result of 3-4 days’ work on ykcpython directly; there was a separate
-week and a half of generic yk bug fixing necessary to get to the point that I
-could look at ykcpython itself.
+## There are Lisp compilers?
 
-Here are the “final” numbers from my brief odyssey on ykcpython and the AWFY
-benchmark suite:
+You might be familiar with Lisp in the form of a Scheme interpreter you used for a few semesters in college. You might think things about it like “it’s so elegant, but it’s kind of impractical for day-to-day use”. You might think of it as “an interpreted language” and so don’t understand what I mean by Lisp compiler. If you don’t think these things you can probably skip to the next section.
 
-|  | cpython | cpython_jit | ykcpython |
-| --- | --- | --- | --- |
-| Bounce | 19.27±0.20 | 11.09±0.05 | **10.09±0.04** |
-| CD | 32.21±0.23 | **26.10±0.08** | 29.33±0.16 |
-| DeltaBlue | 7.43±0.02 | **6.21±0.02** | 7.62±0.04 |
-| Json | 11.81±0.08 | 10.93±0.05 | **9.98±0.03** |
-| List | 15.01±0.22 | **8.10±0.05** | 10.44±0.09 |
-| Mandelbrot | 11.66±0.28 | 6.94±0.27 | **4.20±0.07** |
-| NBody | 18.97±0.13 | 12.77±0.12 | **10.98±0.02** |
-| Permute | 22.97±0.34 | **17.95±0.13** | 21.04±0.05 |
-| Queens | 13.18±0.14 | 9.65±0.11 | **8.32±0.03** |
-| Richards | 54.80±0.20 | 40.56±0.40 | **33.18±0.17** |
-| Sieve | 23.34±0.06 | 17.02±0.07 | **13.74±0.06** |
-| Storage | 22.03±0.19 | 19.94±0.08 | **19.67±0.04** |
-| Towers | 20.46±0.25 | **12.65±0.05** | 13.67±0.04 |
-
-In this table `cpython` is “normal” CPython 3.15.1; `cpython_jit` is CPython
-3.15.1 with the experimental JIT turned on; and `ykcpython` is commit
-[31b4d387](https://github.com/ykjit/ykcpython/commit/31b4d3875a9a63184546d7065863d42b4e24c2fc).
-Times are in seconds (lower is better) with means and 99% confidence intervals bootstrapped from 30 process
-executions, running on a 64 core AMD EPYC 7773X Debian machine in `performance`
-mode ([download the repeatable experiment and the raw
-data](https://tratt.net/laurie/blog/extra/2026/adapting_cpython_for_yk/adapting_experiment.tgz)).
-On each row the fastest entry(s) are shown in bold.
-
-A simple summary of the table is: `ykcpython` is faster than `cpython` on every
-benchmark except DeltaBlue (where it’s about 2.5% slower); and faster than
-`cpython_jit` on 8 out of 13 benchmarks.
-
-The point of this post is not to pretend that ykcpython is in any way ready for
-people to use — it definitely is not! Nor is it to pretend that one can
-expect performance on a wider set of programs to be as good as the numbers
-above — it definitely won’t! My view is that benchmark suite performance
-is a hoop to jump through rather than an end in itself: a system which
-benchmarks well might perform poorly in the real world; but a system which
-benchmarks poorly nearly always performs poorly in the real world.
-
-Rather, I wanted to use this post as a way of showing what it’s like to adapt
-an interpreter for yk[5](javascript:;): the stages I went through; and to give a sense
-of how the just under 450LoC I added were enough to achieve a meaningful
-effect. Luckily I had a sense that this might be a useful journey, so I was
-able to write enough stuff down to be able to flesh out this full post.
-
-If you haven’t read [the earlier yk
-post](https://tratt.net/laurie/blog/2026/retrofitting_jit_compilers_into_c_interpreters.html),
-here’s a very brief refresher. Given a lightly modified C interpreter[6](javascript:;)
-as input, yk produces a VM with a meta-tracing JIT compiler as output[7](javascript:;).
-yk doesn’t aim to produce the fastest possible JIT compiling language
-implementation: rather, it aims to make the language implementation you know and love
-somewhat faster while retaining 100% compatibility. Put another way a “ykified”
-interpreter is a fork of the existing C version of the interpreter, with
-(hopefully!) a handful of adjustments.
-
-As with any meta-tracing JIT compiler, yk identifies *hot* loops in the *guest*
-language (e.g. Lua or Python), and *traces* the interpreter (i.e. records what
-the C code is executing while it is interpreting the guest language). It then
-optimises those traces and converts them to machine code.
-
-yk requires interpreters to tell it where potential loops in the guest language are via
-the `YkLocation` struct. Optionally – though if you want to get good
-performance, definitely necessary! – interpreter authors can add *optimisation hints* that
-embed knowledge about the language or its common idioms of use such as “at
-this point this seemingly dynamic value almost never changes”. In general,
-working out where to put `YkLocation`s is relatively easy, but working out where to
-put hints requires a much greater understanding of the interpreter, and careful
-measurement to understand which do and don’t help.
-
-The challenge I face when adapting an interpreter for yk is that I rarely know
-the interpreter well, if at all. Rather than trying to do everything at once, I
-have learnt to start off as simple as possible: I try and do the minimum
-changes that lead to some traces being recorded and compiled to machine code.
-This can be trickier than it seems: I’ve got to understand the build system[8](javascript:;), and work out where to put some semi-sensible `YkLocation`s.
-I’ve also learnt to make sure that the language’s test suite works from this very
-first step: keeping it working thereafter is not only much easier, but it
-lessens the number of times one attempts optimisations that are unsound.
-
-For a simple interpreter, you might get a basic JIT compiler from an
-interpreter with fewer than 10LoC (Lines-of-Code) changed. For somewhat bigger
-interpreters, a few more changes tend to be necessary. For example, yk doesn’t
-like “threaded” interpreters that use `goto` between opcodes, because it
-doesn’t give it enough opportunities to intercede and see what’s going on.
-Fortunately, such changes are not generally too big.
-
-Since it had been a long time since I looked at CPython’s internals[9](javascript:;),
-I started with the part I was vaguely familiar with. As I later discovered, this is now called the “tier 1” interpreter.
-Quickly hacking in support for yk highlighted several missing things in yk
-(from [basic atomic loads](https://github.com/ykjit/yk/pull/2426) to
-[not-implemented-bit-widths in `sub`](https://github.com/ykjit/yk/pull/2418),
-minor incompatibilities (e.g. [reading an environment variable after a CPython
-test had wiped it](https://github.com/ykjit/yk/pull/2441)), and flat out bugs
-(from [stackmap fixes](https://github.com/ykjit/ykllvm/pull/374/changes) to
-[not doing silly things after `fork`](https://github.com/ykjit/yk/pull/2438)).
-Fixing all those took me around a week and a half; I’m not going to talk about
-them in detail in this post, because they’re generic fixes that aren’t
-ykcpython specific.
-
-My [adaption of the tier 1
-interpreter](https://github.com/ykjit/ykcpython/pull/11) is deliberately
-minimalistic. Most of the changes in the 200LoC diff are small one-offs that
-aren’t hugely interesting: we need CPython to use its (builtin but non-default)
-`switch`-based interpreter; and yk uses a shadow stack, so CPython’s C stack
-resizing needs to take that into account too. The most interesting thing I did
-[was to add `YkLocation`s at backwards jump opcodes](https://github.com/ykjit/ykcpython/pull/11/changes#diff-6f869eb8beb7cbe4bc6817584b99ad567f88962fa67f7beca25d009dc401234dR603),
-which I expected to be enough for some half-sensible traces to be created.
-
-I wasn’t expecting this first version of ykcpython to be faster
-than CPython – if nothing else, it contained almost no optimisation hints – but it was
-*much* slower than I expected. It was definitely creating traces, and they were
-executing correctly – the test suite passed, albeit taking more memory
-than I’d like[10](javascript:;) – but something clearly wasn’t right.
-
-Fortunately, it didn’t take very long to work out what. 4 years ago, CPython
-added support for [*quickening*](https://peps.python.org/pep-0659/) under the
-heading of “specialisation”. Quickening is a simple, clever technique for
-[improving interpreter
-performance](https://www.unibw.de/ucsrl/pubs/ecoop10.pdf/@@download/file/ecoop10.pdf)
-that rewrites “generic” opcodes (e.g. “add objects”) to “specialised”, faster,
-opcodes (e.g. “add two ints”) when possible, deoptimising back to the generic
-opcodes if necessary. I tend to think of quickening as giving a decent portion
-of the benefit of a JIT compiler without all the bother of generating machine
-code[11](javascript:;). The problem for yk is that sometimes a program’s opcodes
-can transition between specialised and unspecialised opcodes a large number of times,
-and the simple way I’d added yk support meant that each transition implicitly
-threw away the associated trace and created a new one. In most cases, traces weren’t
-used long enough to overcome the cost of creating them.
-
-There are techniques which can overcome this problem, and I did briefly
-experiment with them, but I then recalled a conversation I had with some
-CPython developers last year. A quick look inside CPython confirmed my
-recollection: CPython contains a “tier 2” interpreter as well. This isn’t a
-completely new interpreter; rather it is an alternative implementation of core
-parts of the main interpreter loop, mostly intended for CPython’s experimental
-JIT compiler.
-
-A very quick experiment later suggested that the tier 2 interpreter was – at
-least at a basic level – a better fit for yk[12](javascript:;). I thus ripped out
-the tier 1 support and added [support for yk in the tier 2
-interpreter](https://github.com/ykjit/ykcpython/pull/12). Happily, tier 2
-support is even easier than tier 1 support, consisting of a mere [80
-LoC](https://github.com/ykjit/ykcpython/pull/12/changes/06e91ccc5a34cb8be58a398413c56e92b5b534eb).
-To give you a quick idea of what yk support looks like, here’s the part that
-attaches `YkLocation`s[13](javascript:;) to the (start of) loops:
+In Lisp, in contrast with some languages, the semantics are essentially built around interpretation. When you give a Lisp interpreter some code it goes through it step by step and executes it. This invites careful execution. It’s natural, for example, to expect that a program like
 
 ```
-
-for (uint32_t i = 0; i < executor->code_size; i++) {
-  const _PyUOpInstruction *uop = &executor->trace[i];
-  if (_PyUop_Uncached[uop->opcode] == _JUMP_TO_TOP) {
-    uint16_t target = uop_get_jump_target(uop);
-    if (yk_location_is_null(executor->yk_locs[target])) {
-      executor->yk_locs[target] = yk_location_new();
-    }
-  }
-}
+(defun foo (x) (+ x 237))
+(foo "hello world")
 ```
 
-For the rest of this post, I’m going to be using yk and the tier 2 interpreter as the
-starting point for ykcpython.
+that defines an addition function and then calls it on a string, will do something nice like pop you into a debugger, rather than return garbage data.
 
-When optimising any language implementation, it’s important to know where its
-performance sits in the wider performance landscape. To understand how
-ykcpython was doing, I used two other baselines: “stock” CPython; and CPython
-with the experimental JIT. I configured `cpython` as follows:
+But it’s also generally slow. The interpreter has to do something on all possible input. It can’t, for instance, very well optimize FOO to accept only one numerical argument in a register, because later FOO might be called with a string.
+
+So you add a compiler. The compiler is an optimization. It takes code and returns an optimized version that tries to preserve these semantics as much as possible while being much faster. The optimized version is faster partly because it’s probably composed of machine code or JVM bytecode or something else interpretable very quickly, and partly because of higher level optimizations. For example
 
 ```
-
-CC=clang-21 CXX=clang++-21 \
-  ./configure \
-  --enable-optimizations \
-  --with-lto
+(defun foo (x) (+ x 237))
+(+ (foo 16) 93)
+(mapcar (eval) '(3 898 38))
 ```
 
-Note that I’m deliberately using the same version of LLVM for both `cpython`
-and `cpython_jit` because the latter requires LLVM-21. ykllvm – the fork of
-LLVM used in yk – is [based off a version of LLVM about 6 months
-later](https://github.com/ykjit/ykllvm/pull/312) than LLVM-21. That might
-slightly distort comparisons, but it’s a small enough difference that the
-effects hopefully are fairly minor. Bearing that in mind, `ykcpython` is
-configured as follows:
+here the compiler might note that FOO can only accept numbers, and when it sees a straightforward call to FOO like in the second line that gives it only numbers, it generates code that skips the “is this a number? No? Debugger time” check. An “interpreter stub” retains the whole safest behavior, and can be used in the third line if `eval` returns FOO.
+
+This strikes a good balance, for me, between speed and freedom. The optimized code isn’t any less safe, so I can still write things with abandon and watch them fail in the debugger.
+
+The downside is that the compiler has to be pretty smart to be very effective. Luckily several Lisp implementations with pretty good compilers already exist, like SBCL and CCL. Both can generate fast<sup>[1](https://bike.github.io/posts/kildall.html#fn:fast)</sup> code without too much trouble.
+
+## So what is it you’re doing
+
+I work on a new Lisp compiler called Cleavir. Cleavir is the compiler part of Dr. Robert Strandh’s project, [SICL](https://github.com/robert-strandh/SICL). SICL is intended to provide modular, reusable, clean, and more positive adjectives code to other implementations, as well as being an implementation in itself.
+
+SICL isn’t yet an implementation on its own, but Cleavir is used in another new Lisp implementation, [clasp](https://github.com/drmeister/clasp), which is Dr. Christian Schafmeister’s project.
+
+As far as I know the initial thoughts for Clasp went something like this:
+
+> <drmeister> My lab has this new system for designing artificial protein-oids. They’re made of *bis*-amino acids, which we also invented.
+
+> <DoD, etc. shadowy masters> Frikkin’ sweet.
+
+> <DoD, etc.> Sure great. Here’s an award for being a literal nanotechnologist, named after that physicist everyone likes.
+
+> <drmeister> OK so the thing is that this stuff we’re doing involves [a lot of computer work](http://dl.acm.org/citation.cfm?id=3005738).
+
+> <DoD, etc.> Because it’s the future.
+
+> <drmeister> Right, and we mostly do that in C++. But I like Lisp.
+
+> <DoD, etc.> Great. Use it. It’s got an ANSI standard. God bless America.
+
+> <drmeister> But we don’t want to lose the C++ code. Lisp can use C functions but C++ doesn’t really have any interoperability.
+
+> <DoD, etc.> So?
+
+> <drmeister> So I was thinking I’d spend several years making a new Lisp implementation that’s tight with C++ from the ground up.
+
+> <DoD, etc.> That sounds hard, and you’re a chemist.
+
+> <drmeister> So that’s a no, or…
+
+> <DoD, etc.> Here is a zillion dollars. Snap to it.
+
+It must be nice being a respectable scientist, is what I’m saying.
+
+Clasp ended up being based on Embeddable Common Lisp (ECL), so called because it’s written in C and designed to be called from C programs. ECL provides a lot of the runtime. For compilation, however, Cleavir compiles Lisp programs into its “Mid-level Intermediate Representation”, or MIR; Clasp then compiles this into LLVM-IR, which LLVM than compiles to machine code.
+
+This is pretty convoluted and presents some problems (LLVM doesn’t really seem to make itself a good target for something with an online compiler and mostly heap allocation, for one). Luckily they are not usually mine, because I mostly limit myself to Cleavir, but it’s nice to know the nature of the gnashing maw you hang over.
+
+## HIR
+
+Cleavir’s MIR, and also HIR (“High-level”), are mostly what I work with. Consider this (silly) function:
 
 ```
-
-../configure \
-  --without-computed-gotos \
-  --without-tail-call-interp \
-  --enable-experimental-jit=interpreter \
-  --without-ensurepip
+(defun example (x)
+  (flet ((getx () x)
+         (setx (y) (setf x y)))
+    (setx 19)
+    (print (getx))
+    (+ (getx) 331)))
 ```
 
-I used [our fork](https://github.com/ykjit/yk-benchmarks/tree/main/suites/awfy/Python)[14](javascript:;) of the [AWFY](https://github.com/smarr/are-we-fast-yet) benchmark
-suite, simply because I know how to run it without thinking.
+`flet` establishes local closures, and `setf` assigns. `(example anything)` will print 19 and then return 350.
 
-The next challenge is to define a metric, or metrics, to report performance.
-Every metric has the potential to mislead and
-many are difficult to understand. In my opinion, the least worst single metric
-is wall-clock time: how long does my program take to run from start to
-finish? This doesn’t capture everything we want to know, but it captures a lot,
-and it’s easy to understand.
+In HIR, after a few transformations, the code looks like [this](https://bike.github.io/getx_setx.png). Here are the basics: white rectangles are “instructions”, and represent basic operations. Ovals and the orange rectangles are “data”. The solid black arrows indicate control flow. Red dashed arrows indicate inputs to instructions, and blue dashed arrows outputs. Functions begin with the instructions called “enter”.
 
-Most importantly this metric implicitly includes [start-up and warm-up
-time](https://soft-dev.org/pubs/html/barrett_bolz-tereick_killick_mount_tratt__virtual_machine_warmup_blows_hot_and_cold_v6/).
-In other words I’m deliberately choosing a timing metric which tends to favour
-normal interpreters and “penalise” JIT compilers. To somewhat offset that, we
-run each AWFY benchmark for 10 in-process iterations (i.e. run the whole
-benchmark in a `for 0..10` loop) so that we also get some sense of how
-optimisation benefits longer-running programs.
+A few instruction explanations:
 
-The big performance table at the start of this post uses a custom benchmark
-runner on an idle machine. All the timings from now on in the post are from me
-running `time` once as a normal user without being too careful if the machine
-is completely idle or not: when starting to optimise an interpreter, it’s not
-practical to wait an hour to benchmark every change on many benchmarks, when
-the effects are generally quite large[15](javascript:;).
+- enter is the beginning of a function.
+- Create cell, Write cell, Fetch, and Read cell have to do with shared variables for closures - more on that below.
+- enclose allocates a closure. The regular inputs are (cells for) closed-over variables, while the input with the dashed pink line is the actual function code.
+- funcall calls a function, the 1 input, with the other inputs as arguments.
+- ret returns values from a function.
 
-There are various ways one can go about optimising an interpreter for
-meta-tracing, all of which have pros and cons: the sequence of optimisations
-I’m showing here is just one way of going about things[16](javascript:;).
+It’s not really much different from any assembly-type language in form, other than having closures and explicitly separating input and output, but it’s more convenient to represent control flow graphically than with labels.
 
-Let’s start with the [mandelbrot
-benchmark](https://github.com/ykjit/yk-benchmarks/blob/main/suites/awfy/Python/mandelbrot.py)
-on `cpython`:
+## The algorithm
 
-```
+A graph of operation nodes is pretty common as an intermediate representation, because it maps closely with the conception of computers as state machines. As such, some optimization techniques are well-trodden.
 
-$ time cpython harness.py Mandelbrot 10 500
-Starting Mandelbrot benchmark ...
-Mandelbrot: iterations=1 runtime: 1166072us
-Mandelbrot: iterations=1 runtime: 1163564us
-Mandelbrot: iterations=1 runtime: 1166220us
-Mandelbrot: iterations=1 runtime: 1164960us
-Mandelbrot: iterations=1 runtime: 1166583us
-Mandelbrot: iterations=1 runtime: 1166431us
-Mandelbrot: iterations=1 runtime: 1168500us
-Mandelbrot: iterations=1 runtime: 1168757us
-Mandelbrot: iterations=1 runtime: 1165289us
-Mandelbrot: iterations=1 runtime: 1170343us
-Mandelbrot: iterations=10 average: 1166672us total: 11666719us
+In 1973, G. A. Kildall published his paper [“A Unified Approach to Global Program Optimization”](https://drona.csa.iisc.ernet.in/~deepakd/pav/kildall-popl73.pdf)<sup>[3](https://bike.github.io/posts/kildall.html#fn:ACM)</sup>. The title is a bit grandiose but actually pretty accurate. Kildall laid out a very general algorithm for associating optimization information of any kind with nodes in an instruction graph of this form. A few weeks ago I implemented it for Cleavir.
 
-Total Runtime: 11666719us
-cpython/python harness.py Mandelbrot 10 500  11.67s user 0.01s system 99% cpu 11.687 total
-```
+It works like this. First, you establish some domain of optimization information. This domain can be anything you want, as long as it forms a bounded [meet-semilattice](https://en.wikipedia.org/wiki/Semilattice)<sup>[4](https://bike.github.io/posts/kildall.html#fn:English)</sup>. Elements of the domain are called “pools”. Next, you define an “optimization function” which, given an instruction node and its pool, returns another pool.
 
-In other words, I ran the benchmark with 10 in-process iterations and a
-parameter of 500. The AWFY harness prints out how long each iteration took. As
-is common – but definitely not universal! – for an interpreter, `cpython`
-had fairly consistent times from one iteration to the next.
+The algorithm has a “work set” consisting of instructions paired with pools. The initial contents of the work set are dependent on what you’re doing, but contain at least one instruction. The algorithm returns what I’ve been calling a “dictionary”, which is an association of instructions to pools that is distinct from the work set. Initially the dictionary is empty, i.e. there are no associations.
 
-For this benchmark, `cpython_jit` takes 6.746s (0.58× CPython) and `ykcpython`
-takes a whopping 13.70s (1.17× CPython)[17](javascript:;):
+The algorithm proceeds by choosing and removing some (instruction, pool) pair from the work set. If the instruction removed has not yet been associated with a pool in the dictionary, or if the associated pool is less than or equal to (an operation established by the definition of meet) the pool from the work set, the instruction becomes associated with a new pool that is the meet of the old association and the pool from the work set. Additionally, the optimization function is called with the instruction and this new pool; the result pool is paired with all instructions immediate succeeding (or preceding, depending on what you’re doing) the instruction in the work set.
+
+But the paper describes that better. Intuitively, what happens is that if the pool in the work set for an instruction is “better” than the one for that instruction already in the dictionary, in some domain-specific sense, the instruction is reassociated with a “better” pool, and the nearby instructions are put in the work set with new information based on this instruction.
+
+## Examples
+
+Nothing makes sense when it’s put that abstractly, right? It’s not just me? I don’t know how mathematicians survive.
+
+I implemented this algorithm in a general way. The function, `kildall`, takes an argument called a “specialization” that includes all the domain-specific information for the algorithm. I have a few of these specializations.
+
+The one I just put into a usable state was escape analysis. Check out the program with `getx` and `setx` again. An interpreter, upon seeing the `flet`, would allocate closures for both functions on the heap, i.e. dynamically, with cleanup being handled by the garbage collector. But if we look at the program, we can see that the closures cannot possibly be returned from this function or otherwise appear outside a strictly delimited context - they do not “escape”. In other words, these closures could be allocated with stack discipline. This is cheaper. An interpreter isn’t smart enough to see this but a compiler ought to be able to.
+
+To analyze this with Kildall, we can have it track *uses* of values. A use causes an escape or does not; e.g. returning a value is an escape, but adding it is not. We define a pool as a map from variables to escape indicators. An indicator is *true* if the variable escapes, and *false* if it does not. Meet is a union of maps; if a variable appears in both maps, the new map’s indicator for that variable is the logical OR of the two indicators.<sup>[5](https://bike.github.io/posts/kildall.html#fn:pessimism)</sup> The bound is a map where all variables are known to escape.
+
+The optimization function does different things depending on the type of instruction. We can do a completely correct, if overly conservative, analysis with the following rules:
+
+- Inputs to a RETURN instruction escape.
+- The first input to a FUNCALL instruction - the function called - does not escape.[6](https://bike.github.io/posts/kildall.html#fn:funcall) The other arguments are assumed to escape, because we don’t know what the function does.
+- All inputs to all other instructions escape.
+
+The algorithm can then proceed in the reverse direction of control flow. [Here’s the HIR again.](https://bike.github.io/getx_setx.png) We start at the bottom return instruction, with an initial pool of the empty map. The return is not yet associated with any pool, so it takes that one, and passes on a pool up where its input, the “V”, escapes.
+
+It proceeds upwards in that way and then reaches the funcall to which GETX is input. It’s the first input, i.e. the function called, and we have not seen GETX before, so we put (GETX, false) in the next pool up. The same occurs for the other funcall with GETX, and so once we reach the top instruction, we have that GETX does not escape, and can be stack allocated.
+
+The beautiful thing here is that all we actually need to have in the code are the definition of the semilattice and the optimization function rules, and the algorithm handles all the control flow. The analysis automatically works just as well around branches and loops. The whole thing is maybe fifty lines.
+
+## Extending the analysis
+
+Stack allocating closures is nice, but what about those “cell” things? A cell is just a wrapper around a value, with a set and a get, like an ML “reference”. Closures in a language with assignment, like Lisp, have to have something like this; if `setx` just closed over the value, the assignment to x would not take in the outer function. These cells are implicit in the source code but still have to be allocated.
+
+Determining that a cell can be stack allocated is more complicated. Naïvely, you might expect that a cell doesn’t escape if every closure it’s put in doesn’t escape. This is basically true, but there’s a nesting problem. Consider:
 
 ```
-
-$ time ykcpython harness.py Mandelbrot 10 500
-Starting Mandelbrot benchmark ...
-Mandelbrot: iterations=1 runtime: 1488078us
-Mandelbrot: iterations=1 runtime: 1353013us
-Mandelbrot: iterations=1 runtime: 1354018us
-Mandelbrot: iterations=1 runtime: 1350854us
-Mandelbrot: iterations=1 runtime: 1351681us
-Mandelbrot: iterations=1 runtime: 1351815us
-Mandelbrot: iterations=1 runtime: 1351454us
-Mandelbrot: iterations=1 runtime: 1352860us
-Mandelbrot: iterations=1 runtime: 1352099us
-Mandelbrot: iterations=1 runtime: 1352516us
-Mandelbrot: iterations=10 average: 1365839us total: 13658388us
-
-Total Runtime: 13658388us
-ykcpython/build-yk/python harness.py Mandelbrot 10 500  13.94s user 0.07s system 102% cpu 13.691 total
+(lambda (x) ((lambda () (lambda () x))))
 ```
 
-There are a couple of useful things to notice here. First, we can see warm-up
-occurring: `ykcpython`’s first iteration is slower than subsequent iterations.
-That’s OK in my book: yk isn’t really intended for programs running in a
-fraction of a second. Second, the `102% cpu` and user time
-that is higher than wall-clock time are due to yk running trace compilation in threads.
-That allows the interpreter to continue executing, reducing perceived pauses.
+This is a function of one argument, which calls a function of zero arguments, which returns a function of no arguments that returns the first function’s argument. So for example if you call this function with x=4, you get back a function that returns 4.
 
-The first thing I do in this situation is look at the “high-level IR” (HIR) of
-the traces that yk has produced to see if things look sensible:
+The HIR looks [like so](https://bike.github.io/nested.png). The outer function allocates a cell for x and a closure for the middle function using it, then calls that function. The middle function fetches the same, identical cell, puts it in a new closure for the innermost function, and then returns it.
 
-```
+If we use the Kildall specialization described above in the outer function, it will determine, correctly, that the middle closure can be stack-allocated; if used on the middle function it will determine, also correctly, that the inner closure cannot.
 
-$ YKD_LOG_IR=/tmp/l1:hir ykcpython harness.py Mandelbrot 10 500
-...
-$ rg Begin /tmp/l1 | wc -l
-11
-$ rg Loop /tmp/l1 | wc -l
-1
-```
+Were we to say that a cell doesn’t escape if everything it’s closed into, the outer function analysis would find, incorrectly, that the cell can be stack allocated - because it doesn’t know anything about the inner functions.
 
-The logfile contains 11 traces, of which 1 is a “loop” trace. In general,
-loop traces are where yk is most effective, and the non-loop traces are
-the price we have to pay to get the promised land of loop traces. In this
-case, a simple profile showed that most execution time is spent in the
-solitary loop trace, which is a promising start for yk.
+## Extending Kildall
 
-At this point, doing much more with the HIR than this high-level analysis is
-difficult, because the output is 20,772 lines of this sort of thing:
+To determine whether cells can be stack allocated, we need to extend the algorithm to be aware of nested functions, which Kildall did not consider.
+
+The obvious thing to do is, when the algorithm hits an `enclose` instruction, it calls for a recursive analysis on the inner function. This analysis can determine that the fetched cell is enclosed in a closure which escapes. Another step converts this analysis into a simplified “info” structure with only the information we need, i.e. whether the cells can escape the inner function. The optimization function for the outer `enclose` then uses this information to determine that the cell escapes.
+
+On the `getx` example, it can determine in this way that the cell for `x` does *not* escape, as the functions don’t return their cells or any closures. So the `x` cell can be stack allocated there.
+
+That’s as far as I’ve actually implemented.
+
+## Future
+
+Earlier, I mentioned that arguments to a `funcall` instruction other than the function called are assumed to escape. This is because the analysis does not know anything about the function called, and so cannot assume anything. However, as long as we’re analyzing inner functions, we have a representation for the information we need, the “info” structure. Particularly, we can track whether arguments are returned from functions (which does not inhibit them being stack-allocated in the calling function), or escape more generally. Then in the funcall we can use this information to provide a better analysis.
+
+The problem is that this information effectively has to be propagated *forward* from the `enclose` to the `funcall`, i.e. in the opposite direction as this analysis. This propagation is not trivial. We could have code like
 
 ```
-
-%68: ptr = 0x13D581D4
-%69: i8 = 0
-store %69, %68
-%71: i16 = load %64
-%72: i32 = zext %71
-%73: i32 = 32767
-%74: i32 = and %72, %73
-%75: i16 = trunc %74
-%76: ptr = 0x13D58218
-%77: ptr = load %76
-%78: ptr = 0x0
-%79: i1 = icmp eq %77, %78
-guard false, %79, [%0, %2, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31, %32, %33, %34, %35, %36, %37, %38, %39, %40, %41, %42, %43, %44, %45, %64, %74, %75, %78, %56, %49, %50, %51, %52, %53]
+(lambda ()
+  (flet ((foo (x) x)
+         (bar (y) y)
+         (baz ...))
+    (funcall (if (some-condition) #'foo #'bar) #'baz)
+    nil))
 ```
 
-Even if you’re used to this syntax and way of thinking, it can be incredibly
-hard to see the forest for the trees: there’s just too much *stuff*. And that
-isn’t just a problem for humans (or AIs) reading this: more HIR means more
-machine code which implies slower execution.
+`baz` can be stack-allocated, but knowing this requires knowing that both possibly called functions do not let their argument escape.
 
-My first port of call when optimising an interpreter is to tackle interpreter
-dispatch. When an interpreter is executing a program, it continually asks “what
-is the opcode of the current instruction? Is it an `add` or a `sub` or …?”
-and then it *dispatches* to the code that performs the appropriate action. It’s
-probable that a large chunk of that 20KLoC of HIR is the interpreter loading an
-opcode from memory and checking what kind it is. yk’s trace optimiser has
-various classic compiler tricks up its sleeve, but in this case they don’t
-really help, because in most cases between the same instruction being loaded
-twice from memory, some other code will be called that yk has to assume might
-have mutated that memory. This isn’t unnecessary conservatism: Python programs
-really can mutate their function’s instructions!
+It would be possible to tie in another Kildall specialization, type inference, to do this. Type inference propagates forward, and finds for each variable a set of values that it always contains. In the above, the implicit called-function variable always contains a function that does not let its argument escape.
 
-I was particularly lucky because the tier2 interpreter uses “executors” which
-are traces of (optimised) instructions. Those instructions are immutable in the
-context of a given executor: should a Python function’s instructions change,
-any associated executors will be invalidated. That means that we can attach a
-simple monotonically increasing integer *code ID* to a `_PyExecutorObject` and
-know that for a given code ID, an opcode at index *I* will always be the same.
+This implies that type inference would have to be aware of the escape analysis, and escape analysis of type inference. A principled way to compose different specializations of Kildall’s algorithm together would do it.
 
-This allows us to use the single most effective optimisation hint in yk:
-idempotent functions. In essence, an idempotent function says “for the same
-inputs this function will always produce the same output”[18](javascript:;).
-“Always” here really means “always”! Idempotent is a *very* strong guarantee
-that yk cannot help you uphold: if you fail to do so, your system will go wrong
-in weird ways.
-
-Although yk provides a helper `yk_idempotent_load` function, we need something
-more specialised. Fortunately it’s not hard to write what we need:
-
-```
-
-__attribute__((yk_idempotent))
-uint16_t idempotent_load_opcode(uint64_t code_id, const _PyUOpInstruction *pc)
-{
-    __asm__ volatile("" : "+r"(code_id));
-    return pc->opcode;
-}
-```
-
-Unsurprisingly, the `yk_idempotent` attribute tells yk that
-`idempotent_load_opcode` is an idempotent function. That means that if, in a
-particular trace, the function is called with parameters that are constant
-values then yk can remove the idempotent function call and replace it with its
-output. The `__asm__` line is there to encourage LLVM not to inline the
-function[19](javascript:;) (if the function is inlined, yk no longer knows there is
-anything idempotent there).
-
-Using this requires [changing just a few lines in the core
-interpreter loop](https://github.com/ykjit/ykcpython/pull/13). The most important
-lines are simply this:
-
-```
-
-yk_promote(next_uop);
-yk_promote_code_id(yk_code_id);
-uopcode = idempotent_load_opcode(yk_code_id, next_uop);
-```
-
-Promotion (e.g. `yk_promote`)[20](javascript:;) says “this variable is expected to be
-semi-constant: record its concrete value and specialise the trace to it, but
-insert a guard in case that value later changes”. Imagine I have
-`yk_promote(x)` and when a trace is later recorded, `x` happens to be `3`. The trace
-will record `guard true (x == 3)`: if on later runs `x` is not `3`, the guard
-will fail and the trace will deoptimise; if the guard succeeds we know henceforth
-that `x` is definitely `3`.
-
-In other words, in the context of the traces we’re recording, yk will see calls
-to `idempotent_load_opcode` with constant arguments, allowing it to replace the
-function call with a constant result. The point of this isn’t just to remove
-the cost of a load: rather, exposing constant data to yk’s trace optimiser allows it to
-do a much better job of optimising traces. The effect in this case is quite
-something:
-
-```
-
-$ time ykcpython harness.py Mandelbrot 10 500
-Starting Mandelbrot benchmark ...
-Mandelbrot: iterations=1 runtime: 606714us
-Mandelbrot: iterations=1 runtime: 485324us
-Mandelbrot: iterations=1 runtime: 485994us
-Mandelbrot: iterations=1 runtime: 484999us
-Mandelbrot: iterations=1 runtime: 483824us
-Mandelbrot: iterations=1 runtime: 485431us
-Mandelbrot: iterations=1 runtime: 484752us
-Mandelbrot: iterations=1 runtime: 486160us
-Mandelbrot: iterations=1 runtime: 486125us
-Mandelbrot: iterations=1 runtime: 483481us
-Mandelbrot: iterations=10 average: 497280us total: 4972804us
-
-Total Runtime: 4972804us
-ykcpython/build-yk/python harness.py Mandelbrot 10 500  5.09s user 0.08s system 103% cpu 5.005 total
-```
-
-In other words, that simple change has not only made `ykcpython` 2.7× faster,
-but it is now 0.43× `cpython` and 0.74× `cpython_jit`! In other words, a simple
-PR that changes 30LoC has made this benchmark over twice as fast as CPython and
-25% faster than CPython’s JIT. Another way of judging the effectiveness of this
-optimisation is that it has reduced the 20,772 lines of HIR output to 7,648
-lines[21](javascript:;).
-
-However, before we get carried away, this isn’t enough to make all benchmarks
-magically quicker. I have learnt from experience to rotate between benchmarks
-to avoid over-training[22](javascript:;). In this case I decided to look at the
-deltablue benchmark, which I know from yklua can be a tough target.
-The situation in ykcpython turned out to be worse than I expected: `cpython` takes 7.67s,
-`cpython_jit` takes 6.20s, and `ykcpython` (with our idempotent change) takes
-37.51s. Ouch!
-
-My next port of call is to run `YKD_LOG=2` which prints warnings if a trace
-can’t be compiled. Sure enough:
-
-```
-
-$ ykcpython harness.py DeltaBlue 10 12000
-Starting DeltaBlue benchmark ...
-yk-warning: stop-tracing-aborted: Trace too long
-yk-warning: stop-tracing-aborted: Trace too long
-yk-warning: stop-tracing-aborted: Trace too long
-yk-warning: stop-tracing-aborted: Trace too long
-yk-warning: stop-tracing-aborted: Trace too long
-yk-warning: stop-tracing-aborted: Trace too long
-DeltaBlue: iterations=1 runtime: 3362822us
-yk-warning: trace-compilation-aborted: Unimplemented: '%188 = atomicrmw or ptr %187, i64 16 seq_cst, align 8'
-...
-```
-
-For now I’m going to skip “trace too long”. In essence yk has a fixed limit for
-“this trace looks to be so long that it’s probably not useful”. The limit was
-too low, so I [increased it unilaterally](https://github.com/ykjit/yk/pull/2453)
-before doing the work for this post. Exactly what the right value is I don’t
-know. Indeed, I think that this crude heuristic probably needs replacing with
-something more sophisticated: doing that is a problem for another day.
-
-Let’s move onto the “unimplemented” warning: I haven’t got around to
-implementing complex atomic instructions yet, so as soon as one of those is
-encountered, yk has no choice but to give up on that trace entirely. If it
-happens to be a hot part of a benchmark, that can absolutely kill performance.
-In this case, happily, the `atomicrmw` warnings just so happened to come from
-functions which we really don’t want to inline into the trace anyway.
-
-One of tracing’s virtues is that it aggressively
-inlines functions, but that can inline checks which fail too often on
-subsequent executions. For example, one function we inline by default is
-`_PyObject_GC_Link` which checks to see if enough objects have been allocated
-for garbage collection to be worth scheduling. If we’re unlucky, we may trace
-an iteration of a loop which happens to schedule garbage collection: in nearly
-every subsequent execution, the resulting guard will fail, and we’ll take a
-somewhat slower path. The solution here is to mark such functions as
-`yk_outline`:
-
-```
-
-__attribute__((yk_outline))
-void _PyObject_GC_Link(PyObject *op) { ... }
-```
-
-Functions marked `yk_outline` become `call`s in a trace. There are probably a
-number of functions which should be marked as `yk_outline`, but I
-[marked the two](https://github.com/ykjit/ykcpython/pull/14) that happened to
-cause the `aborted` warnings and that also obviously we don’t want to include
-in a trace anyway. Doing so improved execution time to 36.63s (about 2.5%
-faster), so they’re clearly not the major cause of the slowdown in this case.
-
-Just when I was starting to fret, profiling execution showed that, to my
-surprise, deltablue was only spending about half its running time in
-JIT-compiled code, where one would expect it to be spending 90%+. It turns out
-that the main reason for this is that not all executors have a `_JUMP_TO_TOP`
-opcode and weren’t being traced.
-
-My quick fix was to add a `YkLocation` at the first opcode in an executor. The
-[one line fix](https://github.com/ykjit/ykcpython/pull/15) does just that: it
-means that yk starts tracing as soon as it enters an executor. Doing so
-improves deltablue’s execution time to 8.64s (4.23× faster than before). That’s
-still 1.13× CPython, but it’s a lot better than before!
-
-At the time I made this change I didn’t fully think about how adding a
-`YkLocation` at the start of an executor might interact with the `YkLocation`
-already added to `_JUMP_TO_TOP`. As luck would have it, I accidentally stumbled
-on a reasonable combination: `_JUMP_TO_TOP` tends to jump to the instruction at
-index 1. Still, I suspect that there might be a better way to add `YkLocation`s
-to executors, but one can’t solve every problem all at once: it’s time to move
-onto the next thing!
-
-Our earlier use of idempotent loads made such a huge impact on interpreter
-dispatch that it’s easy to overlook that it was a simple, shallow, change: it
-only optimised loading an instruction’s opcode kind. Instructions contain a
-number of other fields that are equally amenable to idempotent loading.
-
-There are various ways one can go about optimising these additional fields. I
-could, for example, have replaced the definitions of some `static` functions in
-header files. To keep things simple, I defined a macro which can generate the
-two-parameter functions we need, and then nobbled some other macros to call it
-at appropriate points. With the [resulting change](https://github.com/ykjit/ykcpython/pull/16) deltablue’s performance
-improves to 8.09s — we’re now within 10% of `cpython`’s performance.
-
-## Unrolling
-
-As we saw earlier, not all functions are good candidates for inlining into a
-trace. yk has a very simple heuristic – stolen shamelessly from RPython/PyPy
-– which is to mark functions containing loops as “outlined”. In other words,
-if C calls a function `f()` and `f` contains `for (...) { ... }` then yk
-will not inline calls to `f`.
-
-The fundamental reason not to inline functions-with-loops is that tracing
-unrolls loops, and that tends not to be a good idea. First, some loops execute
-vast numbers of iterations, which would cause counter-productively-long traces.
-Second, loops’ iterations are often controlled by dynamic, ever-changing
-values: unrolling would specialise the trace to just one of those values, giving
-suboptimal performance on every other value.
-
-There are however a small number of functions in an interpreter which we
-actively want to unroll. Typically those functions’ loops satisfy two
-properties: they only run a small number of iterations; and the number of
-iterations depends on an aspect of the user’s program that changes rarely. For
-example, a function called `unpack_args(int num_args)` which contains `for (int i=0; i<num_args; i++)` would be an excellent candidate, since it probably
-unpacks the same number of parameters every time it is called at the same place
-in a trace.
-
-yk thus provides a `yk_unroll` attribute, which informs yk that a function that
-might otherwise be outlined should in fact be inlined and its loops unrolled.
-Rather than slog through every function in CPython looking for candidates, I
-did a simple grep/sort in hir to see which (implicitly non-inlined) C functions
-appear most often in traces[23](javascript:;):
-
-```
-
-$ YKD_LOG_IR=/tmp/l1:hir ykcpython harness.py Json 10 100
-...
-$ rg call /tmp/l1|grep "@"|cut -d "@" -f 2|sort|uniq -c|sort -n
-   2 PyLong_FromLong
-   6 _Py_HandlePending
-   6 do_lookup
-  24 _PyList_FromStackRefStealOnSuccess
-  50 _PyEvalFramePushAndInit
-  50 _PyObject_GC_Link
-  50 _PyObject_InitInlineValues
- 263 PyLong_FromSsize_t
-1035 _PyFrame_Initialize.5328
-1158 _PyFrame_ClearLocals
-1194 bcmp
-```
-
-`bcmp` is the standard `libc` function: all of the other functions are in CPython itself.
-Not all of those functions will have loops in them, but the chances are that
-most do. What I do in such a situation is go down (or, depending how you look at it,
-up) the list and look at the code in each function. I did that for a couple of
-benchmarks to ensure I got some coverage of common functions.
-
-The two most commonly called CPython functions immediately looked like good candidates.
-`_PyFrame_Initialize` is the most obvious of the two, containing almost exactly
-the pattern I most like to match on:
-
-```
-
-_PyFrame_Initialize(..., int null_locals_from, ...) {
-  ...
-  for (int i = null_locals_from; i < code->co_nlocalsplus; i++) {
-    frame->localsplus[i] = PyStackRef_NULL;
-  }
-  ...
-}
-```
-
-`_PyFrame_ClearLocals` is slightly trickier: it contains a `while` loop involving pointer
-arithmetic, but it didn’t take me long to convince myself that it was a good
-candidate.
-
-Earlier we made `_PyObject_GC_Link` not inlineable, so we don’t want to reverse
-that! Similarly, `do_lookup` looks values up in a dictionary, so we want to
-keep that outlined: it depends on an often-changing dynamic value.
-
-`PyLong_FromSsize_t` and `PyLong_FromLong` were harder to judge. These
-functions’ inner loops depend on dynamic values, but my best guess is that they
-tend to be fairly stable in practice. I will be keeping an eye on these
-functions in the future, because I only have medium confidence that I made the
-right initial call.
-
-As these examples suggest, I am generally fairly cautious about adding
-`yk_unroll`: inappropriate placings can easily help one benchmark and make many
-others worse. I thus tend to only mark one or two functions as `yk_unroll`,
-benchmark, and then move on. In this case, I did 5 small PRs, with the end
-effect that json went from 11.52s to 10.85s.
-
-## Indirect inlining
-
-In general most function calls in C are *direct*: `f()` calls a function called
-`f`. However a minority of functions are *indirect*: `f` is a generic pointer
-whose value can be any compatible function. This is commonly used in
-interpreters to allow run-time dispatch to type specific code.
-
-By default, yk cannot inline through indirect function calls, because without
-knowing exactly what pointer is being called, it can’t reliably reconstruct
-the path that execution took[24](javascript:;). Fortunately, we already have
-the tool we need to solve this problem: `yk_promote`! If yk sees an indirect
-function call with a constant pointer it knows exactly what function is being
-called and can inline as normal. The common pattern I use is:
-
-```
-
-function_type f = ...;
-if (!yk_is_interpreting())
-  yk_promote(f);
-(f)(...);
-```
-
-`yk_is_interpreting()` is `true` during “normal” interpretation; `false` during
-tracing; and (because it’s a constant `false`) removed during tracing. In other
-words, `yk_promote` is only called during the tracing phase.
-`yk_is_interpreting()` is fairly fast (much faster than `yk_promote()`) so this
-idiom is a small but useful performance win.
-
-However, there is often a second problem. yk only puts the tracing machinery
-into a function if it can statically prove that it is reachable from a
-traceable path. Commonly, functions called from indirect calls cannot be
-statically proven to be traceable and thus they still leave an outlined call in
-the trace. We can solve that with the `yk_indirect_inline` function which tells
-yk “this function can be reached from an indirect call and should be considered
-for tracing”[25](javascript:;).
-
-Profiling a couple of benchmarks quickly showed several potential candidates[26](javascript:;). My
-experience is that not all indirect call sites are good targets for promotion:
-for example, of the interpreters I’ve looked at so far, inlining malloc and
-free indirect calls has rarely been profitable. However, I quickly alighted
-upon a couple of promising candidates.
-
-Let’s start with the less promising, but easier to explain, one: benchmarks
-like deltablue and json call `len` on lists and strings. Simplifying slightly,
-`sq_length` is a pointer to a function inside a CPython type, so this becomes
-an indirect call in traces. In the case of `len([...])` the function that’s
-ultimately called is `list_length`:
-
-```
-
-static Py_ssize_t list_length(PyObject *a) {
-  return PyList_GET_SIZE(a);
-}
-```
-
-where `PyList_GET_SIZE` boils down (slightly elided) to a simple load
-`a->ob_size`. That’s the sort of code that yk loves to see inlined in a trace!
-
-The [resulting PR](https://github.com/ykjit/ykcpython/pull/22) has to do a
-slightly annoying dance to make yk accept the `yk_promote` call. In essence, if
-`yk_promote` were to be statically inlined into a function which ykllvm
-determines doesn’t need to be traced, odd things happen, and so ykllvm throws a
-static error. In this case, the function that “should” contain the `yk_promote`
-can get inlined in multiple paths, one of which falls foul of this check. A
-hacky fix is to pull the promote out into a function which isn’t statically
-inlined[27](javascript:;). I then did a [second PR](https://github.com/ykjit/ykcpython/pull/23) to
-inline `range` construction and iteration.
-
-You may notice that in both of these PRs I have marked a much larger number of
-functions `yk_indirect_inline` than I have benchmark evidence for. The reason
-for this is a variant of something I mentioned above: my experience of indirect
-call sites is that either nearly all targets benefit from indirect inlining or
-none do. This clearly isn’t an iron law of the universe, but what it means is
-that I tend to look at all the possible targets, and mark them as
-`yk_indirect_inline` if they look sensible. So far, I have rarely regretted
-doing so.
-
-Collectively these two PRs drive json’s performance down to 10.41s, though the
-effect on deltablue was too small to say anything either way. As I get further
-into optimising an interpreter for yk this is common: not all benchmarks
-benefit from all optimisations.
-
-At this point, you’ve probably got a good sense of how I approach ykifying an
-interpreter. I raised a few more PRs before realising that I wasn’t going to add
-much useful conceptually to this post: it was time to finish this stage of work
-off and write it up.
-
-Before I started this little journey, I wasn’t entirely sure if yk would work
-at all – let alone “well”! – on an interpreter the size and complexity of
-CPython. The early stages didn’t entirely dispel my worries: there were lots of
-missing pieces, and quite a few bugs, that needed fixing in yk for ykcpython to
-work at all. The fact that ykcpython does work, and works fairly well, is proof
-that at least one big, complex, interpreter can be ykified with relative ease
-— and that it can be surprisingly competitive on performance.
-
-Of course, I am lucky in many ways. yk already had decent foundations, thanks
-to several people’s hard work. The tier 2 interpreter in CPython made my life a
-lot easier than it might otherwise have been. Small benchmarks, like the ones
-I’ve used in this post, tend to flatter (meta-)tracing as a JIT compiling
-technique. And when it comes to ykifying interpreters, well, I’ve been round
-the block a few times.
-
-But I don’t want to completely underplay things. 3-4 days isn’t that long to
-spend on an interpreter like CPython. It will take a lot longer than that –
-even with the wonder of LLMs to speed up the journey – to do a thorough job
-and squeeze all the juice that ykcpython can expose to yk. Similarly, I have
-only looked at a handful of benchmarks: it’s unlikely that ykcpython will magically
-speed up a wide range of programs yet, as there will be many other parts
-of CPython that need to be considered for optimisation. A lot of this will
-not be rocket science, but it is work, and not all of it can yet be automated.
-
-I also haven’t made any performance optimisations (yet!) to yk for ykcpython
-specifically (though I have fixed a couple of bottlenecks that I had previously
-been able to ignore). In particular, one thing I am entirely confident in is
-that ykcpython will generate HIR patterns that yk doesn’t yet optimise
-effectively: fixing those will improve ykcpython’s performance for free,
-possibly quite a bit. Even without that, ykcpython has highlighted additional
-bottlenecks in yk that had never previously been an issue: each time one of
-those is fixed, ykcpython will magically get faster.
-
-In a sense, this is one of the nice things that yk offers: improvements to yk
-nearly always benefit every ykified interpreter. It’s why I could bring
-ykcpython up to speed in a short period of time: I wasn’t writing a JIT
-compiler from scratch, I was reusing a generic toolkit. For example, the
-various missing pieces and bugs that ykcpython highlighted in yk will almost
-certainly make ykifying the next interpreter that bit easier — and hopefully
-future improvements to yk will benefit ykcpython even further!
-
-**Acknowledgments**: [Edd Barrett](https://www.eddbarrett.co.uk/) and [Lukas
-Diekmann](https://diekmann.uk/) did much of the original work on yk. Shopify
-and the Royal Academy of Engineering generously funded the underlying research.
-Chris Seaton was the person who made the work on yk possible.
-
-### Footnotes
-
-A combination of the AWFY and CBLG suites along with
-a few other “real world” benchmarks we distilled down from other sources.
-
-A combination of the AWFY and CBLG suites along with
-a few other “real world” benchmarks we distilled down from other sources.
-
-PUC Lua is written in a style unlike anything else I’ve seen. At first,
-I found myself overwhelmed by the deeply nested use of macros and
-widespread implicit conventions. As I’ve spent more time with it, I’ve come
-to deeply appreciate the beauty in the way its code is structured: not just
-the literal aesthetics of the code, but also how much thought has gone into
-making the code run fast.
-
-PUC Lua is written in a style unlike anything else I’ve seen. At first,
-I found myself overwhelmed by the deeply nested use of macros and
-widespread implicit conventions. As I’ve spent more time with it, I’ve come
-to deeply appreciate the beauty in the way its code is structured: not just
-the literal aesthetics of the code, but also how much thought has gone into
-making the code run fast.
-
-Naming things is not my strong point.
-
-Naming things is not my strong point.
-
-Also I hope this post might help agents do a better job in the
-future of ykifying interpreters. As things stand, they do spot some really
-clever opportunities, but they miss an awful lot of obvious ones, and they
-tend to overcomplicate the opportunities they do spot.
-
-Also I hope this post might help agents do a better job in the
-future of ykifying interpreters. As things stand, they do spot some really
-clever opportunities, but they miss an awful lot of obvious ones, and they
-tend to overcomplicate the opportunities they do spot.
-
-Technically any interpreter with LLVM IR. We have now tested that
-at least some C++ interpreters work, but whether (say) Rust interpreters work is
-a worry for the future.
-
-Technically any interpreter with LLVM IR. We have now tested that
-at least some C++ interpreters work, but whether (say) Rust interpreters work is
-a worry for the future.
-
-Another way of thinking of yk is that it is RPython (i.e. “PyPy”) for
-LLVM IR. As that suggests, yk owes a deep debt to RPython, which is its
-major inspiration.
-
-Another way of thinking of yk is that it is RPython (i.e. “PyPy”) for
-LLVM IR. As that suggests, yk owes a deep debt to RPython, which is its
-major inspiration.
-
-No-one enjoys looking at someone else’s build system.
-
-No-one enjoys looking at someone else’s build system.
-
-CPython and I go back quite some way. I *think* that I contributed
-some RISC OS patches to CPython, possibly via someone else, in 1997 or
-1998. The first commit I can definitely say I had something to do with [was
-in 1999](https://github.com/python/cpython/commit/f2f059458792a4ebf80f0adb7e97823e51e697a9).
-CPython has changed an awful lot since then!
-
-CPython and I go back quite some way. I *think* that I contributed
-some RISC OS patches to CPython, possibly via someone else, in 1997 or
-1998. The first commit I can definitely say I had something to do with [was
-in 1999](https://github.com/python/cpython/commit/f2f059458792a4ebf80f0adb7e97823e51e697a9).
-CPython has changed an awful lot since then!
-
-At the time of writing, yk never frees memory associated with
-traces. I have implemented most of the bits necessary to fix this, and just
-have to finish off the last part.
-
-At the time of writing, yk never frees memory associated with
-traces. I have implemented most of the bits necessary to fix this, and just
-have to finish off the last part.
-
-I had entirely forgotten about the existence of this in
-CPython, which is embarrassing, becuase I’ve advocated for its inclusion in
-various interpreters in the past. Not, I admit, with great success.
-
-I had entirely forgotten about the existence of this in
-CPython, which is embarrassing, becuase I’ve advocated for its inclusion in
-various interpreters in the past. Not, I admit, with great success.
-
-Though it threw up a few more missing parts and bugs in yk that I
-had to fix before I could be sure.
-
-Though it threw up a few more missing parts and bugs in yk that I
-had to fix before I could be sure.
-
-In case you’re wondering, this is very fast: a `YkLocation` is a
-word sized value with no other associated memory unless that location
-becomes hot. The idea here is to make sure that the common case of cold
-code has a very low cost.
-
-In case you’re wondering, this is very fast: a `YkLocation` is a
-word sized value with no other associated memory unless that location
-becomes hot. The idea here is to make sure that the common case of cold
-code has a very low cost.
-
-Technically a subset, because Havlak doesn’t work out of the box
-with stock CPython.
-
-Technically a subset, because Havlak doesn’t work out of the box
-with stock CPython.
-
-As the interpreter becomes more mature, and the effects of any
-optimisation become smaller, one does have to be more careful. ykcpython is
-not there yet!
-
-As the interpreter becomes more mature, and the effects of any
-optimisation become smaller, one does have to be more careful. ykcpython is
-not there yet!
-
-ykcpython imposes a constraint that most of us haven’t experienced
-since ye olde days: it takes several minutes to link on my box. For those
-of us used to lightning-fast compilation, this can come as a bit of a shock
-to the system. Fortunately, as we’ll see, a small number of small changes
-had big effects, so it wasn’t quite as annoying as I first expected.
-
-I have a local patch which improves linking speed by over 2×, but
-I’m not yet convinced it’s correct. I haven’t used it for anything
-described in this post.
-
-ykcpython imposes a constraint that most of us haven’t experienced
-since ye olde days: it takes several minutes to link on my box. For those
-of us used to lightning-fast compilation, this can come as a bit of a shock
-to the system. Fortunately, as we’ll see, a small number of small changes
-had big effects, so it wasn’t quite as annoying as I first expected.
-
-I have a local patch which improves linking speed by over 2×, but
-I’m not yet convinced it’s correct. I haven’t used it for anything
-described in this post.
-
-We’ve put a lot of work into making warmup costs in yk as low as
-possible, but they’ll never go to zero: the first iteration is 10% slower
-than the subsequent iterations because it’s doing work tracing and so on.
-
-We’ve put a lot of work into making warmup costs in yk as low as
-possible, but they’ll never go to zero: the first iteration is 10% slower
-than the subsequent iterations because it’s doing work tracing and so on.
-
-It’s fine if the function mutates state inside it,
-provided (1) it always guarantees to produce the same outputs for the same
-inputs and (2) removing the call, and its mutations, doesn’t affect overall
-correctness.
-
-It’s fine if the function mutates state inside it,
-provided (1) it always guarantees to produce the same outputs for the same
-inputs and (2) removing the call, and its mutations, doesn’t affect overall
-correctness.
-
-`yk_idempotent` implies `noinline`, but LLVM has a habit of
-ignoring such requests for no obvious reason. The `__asm__` trick makes
-LLVM less likely (note my careful choice of words!) to ignore `noinline`.
-
-`yk_idempotent` implies `noinline`, but LLVM has a habit of
-ignoring such requests for no obvious reason. The `__asm__` trick makes
-LLVM less likely (note my careful choice of words!) to ignore `noinline`.
-
-Oddly, this applies *to* a variable, not (just) its result. It’s a
-long story.
-
-Oddly, this applies *to* a variable, not (just) its result. It’s a
-long story.
-
-It’s a coincidence that the HIR has also reduced by almost
-exactly the same factor. HIR instructions do not all have the same cost,
-and there are some forms of duplication in there that muddy the waters
-further (guard bodies, in case you’re really interested).
-
-It’s a coincidence that the HIR has also reduced by almost
-exactly the same factor. HIR instructions do not all have the same cost,
-and there are some forms of duplication in there that muddy the waters
-further (guard bodies, in case you’re really interested).
-
-This isn’t quite the same thing as saying they are the most
-frequently called, but it’s not a terrible proxy for that.
-
-This isn’t quite the same thing as saying they are the most
-frequently called, but it’s not a terrible proxy for that.
-
-Imagine we call an unknown pointer P and we subsequently see
-that block B in function F has been traced: we can’t tell if P==F, or
-whether P referenced an untraceable function G that then called F.
-
-Imagine we call an unknown pointer P and we subsequently see
-that block B in function F has been traced: we can’t tell if P==F, or
-whether P referenced an untraceable function G that then called F.
-
-Note that `yk_indirect_inline` still respects
-the “don’t consider a function as traceable if it contains loops”
-heuristic, so one sometimes wants to use both `yk_indirect_inline` and
-`yk_unroll` together.
-
-Note that `yk_indirect_inline` still respects
-the “don’t consider a function as traceable if it contains loops”
-heuristic, so one sometimes wants to use both `yk_indirect_inline` and
-`yk_unroll` together.
-
-Working out what functions are “indirectly directly” called from a
-trace used to be a pain, but an LLM will now happily go away and return an
-accurate answer in a few minutes.
-
-Working out what functions are “indirectly directly” called from a
-trace used to be a pain, but an LLM will now happily go away and return an
-accurate answer in a few minutes.
-
-I haven’t seen this problem before: it seems probable that
-ykllvm could be extended to avoid this hacky fix, but that’s a problem for
-another day.
-
-I haven’t seen this problem before: it seems probable that
-ykllvm could be extended to avoid this hacky fix, but that’s a problem for
-another day.
+1. Which “languages” are “faster” is an argument I don’t want to get into. But if I spend comparable amounts of effort writing a program with clang, SBCL, and CPython, the SBCL program will probably be two to ten times as slow as clang’s, and a hundred to a thousand times as fast as CPython’s. [↩](https://bike.github.io/posts/kildall.html#fnref:fast)
+2. Check out this incredible title: [“Spiroligozymes for Transesterifications: Design and Relationship of Structure to Activity”](http://pubs.acs.org/doi/abs/10.1021/ja3069648) [↩](https://bike.github.io/posts/kildall.html#fnref:spiro)
+3. [On the ACM digital library](http://dl.acm.org/citation.cfm?id=512945) [↩](https://bike.github.io/posts/kildall.html#fnref:ACM)
+4. You have a set. You have a binary operation on that set, “meet”, which takes two objects in the set as arguments and returns a third object in the set. The order of arguments to meet is not important (commutativity), and you can also rearrange groupings freely (associativity). If the two objects are the same, their meet is that same object (idempotency). There are examples later. [↩](https://bike.github.io/posts/kildall.html#fnref:English)
+5. The algorithm generally proceeds from an incorrectly optimistic initial state down to harder-to-optimize reality. [↩](https://bike.github.io/posts/kildall.html#fnref:pessimism)
+6. This is not actually true in general: We can define a function like `(labels ((foo () #'foo)) ...)` that returns itself, or worse. But in HIR, recursive functions are currently implemented by putting the function in a cell (keep reading this post for more on those) which is over by the function. Since the analysis considers being written into a cell an escape, any function that returns itself will be marked as escaping for other reasons. [↩](https://bike.github.io/posts/kildall.html#fnref:funcall)

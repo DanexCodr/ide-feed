@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-13T14:07:31Z",
+  "updated": "2026-11-13T23:22:02Z",
   "items": [
     {
       "id": "devto-4985077",
@@ -38,27 +38,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978154",
-      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
-      "desc": "By Randal L. Schwartz | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T00:02:44Z",
-      "order": 4,
-      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4911275",
       "title": "AI is getting better. Here is my plan to stay ahead.",
       "desc": "By Julien Avezou | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-12T15:35:00Z",
-      "order": 5,
+      "order": 4,
       "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4978154",
+      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
+      "desc": "By Randal L. Schwartz | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T00:02:44Z",
+      "order": 5,
+      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -302,24 +302,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4944141",
-      "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
-      "desc": "By Tyler N | 9 min read",
-      "tag": "tutorial",
-      "published": "2026-10-30T21:07:45Z",
-      "order": 26,
-      "url": "https://dev.to/tyleruploads/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5005200",
       "title": "A VS Code extension to turn ANY free chatbot website into an AI agent (kind of)",
       "desc": "By EffessDev | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-12T14:00:15Z",
-      "order": 27,
+      "order": 26,
       "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1jfb",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fajrw5ue6qipaycfbsrh0.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcKoQF//xAAWEAEBAQAAAAAAAAAAAAAAAAABIBH/2gAIAQEAAQUChMj/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAWEAEBAQAAAAAAAAAAAAAAAAAgITH/2gAIAQEAAT8hE10f/9oADAMBAAIAAwAAABA2D//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxAdn//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAgEBPxBMn//EABkQAQADAQEAAAAAAAAAAAAAAAEAEBFRIf/aAAgBAQABPxDSKRzrQhicb7EwHtE//9k=",

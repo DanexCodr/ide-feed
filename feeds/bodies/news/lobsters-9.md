@@ -1,167 +1,139 @@
-Baochip is the latest open/trustable hardware venture by living legend
-[Andrew "bunnie" Huang](https://en.wikipedia.org/wiki/Andrew_Huang_(hacker)) (wikipedia.org).
+I started running decoded.legal - a small English law firm, focussing
+on Internet, telecoms, and tech law - on Free software, both client and
+server side, around five years ago. I have used Free software in my
+personal life for a lot longer than that.
 
-Here’s the official website:
+Back in 2022, [I
+wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
 
-But I recommend bunnie’s write-ups on his blog as an introduction:
+I wrote [an
+update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
 
-- [Baochip-1x: A Mostly-Open, 22nm SoC for High Assurance Applications](https://www.bunniestudios.com/blog/2026/baochip-1x-a-mostly-open-22nm-soc-for-high-assurance-applications/) (bunniestudios.com)
-- [BIO: The Bao I/O Coprocessor](https://www.bunniestudios.com/blog/2026/bio-the-bao-i-o-coprocessor/) (bunniestudios.com)
+Someone asked me recently what I am doing now, and, while it is
+mostly the same, some bits have changed. So here is the 2026 update.
 
-What makes the Baochip1x special is that it is an SoC (system on chip) with:
+## Client-side stuff
 
-- A RISC-V core
-- An MMU (memory management unit, allows for hardware support of virtual memory, a feature normally reserved for "real" computers)
-- I/O coprocessor (BIO)
-- Hardware support for a bunch of security-focused features such as a TRNG (true random number generator), AES encryption, and a ton of cryptographic hashes
-- It is intentionally inspectable with inexpensive infra-red cameras so you can visibly verify the structure of the chip yourself! (See [Infra-Red, In Situ (IRIS) Inspection of Silicon](https://www.bunniestudios.com/blog/2023/infra-red-in-situ-iris-inspection-of-silicon/) (bunniestudios.com)
+I am still using Debian, with GNOME, and it works well for me.
 
-It was made specifically to be able to run Xous, a microkernel OS written in Rust originally written for bunnie’s Precursor device. See
-[Xous 0.10.0 - Introducing Baochip-1x Support](https://www.crowdsupply.com/sutajio-kosagi/precursor/updates/xous-0-10-0-introducing-baochip-1x-support) (crowdsupply.com).
+I’m using it [on
+a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
+version, I rather like being able to fold the screen back and write on
+it to mark up documents. ([Here
+are my thoughts on the different “Active Pens” available for
+it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
 
-I’m mostly here because I think bunnie is great and I’m interested in RISC-V as a platform.
+However, the machine itself seems to have a hardware problem with the
+Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
+I might need to replace it. And I have *no* idea what laptop I
+might get.
 
-(I’ve been a fan of bunnie since his
-[On MicroSD Problems](https://www.bunniestudios.com/blog/on-microsd-problems/) (bunniestudios.com)
-investigation and write-up, but especially after I read his book *The Hardware Hacker: Adventures in Making and Breaking Hardware* in 2019.)
+- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
+  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
+  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
+- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
+- Presentations: **reveal.js**
+  - I absolutely love this.
+  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
+  - Blogpost about reveal.js
+  - Here are some presentations I’ve given, using reveal.js
+- File manager: **Nautilus**
+  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
+- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
+- Text expansion: **espanso**
+  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
+- Browser: **Firefox** or **links**
+  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
+  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
+- Local wiki / knowledge management: **vimwiki**
+  - because I use vim so much, vimwiki was quite an obvious choice.
+  - I use this for keeping track of my professional development, and for various notes
+- Disk encryption: **LUKS**
+- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
+- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
+  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
+- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
+- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
+- Scanning: **paperless-ngx**
+- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
 
-## The Dabao evaluation board
+Why so many terminal-based tools? The simple answer is that I am very
+comfortable in a terminal, and I like them. They have fewer distractions
+and, when compared with most GUI software, are just - IMHO - easier to
+use, especially when I don’t need to move my hands away from the
+keyboard. So, while I don’t use them exclusively, I use
+`mutt`, `vim`, `ikhal`,
+`ncmpcpp`, `newsboat`, `toot`,
+`links`, and various other TUIs, frequently.
 
-My Dabao board with the Baochip1x arrived today from Crowd Supply.
+## Server-side stuff
 
-Here’s a crummy image of the chip itself, so tiny and so shiny!:
+Everything here - other than Signal - is self-hosted, and I’m mostly
+using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
+than I did.
 
-It’s shiny because there’s no package, that’s the actual silicon
-polished to a perfect mirror finish.
+(Again, this doesn’t list everything; just the main
+applications.)
 
-## Let’s connect to it!
+- Email (MTA): **postfix / dovecot**
+  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
+- File synchronisation: **Syncthing**
+  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
+- Video conferencing: **Signal**
+  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
+- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
+- Time tracking: **Kimai**
+  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
+- “Case management” / “Matter management”: **EspoCRM**
+- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
+- Vulnerability scanning: **greenbone/OpenVAS**
+- Monitoring: **Uptime Kuma**
+  - I implemented this not long after the last update. It … just works?
+- Forge / hosted git repository: **Forgejo**
+  - I use this for version tracking the website, and for a couple of template projects
+  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
+- SIEM: **Wazuh**
+- Password manager: **vaultwarden**
+- Website: it is a static site built via **mkdocs**, hosted on **apache2**
+  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
+  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
+- Blog: **BSSG**
+  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
+  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
+  - I tend to use my personal blog for posts about the more technical bits and pieces
+  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
+- Fediverse: I am using the *glitch-soc Mastodon** fork
+  - Switching from normal Mastodon to glitch-soc Mastodon was easy
+  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
+  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
+- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
+- DNS: **unbound**, with **Pi-Hole** in front of it
+  - I used to run a doh server, but I’ve stopped doing that.
+- Backups: **restic** and **rsync**
+  - Notes on restic
+- Forms: **LiberaForms**
+  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
+  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
+- Collaborative document editing: I don’t.
+  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
 
-I found this pair of READMEs in the Xous repo most helpful:
+## AI tools
 
-> "Regardless of the board, the bao1x chip comes from the factory programmed
-> with boot0 and boot1 stages. The code for these can be found in bao1x-boot/."
+## Mobile device
 
-> "boot1 contains a USB driver, serial-over-USB driver, and serial driver capable of accepting code updates in the form of .u2f files or serial commands. It also contains a small command terminal for managing configurations, keys, and device lifecycle state."
+I’m using a Pixel running GrapheneOS for my mobile device.
 
-> "Baochip relies primarily upon a "virtual serial console", which is a USB
-> CDC-ACM device. In short, when you plug a Baochip into your computer, you will
-> get something similar to either a COM port (on windows) or a tty node (on
-> Linux)."
+I use F-Droid as the main app store.
 
-Sure enough, I plugged it into my Linux PC and there it is:
+Using Android doesn’t thrill me, especially given Google’s direction
+of travel, but at the moment - despite trying quite a lot of different
+OSs and devices, including postmarketOS and Ubuntu Touch, as well as
+SailfishOS previously - I have not found something that does what I need
+better than GrapheneOS.
 
-```
-$ sudo dmesg
-...
-[41412.220396] usb 3-4: Product: Baochip-1x
-[41412.220400] usb 3-4: Manufacturer: Baochip
-[41412.220404] usb 3-4: SerialNumber: YH1DTN
-[41412.307486] usb-storage 3-4:1.2: USB Mass Storage device detected
-[41412.307677] scsi host9: usb-storage 3-4:1.2
-[41412.307824] usbcore: registered new interface driver usb-storage
-[41412.308600] cdc_acm 3-4:1.0: ttyACM0: USB ACM device
-...
-```
+## Working with others
+(who don’t use FOSS tools)
 
-Using GNU `screen` is how I’m used to speaking to serial devices and
-that’s what the README recommended as well. Depending on your distro’s
-setup, it may be easiest to simply run `screen` as root.
+No change here: zero problems.
 
-Without root:
-
-```
-$ screen /dev/ttyACM0 1000000
-[screen is terminating]
-```
-
-With root:
-
-```
-$ sudo screen /dev/ttyACM0 1000000
-(terminal goes blank - we're connected!)
-```
-
-The boot1 REPL (which we can think of here as nothing more than a simple
-command-line interface) presents a completely blank terminal with no prompt.
-Hit Enter or trying typing a command and you’ll see a reply if everything’s
-working:
-
-```
-Command not recognized:
-Commands include: altboot, audit, boot, boardtype, bootwait, echo, idmode, ifr, localecho, lockdown, paranoid, reset, self_destruct, skipping, uf2
-```
-
-The easiest commmand to use is `echo`:
-
-```
-echo Hello World!
-Hello World!
-```
-
-Some of the others are mysterious or scary like `paranoid` or even `self_destruct`.
-
-Since the source for both boot stages are in the Xous repo, I cloned it and searched
-for the REPL commands. Sure enough, I found them in: `xous-core/bao1x-boot/boot1/src/repl.rs`.
-
-Here’s the `echo` command:
-
-```
-"echo" => {
-    for word in args {
-        crate::print!("{} ", word);
-    }
-    crate::println!("");
-}
-```
-
-And `self_destruct` is *not* a joke:
-
-```
-"self_destruct" => {
-    if !matches!(args.as_slice(), [s] if s == "void_my_warrantee") {
-        return Err(Error::help(
-            "Usage: 'self_destruct void_my_warrantee'. This PERMANENTLY wipes the chip and bricks it. No returns or exchanges are allowed after executing this command.",
-        ));
-    }
-    let mut rram = bao1x_hal::rram::Reram::new();
-    unsafe { rram.self_destruct() }
-    // ... and all was null and void!
-}
-```
-
-I didn’t see any easter eggs and `echo` is the only real command one would "play" with.
-
-Exit from the `screen` session with the screen prefix command `CTRL+A` followed by the `\` key.
-
-## Where to go from here?
-
-I’m just happy this thing exists and that I could talk with it right away. I think this is
-my first interactions with a computer running a RISC-V architecture?
-
-It looks like the Xous ecosystem is very well planned, with a focus on having a
-toolchain that doesn’t rely on a ton of fragile C tooling setup.
-I thought this was particularly insightful (from bunnie’s blog post about the BIO coprocessor linked above):
-
-> "…​one of the key benefits of the Xous ecosystem being pure Rust is that we don’t have to maintain any tooling. We’d like to keep it so that the only tool required to build a Xous image is stable Rust. The moment a C compiler is introduced into the build process, we have to wade through a hodge-podge of distribution-specific C toolchains, greatly increasing developer friction and maintenance burden."
-
-As an aside, here’s an interesting tidbit for Zig fans:
-
-> "Our solution to this problem, at least for now, is to borrow the Zig ecosystem’s clang C
-> compiler. …​ As a side-effect, this also paves an on-ramp for Zig developers to write BIO code."
-
-But I really think it would be interesting to learn how to work within the Xous system as intended.
-
-Since the Dabao board has a "PROG" (Program) button, programming is as simple as holding down the
-button while connecting the USB-C cable to the PC. It shows up as a USB Mass Storage device:
-
-I should be able to just drag UF2 files (USB Flashing Format - a standard for
-packaging binary program images into 512 byte blocks so they can be written to
-memory via a virtual file system) to the Baochip to program it.
-
-So now I "just" need to re-learn enough Rust to blink an LED.
-
-After that, who knows? I’m in absolutely no hurry and I have a lot of other projects to complete first.
-
-Anyway, I’ll never stop being enchanted by by the fact that we have computers the size of a grain of rice
-that cost as much as a bag of rice. That’s *way* more interesting to me than the brute-force computing
-currently en vogue.
+Many of my clients use Microsoft’s software, or Apple’s software.
