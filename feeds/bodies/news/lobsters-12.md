@@ -1,376 +1,329 @@
-This is a sign that C++ is (still) struggling with its governance (see a
-              [previous article on cultural issues within C++ here](https://herecomesthemoon.net/2024/11/two-factions-of-cpp/)). This is a big deal even if you do not care about programming languages. C++ is arguably the most
-              important programming language in existence.
+I think the most trustworthy programming languages are those which are *human-scale*: languages which a single user could reasonably write from scratch on some readily-available computational substrate. Knowing how to make your own tools provides a satisfying [feeling of power](https://en.wikipedia.org/wiki/The_Feeling_of_Power).
 
-Your computer runs on C or C++. The *web browser* you are using to read this is written in C++.
-              ~All programming languages depend on C++ (often through LLVM). Likewise, ~all websites with performance
-              requirements (e.g. YouTube) depend on C++, ~all data storage, game engines, finance, etc.
+Today I’d like to take you on a brisk journey through the process of implementing an interesting subset of the [PostScript](https://en.wikipedia.org/wiki/PostScript) programming language. We will ignore or simplify many features of the language, and we will elide most error-handling for simplicity, but every PostScript example we discuss will be a well-formed PostScript program which has the same behavior in our toy subset and a standard PostScript interpreter like [Ghostscript](https://en.wikipedia.org/wiki/Ghostscript).
 
-In a world that is drowning in exciting new vulnerabilities in ~all software, the ability of C++ to change
-              and adjust to changing times affects you.
+PostScript is primarily designed for describing printed documents: it has a rich vocabulary of features for creating and manipulating raster and vector graphics. For the purposes of this article I will narrowly focus on its mechanics as a general-purpose programming language.
 
-Let’s take a step back and get an overview. The initial source was a post by
-              [Robert Seacord on LinkedIn](https://www.linkedin.com/posts/robertseacord_balloting-has-completed-for-c26-unfortunately-share-7519795139859517440-AOth/):
+PostScript programs are composed of a series of whitespace-delimited tokens, plus a few special characters (`% / ( ) < > [ ] { }`) which immediately terminate the preceding token and begin a new one. The `%` character begins a line-comment. The `/` character can prefix a *literal name*, which we’ll discuss in more detail momentarily. The `( )` and `< >` characters enclose PostScript *strings*, which we will omit from our interpreter for simplicity. The `[`, `]`, `{` and `}` characters are used to enclose PostScript *arrays* and *procedures*, respectively, but are ordinary self-delimiting tokens. Given a PostScript program fragment:
 
-In a comment, J. Daniel García adds: “There were 12 countries that abstained. In several cases
-              because they could not reach to a common position. That is another signal of a contested draft.”
+```
+% This is a line comment
+/double {2 mul} def
 
-Now, before we get into the facts: **This is not a good look for C++.**
+3 double
+```
 
-There have been multiple fights over the future direction of the C++ language, but no C++ standard ever
-              failed to be signed off by the national bodies.
+The tokens are:
 
-The national body vote is considered to be *a formality*. By the time the vote reaches the national
-              bodies all disagreements should’ve been sorted out by WG21 (Working Group 21, i.e. the C++ Standards
-              Committee).
+```
+['/double','{','2','mul','}','def','3','double']
+```
 
-Truly controversial features should never make it this far, since they should never be added to the C++26
-              working draft in the first place. This is a sign of division in the C++ community, in some form or
-              another, and completely independently of whether you agree with this result or not.
+The PostScript execution model centers around several *stacks*: chiefly, an *operand stack* which is used to pass arguments between operators and a *dictionary stack* which is used to associate names with values.
 
-Here, “Added to the C++26 working draft” is essentially accepting the pull request. Everyone
-              is working towards the C++26 release, and people contribute to it with papers. Papers lead to votes, which
-              then lead to amendments of the draft. Finally (this is where we are) wording passes happen, and it gets
-              signed off, rubber-stamped and released. Phrased like this, the ISO process sounds sensible enough, but
-              trust me, it’s actually kind of a nightmare.
+The above program fragment is executed as follows:
 
-Needless to say, the debates are raging, with comments on all sides:
-              [So](https://www.reddit.com/r/cpp/comments/1xeeevt/balloting_has_completed_for_c26_unfortunately_it/)
-[many](https://www.reddit.com/r/cpp/comments/1xr8y5c/herb_sutter_when_a_languages_creator_and_its/)
-[discussions](https://www.reddit.com/r/cpp/comments/1xpcz59/c26_dis_failed_how_does_c_survive/).
+It’s also worth taking a moment to touch on PostScript *arrays*. The `[` operator pushes a special value called `mark` onto the operand stack, and the `]` operator pops all of the values of the operand stack down to the topmost `mark` and builds an array from them:
 
-Quick explanation: The national bodies execute a single vote. To pass the national bodies, the draft has
-                to meet two bars:
+```
+[]             % an empty array
+[1 2]          % an array of two values
+[[1 2][3 4]]   % an array of two values, each of which is an array
+[2 3 add]      % equivalent to [5]
+```
 
-1. At least two-thirds of the participating voting members have to vote Yes.
-2. At most one quarter of all voting members may vote No.
+We’ll discuss programming in PostScript in more detail later, but this is enough to get building.
 
-*If the above posts are correct*, then the draft failed to meet both bars. Twelve isn’t
-                two-thirds of twenty, and nine is more than a quarter. Visualization:
+Our PostScript interpreter will be written in a very concise style of JavaScript that is influenced by the philosophy of [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)), an influential ancestor of PostScript:
 
-In total, there were 20 P-members, and 22 total members (ignoring abstaining). I heard that the US
-                abstained, but take that with a grain of salt.
+Here are a few routines which illustrate this style:
 
-## So, what happened?
+```
+last = x=>x[x.length-1]
+iota = x=>Array.from(Array(x)).map((_,i)=>i)
+mod  = (x,y)=>x-y*Math.floor(x/y)
+```
 
-**tl;dr**: WG21 voted to include *Contracts* in C++26. Several high-ranking members of
-              WG21 are strongly opposed to Contracts, and so are several national bodies. The national body vote was the
-              ’last resort’ place to prevent Contracts from being canonicalized as part of the C++ standard.
+If you’re finding yourself struggling to “skim” code in this style, try to slow down and read each definition carefully, character-by-character. You may also find it useful to experiment with each definition in your browser’s JavaScript console as you go along.
 
-New keywords that replace `assert` macros with a standardized way to enforce runtime checks.
-                Most importantly, you can add `pre` and `post` checks to ensure that all arguments
-                and return values fulfill certain conditions.
+The first step in writing any interpreter is determining how we’ll represent data, in this case describing PostScript datatypes in terms of JavaScript datatypes:
 
-This ends up looking roughly as follows:
+| PostScript | Example | JavaScript | Example |
+| --- | --- | --- | --- |
+| number | `37` | Number | `37` |
+| boolean | `true` | Boolean | `true` |
+| name | `a` | String | `"a"` |
+| literal | `/a` | String | `"/a"` |
+| dictionary | `<</a 11>>` | Map | `new Map([['/a',11]])` |
+| array | `[11 22]` | Array | `[11,22]` |
+| procedure | `{1 add}` | Object-wrapped Array | `{t:'proc',v:[1,'add']}` |
+| operator | `add` | Function | `(x,y)=>x+y` |
+| mark | `mark` | Singleton Object | `MARK` |
 
-```cpp
-int wrap_index(int i, const int size)
-    pre (size > 0)               // the caller must guarantee this
-    post (r: 0 <= r && r < size) // the function promises this; r is the return value
-{
-    int r = i % size;
-    if (r < 0) r += size;
-    contract_assert(r >= 0);     // a check inside the body
-    return r;
+Using primitive JavaScript values to represent most of these types will be particularly helpful for writing the definitions of all the operators.
+
+Here are a set of definitions for constructing, accessing, and identifying various PostScript values:
+
+```
+MARK    = {}
+proc    = x=>({t:'proc',v:x})
+procval = x=>x.v
+isproc  = x=>x&&x.t=='proc'
+isarray = x=>Array.isArray(x)
+isfunc  = x=>'function'==typeof x
+isname  = x=>'string'==typeof x&&`/`!=x[0]
+litval  = x=>x.slice('/'==x[0])
+```
+
+Next, we need to translate PostScript syntax into the above data representations. We can use a JavaScript RegExp to split an input program into a sequence of tokens- line-comments (which can be discarded), special delimiters (`[]{}`), names, and numbers (which can be coerced into JavaScript numbers). While it is possible to implement `{` and `}` as PostScript operators, it is simpler for our purposes to cluster the tokens of procedures together as we parse the program:
+
+```
+parse = x=>{
+ const t=x.trim().match(/(%[^\n]*\n)|(\[|\]|\{|\})|(\/?[^\[\]\{\}\/% \n]+)|(-?\d+)/gm).filter(x=>x[0]!='%')
+ const next=()=>t.shift()
+ const peek=()=>t[0]
+ const isnum=x=>+x==+x
+ const rec=()=>peek()=='{'?(next(),seq()): isnum(peek())?+next(): next()
+ const seq=()=>{const r=[];while(peek()&&peek()!='}')r.push(rec());return next(),proc(r)}
+ return seq()
 }
 ```
 
-Looks simple, right? You’d think so, but no!
+Given a PostScript program like
+
+```
+[10 20 30] {2 mul} forall
+```
+
+The `parse(x)` routine will break it down into
+
+```
+{t:'proc', v:['[', 10, 20, 30, ']', {t:'proc', v:[2, 'mul']}, 'forall']}
+```
+
+The PostScript operand stack and dictionary stack can be represented as simple JavaScript global arrays- `o` and `d`, respectively:
+
+```
+
+o=[]
+d=[]
+```
+
+Some simple routines for manipulating these stacks:
+
+```
+push     = x=>o.push(x)
+pop      = x=>o.pop()
+popn     = x=>{const r=[];while(x-->0)r.unshift(pop());return r}
+popmark  = ()=>{const r=[];while(o.length&&MARK!=last(o))r.unshift(pop());pop();return r}
+load     = x=>{const v=litval(x);return d.findLast(s=>s.has(v)).get(v)}
+```
+
+Executing pre-tokenized PostScript programs is very simple: we execute each token in sequence. Names are looked up in the dictionary stack and the corresponding operator or procedure is called; anything else is pushed onto the operand stack. Since operators are JavaScript functions, when we execute them we’ll pop a number of values from the operand stack corresponding to their argument list count and `apply()` them to the function. If the function returns something other than `undefined`, we’ll push the result onto the stack:
+
+```
+execfunc = x=>{const v=x.apply(null,popn(x.length));if(v!=undefined)push(v)}
+execproc = x=>{isproc(x)?procval(x).forEach(exec): exec(x)}
+exec     = x=>{isfunc(x)?execfunc(x): isname(x)?execproc(load(x)): push(x)}
+```
+
+The large bulk of the machinery of our interpreter lives in the primitive operator definitions, but each is individually fairly simple, with the possible exception of the `for` operator, which needs a few helper routines for generating stepped ranges. Many of these operators are pure JavaScript functions which do not directly access or modify either stack and can be tested and understood in isolation.
+
+```
+countup  = (x,y,z)=>{const r=[];while(x<=z)r.push(x),x+=y;return r}
+countdn  = (x,y,z)=>{const r=[];while(x>=z)r.push(x),x+=y;return r}
+range    = (x,y,z)=>x<z&&y>0?countup(x,y,z): y<0?countdn(x,y,z): []
+prims={
+ true:   true,
+ false:  false,
+ exec:   execproc,
+ for:    (x,y,z,w)=>range(x,y,z).forEach(v=>(push(v),execproc(w))),
+ forall: (x,y)=>x.forEach(v=>(push(v),execproc(y))),
+ repeat: (x,y)=>iota(x).forEach(v=>execproc(y)),
+ ifelse: (x,y,z)=>execproc(x?y:z),
+ load:   load,
+ def:    (x,y)=>{last(d).set(litval(x),y)},
+ begin:  x=>{d.push(x)},
+ end:    ()=>{d.pop()},
+ dup:    x=>(push(x),x),
+ exch:   (x,y)=>(push(y),x),
+ pop:    x=>{},
+ index:  x=>o[o.length-(1+x)],
+ copy:   x=>o.slice(-x).forEach(push),
+ roll:   (x,y)=>popn(x).forEach((_,i,a)=>push(a[mod(i-y,x)])),
+ floor:  x=>Math.floor(x),
+ sqrt:   x=>Math.sqrt(x),
+ not:    x=>!x,
+ add:    (x,y)=>x+y,
+ sub:    (x,y)=>x-y,
+ mul:    (x,y)=>x*y,
+ div:    (x,y)=>x/y,
+ mod:    mod,
+ eq:     (x,y)=>x==y,
+ ne:     (x,y)=>x!=y,
+ gt:     (x,y)=>x>y,
+ ge:     (x,y)=>x>=y,
+ lt:     (x,y)=>x<y,
+ le:     (x,y)=>x<=y,
+ '[':    ()=>MARK,
+ ']':    popmark,
+ length: x=>x.length,
+ get:    (x,y)=>x[y],
+ dict:   x=>new Map(),
+}
+```
+
+To access the primitives from within `exec()` and `execproc()` we need to install them into the dictionary stack. Here’s a procedure to initialize both stacks:
+
+```
+init = ()=>{o=[],d=[new Map(Object.entries(prims))]}
+```
+
+We can now execute programs and observe their effects on the stacks:
+
+```
+init()
+execproc(parse('2 3 add'))
+console.log(pop()) // 5
+```
+
+For interactive use, we can wire everything up into a [Read-Eval-Print-Loop](https://en.wikipedia.org/wiki/Read–eval–print_loop) (REPL). We’ll need at least some rudimentary output capabilities, so for starters we can install an extra primitive `==` which pops a value from the stack and displays it:
+
+```
+format = x=>isarray(x)?`[${x.map(format).join(' ')}]`: isproc(x)?`{${format(procval(x))}}`: `${x}`
+prims['==']=x=>{console.log(format(x))}
+init()
+```
 
-First, due to issues with virtual functions, Contracts for virtual functions were already cut from the
-                proposal.
+If we’re using [Node.js](https://nodejs.org) we have to write our REPL in an event-driven style:
 
-Second, it’s not entirely obvious how this will interact with `constexpr` or function
-                inlining.
+```
+// usage: node ps.js
+rl=require('readline').createInterface({input:process.stdin,output:process.stdout,prompt:'  '})
+rl.prompt()
+rl.on('line',x=>(execproc(parse(x)),rl.prompt()))
+rl.on('close',_=>(console.log(''),process.exit(0)))
+```
 
-Third, there are compile flags to selectively enable or disable the enforcement. E.g. “If a
-                contract is violated, do you want to 1) kill the program, 2) call a ‘contract-violation
-                handler’ and then kill the program, 3) log an error, 4) ignore completely (and not even perform
-                the check, for performance reasons)?”
+If we’re using [QuickJS](https://bellard.org/quickjs/) we can write a more straightforward infinite loop instead:
 
-Big question: You compile your code with `enforce` and are linking a prebuilt library that
-                pulls in the same dependency as you, but with Contracts set to `ignore`. This is fine
-                according to Contracts. The linker gets to keep one of the copies. What happens? Do Contracts run or
-                not? What if a call is inlined across translation units?
-
-Is there even a way for the user to guarantee that checks always run? (The answer is no. What? You were
-                hoping that this feature could be used to ensure certain checks guarding against Undefined Behavior
-                would *always* run, no matter what? Don’t be silly—this is C++.)
+```
+// usage: qjs --std ps.js
+while(1){std.out.printf('  '),execproc(parse(std.in.getline()))}
+```
 
-Oh, did I mention that code inside of predicates is just standard C++, so the compiler is allowed to
-                elide checks due to Undefined Behavior?
+Either way, we now have a fancy PostScript-style desk calculator:
 
-But do feel free to take it from the source: The “Contracts paper” can be found
-                [here](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2900r14.pdf), and if you read closely, you’ll find some funny statements that really ruffled some feathers:
+```
+  2 3 add ==
+5
+  [[11 22 33] {10 mul} forall] ==
+[110 220 330]
+```
 
-> It is ill-formed, no diagnostic required (IFNDR) if multiple first declarations for the same function
->                   are in different translation units that do not have the same sequence of function contract specifiers.
+[The entire interpreter in one piece](https://beyondloom.com/blog/postscript-figures/ps.js), for reference.
 
-All of this leads to *so many funny issues*, some of which can be poorly summarized as
-                “Well, who even knows whether your Contracts are even going to be enforced, this is C++, the
-                compiler can do whatever it wants lol”.
+Our interpreter offers a very small subset of the primitive operators supplied with standard PostScript. There are some fun finger-exercises to be had in fleshing out more of that set in terms of what we already have:
 
-If you think “Gee, this proposal looks rather complex and messy”, keep in mind that the
-                Contracts paper was explicitly designed to be a minimal viable product that everyone would be able to
-                agree on.
+```
+/if  {{} ifelse} def
+/neg {-1 mul} def
+```
 
-If you only faintly paid attention to C++, you might be going into this assuming that
-              *Profiles* (aka Bjarne Stroustrup’s initiative to make C++ safer via magical fairy dust, also
-              controversial and considered to be ‘impossible to implement’ by some) are the sticking point,
-              but no,
-              [Profiles did not make it into C++26](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/).
+Try your hand at `abs`- compute the absolute value of a number:
 
-How do we know that it’s Contracts?
+How about `min`- find the minimum of two values on the stack?
 
-Oh, y’know, it’s just because *that’s all everyone has been talking about*.
+It can also be worthwhile to try some classic functional programming exercises, like recursively computing the Fibonacci sequence:
 
-Most obviously, the pro-Contracts camp released
-              [“Do not remove Contracts from C++26”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p4433r0.pdf)
-              on Oct 23rd, i.e. around the time when the national body ballot closed. Vinnie Falco (the most outspoken
-              voice against Contracts) countered with
-              [“Do Remove Contracts From C++26”](https://raw.githubusercontent.com/cppalliance/wg21-papers/master/source/_reserve/d4420-do-remove-contracts-from-cpp26.md)
-              on the very same day<sup>[1](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fn:1)</sup>.
+```
+/fib {dup 2 ge {1 sub dup 1 sub fib exch fib add} {} ifelse} def
 
-If you’ve been paying attention, there’s a whole trail of papers and events here.
+[0 1 10 {fib} for] ==
+% [0 1 1 2 3 5 8 13 21 34 55]
+```
 
-We’ve got talks, and Bjarne Stroustrup, the creator of C++ himself, saying
-              [“it’s claimed to be a minimum viable product. It is not minimal. I don’t think
-                it’s viable”](https://youtu.be/tzXu5KZGMJk?t=3180).
+There are, of course, more idiomatic iterative approaches:
 
-We’ve got multiple papers, say
-              [“Contract Concerns”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p3573r0.pdf),
-              [“Contracts make C++ less safe — full stop!”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p3835r0.html), or
-              [“Contracts’ fundamental flaws”](https://www.stroustrup.com/Contracts_fundamental_flaws.pdf)
-              (all reasonably short) opposing the behemoth that’s the
-              [Contracts paper](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2900r14.pdf)
-              and its
-              [rationale document](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2899r1.pdf)
-              (put together, almost 300 pages).
+```
+[0 1 9 {2 copy add} repeat] ==
+% [0 1 1 2 3 5 8 13 21 34 55]
+```
 
-We’ve had multiple votes. Most importantly ([Hagenberg, Feb 15th, 2025](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5007.pdf)), the vote to formally add Contracts to the C++26 working draft, turned out 100 in favor, 14 opposed, 12
-              abstain. The multiple votes to remove Contracts from the draft all failed, most recently
-              [in Croydon](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/n5040.pdf), which is also when an amendment to support
-              [a mechanism to ensure mandatory contract enforcement failed](https://isocpp.org/files/papers/P4044R0.html).
+I quite enjoy the way that enclosing PostScript expressions in `[]` acts like a more composable alternative to [list comprehensions](https://en.wikipedia.org/wiki/List_comprehension).
 
-*If your eyes are glazing over at this point, I don’t blame you!*
+Here’s a utility routine for making a copy of an array with the elements in reversed order:
 
-The whole situation is a mess, and trying to keep track of it from the outside is a fool’s errand:
-              You’re basically forced to track dry meeting notes, and read between the lines looking at the
-              various drafts people are publishing. Don’t do it.
+```
+/reverse {[exch dup length 1 sub -1 0 {1 index exch get exch} for pop]} def
 
-This is not Contracts’ first rodeo: A different version of Contracts was up for debate around 2018,
-              and was kicked out not too long after. At this point SG21 (‘Study Group 21’) was formed,
-              dedicated to revamping the Contracts concept to get us the new “Minimum Viable Product”
-              that’s currently part of the draft.
+[11 22 33] reverse ==
+% [33 22 11]
+```
 
-The whole situation went back and forth, resulted in fourteen revisions on the Contracts paper, many
-              comments from the national bodies during the process, and finally in some people
-              [explicitly calling for the national bodies to veto C++26](https://web.archive.org/web/20260819155123/https://cppalliance.org/pdf/alliance-nb-petition.pdf). (We call that ’the nuclear option’. FYI, some of the people signing this are themselves
-              sitting on national bodies.)
+How many approaches can you think of for *concatenating* a pair of arrays, given the primitive operators we have at hand?
 
-This was then what, in fact, happened.
+```
+[11 22 33] [44 55] concat ==
+% [11 22 33 44 55]
+```
 
-## Where are we standing?
+One approach:
 
-What you need to understand is that the Hagenberg vote (on adding Contracts to the working draft) was
-              *strongly* in favor of Contracts. 100 in favor vs. 14 against is *not* a weak result. This
-              makes it incredibly puzzling that this final vote failed so badly (12 for, 8 against is bad).
+Much of my experience with [concatenative programming languages](https://en.wikipedia.org/wiki/Concatenative_programming_language) like PostScript is with Forth, which uses slightly different names and factorings for most operators. Fortunately, PostScript is fairly malleable:
 
-One narrative on what happened is the following:
+```
+/swap  {exch} def
+/drop  {pop} def
+/over  {1 index} def
+/2dup  {2 copy} def
+/2drop {pop pop} def
+/rot   {3 -1 roll} def
+/-rot  {3 1 roll} def
+/@     {load exec} def
+/!     {exch def} def
+```
 
-> “There’s a loud minority strongly opposing Contracts in C++26. This group includes people
->                 with a lot of influence, e.g. Bjarne Stroustrup. Some members of this group actively lobbied the
->                 national bodies to vote against Contracts, *even though* WG21 achieved alignment, and agrees that
->                 Contracts should ship in their current form.”
+PostScript’s `roll` and `index` operators make it easier to reach deep into the stack than the usual Forth stack-twiddlers, but this also demands the programmer retain a larger perspective of the contents of the stack in their limited working memory as they read. Even `rot`/`-rot` can be controversial “code smells” to some Forthwrights.
 
-This agrees with the evidence we’ve seen (votes in favor, some people strongly opposed). Herb Sutter
-              is suggesting this in his latest paper, see
-              [here](https://isocpp.org/files/papers/P4454R0.pdf). (Herb
-              Sutter, for the record, was the chair of the C++ Committee and is (next to Bjarne) perhaps the
-              second-most-important person anyone in the C++ world listens to.)
+In Forth, we can freely manipulate the “return stack” as well as the operand stack, usually with words like `r>` and `>r` for transferring values from the top of one stack to the other. Forth control structures will often store things like loop indices on the return stack between iterations in order to prevent them from interfering with the flow of arguments within the loop body. It can also be handy for temporarily stashing intermediate results to keep the operand stack shallow. PostScript has an “execution stack” for nested procedure bookkeeping, but it is not under direct control of the programmer; as a result we can’t use these sorts of idioms.
 
-This is plausible, but I don’t believe it. Not entirely, anyway. Yes, lobbying happened, and
-              Bjarne’s opinion is something people listen to. It’s possible it was the deciding factor, but
-              *if it was the deciding factor, then this is a sign that the process itself is broken, and puts undue
-                value onto status.*
+The dictionary stack offers nestable scopes for named local variables:
 
-Even Herb Sutter acknowledges that Contracts were contentious. In footnote 4 on his paper, anyway.
+```
+2 dict begin
+ /b def
+ /a def
+ a a mul
+ b b mul
+ add sqrt
+end
+```
 
-> Some of the NBs that voted Disapprove had participated and had expressed concerns about contracts
->                 without having to be lobbied (importantly, those were the first-ever Disapprove votes on any C++ DIS).
+It’s even possible to build tidy abstractions around this pattern:
 
-In other words, before any lobbying happened we already had a historical first, the strongest ever NB
-              disagreement with a draft.
+```
+/local {1 dict begin 3 1 roll exch def exec end} def
 
-Importantly, it looks to me as though the committee just repeatedly ignored the comments/feedback of the
-              national bodies throughout the process, and then ran face-first into a wall at the vote.
+25 /a {a a add} local
+```
 
-If you think “Oh, you are saying that the committee is just straight-up incompetent and/or evil,
-              then?” No, not really. The committee process is just such a mess that it semi-naturally leads to
-              situations like this. The people working *within* this system have become so used to the process
-              that they’re barely capable of seeing it.
+But since this approach produces *dynamic* rather than *lexical* scopes, it is not transparent to procedures we `exec`. Without an auxiliary stack to “hide” intermediate state, it can be surprisingly challenging to write higher-order functions. Try defining the equivalent of a Lispy `(cond)` conditional in PostScript and you’ll see what I mean:
 
-(Over the years many people who did not find this process workable just left entirely. There’s a
-              huge selection bias effect.)
+```
+[{p1} {e1} {p2} {e2} ... {e}] cond
+```
 
-Part of what makes the process bad is that it’s very “all or nothing”, and the process
-              is so slow that working on the standard is painful for everyone. More on that later.
+PostScript has a tantalyzing `bind` operator (not implemented in our interpreter) which is meant to help sidestep the footguns of dynamic scope by eagerly replacing references to operators within a procedure with their values at `bind`-time. However, since `bind` concerns itself only with resolving *operators*, it isn’t useful for simulating general-purpose lexical scope; we’d need to build a more general mechanism for performing named substitutions within procedures.
 
-Anyway. I don’t believe that it’s all just the lobbying. The discussions were already way
-              underway. Evidence:
+My preceding semantic quibbles aside, I think PostScript is quite elegant, and well worth learning. Now that we have an interpreter for the language which fits on a printed page or two, we have an inviting foundation for experimentation. I’m sure that over the course of our brief explorations you’ve already thought of many new primitive operators you could add- `sin`, `cos`, `pi`, perhaps more tools for manipulating data like `type`, `cvx`, and `cvlit`, or a richer set of input and output routines?
 
-### Exhibit A: Comments by National Bodies
+You might find it worth the added bulk to add more robust error-handing. For example, you could make `load` tolerate undefined names and return a placeholder:
 
-Taking a look at
-              [“Do not remove Contracts from C++26”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p4433r0.pdf), it refers to the “23 NB comments on contract assertions”.
+```
+load = x=>{const v=litval(x);return (d.findLast(s=>s.has(v))||new Map()).get(v)||null}
+```
 
-Taking a closer look at
-              [N5028](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5028.pdf)
-              and
-              [N5031](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5031.pdf), we see the committee rejected at least one strong anti-Contracts comment from each of the following
-              countries: Sweden, Spain, the United States, France, Romania, the Czech Republic and Finland.
+You could also implement a more complete range of datatypes and syntax, like `(strings)`, non-integer numbers, and the `<</a 11 /b 22>>` syntax for dictionary “literals”.
 
-These comments included multiple asks to not ship Contracts in their current form at all, resolve safety
-              issues, make Contracts reliably non-ignorable, fix the const issues, and change it such that standard
-              library hardening phrasing does not depend on Contracts.
-
-What did the committee think? That all of these asks were completely irrelevant? Yeah,
-              *no shit* people are going to vote against something or abstain if you ignore their concerns.
-
-This was preventable! People told you ahead of time that they were strongly opposed! The national bodies
-              played their part correctly here. They gave you feedback ahead of time, and then voted accordingly.
-
-### Exhibit B: Standard Library Hardening
-
-There were at least four comments asking specifically “Please do not make the work on
-              ‘standard library hardening’ depend on the inclusion of Contracts into C++26.” As it
-              stands, this coupling is still there, i.e. the comments were ignored.
-
-In fact, now that the future of Contracts is shaky, the “Do not remove Contracts” paper
-              includes the following line:
-
-> At the time of writing, there is no wording for removing contract assertions from C++26, and producing
->                 it is not a purely mechanical exercise. It would require:
->
-> […]
->
-> removing or respecifying C++26 standard-library hardening [P3471R4], which is written in terms of
->                 contract assertions and has never had complete, reviewed wording that is independent of contract
->                 assertions.
-
-The audacity. The national bodies were very explicit in saying that
-              *they do not want standard library hardening to depend on Contracts*.
-
-You went and ignored those comments, and are now complaining about the effort that would be necessary to
-              walk things back? You were given all the heads-up you needed, you just ignored it!
-
-### Exhibit C: Non-ignorable Contracts
-
-I quote Footnote 6 from
-              [Herb Sutter’s paper on the situation we are in](https://isocpp.org/files/papers/P4454R0.pdf). If there is an expert, it is him:
-
-> P3911 is the only technical proposal that NBs told us during CD comment processing would likely prevent
->                 multiple potential NB negative votes. It’s also a pure extension that doesn’t disturb the rest of the
->                 contracts design or interfere with future extensions, which makes it low-cost and low-risk to adopt.
->                 This is why in Kona I repeatedly encouraged EWG to pursue it. It addresses what several experts said was
->                 their principal concern motivated by safety issues: to provide a way to write a contract in source code
->                 that would be guaranteed to be enforced at execution time regardless of build mode or linking. However,
->                 it failed to be approved in the EWG 2026-01 telecon (‘encourage more work in this direction’ failed by
->                 8-25 for-against, with 9 neutral). Now we have the new information that NBs have rejected the DIS, and
->                 several have again cited safety as a critical issue, so this change is likely to increase NB consensus.
-
-[P3911](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p3911r2.html)
-              is the paper that proposes adding a way to ensure Contracts will *always* run, and can be enforced.
-
-(Which, yes, a lot of people believe is necessary for a safety feature. If you can’t guarantee the
-              safety is even enforced, what’s the point?)
-
-### Do Herb Sutter and I even disagree?
-
-Honestly, probably not. Herb Sutter is looking at the situaation from the political angle, and analyzing
-              whose beliefs have more weight based on their status.
-
-Bjarne Stroustrup’s beliefs (as the creator of C++) hold a lot of weight. This is correct.
-
-Quoting
-              [Herb Sutter’s discussion on the matter](https://isocpp.org/files/papers/P4454R0.pdf):
-
-> Over half of the NBs that voted Disapprove on the C++26 DIS had never participated in WG21 at all and/or
->                 never before expressed any concern about contracts in C++26 (most sent no comments on the C++26 CD
->                 comment ballot; one sent contracts-unrelated CD comments), yet voted against the DIS after being lobbied
->                 with messages citing Bjarne’s opposition.
-
-“Look! It’s just Bjarne having a lot of status!” he says, and he is completely right in
-              saying so, but he is also acting as though putting huge pressure on members to “disagree and commit
-              :-)” hadn’t always been part of it. The C++ Standards Committee **always** voted
-              in terms of factions.
-
-It was always a political mess where Bjarne’s explicit support was absolutely critical, and where
-              “I know you may disagree with this, but you should vote in favor to get it in” was a part of
-              the process.
-
-Quoting Herb Sutter and Bjarne, yet again from Herb Sutter’s paper:
-
-> (Ed.: Bjarne added, when reviewing this paper, that one reason previous DIS ballots were unanimous was
->                 his private and public encouragement.)
-
-Aka lobbying.
-
-Always has been.
-
-## Verdict
-
-Why is C++ in this mess?
-
-Why are Contracts authors so obsessed with getting Contracts into C++26? Why not wait for the next
-              release?
-
-Well, C++ has this funny “release train model” (also known as “[the frame rule bus stop analogy](https://www.youtube.com/watch?v=ry0grTSXMIk)” in Super Mario Bros. speedrunning). A new version of the C++ standard releases every three years.
-              If your work gets voted into the standard in time, it becomes part of it. If it doesn’t, you have to
-              wait another three years for the next release.
-
-Three years is a long time, and it’s an *especially* long time to work on a single C++
-              feature. Getting a C++ paper accepted into the standard is a process so notoriously draining that ~all of
-              the “C++ people” I know just stopped bothering, and stopped working with WG21. It’s bad.
-
-If Contracts don’t get in *this cycle*, there’s a good chance they never will. They
-              will be nitpicked over the next three years, endlessly litigated, and frankly, I think there’s a
-              good chance several of the people working on Contracts
-              *just won’t want to deal with that, and might instead drop out of the process entirely, leaving
-                Contracts dead and buried*.
-
-Until *the process itself changes*, which, god knows how that could happen considering the
-              requirements presumably imposed by ISO, it’s hard to imagine this changing.
-
-This is why the pro-Contracts side released the following statement in their paper:
-
-> If the DIS ballot has failed, we should seek another ballot without altering contract assertions or
->                 removing them from C++26;
-
-In other words, they are playing a game of Chicken: “We believe you are going to give up
-              first.”
-
-They know full well that a failed C++26 will hurt *everyone*. But, because the WG21 process is so
-              insane that a loss here risks killing Contracts entirely, and would require another three years of endless
-              litigation and fights, the stakes are high.
-
-As far as I know, the next scheduled WG21 meeting runs Nov 16–21, 2026 in Búzios. So, you might think
-              “Ah, then it’s just a few days and they’ll sit down and sort things out, right?”
-
-Well, probably not. The WG21 + ISO process is slow and messy. Even if everyone agrees on whether Contracts
-              should/should not go in, each ballot is open for multiple weeks. So yeah, this may take another year or
-              so.
-
-So uh, good luck, C++.
-
-If C++26 fails, I’ll pour one out. Not for you, but for the many, many people who tried to make you
-              better, and failed<sup>[3](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fn:3)</sup>.
-
-If you've made it this far, consider signing up for
-                [e-mail notifications](https://buttondown.com/mond), following along on
-                [Substack](https://mondmondmondmon.substack.com), or adding this blog to your
-                [RSS reader](https://herecomesthemoon.net/posts/index.xml).
-
-1. It’d be slightly easier to take Vinnie’s paper seriously if it didn’t contain Claude-isms like *“The ‘purely additive’ claim turns the deferral into a dismissal”* that make my eyes glaze over. There has been an uptick in AI usage within WG21, and not all of it has been responsible. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:1)
-2. Okay fine, there were some tiny concessions, P3878R1 decoupled parts of standard-library hardening from Contract observe mechanics. Still coupled to Contracts though, making it impossible to allow standard-library hardening to enter without Contracts getting in. In other words, the ‘standard-library hardening’ draft was written with the assumption that Contracts would definitely go in. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:2)
-3. This, for the record, will include the Contracts people (assuming Contracts fail). I am not a big fan of Contracts (for reasons unrelated to any of the discussion here), but I understand the case for them, and the people working on them are (like everyone else) victims of the process. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:3)
+Take your budding new human-scale programming environment in whatever direction you like. Enjoy the feeling of power.

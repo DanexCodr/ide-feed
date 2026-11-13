@@ -277,5 +277,3 @@ An interesting detail is that they claim about 2500 characters per second; the r
 Edit added later: David Fuchs pointed out [US Patent 6377261], filed in 1996, which compiled glyphs to machine code.
 It's highly optimized for speed, and has a lot in common with the idea here, but depends on a cache to be reasonably RAM efficient.
 Even so, it absolutely counts as prior art.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50412072)

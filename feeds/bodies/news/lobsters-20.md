@@ -1,194 +1,105 @@
-GitHub Actions now
-[supports workflow lockfiles](https://github.blog/changelog/2026-10-28-github-actions-workflow-lockfiles-are-generally-available/).
+Write Futhark code inline in your J programs and get automatic
+parallel execution on all CPU cores.
 
-Because GitHub Actions are fetched from Git, the previous advice was to pin to a full
-SHA instead of a tag. This is because tags are mutable and susceptible to
-[supply-chain attacks](https://www.legitsecurity.com/blog/github-actions-tj-actions-changed-files-attack)
-where an attacker points a previously safe tag at malicious code.
+**Download:** [futhark.ijs](https://chen.cat/j/futhark/futhark.ijs)
+(v1.7.0)
 
-For example, an old workflow looks like:
+The Futhark-J Bridge lets you write [Futhark](https://futhark-lang.org/) code directly in your J
+source files. Futhark is a purely functional data-parallel programming
+language that compiles to highly efficient parallel code. This bridge
+handles compilation, caching, and FFI calls automatically.
 
-```yaml
-name: Lint
+```
+NB. Define a Futhark function inline
+double =: 'entry f (xs: []f64) : []f64 = map (*2) xs' fut
 
-on: [push, pull_request, workflow_dispatch]
-
-permissions: {}
-
-env:
-  FORCE_COLOR: 1
-  RUFF_OUTPUT_FORMAT: github
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
+NB. Use it like any J verb
+double 1 2 3 4 5
+   2 4 6 8 10
 ```
 
-Here’s how I set up lockfiles.
+J is already excellent at array programming, but some workloads
+benefit from parallel execution across multiple CPU cores. Futhark
+excels at:
 
-## Install [#](https://hugovk.dev/blog/2026/lock-github-actions/#install)
+The library includes benchmarks comparing native J to Futhark. Here
+are some highlights:
 
-Install the [`gh-actions-lock`](https://github.com/github/gh-actions-lock#install)
-extension to the [`gh` CLI](https://cli.github.com/):
+| Workload | Max Speedup | Notes |
+| --- | --- | --- |
+| Mandelbrot escape | **1525x** | Variable iteration count per element |
+| Logistic map (1000 iters) | **14x** | High compute per element |
+| Standard deviation | **2x** | Multiple passes over data |
+| Dot product | 0.3x | Memory-bound; J wins |
 
-```console
-$ gh extension install github/gh-actions-lock
-✓ Installed extension github/gh-actions-lock
+**Key insight**: Futhark shines when computation
+dominates memory access. For simple operations like dot product, native
+J is faster due to FFI overhead.
+
+```
+NB. Load the library
+load 'futhark.ijs'
+
+NB. Array transformations
+square =: 'entry f (xs: []f64) : []f64 = map (\x -> x * x) xs' fut
+square 1 2 3 4 5
+   1 4 9 16 25
+
+NB. Reductions to scalar
+total =: 'entry f (xs: []f64) : f64 = reduce (+) 0 xs' fut
+total 1 2 3 4 5
+   15
+
+NB. Two-input (dyadic) functions
+dot =: 'entry f (xs: []f64) (ys: []f64) : f64 = reduce (+) 0 (map2 (*) xs ys)' fut
+(1 2 3) dot (4 5 6)
+   32
+
+NB. Scalar input functions (v1.6.0) - use 0 : 0 for multiline Futhark
+factors_src =: 0 : 0
+  entry f (n: i64) : []i64 =
+    let (_, _, result) =
+      loop (x, i, acc) = (n, 2i64, ([] : []i64))
+      while x > 1 do
+        if x % i == 0
+        then (x / i, i, acc ++ [i])
+        else (x, i + 1, acc)
+    in result
+)
+factors =: factors_src fut
+
+factors 12
+   2 2 3
+factors 100
+   2 2 5 5
+
+NB. Fixed-size array dimensions (v1.7.0)
+NB. Output has fixed inner dimension [3]
+triple =: 'entry f (ns: []i64) : [][3]i64 = map (\n -> [n, n*2, n*3]) ns' fut
+triple 1 2 3 4 5
+   1  2  3
+   2  4  6
+   3  6  9
+   4  8 12
+   5 10 15
 ```
 
-## Lock ’em [#](https://hugovk.dev/blog/2026/lock-github-actions/#lock-em)
+Futhark entry points follow this pattern:
 
-In your repo, run:
-
-```console
-$ gh actions-lock
-
-✓ All 1 workflows valid
+```
+entry <name> (<param>: <type>) : <return_type> = <body>
 ```
 
-The workflow now uses `vX.Y.Z` tags and looks like this:
+Common operations:
 
-```diff
-diff --git a/.github/workflows/lint.yml b/.github/workflows/lint.yml
-index 946971c..3503607 100644
---- a/.github/workflows/lint.yml
-+++ b/.github/workflows/lint.yml
-@@ -13,7 +13,7 @@ jobs:
-     runs-on: ubuntu-latest
+| Futhark | J Equivalent | Description |
+| --- | --- | --- |
+| `map (*2) xs` | `2 * xs` | Element-wise transform |
+| `reduce (+) 0 xs` | `+/ xs` | Fold to scalar |
+| `scan (+) 0 xs` | `+/\ xs` | Running sum |
+| `map2 (*) xs ys` | `xs * ys` | Element-wise binary op |
+| `transpose xs` | `\\|: xs` | Matrix transpose |
+| `flatten xs` | `, xs` | Ravel to 1D |
 
-     steps:
--      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-+      - uses: actions/checkout@v7.0.1
-         with:
-           persist-credentials: false
--      - uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
-+      - uses: j178/prek-action@v3.1.0
-```
-
-And it generates a lockfile at `.github/workflows/actions.lock`:
-
-```yaml
-# This file is machine-generated by `gh actions-lock`.
-# Do not edit by hand; run `gh actions-lock` to update.
-# Docs: https://gh.io/actions-lockfile
-version: 'v0.0.3'
-workflows:
-    '.github/workflows/lint.yml':
-        - 'actions/checkout@v7.0.1'
-        - 'j178/prek-action@v3.1.0'
-dependencies:
-    'actions/checkout@v7.0.1':
-        ref: 'v7.0.1'
-        commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
-        owner_id: 44036562
-        repo_id: 197814629
-    'j178/prek-action@v3.1.0':
-        ref: 'v3.1.0'
-        commit: 'sha1-44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d'
-        owner_id: 10510431
-        repo_id: 1052387486
-```
-
-Commit modified workflows and the new lockfile.
-
-## Renovate and Dependabot [#](https://hugovk.dev/blog/2026/lock-github-actions/#renovate-and-dependabot)
-
-Good news, both already
-[support](https://docs.renovatebot.com/modules/manager/github-actions/#github-actions-lockfile-actionslock)
-[lockfiles](https://docs.github.com/en/actions/how-tos/administer/enforce-workflow-lockfiles#dependabot-version-updates)!
-Your periodic updates will also update the lockfile. Remember to use
-[cooldowns](https://blog.yossarian.net/2025/11/21/We-should-all-be-using-dependency-cooldowns).
-
-## Validate [#](https://hugovk.dev/blog/2026/lock-github-actions/#validate)
-
-GitHub also
-[recommends verifying lockfiles](https://docs.github.com/en/actions/how-tos/administer/enforce-workflow-lockfiles#a-dedicated-workflow-or-copilot)
-in CI to ensure it’s up-to-date and not corrupt.
-
-They suggest copying this
-[`verify-lockfile.yml`](https://github.com/github/gh-actions-lock/blob/main/.github/workflows/verify-lockfile.yml)
-into your repo. I decided to put it into my existing lint workflow, but in its own job
-so it runs independently and in parallel:
-
-```yaml
-name: Lint
-
-on: [push, pull_request, workflow_dispatch]
-
-permissions: {}
-
-env:
-  FORCE_COLOR: 1
-  RUFF_OUTPUT_FORMAT: github
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: j178/prek-action@v3.1.0
-
-  # Fails when .github/workflows/actions.lock is out of sync with the
-  # workflows or a locked pin no longer verifies upstream.
-  lockfile:
-    runs-on: ubuntu-slim
-    env:
-      GH_TOKEN: ${{ github.token }}
-
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - run: gh extension install github/gh-actions-lock --pin v0.4.1
-      - run: gh actions-lock --verify
-```
-
-Note I’m using the lightweight `ubuntu-slim` runner here. Also, it’s pinning to v0.4.1;
-we’ll have to update that at some point or figure out a way to automate it. That’s for
-another time.
-
-Don’t forget that we just modified the actions in a workflow, so need to relock with
-`gh actions-lock`. Nothing actually changes if adding to `lint.yml` because it’s already
-locking `actions/checkout`. But if you created a new file like `verify-lockfile.yml`,
-you’ll need to relock for that. The CI will let you know.
-
-## zizmor [#](https://hugovk.dev/blog/2026/lock-github-actions/#zizmor)
-
-[zizmor](https://zizmor.sh/) is a security linter for GitHub Actions and **strongly
-recommended**. If you don’t use it, please do.
-
-Versions before v1.32.0 tell you to hash-pin actions, and
-[v1.32.0](https://github.com/zizmorcore/zizmor/releases/tag/v1.32.0) is the first to
-support lockfiles.
-
-I use zizmor in [prek](https://hugovk.dev/blog/2025/ready-prek-go/), so add/update zizmor in
-`.pre-commit-config.yaml`:
-
-```yaml
-  - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.32.0
-    hooks:
-      - id: zizmor
-```
-
-## Locked! [#](https://hugovk.dev/blog/2026/lock-github-actions/#locked)
-
-OK, commit and push!
-
-## Examples [#](https://hugovk.dev/blog/2026/lock-github-actions/#examples)
-
-<small>Header photo:
-[Slaymaker Barry Co. Sprocket Locks](https://archive.org/details/bearings1218951896cycl/page/n1161/mode/2up)
-in
-[The Bearings (vol. XII no. 23, 2nd January 1896)](https://library.si.edu/digital-library/book/bearings)
-in the [Smithsonian Libraries and Archives](https://library.si.edu/digital-library/),
-with [no known copyright restrictions](https://library.si.edu/copyright).</small>
+The context is created at definition time and persists, so there’s no
+“warmup” penalty on first execution.

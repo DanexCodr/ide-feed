@@ -1,507 +1,256 @@
-This post demonstrates how to use monads in the Lean programming language
-(Lean 4, to be specific). If you're not familiar with Lean, this part of the
-language is very similar to other functional programming languages, like
-Haskell or OCaml.
+After two detailed articles (that I hope you read!), we have a great technique to connect two elements with a line you can shape using `border-shape` and `shape()`.
 
-## Motivating example - evaluating expressions
+In this article, we will explore more types of connections commonly used to create graphs and diagrams. Of course, we can’t cover them all, but the technique is generic, so if you understand it well, you can easily tweak the code to create your own connections.
 
-Suppose we want to write a simple numerical expression evaluator that supports
-numbers with addition and division:
+Before we start, let me remind you that the goal is not to invent a new or better way to create graphs with CSS. This remains an experiment to explore modern features and create things that were impossible (or very difficult) to achieve using only CSS. This can also serve as proof of concept that it’s indeed possible using CSS. If so, it can lead to a better, more intuitive implementation.
 
-```
-inductive Expr where
-  | num : Int → Expr
-  | add : Expr → Expr → Expr
-  | div : Expr → Expr → Expr
-```
+Enough talking, let’s start!
 
-What happens when we encounter a division by zero? We'll want our evaluator
-to report this as a failure, which will be represented explicitly using the
-the Option type:
+At the time of writing, only Chrome and Edge fully support the features we’ll use.
 
-```
-def safeDiv (x y : Int) : Option Int :=
-  if y == 0 then none else some (x / y)
-```
+## Dynamic Connection
 
-With this in hand, the eval function can be written as follows:
+The first connection type adjusts based on the element position and shapes. It’s similar to what we did in the previous articles, but this time we are not only connecting the centers, but we are also considering the sides.
 
-```
-def eval : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-    match eval a with
-    | none => none
-    | some x =>
-      match eval b with
-      | none => none
-      | some y => some (x + y)
-  | .div a b =>
-    match eval a with
-    | none => none
-    | some x =>
-      match eval b with
-      | none => none
-      | some y => safeDiv x y
+Let’s start with a demo:
+
+If you drag the elements around, you will notice the connection considers the closest sides to connect both elements, and if they get too close, it connects their centers. A dynamic connection!
+
+If you look closely, you’ll notice we have four different positions, and therefore four different shapes (one curved line and three straight lines).
+
+![Four pairs of teal and orange rounded squares, each pair connected by a line: one S-shaped curve from side to side, and three straight lines connecting the closest sides or centers depending on how the squares are positioned.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-four-shapes.png?w=876&quality=80&ssl=1)
+
+Did you forget a few cases? There are more positions!
+
+Yes, but don’t forget the anchor position configuration. We have four regions where only one is visible at a time, and they are all symmetric, so the scale transformation gives us the remaining ones. If this last sentence sounds strange, go back to [the first article](https://blog.master.dev/two-circles-one-arrow-and-anchor-positioning/) to refresh your memory.
+
+The shape is identical to the one we used in the previous article, same as the `border-shape` code.
+
+```css
+.link *:before {
+  border-shape: if(
+    style(condition_1): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    style(condition_2): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    style(condition_3): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    else: 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??))
+    padding-box;
+}
 ```
 
-safeDiv returns an Option; to propagate that possible failure to
-its caller, eval also returns an Option, and - moreover - has to perform
-lots of tedious checking for the possibility of a none value. Is there a
-better way?
+So far, nothing has changed compared to the previous article. We moved from two shapes to four, so we need three conditions instead of one.
 
-Note a common code pattern repeated here:
+Let’s start with the first condition: when both elements are close, draw a line from the center of the first element to the center of the second one. Said differently, when their distance is smaller than a specified value, we draw a line from the top-left corner to the bottom-right corner of the pseudo-element.
 
-1. Examine the value of an Option
-2. If it's none, return none without proceeding
-3. Otherwise if it's some result, continue the computation with result
-
-We can extract it into a helper function:
-
-```
-def withSome (result : Option α) (onSuccess : α → Option β) : Option β :=
-  match result with
-  | none => none
-  | some x => onSuccess x
+```css
+style((hypot(100cqw,100cqh) < 200px)): 
+      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
 ```
 
-And rewrite our eval using this helper:
+The `shape()` value should be clear, and if you are wondering about `hypot()`, it’s the hypotenuse math function. It calculates the diagonal of the pseudo-element, which is the distance between the centers of the two circles.
 
-```
-def evalWithSome : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-      withSome (evalWithSome a) (fun x =>
-        withSome (evalWithSome b) (fun y =>
-          some (x + y)))
-  | .div a b =>
-      withSome (evalWithSome a) (fun x =>
-        withSome (evalWithSome b) (fun y =>
-          safeDiv x y))
-```
+Let’s move to the second condition: when the vertical distance between the elements is smaller than a specified value, we link the right and left edges.
 
-This is already much better; we can make it even cleaner using operator
-overloading:
+See that? I simply adjusted two values compared to the previous shape. That `60px` is half the element size. It’s defined as a variable in the demo, and yes, it’s a little drawback for this type of connection since the element size needs to be known.
 
-```
-infixl:55 " >>? " => withSome
+I suppose you got the idea, so here is the full code:
 
-def evalOp : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-    evalOp a >>? fun x =>
-    evalOp b >>? fun y =>
-    some (x + y)
-  | .div a b =>
-    evalOp a >>? fun x =>
-    evalOp b >>? fun y =>
-    safeDiv x y
+```css
+.link *:before {
+  border-shape: if(
+    style((hypot(100cqw,100cqh) < 200px)): 
+      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
+    style((100cqh < 200px) and (100cqh < 100cqw)): 
+      shape(from 60px 0,curve to 50% 50% with 50% 50%,smooth to calc(100% - 60px) 100%);
+    style((100cqw < 250px) and (100cqh > 100cqw)): 
+      shape(from 0 60px,curve to 50% 50% with 50% 50%,smooth to 100% calc(100% - 60px));
+    else: 
+      shape(from 60px 0,curve to 50% 50% with 200px 0,smooth to calc(100% - 60px) 100%))
+    padding-box;
+}
 ```
 
-Congratulations - we've pretty much invented monads!
+I am adding an extra rule for the second and third conditions to illustrate that we can use `and`/`or` to create precise conditions. In this case, I want to avoid some edge cases where the connection didn’t look good to me.
 
-## Option as a Monad in expression evaluation
+![A teal square above and slightly left of an orange square, connected by a short, nearly vertical straight line between their closest edges.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/conditions-and-or-edge-cases.png?w=401&quality=80&ssl=1)
 
-In simplified form, the Monad type class in Lean is defined as:
+For the extremities, it’s exactly the same logic. We keep the same `if()` structure, and we update the `shape()` values. For this reason, I wrote the following code in the demo:
 
-```
-class Monad (m : Type → Type) where
-  pure : α → m α
-  bind : m α → (α → m β) → m β
-```
-
-In our code, pure is equivalent to some, and bind is equivalent
-to withSome; in fact, the Monad instance for Option is something
-like:
-
-```
-instance : Monad Option where
-  pure x := some x
-  bind opt next :=
-    match opt with
-    | none => none
-    | some x => next x
+```css
+.link *:before,
+.link *:after {
+  border-shape: if(
+    style((hypot(100cqw,100cqh) < 200px)): 
+      var(--shape1);
+    style((100cqh < 200px) and (100cqh < 100cqw)): 
+      var(--shape2);
+    style((100cqw < 250px) and (100cqh > 100cqw)): 
+      var(--shape3);
+    else: 
+      var(--shape4))
+    padding-box;
+}
 ```
 
-An operator akin to >>? for monads is already defined in Lean; it's called
->>=, and picks up the bind method of the Monad type class. So we can
-rewrite our evaluator using the standard Monad instance, without defining
-withSome or the >>? operator [[1]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-1):
+Then, each pseudo-element defines its own shapes.
 
-```
-def evalBind : Expr → Option Int
-  | .num n => pure n
-  | .add a b =>
-    evalBind a >>= fun x =>
-    evalBind b >>= fun y =>
-    some (x + y)
-  | .div a b =>
-    evalBind a >>= fun x =>
-    evalBind b >>= fun y =>
-    safeDiv x y
-```
+If you are wondering about the logic behind the specified values, the conditions, their numbers, etc., the answer is: there is no logic. It’s a matter of personal choices. As I said in the introduction, it’s a generic technique. I simply built on what we learned in the previous article to create a more complex-looking connection.
 
-We can go even further with the do notation, which is syntactic sugar around
->>= that lets us rewrite the evaluator as:
+Give it a try! Pick up a pen and paper, draw the connection, and try to code it. Start with one shape, then think about the different conditions and how you want to update it. Don’t be shy; it’s a fun exercise. Do it before moving to the next section because we are increasing the difficulty a bit.
 
-```
-def evalDo : Expr → Option Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalDo a
-    let y ← evalDo b
-    some (x + y)
-  | .div a b => do
-    let x ← evalDo a
-    let y ← evalDo b
-    safeDiv x y
-```
+Let’s not forget that we can add as many elements as we want to create a fancy graph!
 
-This notation should be familiar if you've seen Lean code dealing with I/O;
-we'll revisit I/O later in the post.
+![A graph of six colored nodes labeled A through F connected by curved and straight gray lines, forming a flowchart-like diagram.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-graph.png?w=935&quality=80&ssl=1)
 
-## Monads for modeling side effects
+## Static Connection
 
-Functional programming languages place a lot of emphasis on *pure* functions
-that are free of side effects. There's no question that such functions are
-easier to reason about, debug, and even optimize (by memoization). That said,
-the real world is messy and sometimes side effects are inescapable; monads
-help encapsulate side effects in functional programs.
+Let’s try another type of connection. I am calling this static because the idea is to keep a line connected to the same sides, regardless of the element positions.
 
-The core idea is: side effects are encapsulated inside a Monad, which
-wraps the value returned from a computation. The bind method (or the
-equivalent >>= operator) lets us take a wrapped value and push it into the
-next computation in the sequence. This may look familiar from
-continuation-passing style (CPS). Continuations themselves can also be modeled
-with a monad [[2]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-2).
+Here is a demo to better understand:
 
-The definition of bind is:
+See that? We have a right-to-left connection, and the good news is that this type of connection doesn’t require us to know the element size, but we lose the symmetry.
 
-```
-bind : m α → (α → m β) → m β
+![Four pairs of teal and orange rectangles in different positions, each connected from the right side of the teal one to the left side of the orange one, with the line curving or looping around as needed.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-right-to-left.png?w=1151&quality=80&ssl=1)
+
+What symmetry? I don’t get it.
+
+Here is a better figure showing the four different regions (explained in the first article) and the shape in each one of them:
+
+![Four diagrams labeled A, B, C, and D, each showing a teal square and an orange square at opposite corners of a thin rectangle, connected by a right-to-left curved line whose shape differs between the left and right columns.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-four-regions.png?w=711&quality=80&ssl=1)
+
+A and C are still symmetric (as are B and D), but A and B are no longer symmetric (same for C and D). This means we need a different strategy than simply working on one position and flipping it to get the others.
+
+To do this, I will update the anchor position configuration. A slightly different one, better suited to this case.
+
+We update the following:
+
+```css
+.link > * {
+  position: absolute;
+  --_x: calc(anchor(--c1 inside) + anchor-size(--c1)/2);
+  --_y: calc(anchor(--c2 inside) + anchor-size(--c2)/2);
+}
+
+.link :is(a,b) {top:  var(--_x); bottom: var(--_y);}
+.link :is(a,c) {left: var(--_x); right:  var(--_y);}
+.link :is(c,d) {top:  var(--_y); bottom: var(--_x);}
+.link :is(b,d) {left: var(--_y); right:  var(--_x);}
+
+.link b {scale: -1  1} 
+.link c {scale:  1 -1} 
+.link d {scale: -1 -1} 
 ```
 
-Here's a mental model to think about it:
+We replace it with this:
 
-1. Take a value wrapped with potential side effects
-2. Take a computation that takes this value and may produce additional side effects
-3. Combine the results into a final wrapped value
+```css
+.link > * {
+  position: absolute;
+  --_x: calc(anchor(var(--x) inside) + anchor-size(var(--x))/2);
+  --_y: calc(anchor(var(--y) inside) + anchor-size(var(--y))/2);
+  container-type: size;
+}
+.link :is(a,b) {top:  var(--_x); bottom: var(--_y)}
+.link :is(a,c) {left: anchor(var(--x) outside); right: anchor(var(--y) outside)}
+.link :is(c,d) {top:  var(--_y); bottom: var(--_x)}
+.link :is(b,d) {left: anchor(var(--y) inside); right: anchor(var(--x) inside)}
 
-Chaining multiple binds together is essentially a sequence of computations
-while keeping track of the side effects. A monad decouples what computations
-*do* from *how they are sequenced*. The programmer describes the sequence of
-computations and their dependencies, while the monad's bind implementation
-handles the bookkeeping necessary to combine their side effects.
-
-Our evaluator case study shows one example of side effects: early return from
-a computation with a none value.
-
-Let's see another idiomatic way of doing that, with the Except type that
-contains either a successful result or an error value (very similar to the
-Result type in Rust).
-
-We'll begin by writing an exception-returning version of safeDiv:
-
-```
-def safeDivExc (x y : Int) : Except String Int :=
-  if y == 0 then .error "division by zero" else .ok (x / y)
+.link :is(c,d) {scale:  1 -1}
 ```
 
-Instead of writing a whole new eval variant for Except, we'll
-create a generic one that works with any Monad [[3]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-3):
+The top and bottom values stay the same, but the left and right ones are updated. And only C and D need the scale for horizontal symmetry with A and B.
 
-```
-def evalM {m : Type → Type} [Monad m]
-    (div : Int → Int → m Int) : Expr → m Int
-  | .num n => pure n
-  | .add a b =>
-    do
-      let x ← evalM div a
-      let y ← evalM div b
-      pure (x + y)
-  | .div a b =>
-    do
-      let x ← evalM div a
-      let y ← evalM div b
-      div x y
-```
+Drag the elements in the demo below to understand the different regions. (You can compare it with [the demo](https://codepen.io/t_afif/pen/LERWyvX/e943ba53f15ff9dd70c149a6bce0cac0) of the first article.)
 
-Now evalM can be used with safeDivExc to implement an evaluator where
-division returns Except; used with safeDiv, it would be equivalent to
-the Option-specific evalDo we've written before.
+Whatever the anchor position configuration, the important requirement is that we always have one visible region at a time. The other requirement when creating the shapes is the continuity between the regions.
 
-```
-#eval evalM safeDiv (.add (.num 4) (.div (.num 6) (.num 0)))
-#eval evalM safeDivExc (.add (.num 4) (.div (.num 6) (.num 0)))
+Continuity? What?!
+
+If we forget the implementation and play with different demos, it looks like we have a unique connection linking both elements. In reality, we have four, but thanks to the “continuity” effect, the illusion is perfect.
+
+Here is the previous example where I am using different colors:
+
+You can clearly see we have four different connections, but when moving from one to another, they share the same position/shape to create the continuity effect, making it look like it’s one. That’s why I always chose a straight line for the switch because it’s the easiest option.
+
+For this new connection, we need to have continuity between two curved lines!
+
+```css
+.link :is(a,c):before {
+  border-shape: shape(from 0   0,curve to 50% 50% with 150px 0,smooth to 100% 100%) padding-box;
+}
+.link :is(b,d):before {
+  border-shape: shape(from 100% 0,curve to 50% 50% with calc(100% + 150px) 0,smooth to 0   100%) padding-box;
+}
 ```
 
-## Logging computations - an example of the writer monad
+A and C still share the same shape (and B and D do too).
 
-Let's look at a more advanced example: an evaluator that also *logs* the
-computation it executes in a linear log of strings. The challenge here is that
-we still have to combine that with Option to support the divide-by-zero
-case, so we'll start by creating a new structure to carry the state of the
-computation:
+See that? The illusion is perfect! The moment we switch between A and B, the curve is the same in both areas.
 
-```
-structure LoggedOption (α : Type) where
-  value : Option α
-  log : List String
-```
+Let’s add a condition to make the line straight when the vertical distance is small:
 
-This will be the result of one eval call; it produces an optional value,
-along with a list of strings (the log). Here's the Monad implementation for
-this type:
-
-```
-instance : Monad LoggedOption where
-  pure x := ⟨some x, []⟩
-  bind v next :=
-    match v.value with
-    | none => ⟨none, v.log⟩
-    | some x =>
-      let nextResult := next x
-      ⟨nextResult.value, v.log ++ nextResult.log⟩
+```css
+.link *:before {
+  border-shape: shape(from 0 0,curve to 50% 50% with if(style(100cqh < 100px): 0;else: 150px;) 0,smooth to 100% 100%) padding-box;
+}
+.link :is(b,d):before {
+  border-shape: shape(from 100% 0,curve to 50% 50% with if(style(100cqh < 100px): 100%;else: calc(100% + 150px);) 0,smooth to 0 100%) padding-box;
+}
 ```
 
-The main idea is combining the stored log with the log of the next computation
-by appending them (thus accumulating a linear log). Here's our evaluator:
+What? `if()` inside `shape()`?!
 
-```
-def evalLogged : Expr → LoggedOption Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalLogged a
-    let y ← evalLogged b
-    ⟨some (x + y), [s!"adding {x} and {y}"]⟩
-  | .div a b => do
-    let x ← evalLogged a
-    let y ← evalLogged b
-    match y with
-    | 0 => ⟨none, [s!"dividing {x} by zero"]⟩
-    | _ => ⟨some (x / y), [s!"dividing {x} by {y}"]⟩
-```
+Yes, we can do that. The whole `if()` block will resolve to a value, so you can place it wherever you want as long as the returned value is valid there. Since I only want to update one value, putting an `if()` inside `shape()` is more interesting and requires less code than putting two `shape()` values inside `if()`.
 
-Note how the code of evalLogged doesn't have to deal with the mechanics
-of logging too much (other than adding new log entries). All of that is hidden
-within the monad instance. LoggedOption is an example of the *writer monad*,
-which is a write-only version of the *state monad*.
+Here is the full demo again.
 
-## State monad
+And that’s only one of 10 different cases! Yes, we can have all the possible connections.
 
-One of the most important use cases of monads in functional programming
-languages is modeling mutable state through a computation.
+Left-to-left:
 
-A stateful computation is modeled as a function that takes an initial state
-and returns a tuple containing the result value and a new, updated state. In
-Lean notation:
+Right-to-right:
 
-```
-def State (σ : Type) (α : Type) : Type :=
-  σ → (α × σ)
-```
+Bottom-to-left (or left-to-bottom):
 
-To demonstrate this in action, let's enhance our evaluator to support variable
-assignments and lookups. Our state is going to be an association list of
-name, value pairs:
+Bottom-to-top (or top-to-bottom):
 
-```
-abbrev Vars := List (String × Int)
-```
+And so on.
 
-And we'll augment our expression enum with additional operations:
+Can you do the remaining ones? Take this as homework. Study the demos I shared, then try a new one. The logic is always the same. Start by identifying a suitable anchor position configuration based on potential symmetry. Then draw the shape, keeping the continuity effect in mind.
 
-```
-inductive ExprV where
-  | num : Int → ExprV
-  | add : ExprV → ExprV → ExprV
-  | div : ExprV → ExprV → ExprV
-  | store : String → ExprV → ExprV
-  | load : String → ExprV
-```
+And of course, it’s even more interesting if you combine different connections into one graph.
 
-This is going to be our state monad:
+![Four colored rectangles labeled A, B, C, and D connected in a loop by curved gray lines that leave from and arrive at different sides of each block.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/combined-connections-graph.png?w=886&quality=80&ssl=1)
 
-```
-structure EvalM (α : Type) where
-  run : Vars → Option (α × Vars)
-```
+## Want More?
 
-Note the correspondence of the run function to the State signature
-above:
+Now that we have seen the potential of this technique, let’s push it a bit further and create some fancy demos!
 
-- It takes the current state, which for our use cases is an association list carrying values for all defined variables.
-- It returns an optional result which is a pair of some value (in our case, the result of the computation) and an updated state.
+What about a straight line that bends when both elements get closer?
 
-This is its Monad class implementation:
+Some physics using pure CSS! And the line stretches (gets thinner) if the elements are too far apart.
 
-```
-instance : Monad EvalM where
-  pure x := ⟨fun vars => some (x, vars)⟩
-  bind action next := ⟨fun vars =>
-    match action.run vars with
-    | none => none
-    | some (x, vars') => (next x).run vars'⟩
-```
+The idea is to define a static shape, then adjust the height based on the width. When the latter gets smaller, the height increases, and vice versa.
 
-And finally, the evaluator:
+Here is a demo to better understand what’s going on. Resize the element to see how the curve behaves:
 
-```
-def evalState : ExprV → EvalM Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalState a
-    let y ← evalState b
-    pure (x + y)
-  | .div a b => do
-    let x ← evalState a
-    let y ← evalState b
-    ⟨fun vars => (safeDiv x y).map (fun value => (value, vars))⟩
-  | .load name =>
-    ⟨fun vars => do
-      let value ← vars.lookup name
-      pure (value, vars)⟩
-  | .store name rhs => do
-    let value ← evalState rhs
-    ⟨fun vars =>
-      let vars' := (name, value) :: vars.filter (fun p => p.1 != name)
-      some (value, vars')⟩
-```
+And don’t ask me about the math; I had to ask [two](https://math.stackexchange.com/q/5130987/695610) [questions](https://math.stackexchange.com/q/5131829/695610) online to find a good approximation of some complex formulas.
 
-Operations that don't deal with variables directly (like .num and
-.add) just do their work as before. .div only has to deal with the
-actual monad type to ensure that none is propagated in case of division
-by zero. Note also that this evaluator supports stores as expressions, since
-they separately return a value and the updated state; therefore, computations
-like this one will work:
+Let’s try something different: a zig-zag connector. This one is not robust, so don’t stretch it too far, or it may break. Don’t say I didn’t warn you!
 
-```
--- (x := 12) + (x / 3): the right operand sees the left operand's assignment.
-#eval (evalState
-  (.add (.store "x" (.num 12))
-        (.div (.load "x") (.num 3)))).run []
-```
+A double zig-zag, maybe?
 
-Producing the result some (16, [("x", 12)]).
+There are some scroll-driven animations, but don’t worry, I won’t bother you with a boring explanation. Enjoy the fun demos!
 
-In a language with mutable state, modeling side effects is easy - just assign
-some state (like a struct field or class member). In a functional language like
-Lean, however, we have to carry this state across the computations explicitly;
-monads help us do this with elegance - by hiding most of the mechanics of
-actually carrying the state around, the majority of the code remains free
-of bookkeeping.
+And what about a spring connector? You can go wild with this one; it won’t break!
 
-## IO monad
+Do you have another crazy connector idea? Share it in the comments. I am up for any CSS coding challenge.
 
-Perhaps the most well known example of a monad in functional programming
-languages like Lean and Haskell is IO. To anyone who's written a "real"
-program that interacts with the outer world, IO is very familiar. Here's
-a customized "Hello" program that's typically taught in the first 15
-minutes of learning a new programming language:
+## Conclusion
 
-```
-def greet : IO Unit := do
-  let stdin ← IO.getStdin
-  IO.println "What is your name?"
-  let name ← stdin.getLine
-  IO.println s!"Hello, {name}"
-```
+We are done! I hope you enjoyed this series. Another one packed with a lot of CSS fun. Do you remember when creating basic shapes was a nightmare?! Now, we can make graphs with complex connections that even SVG cannot easily create!
 
-Note the do notation here, suggesting monads. As mentioned before, do
-is syntactic sugar for the monad's bind method, or the >>= operator; we
-can rewrite this code more explicitly as:
-
-```
-def greetBind : IO Unit :=
-  IO.getStdin >>= fun stdin =>
-  IO.println "What is your name?" >>= fun _ =>
-  stdin.getLine >>= fun name =>
-  IO.println s!"Hello, {name}"
-```
-
-In essence, IO is a state monad, where the state carried around represents
-the "outside world". IO operations like println act on that world,
-and its state is carried over using bind, like other state monads.
-
-Here's a version of our expression evaluator that logs directly to standard out,
-instead of collecting the log as a list of strings:
-
-```
-def evalIO : Expr → OptionT IO Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalIO a
-    let y ← evalIO b
-    IO.println s!"adding {x} and {y}"
-    pure (x + y)
-  | .div a b => do
-    let x ← evalIO a
-    let y ← evalIO b
-    IO.println s!"dividing {x} by {y}"
-    OptionT.mk (pure (safeDiv x y))
-```
-
-The only unusual construct here is OptionT, which is a *monad transformer*
-that helps us compose Option (for propagating failure from safe division)
-with the IO Monad [[4]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-4).
-
-The IO monad also supports throw for Python-like exception behavior,
-but in this example we use Option explicitly; exceptions are a matter of
-programming preference, and using them inside library functions like eval
-doesn't feel right to me.
-
-## Monad laws in Lean
-
-Just like in Haskell, monads in Lean should obey [certain laws](https://lean-lang.org/doc/reference/latest/Functors___-Monads-and--do--Notation/Laws/).
-Those are:
-
-**Left identity**: wrapping a value in pure and immediately passing it to
-f with bind should be equivalent to just calling f on the value:
-
-```
-pure v >>= f       =    f v
-```
-
-**Right identity**: extracting a value from a computation and immediately
-wrapping it with pure again should not change the computation:
-
-```
-m >>= pure         =    m
-```
-
-**Associativity**: the grouping of operations doesn't matter, as long as their
-order remains the same:
-
-```
-(m >>= f) >>= g    =    m >>= (fun v => f v >>= g)
-```
-
-Let's see how Option obeys these laws.
-
-For left identity, pure v is some v and the bind implementation
-matches some x to next x, which is equivalent to f v.
-
-For right identity, m >>= pure just rewraps a some value in pure,
-leaving none alone - this is equivalent to keeping things as they are.
-
-For associativity, if m is none then both sides are none. If m
-is some v, the left side is f v >>= g, and the right side reduces to
-the same, so again they are equivalent.
-
-While Lean doesn't enforce that a Monad instance obeys these laws, it has
-a separate type class called LawfulMonad which *does* require Lean proofs;
-this is useful for Lean's main use case - proving theorems about programs,
-expressed through its powerful type system. But this is a topic for another
-day.
-
-| [[1]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-1) | We've replaced some n by pure n in the .num case; technically this isn't necessary, but it will be useful later in the post when we examine other types implementing Monad. |
-| --- | --- |
-
-| [[2]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-2) | This is explored in Philip Wadler's classical paper "The essence of functional programming". |
-| --- | --- |
-
-| [[3]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-3) | Except also happens to implement Monad. |
-| --- | --- |
-
-| [[4]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-4) | We could also have used OptionT in earlier examples, e.g. instead of explicitly defining LoggedOption - try changing that code to use OptionT as an exercise. |
-| --- | --- |
+Again, what we have done is not something for production (at least not yet). Use it for fun, use it to create fancy stuff, but most importantly, understand the features we have used: anchor positioning, `shape()`, `border-shape`, `if()` conditions, etc. Once they are widely available, you will definitely use them in production.
