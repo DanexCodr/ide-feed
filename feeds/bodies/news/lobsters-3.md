@@ -27,5 +27,3 @@ Roadmap to v1.0:
 - Android and Windows support
 - Packaging for major Linux distros
 - Any suggestions?
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50491400)

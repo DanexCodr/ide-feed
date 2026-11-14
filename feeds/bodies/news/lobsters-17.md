@@ -1,299 +1,191 @@
-I’ve been exploring Rust, and one topic that got me intrigued is pointer
-provenance, particularly because it’s not easy to visualize.
+I got a part time job writing a Lisp compiler, so I’m going to talk about that.
 
-To get a feel for
-[vtables](https://sofiabelen.github.io/projects/visualizing-rusts-vtables-how-dyn-trait-works-in-memory/),
-what I wanted was to look at the actual memory, to see what it really looked
-like and prove that I could in fact call these functions through their
-respective function pointers. With provenance, I wanted to take it apart the
-same way, but it turns out it’s not so straightforward. This only got me more
-intrigued, so let’s see what we can find!
+This post might be hard to understand if you do not program. Or if you do. There’s a fair amount of background required.
 
-My first time hearing about provenance, I wondered, why hadn’t I heard about it
-before? It seems so crucial, yet a bit of an obscure concept.
+## There are Lisp compilers?
 
-## What is Provenance: Pointers Are Not Just Glorified Ints
+You might be familiar with Lisp in the form of a Scheme interpreter you used for a few semesters in college. You might think things about it like “it’s so elegant, but it’s kind of impractical for day-to-day use”. You might think of it as “an interpreted language” and so don’t understand what I mean by Lisp compiler. If you don’t think these things you can probably skip to the next section.
 
-Let’s start by taking a good look at this snippet. It’s short, but our intuition
-can trick us if it’s our first time coming across this concept. `void opaque(int*)` is forward declared here, so for us it’s a black box. Neither we
-nor the compiler can rule out that this function dereferences `p` and writes to
-memory.
-
-```cpp
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    return x;
-}
-```
-
-If we compile this with `-O2`, Clang optimizes this to return 1. Let’s try this
-on Godbolt:
-
-The question is, how does it know that `int* p` doesn’t point to the same memory
-address where `x` lives (meaning that `opaque(p)` could end up modifying `x`)?
-
-The compiler assumes `p` can’t equal `&x` because `p` wasn’t *derived* from `x`.
-
-When I first heard about this, I thought it was a bit of a strange concept. What
-does it mean that something is *derived* from something?
-
-I mean, if pointers were just numbers (memory addresses), `p` could
-theoretically happen to hold the same memory address as `x`’s allocation on the
-stack. Good thing they’re not just numbers!
-
-Let us follow the white rabbit.
-
-This brings us to the core of provenance. <mark>That “*derived from*” relation
-is **provenance**: for every pointer, the compiler keeps track of which
-allocation it belongs to and may, therefore, touch.</mark>
-
-I tried to find a way to print this mysterious provenance, but it turns out that
-it’s purely a compiler abstraction. It does not exist as an actual data field
-stored alongside the memory address. (There are exceptions though: feel free to
-look up the CHERI architecture to go down another rabbit hole).
-
-## Inspecting Provenance: LLVM IR
-
-So what can we do to inspect it? If the compiler knows about it then it must
-exist somewhere. If so, there must be a way to *see* it.
-
-This is how I learned about LLVM IR (intermediate representation), which is
-essentially a low-level programming language that acts as a bridge between
-high-level languages (like Rust, C++, etc) and machine code.
-
-Let’s try it for this code instead, where we also pass `&x` to `opaque` to see
-what happens when the compiler doesn’t optimize that part away:
-
-```c++
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    opaque(&x);
-    return x;
-}
-```
-
-We can use the `-emit-llvm` flag on Godbolt to [see the LLVM
-IR](https://godbolt.org/#g:!%28%28g:!%28%28g:!%28%28h:codeEditor,i:%28filename:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,selection:%28endColumn:2,endLineNumber:8,positionColumn:2,positionLineNumber:8,selectionStartColumn:2,selectionStartLineNumber:8,startColumn:2,startLineNumber:8%29,source:%27void+opaque%28int*%29%3B%0A%0Aint+f%28int*+p%29+%7B%0A++++int+x+%3D+1%3B%0A++++opaque%28p%29%3B%0A++++opaque%28%26x%29%3B%0A++++return+x%3B%0A%7D%27%29,l:%275%27,n:%270%27,o:%27C%2B%2B+source+%231%27,t:%270%27%29%29,k:44.33887569279493,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29,%28g:!%28%28h:compiler,i:%28compiler:clang2310,filters:%28b:%270%27,binary:%271%27,binaryObject:%271%27,commentOnly:%270%27,debugCalls:%271%27,demangle:%270%27,directives:%270%27,execute:%271%27,intel:%270%27,libraryCode:%270%27,trim:%271%27,verboseDemangling:%270%27%29,flagsViewOpen:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,libs:!%28%29,options:%27-O2++-emit-llvm%27,overrides:!%28%29,selection:%28endColumn:29,endLineNumber:24,positionColumn:1,positionLineNumber:1,selectionStartColumn:29,selectionStartLineNumber:24,startColumn:1,startLineNumber:1%29,source:1%29,l:%275%27,n:%270%27,o:%27+x86-64+clang+23.1.0+%28Editor+%231%29%27,t:%270%27%29%29,k:55.66112430720507,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29%29,l:%272%27,n:%270%27,o:%27%27,t:%270%27%29%29,version:4):
+In Lisp, in contrast with some languages, the semantics are essentially built around interpretation. When you give a Lisp interpreter some code it goes through it step by step and executes it. This invites careful execution. It’s natural, for example, to expect that a program like
 
 ```
-
-define dso_local noundef i32 @f(int*)(ptr noundef %0) local_unnamed_addr #0 !dbg !14 {
-  %2 = alloca i32, align 4 // --> root of %2 allocation (x)
-    #dbg_assign(i1 poison, !22, !DIExpression(), !23, ptr %2, !DIExpression(), !24)
-    #dbg_value(ptr %0, !21, !DIExpression(), !24)
-  call void @llvm.lifetime.start.p0(ptr nonnull %2) #3, !dbg !25
-  store i32 1, ptr %2, align 4, !dbg !26
-    #dbg_assign(i32 1, !22, !DIExpression(), !28, ptr %2, !DIExpression(), !24)
-  tail call void @opaque(int*)(ptr noundef %0), !dbg !29
-  call void @opaque(int*)(ptr noundef nonnull %2), !dbg !30
-  %3 = load i32, ptr %2, align 4, !dbg !31
-  call void @llvm.lifetime.end.p0(ptr nonnull %2) #3, !dbg !32
-  ret i32 %3, !dbg !33
-}
-
-declare void @llvm.lifetime.start.p0(ptr captures(none)) #1
-
-declare !dbg !34 void @opaque(int*)(ptr noundef) local_unnamed_addr #2
-
-declare void @llvm.lifetime.end.p0(ptr captures(none)) #1
-
-attributes #0 = { mustprogress uwtable "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #1 = { mustprogress nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
-attributes #2 = { "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #3 = { nounwind }
+(defun foo (x) (+ x 237))
+(foo "hello world")
 ```
 
-What the compiler does is to conceptually construct a DAG (directed acyclic
-graph), to answer the question of where a pointer comes from and whether two
-pointers can touch the same memory.
+that defines an addition function and then calls it on a string, will do something nice like pop you into a debugger, rather than return garbage data.
 
-If the root origins don’t match, LLVM can guarantee that writing through `%0`
-will never alter the value stored at `%2`.
+But it’s also generally slow. The interpreter has to do something on all possible input. It can’t, for instance, very well optimize FOO to accept only one numerical argument in a register, because later FOO might be called with a string.
 
-There is so much more to explore here that it’s hard not to get carried away
-because it’s truly fascinating. However, my original goal was to compare how C++
-and Rust handle this, so let’s continue.
-
-## C++: What Happens If We Cast to an Integer?
-
-If we were to cast `&x` to an integer, then LLVM must assume that anyone could
-rebuild a pointer to `x` from that integer.
-
-```cpp
-#include <cstdint>
-
-void g(std::uintptr_t);
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    g(reinterpret_cast<std::uintptr_t>(&x)); // address of x is now 'exposed'
-    opaque(p);
-    return x;
-}
-```
-
-The result is that the compiler gives up the optimization:
-
-That’s a pity if we only wanted to read the address and never intended to cast
-it back to a pointer. Wouldn’t it be nice if we could communicate this intent to
-the compiler?
-
-## Rust: Making Your Intent Explicit
-
-This is exactly what Rust provides with its powerful provenance APIs.
-
-### Inspecting Without Exposing
-
-```rust
-let p: *const u32 = &x;
-let a: usize = p.addr();
-```
-
-`p.addr()` extracts the raw memory address integer while telling Rust’s abstract
-machine:
-
-> I am reading this numeric address for inspection, but I guarantee I WILL NOT
-> cast it back to a valid pointer.
-
-Provenance is therefore not exposed.
-
-To mirror our previous experiments, we can try to see if the optimization was
-avoided or not:
-
-What we see is that `mov eax, dword ptr [rsp + 12]` reloads `x` after
-`opaque(p)`, meaning that, at least for now, the optimization is given up. Same
-as in the C++ case.
-
-Still, we can benefit from using the more expressive API, and not relying on
-exposure semantics. It gives the compiler room to optimize in the future, and,
-by telling Miri explicitly what we mean, it can better help us catch bugs.
-
-### Preserving Provenance
-
-In lock-free data structures, we sometimes need to store status flags in the
-lower unused bits of a pointer. It’s a very cool trick, which left me with my
-eyes wide open for a minute when I first read about it. I talk more about it in
-[this
-post](https://sofiabelen.github.io/projects/visualizing-crossbeam-epoch-based-reclamation/#q2-dissecting-crossbeamepochshared).
-Essentially, due to alignment, the lower bits of pointers are “wasted” (always
-0), so we can use them to store flags.
-
-What we can do is work with an intermediate pointer value, which will have the
-flag bit set BUT that also inherits provenance from the original pointer. This
-is exactly the functionality that `with_addr` provides us. After we’re done, we
-can recreate our valid initial pointer.
-
-The tagged value is stays a pointer rather than ‘usize’ because an integer is
-just a number and can’t carry provenance.
-
-```rust
-let tagged: *const u32 = p.with_addr(p.addr() | 1);
-// ...
-let revived_ptr: *const u32 = tagged.with_addr(tagged.addr() & !1);
-```
-
-Keep in mind that `tagged` isn’t dereferenceable, given that `p.addr() | 1` is
-misaligned for `u32`. Dereferencing it would be UB.
-
-In short:
-
-- `addr()` reads the address without exposing provenance.
-- `with_addr()` builds a new pointer with a new address but the *same* provenance as the original.
-
-### Legacy Rust, Similar To C++
-
-In legacy code, we’d have to do something like this:
-
-```rust
-let addr = p as usize;
-let tagged_addr = addr | 1;
-let revived_ptr = (tagged_addr & !1) as *const u32;
-println!("*revived_ptr: {}", unsafe { *revived_ptr});
-```
-
-This code will run, but if we run it with Miri, it emits a warning:
-
-```mysql
-warning: integer-to-pointer cast
- --> src/main.rs:6:22
-  |
-6 |     let revived_ptr = (tagged_addr & !1) as *const u32;
-  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ integer-to-pointer cast
-  |
-  = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
-  = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
-  = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
-  = help: you can then set `MIRIFLAGS=-Zmiri-strict-provenance` to ensure you are not relying on `with_exposed_provenance` semantics
-  = help: alternatively, `MIRIFLAGS=-Zmiri-permissive-provenance` disables this warning
-
-*revived_ptr: 1
-warning: 1 warning emitted
-```
-
-Actually, the reason that it runs is also interesting. What happens is similar
-to the C++ example. `p as usize` exposes the provenance of `p`, and since the
-reconstructed pointer points to the same allocation, provenance is recovered.
-
-Provenance would be lost if we did some pointer arithmetic and landed in a
-different allocation.
-
-### Casting Without Exposing Provenance
-
-To see what happens when provenance is **not** exposed, we can use
-`ptr::without_provenance`, which creates a bare address with no allocation
-behind it. (It’s useful for dangling or sentinel pointers, but it can’t be
-dereferenced).
-
-```rust
-let bare_ptr = std::ptr::without_provenance::<u32>(p.addr());
-println!("*tagged_ptr: {}", unsafe { *bare_ptr});
-```
-
-As expected, Miri complains about a <mark>*dangling pointer*</mark> and tells us explicitly that <mark>it has no provenance.</mark>
+So you add a compiler. The compiler is an optimization. It takes code and returns an optimized version that tries to preserve these semantics as much as possible while being much faster. The optimized version is faster partly because it’s probably composed of machine code or JVM bytecode or something else interpretable very quickly, and partly because of higher level optimizations. For example
 
 ```
-
-error: Undefined Behavior: memory access failed: attempting to access 4 bytes, but got 0x20b28[noalloc] which is a dangling pointer (it has no provenance)
-  --> src/main.rs:11:42
-   |
-11 |     println!("*tagged_ptr: {}", unsafe { *bare_ptr});
-   |                                          ^^^^^^^^^ Undefined Behavior occurred here
-   |
-   = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
-   = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
-
-note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
-
-error: aborting due to 1 previous error
+(defun foo (x) (+ x 237))
+(+ (foo 16) 93)
+(mapcar (eval) '(3 898 38))
 ```
 
-## Recap
+here the compiler might note that FOO can only accept numbers, and when it sees a straightforward call to FOO like in the second line that gives it only numbers, it generates code that skips the “is this a number? No? Debugger time” check. An “interpreter stub” retains the whole safest behavior, and can be used in the third line if `eval` returns FOO.
 
-Provenance, in short, is a hidden piece of information tracking “which
-allocation” a pointer originates from, which LLVM uses for optimizations.
+This strikes a good balance, for me, between speed and freedom. The optimized code isn’t any less safe, so I can still write things with abandon and watch them fail in the debugger.
 
-In C++, `uintptr_t` casts force the optimizer to prepare for the worst case by
-disabling some optimizations.
+The downside is that the compiler has to be pretty smart to be very effective. Luckily several Lisp implementations with pretty good compilers already exist, like SBCL and CCL. Both can generate fast<sup>[1](https://bike.github.io/posts/kildall.html#fn:fast)</sup> code without too much trouble.
 
-In Rust, `addr()`, `with_addr()` and `without_provenance()` let you state your
-intent explicitly: you only want the number, or you are deriving a new pointer
-from an existing one. In principle, that gives the compiler room to optimize
-more aggressively. In our experiment, however, the Rust version is unoptimized
-too: `x` was still reloaded from the stack. Using more expressive
-APIs is still valuable though, as Miri can enforce the rules and catch bugs that
-stem from unintended usage.
+## So what is it you’re doing
 
-I had planned to compare what Miri and ASan can catch, but I’ll save that for
-another post. It was enough new info as it is and it takes some time to fully
-wrap my head around it.
+I work on a new Lisp compiler called Cleavir. Cleavir is the compiler part of Dr. Robert Strandh’s project, [SICL](https://github.com/robert-strandh/SICL). SICL is intended to provide modular, reusable, clean, and more positive adjectives code to other implementations, as well as being an implementation in itself.
 
-I’m currently between jobs and looking for a Rust role, so writing these posts
-keeps me motivated and has helped me find a sense of community. Thank you for
-reading, and I hope you enjoyed it!
+SICL isn’t yet an implementation on its own, but Cleavir is used in another new Lisp implementation, [clasp](https://github.com/drmeister/clasp), which is Dr. Christian Schafmeister’s project.
+
+As far as I know the initial thoughts for Clasp went something like this:
+
+> <drmeister> My lab has this new system for designing artificial protein-oids. They’re made of *bis*-amino acids, which we also invented.
+
+> <DoD, etc. shadowy masters> Frikkin’ sweet.
+
+> <DoD, etc.> Sure great. Here’s an award for being a literal nanotechnologist, named after that physicist everyone likes.
+
+> <drmeister> OK so the thing is that this stuff we’re doing involves [a lot of computer work](http://dl.acm.org/citation.cfm?id=3005738).
+
+> <DoD, etc.> Because it’s the future.
+
+> <drmeister> Right, and we mostly do that in C++. But I like Lisp.
+
+> <DoD, etc.> Great. Use it. It’s got an ANSI standard. God bless America.
+
+> <drmeister> But we don’t want to lose the C++ code. Lisp can use C functions but C++ doesn’t really have any interoperability.
+
+> <DoD, etc.> So?
+
+> <drmeister> So I was thinking I’d spend several years making a new Lisp implementation that’s tight with C++ from the ground up.
+
+> <DoD, etc.> That sounds hard, and you’re a chemist.
+
+> <drmeister> So that’s a no, or…
+
+> <DoD, etc.> Here is a zillion dollars. Snap to it.
+
+It must be nice being a respectable scientist, is what I’m saying.
+
+Clasp ended up being based on Embeddable Common Lisp (ECL), so called because it’s written in C and designed to be called from C programs. ECL provides a lot of the runtime. For compilation, however, Cleavir compiles Lisp programs into its “Mid-level Intermediate Representation”, or MIR; Clasp then compiles this into LLVM-IR, which LLVM than compiles to machine code.
+
+This is pretty convoluted and presents some problems (LLVM doesn’t really seem to make itself a good target for something with an online compiler and mostly heap allocation, for one). Luckily they are not usually mine, because I mostly limit myself to Cleavir, but it’s nice to know the nature of the gnashing maw you hang over.
+
+## HIR
+
+Cleavir’s MIR, and also HIR (“High-level”), are mostly what I work with. Consider this (silly) function:
+
+```
+(defun example (x)
+  (flet ((getx () x)
+         (setx (y) (setf x y)))
+    (setx 19)
+    (print (getx))
+    (+ (getx) 331)))
+```
+
+`flet` establishes local closures, and `setf` assigns. `(example anything)` will print 19 and then return 350.
+
+In HIR, after a few transformations, the code looks like [this](https://bike.github.io/getx_setx.png). Here are the basics: white rectangles are “instructions”, and represent basic operations. Ovals and the orange rectangles are “data”. The solid black arrows indicate control flow. Red dashed arrows indicate inputs to instructions, and blue dashed arrows outputs. Functions begin with the instructions called “enter”.
+
+A few instruction explanations:
+
+- enter is the beginning of a function.
+- Create cell, Write cell, Fetch, and Read cell have to do with shared variables for closures - more on that below.
+- enclose allocates a closure. The regular inputs are (cells for) closed-over variables, while the input with the dashed pink line is the actual function code.
+- funcall calls a function, the 1 input, with the other inputs as arguments.
+- ret returns values from a function.
+
+It’s not really much different from any assembly-type language in form, other than having closures and explicitly separating input and output, but it’s more convenient to represent control flow graphically than with labels.
+
+## The algorithm
+
+A graph of operation nodes is pretty common as an intermediate representation, because it maps closely with the conception of computers as state machines. As such, some optimization techniques are well-trodden.
+
+In 1973, G. A. Kildall published his paper [“A Unified Approach to Global Program Optimization”](https://drona.csa.iisc.ernet.in/~deepakd/pav/kildall-popl73.pdf)<sup>[3](https://bike.github.io/posts/kildall.html#fn:ACM)</sup>. The title is a bit grandiose but actually pretty accurate. Kildall laid out a very general algorithm for associating optimization information of any kind with nodes in an instruction graph of this form. A few weeks ago I implemented it for Cleavir.
+
+It works like this. First, you establish some domain of optimization information. This domain can be anything you want, as long as it forms a bounded [meet-semilattice](https://en.wikipedia.org/wiki/Semilattice)<sup>[4](https://bike.github.io/posts/kildall.html#fn:English)</sup>. Elements of the domain are called “pools”. Next, you define an “optimization function” which, given an instruction node and its pool, returns another pool.
+
+The algorithm has a “work set” consisting of instructions paired with pools. The initial contents of the work set are dependent on what you’re doing, but contain at least one instruction. The algorithm returns what I’ve been calling a “dictionary”, which is an association of instructions to pools that is distinct from the work set. Initially the dictionary is empty, i.e. there are no associations.
+
+The algorithm proceeds by choosing and removing some (instruction, pool) pair from the work set. If the instruction removed has not yet been associated with a pool in the dictionary, or if the associated pool is less than or equal to (an operation established by the definition of meet) the pool from the work set, the instruction becomes associated with a new pool that is the meet of the old association and the pool from the work set. Additionally, the optimization function is called with the instruction and this new pool; the result pool is paired with all instructions immediate succeeding (or preceding, depending on what you’re doing) the instruction in the work set.
+
+But the paper describes that better. Intuitively, what happens is that if the pool in the work set for an instruction is “better” than the one for that instruction already in the dictionary, in some domain-specific sense, the instruction is reassociated with a “better” pool, and the nearby instructions are put in the work set with new information based on this instruction.
+
+## Examples
+
+Nothing makes sense when it’s put that abstractly, right? It’s not just me? I don’t know how mathematicians survive.
+
+I implemented this algorithm in a general way. The function, `kildall`, takes an argument called a “specialization” that includes all the domain-specific information for the algorithm. I have a few of these specializations.
+
+The one I just put into a usable state was escape analysis. Check out the program with `getx` and `setx` again. An interpreter, upon seeing the `flet`, would allocate closures for both functions on the heap, i.e. dynamically, with cleanup being handled by the garbage collector. But if we look at the program, we can see that the closures cannot possibly be returned from this function or otherwise appear outside a strictly delimited context - they do not “escape”. In other words, these closures could be allocated with stack discipline. This is cheaper. An interpreter isn’t smart enough to see this but a compiler ought to be able to.
+
+To analyze this with Kildall, we can have it track *uses* of values. A use causes an escape or does not; e.g. returning a value is an escape, but adding it is not. We define a pool as a map from variables to escape indicators. An indicator is *true* if the variable escapes, and *false* if it does not. Meet is a union of maps; if a variable appears in both maps, the new map’s indicator for that variable is the logical OR of the two indicators.<sup>[5](https://bike.github.io/posts/kildall.html#fn:pessimism)</sup> The bound is a map where all variables are known to escape.
+
+The optimization function does different things depending on the type of instruction. We can do a completely correct, if overly conservative, analysis with the following rules:
+
+- Inputs to a RETURN instruction escape.
+- The first input to a FUNCALL instruction - the function called - does not escape.[6](https://bike.github.io/posts/kildall.html#fn:funcall) The other arguments are assumed to escape, because we don’t know what the function does.
+- All inputs to all other instructions escape.
+
+The algorithm can then proceed in the reverse direction of control flow. [Here’s the HIR again.](https://bike.github.io/getx_setx.png) We start at the bottom return instruction, with an initial pool of the empty map. The return is not yet associated with any pool, so it takes that one, and passes on a pool up where its input, the “V”, escapes.
+
+It proceeds upwards in that way and then reaches the funcall to which GETX is input. It’s the first input, i.e. the function called, and we have not seen GETX before, so we put (GETX, false) in the next pool up. The same occurs for the other funcall with GETX, and so once we reach the top instruction, we have that GETX does not escape, and can be stack allocated.
+
+The beautiful thing here is that all we actually need to have in the code are the definition of the semilattice and the optimization function rules, and the algorithm handles all the control flow. The analysis automatically works just as well around branches and loops. The whole thing is maybe fifty lines.
+
+## Extending the analysis
+
+Stack allocating closures is nice, but what about those “cell” things? A cell is just a wrapper around a value, with a set and a get, like an ML “reference”. Closures in a language with assignment, like Lisp, have to have something like this; if `setx` just closed over the value, the assignment to x would not take in the outer function. These cells are implicit in the source code but still have to be allocated.
+
+Determining that a cell can be stack allocated is more complicated. Naïvely, you might expect that a cell doesn’t escape if every closure it’s put in doesn’t escape. This is basically true, but there’s a nesting problem. Consider:
+
+```
+(lambda (x) ((lambda () (lambda () x))))
+```
+
+This is a function of one argument, which calls a function of zero arguments, which returns a function of no arguments that returns the first function’s argument. So for example if you call this function with x=4, you get back a function that returns 4.
+
+The HIR looks [like so](https://bike.github.io/nested.png). The outer function allocates a cell for x and a closure for the middle function using it, then calls that function. The middle function fetches the same, identical cell, puts it in a new closure for the innermost function, and then returns it.
+
+If we use the Kildall specialization described above in the outer function, it will determine, correctly, that the middle closure can be stack-allocated; if used on the middle function it will determine, also correctly, that the inner closure cannot.
+
+Were we to say that a cell doesn’t escape if everything it’s closed into, the outer function analysis would find, incorrectly, that the cell can be stack allocated - because it doesn’t know anything about the inner functions.
+
+## Extending Kildall
+
+To determine whether cells can be stack allocated, we need to extend the algorithm to be aware of nested functions, which Kildall did not consider.
+
+The obvious thing to do is, when the algorithm hits an `enclose` instruction, it calls for a recursive analysis on the inner function. This analysis can determine that the fetched cell is enclosed in a closure which escapes. Another step converts this analysis into a simplified “info” structure with only the information we need, i.e. whether the cells can escape the inner function. The optimization function for the outer `enclose` then uses this information to determine that the cell escapes.
+
+On the `getx` example, it can determine in this way that the cell for `x` does *not* escape, as the functions don’t return their cells or any closures. So the `x` cell can be stack allocated there.
+
+That’s as far as I’ve actually implemented.
+
+## Future
+
+Earlier, I mentioned that arguments to a `funcall` instruction other than the function called are assumed to escape. This is because the analysis does not know anything about the function called, and so cannot assume anything. However, as long as we’re analyzing inner functions, we have a representation for the information we need, the “info” structure. Particularly, we can track whether arguments are returned from functions (which does not inhibit them being stack-allocated in the calling function), or escape more generally. Then in the funcall we can use this information to provide a better analysis.
+
+The problem is that this information effectively has to be propagated *forward* from the `enclose` to the `funcall`, i.e. in the opposite direction as this analysis. This propagation is not trivial. We could have code like
+
+```
+(lambda ()
+  (flet ((foo (x) x)
+         (bar (y) y)
+         (baz ...))
+    (funcall (if (some-condition) #'foo #'bar) #'baz)
+    nil))
+```
+
+`baz` can be stack-allocated, but knowing this requires knowing that both possibly called functions do not let their argument escape.
+
+It would be possible to tie in another Kildall specialization, type inference, to do this. Type inference propagates forward, and finds for each variable a set of values that it always contains. In the above, the implicit called-function variable always contains a function that does not let its argument escape.
+
+This implies that type inference would have to be aware of the escape analysis, and escape analysis of type inference. A principled way to compose different specializations of Kildall’s algorithm together would do it.
+
+1. Which “languages” are “faster” is an argument I don’t want to get into. But if I spend comparable amounts of effort writing a program with clang, SBCL, and CPython, the SBCL program will probably be two to ten times as slow as clang’s, and a hundred to a thousand times as fast as CPython’s. [↩](https://bike.github.io/posts/kildall.html#fnref:fast)
+2. Check out this incredible title: [“Spiroligozymes for Transesterifications: Design and Relationship of Structure to Activity”](http://pubs.acs.org/doi/abs/10.1021/ja3069648) [↩](https://bike.github.io/posts/kildall.html#fnref:spiro)
+3. [On the ACM digital library](http://dl.acm.org/citation.cfm?id=512945) [↩](https://bike.github.io/posts/kildall.html#fnref:ACM)
+4. You have a set. You have a binary operation on that set, “meet”, which takes two objects in the set as arguments and returns a third object in the set. The order of arguments to meet is not important (commutativity), and you can also rearrange groupings freely (associativity). If the two objects are the same, their meet is that same object (idempotency). There are examples later. [↩](https://bike.github.io/posts/kildall.html#fnref:English)
+5. The algorithm generally proceeds from an incorrectly optimistic initial state down to harder-to-optimize reality. [↩](https://bike.github.io/posts/kildall.html#fnref:pessimism)
+6. This is not actually true in general: We can define a function like `(labels ((foo () #'foo)) ...)` that returns itself, or worse. But in HIR, recursive functions are currently implemented by putting the function in a cell (keep reading this post for more on those) which is over by the function. Since the analysis considers being written into a cell an escape, any function that returns itself will be marked as escaping for other reasons. [↩](https://bike.github.io/posts/kildall.html#fnref:funcall)

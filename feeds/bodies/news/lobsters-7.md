@@ -1,490 +1,591 @@
-So, after a debugging session the other day, I was having some shower
-      thoughts regarding early userspace and initrd.
+Probabilistic data structures give you approximate answers to questions about the data they handle. Does the set contain a certain item? How many unique items are in the collection? Which items appear most often? Unlike deterministic structures like sets and frequency tables, the answers might not be exact, but in return, you can drastically reduce memory usage.
 
-Linux initramfs supports unpacking CPIO, a stupid, simple, standardized
-      format. In the discussion on whether to support TAR instead, much
-      emphasize has been put on the fact that CPIO is standardized and less
-      fragmented.
+In this post, we'll talk about what probabilistic structures are, how they work, and what kinds of guarantees they provide. I'll also introduce [**unsure**](https://github.com/nalgeon/unsure) — a package that implements these structures in Go. It's simple (the core logic for each data structure is 100–300 LOC), fast (usually several times faster than other implementations), and has no dependencies except for the standard library.
 
-Luckily, Linux (the kernel) includes its own tool to produce the specific
-      variant of the standard that it happens to implement. The standard CPIO
-      tool is possibly the most cursed archiver under the SUN.
+[Bloom filter](https://antonz.org/probabilistic-data-structures/#bloom-filter) •
+[Count-min sketch](https://antonz.org/probabilistic-data-structures/#count-min-sketch) •
+[HyperLogLog](https://antonz.org/probabilistic-data-structures/#hyperloglog) •
+[T-digest](https://antonz.org/probabilistic-data-structures/#t-digest) •
+[Top-k](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
 
-In the old DOS/WinDOS world, ZIP was probably the most wide spread and
-      well known archive format, being displaced to some extend by the rise of
-      RAR during the 2000s.
+## [#](https://antonz.org/probabilistic-data-structures/#bloom-filter)
+Bloom filter
 
-Because of the design of the format, ZIP lends itself to all kinds of
-      polyglot trickery. Way back when, self extracting ZIP archives where a
-      thing, EXE/ZIP polyglots that can be run and unpack themselves, which is
-      useful if you don't have an archiver installed.
+A Bloom filter is a set that trades certainty for space. It can tell you that an item is *definitely not* in the set, or that it *probably is* (which might be a false positive). The filter doesn't actually store the items, so it's much more compact than a regular set.
 
-I don't think I need to explain where I am going with this, here is the
-      resulting ZIP archive I built:
+For example, a regular set with 1,000,000 distinct 8-byte strings takes about 64 MB. A Bloom filter for the same strings, with a 1% false positive rate, uses only 1.24 MB (about 10 bits per item) — that's 50 times smaller. The size of the filter doesn't depend on the item size, so the difference gets even bigger with longer strings.
 
-It is a completely normal ZIP archive, containing its own source code
-      needed to build itself from scratch:
+A Bloom filter often resides in memory and helps minimize expensive I/O operations such as disk reads or network calls. You check if an item is in the filter, and if the answer is "no", you skip the costly lookup. If the answer is "yes", you still have to perform the lookup because it might be a false positive.
 
+```go
+// A filter for 1000 items with a 1% false positive rate.
+filter := bloom.New(1000, 0.01)
+
+filter.Add([]byte("alice"))
+filter.Add([]byte("bob"))
+
+filter.Contains([]byte("alice")) // true
+filter.Contains([]byte("carol")) // false (or, rarely, true)
 ```
 
-$ unzip -t boot.zip
-Archive:  boot.zip
-    testing: boot/ZIPHEAD.COM         OK
-    testing: boot/MESSAGE.TXT         OK
-    testing: common/asm.h             OK
-    testing: common/multiboot.h       OK
-    testing: common/zip.h             OK
-    testing: multiboot/console.c      OK
-    testing: multiboot/console.h      OK
-    testing: multiboot/multiboot.c    OK
-    testing: multiboot/string.S       OK
-    testing: setup/a20.S              OK
-    testing: setup/disk.S             OK
-    testing: setup/entry16.S          OK
-    testing: setup/entry32.S          OK
-    testing: setup/mbload.S           OK
-    testing: setup/mem.S              OK
-    testing: setup/setup.ld           OK
-    testing: util/fixhdr.c            OK
-    testing: util/zipglue.c           OK
-    testing: util/zippack.c           OK
-    testing: mk.sh                    OK
-    testing: README.txt               OK
-    testing: MESSAGE.txt              OK
-    testing: LICENSE.txt              OK
-No errors detected in compressed data of boot.zip.
+The filter is sized for the given number of items with a given false positive rate. You can add more, but the false positive rate will go up.
+
+You can add an item to a Bloom filter and check if an item is in the filter, but you cannot delete an item, count the number of items, or iterate over them.
+
+### How it works
+
+**Bloom filter**<sup>[1](https://antonz.org/probabilistic-data-structures/#fn:1)</sup> is a large array of *m* bits, all set to zero at first. To add an item, you compute *k* hash values for it and set the k bits at those positions:
+
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hk ──►│ mod m │──► i1, i2, ..., ik
+        └──────┘                       └───────┘
+
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  m-1
 ```
 
-A particularly interesting file here is **boot/ZIPHEAD.COM**, that
-      contains executable code that is run when booting the archive.
+To check if an item is in the filter, you compute the same k hashes and check if all k bits are set:
 
-You need to fix the execute permissions of mk.sh after
-      unpacking, and you will need a copy of Zlib installed for
-      the tools. Running mk.sh from it's directory should
-      leave you with a fresh copy of the bootable ZIP archive.
+- If any of the bits is not set, the item definitely was never added.
+- If all the bits are set, the item was probably added, but it's not guaranteed (the bits could have been set by other items).
 
-The simplest way to run it, is to just pass it to Qemu direct kernel boot:
+```text
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 1 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  all 1 → probably in the set
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-```
-$ qemu-system-i386 -kernel boot.zip
-```
-
-"That's easy" you might say, "Qemu supports Multiboot, that ZIPHEAD.COM
-      is uncompressed, at the beginning of the archive and has a Multiboot
-      header in it!"
-
-Yes, that's all true! But this ZIP archive also brings it's own boot
-      loader along. You can try putting it on a floppy and throw that in front
-      of Qemu:
-
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 0 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  any 0 → definitely not
+└───┴───┴───┴───┴───┴─▲─┴───┴───┴───┴───┴───┴───┘          in the set
+                     (!)
 ```
 
-$ dd if=/dev/zero of=floppy.img count=2880
-$ dd if=boot.zip of=floppy.img conv=notrunc
-$ qemu-system-i386 -fda floppy.img
+The k bits are randomly distributed throughout the entire array. When the filter is larger than the CPU cache, each bit access could result in a cache miss, so a lookup may wait on memory k times.
+
+**Unsure** uses a blocked Bloom filter<sup>[2](https://antonz.org/probabilistic-data-structures/#fn:2)</sup>. The bit array is divided into 512-bit blocks, each matching the size of a CPU cache line. When you add or check an item, it is hashed once: part of the hash selects a block, and the rest selects k bits within that block. Each add or check only accesses one cache line, so the filter stays fast even when it's very large.
+
+```text
+        ┌──────┐         ┌──► high 32 bits ──► block
+item ──►│ hash │──► h ───┤                   ┌─────────┐
+        └──────┘         └──► low 32 bits ──►│ × salts │──► i1, i2, ..., ik
+                                             └─────────┘
+
+          block
+┌───────┬───▼───┬───────┬───────┬───────┬───────┐
+│   0   │   1   │   2   │   3   │  ...  │  n-1  │
+└───────┴───────┴───────┴───────┴───────┴───────┘
+        │       │
+┌───────┘       └───────────────────────────────┐
+│         i1          i2                  ik    │
+├───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┤
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  511
 ```
 
-The first 512 bytes of the archive contain a valid boot sector that
-      loads some more code from the second sector and then bootstraps itself
-      into highmem with the A20 enabled and 32 bit protected mode set up.
+In a blocked Bloom filter, some blocks end up with more items than others, which increases the false positive rate. To make up for this, the filter needs to be a bit larger. Compared to a standard Bloom filter, it uses about 3% more memory at a 1% false positive rate, 8% more at 0.1%, and 15% more at 0.01%.
 
-You can also put it on a hard drive too, it detects what **INT 13h**
-      drive it's been loaded from and dutifully queries the disk geometry.
+The filter uses the local *wyhash*<sup>[3](https://antonz.org/probabilistic-data-structures/#fn:3)</sup> implementation for hashing. It performs roughly the same as *xxh3*<sup>[4](https://antonz.org/probabilistic-data-structures/#fn:4)</sup> but has a much simpler implementation, without SIMD or assembly.
 
-If you care to try, you can also dump it on a real floppy and stuff it
-      into a PC:
+### Benchmarks
 
-That's a Pentium MMX by the way, but I also tried an i486 DX2 and an
-      Am386DX-40, just to be sure. My 486 had me hold my breath for a moment,
-      it has a spectacularly slow floppy drive. The text on screen is from
-      the file **boot/MESSAGE.TXT**
+| Operation | Items | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- | --- |
+| Add | 10K | **9** | 37 | 17 |
+|  | 1M | **10** | 36 | 19 |
+|  | 50M | **38** | 170 | 63 |
+| Contains, hit | 10K | **8** | 32 | 16 |
+|  | 1M | **9** | 32 | 18 |
+|  | 50M | **34** | 129 | 60 |
+| Contains, miss | 10K | **8** | 41 | 27 |
+|  | 1M | **9** | 48 | 33 |
+|  | 50M | **34** | 113 | 60 |
 
-"But that's not special either" you might respond, "ZIPs are read from
-      the back, you can just put anything you want in front, so you put a boot
-      sector there!"
+Memory, bits per item at 10M items (lower is better):
 
-That is sadly *not quite true* anymore, I'll get to that. But for
-      now, lets take a look at the first couple bytes of that archive
-      together and we'll see the real party trick:
+| False positive rate | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- |
+| 10% | 4.84 | **4.80** | 5.39 |
+| 1% | 9.90 | **9.59** | 10.79 |
+| 0.1% | 15.49 | **14.38** | 16.18 |
 
+*Unsure* is about 4× faster than *bits-and-blooms* and 2× faster than *gloom*, using 1–8% more memory than *bits-and-blooms* and 4–10% less than *gloom*.
+
+## [#](https://antonz.org/probabilistic-data-structures/#count-min-sketch)
+Count-min sketch
+
+A count-min sketch is a frequency table that trades accuracy for space. It tells you approximately how many times each item has appeared. The estimate is *never less* than the actual count, but it can be *higher*. The sketch doesn't actually store the items, so it's much more compact than a regular map of per-item counts.
+
+For example, a regular map counting 1,000,000 distinct 8-byte strings takes about 64 MB. A count-min sketch for the same strings, with estimates within 0.01% of the total count (with 99% probability), uses only 0.55 MB — that's 116 times smaller. The size of the sketch doesn't depend on the number of distinct items or their size, only on the accuracy you choose. So the difference gets even bigger with more or longer strings.
+
+A count-min sketch is useful when you want to track how many times an item shows up in a large stream of events. It's often used to check if something has happened a certain number of times, like rate-limiting an IP after X requests or sending an alert after an error happens Y times. A sketch can also help decide if a key is worth keeping in the cache given how often it was requested.
+
+```go
+// Estimates within 0.1% of the total count, with 99% probability.
+sketch := countmin.New(0.001, 0.01)
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.AddN([]byte("alice"), 2)
+
+sketch.Count([]byte("alice")) // 3 (or, rarely, more)
+sketch.Count([]byte("bob"))   // 1 (or, rarely, more)
+sketch.Count([]byte("carol")) // 0 (or, rarely, more)
+sketch.Total()                // 4
 ```
 
-$ xxd -g 1 -l 128 boot.zip
-00000000: 50 4b 03 04 0a 00 02 80 00 00 eb 44 e4 2e 41 0f  PK.........D..A.
-00000010: 01 8f 0a 09 00 00 0a 09 00 00 10 00 00 00 62 6f  ..............bo
-00000020: 6f 74 2f 5a 49 50 48 45 41 44 2e 43 4f 4d 00 90  ot/ZIPHEAD.COM..
-00000030: 02 b0 ad 1b 03 00 01 00 fb 4f 51 e4 30 00 10 00  .........OQ.0...
-00000040: 00 00 10 00 bd 72 10 00 bd 72 10 00 31 03 10 00  .....r...r..1...
-00000050: fa fc 31 c0 89 c4 8e d8 8e c0 8e d0 ea 61 7c 00  ..1..........a|.
-00000060: 00 bf 00 06 b9 00 02 f3 aa 88 16 98 06 be 0f 7d  ...............}
-00000070: e8 8c 00 b8 00 f0 89 c1 50 9d 9c 58 a8 02 74 4a  ........P..X..tJ
+The sketch uses two settings: epsilon *ε* and delta *δ*. If the actual count for any given item is X and the total of all counts is N, then the estimated count for this item will usually be between X and X+ε·N. However, rarely (with a probability of δ) the estimate could be even higher.
+
+For example, if ε is 0.001, δ is 0.01, and N is 1 million, then the estimate could be off by up to 1,000 (ε·N) with at least 99% probability (1−δ), and by more than 1,000 with at most 1% probability (δ).
+
+The counting error in a sketch depends on the total of all counts, not on each individual item. Therefore, frequent items are estimated more or less accurately relative to their count, but rare items are not — the absolute error is too high for them.
+
+You can increase the per-item counter in a sketch and get the estimated count for an item, but you cannot decrease a counter or iterate over the items.
+
+### How it works
+
+**Count-min sketch**<sup>[8](https://antonz.org/probabilistic-data-structures/#fn:8)</sup> is a table of counters with *d* rows and *w* columns, all starting at zero. Each row uses its own hash function that maps an item to one of the w counters. To add an item, you increment its counter in each row:
+
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hd ──►│ mod w │──► i1, i2, ..., id
+        └──────┘                       └───────┘
+
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 5
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 6
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+                 i1              i2      id
 ```
 
-The ASCII **P** stands for Phil
-      ([not Picard](https://memory-alpha.fandom.com/wiki/Lonely_Among_Us_(episode)#Act_Five)), as in
-      [Phil Katz](https://en.wikipedia.org/wiki/Phil_Katz),
-      followed by **03h** and **04h**. What you are looking at, is a
-      completely valid ZIP local file header for **boot/ZIPHEAD.COM**
+To estimate an item's count, you take the smallest value from its d counters:
 
-Oh, and those other bytes there after the ZIP header: **02 b0 ad 1b**,
-      if you flip them around to human endian, it reads **1BADB002**.
-      That's the Multiboot magic :-)
+- Other items might hash to the same counter, so each counter value is ≥ true count.
+- The smallest counter is the one with the fewest collisions, so it's the best estimate.
 
-The 16 bit real mode code starts right after the Multiboot header,
-      at offset **00000050**. If you are feeling a little confused,
-      so is the file utility:
-
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5   min = 3
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-$ file boot.zip
-boot.zip: DOS/MBR boot sector; partition 1 : ID=0xd, active 0xcd, start-CHS (0x7
-2,19,7), end-CHS (0x388,254,6), startsector 2147916342, 243810273 sectors; parti
-tion 2 : ID=0x60, active 0x9c, start-CHS (0x366,6,3), end-CHS (0x3f7,49,18), sta
-rtsector 2298911798, 4154016209 sectors; partition 4 : ID=0xf8, active 0xe1, sta
-rt-CHS (0x2,184,1), end-CHS (0x313,6,13), startsector 3277940231, 0 sectors
+With w = e/ε columns, each counter's error is at most ε·N, with probability at least 1 − 1/e. If you use d = ln(1/δ) rows, the chance that all d of the item's counters exceed its true count by more than ε·N is ≤ δ.
+
+**Unsure** uses a *conservative update*. When you add n to an item, it first finds the current estimate E (the smallest counter), then increases only the counters that are below E+n, leaving the larger ones unchanged. This keeps the same accuracy guarantee, but the actual error is about 2× lower. The tradeoff is that counts can't be decreased.
+
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 5
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-If you take a closer look at the first line of the hex dump, you might
-      be able to spot the jump instruction that makes this little magic trick
-      possible. Luckily, Phil Katz' initials are valid opcodes. The Multiboot
-      entry point is much further into the file at offset **00000331**.
+Counters are 32-bit instead of the usual 64-bit, so the sketch uses 2× less memory. The item is hashed once, and each row gets its own position from that hash by salting it (multiplying by a random per-row constant).
 
-Here's a picture you probably recognize from
-      [the Wikipedia article about the ZIP format](https://en.wikipedia.org/wiki/ZIP_(file_format)).
-      This here is a local copy, Wikimedia Commons hosts
-      [the original with attribution and licensing information](https://commons.wikimedia.org/wiki/File:ZIP-64_Internal_Layout.svg).
-
-Much like a TAR or CPIO archive, a ZIP file is an amalgamation of tightly
-      packed files with a short header in front, specifying the full file path
-      and other meta data:
-
+```text
+        ┌──────┐         ┌─────────┐
+item ──►│ hash │──► h ──►│ × salts │──► i1, i2, ..., id
+        └──────┘         └─────────┘
 ```
 
-typedef struct {
-	uint32_t magic;
-	uint16_t version;
-	uint16_t flags;
-	uint16_t method;
-	uint16_t modtime;
-	uint16_t moddate;
-	uint32_t checksum;
-	uint32_t compsize;
-	uint32_t origsize;
-	uint16_t namelength;
-	uint16_t extralength;
-	char name[namelength];
-	uint8_t extra[extralength];
-} __attribute__((packed)) zip_entry_t;
+The sketch uses *wyhash* for hashing.
+
+### Benchmarks
+
+Here's an excerpt from the full benchmarks<sup>[9](https://antonz.org/probabilistic-data-structures/#fn:9)</sup>, comparing *unsure* to *BoomFilters*<sup>[10](https://antonz.org/probabilistic-data-structures/#fn:10)</sup> (a classic count-min sketch with 64-bit counters) (ns/op, lower is better):
+
+| Operation | ε | Size (unsure) | unsure | BoomFilters |
+| --- | --- | --- | --- | --- |
+| Add | 0.001 | 55 KB | **13** | 19 |
+|  | 0.00001 | 5.4 MB | **17** | 32 |
+|  | 0.000001 | 54 MB | **81** | 98 |
+| Count | 0.001 | 55 KB | **9** | 51 |
+|  | 0.00001 | 5.4 MB | **14** | 64 |
+|  | 0.000001 | 54 MB | **52** | 139 |
+
+Accuracy at ε=0.0001, N=10M additions over 1M distinct items, mean overestimate (lower is better):
+
+| Distribution | unsure | BoomFilters |
+| --- | --- | --- |
+| Uniform | **139** | 302 |
+| Zipf, s = 1.1 | **23** | 44 |
+| Zipf, s = 1.5 | **0.3** | 0.8 |
+| Size | **536 KB** | 1080 KB |
+
+*Unsure* is about 1.5× faster for Add and 4× faster for Count, using 2× less memory with 2–2.7× lower error.
+
+## [#](https://antonz.org/probabilistic-data-structures/#hyperloglog)
+HyperLogLog
+
+HyperLogLog is a unique items counter that trades accuracy for space. It tells you approximately how many *distinct items* it has seen, no matter how many times each one appeared. HyperLogLog (also called a *sketch* from here on) doesn't actually store the items, so it's much more compact than a regular set.
+
+For example, a regular set of 1,000,000 distinct 8-byte strings takes about 64 MB. A HyperLogLog sketch counting the same strings with about 0.8% error uses only 16 KB — that's almost 4,000 times smaller. The size of the sketch doesn't depend on the number of items or their size, only on the accuracy you choose. A 16 KB sketch counts a billion items as accurately as a thousand.
+
+HyperLogLog is useful when you need to count unique things in a large stream: unique visitors to a website, unique search queries per day, or distinct values in a database column.
+
+```go
+// Standard error about 0.8% of the true count.
+sketch := hll.New()
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("carol"))
+
+sketch.Count() // 3 (approximately)
 ```
 
-The timestamps are DOS datetime, the checksum is a CRC-32, there are no
-      attributes or permission bits, we are thoroughly in DOS land. Directories
-      are implied by the file paths.
+You can merge sketches to gather data from multiple machines or segments (like by hour, page, or region). When you merge two sketches, you get the total number of unique items from both, without counting shared items twice.
 
-Unlike TAR or CPIO, there is a **central directory** in the end, with
-      a listing of all of the file headers and back references to the file in
-      the archive. Unlike traditional file formats that have are
-      **started by a header**, ZIP is **terminated by a footer**.
-
-The reason for this is twofold:
-
-That last part was especially important in the days when ZIP archives
-      would be split over several floppies. To access a file, just scan the
-      directory on the last floppy, then tell the user what floppy to insert to
-      get the file.
-
-By comparison, accessing a file in a tarball requires linearly scanning
-      over the whole thing (which, on the other hand, is
-      [preferable for tape drives](https://en.wikipedia.org/wiki/Tape_drive#Technical_limitations), where TAR originates).
-
-### Polyglot Trickery
-
-ZIP archives are meant to be read from the back, the footer points to the
-      central directory, the directory points to the files. *In theory*,
-      the archiver shouldn't care if there happens to be a gap between two
-      files, containing something else or if there is something else in the
-      front of the archive, like a file header for a different file format.
-
-The local file headers also supports up to 64k of "extra" stuff between
-      the header and the file data, the footer has "comment" at the end, also
-      up to 64k.
-
-If you look at the footer for a second, you might spot an interesting
-      design flaw:
-
+```go
+home := hll.New() // visitors to the home page
+docs := hll.New() // visitors to the docs
+// ...
+home.Merge(docs)
+home.Count() // visitors to either page
 ```
 
-typedef struct {
-	uint32_t magic;
-	uint16_t disknum;
-	uint16_t diskstart;
-	uint16_t num_dir_entries;
-	uint16_t total_dir_entries;
-	uint32_t dir_size;
-	uint32_t dir_start;
-	uint16_t comment_length;
-	uint8_t comment[comment_length];
-} __attribute__((packed)) zip_end_t;
+The sketch has one setting: the precision *p*, which gives a relative standard error (stdErr) of 1.04/√(2^p). A common default is p=14, which gives 0.81% error.
+
+With p=14 and 1 million distinct items:
+
+- 68% of the time the estimate is within 0.81% (8,100) of the true count,
+- 95% within 1.6% (2·stdErr),
+- 99.7% within 2.4% (3·stdErr).
+
+The error is relative to the count, so the standard error is the same 0.81% for a thousand items or a billion.
+
+You can add items to a sketch, get the estimated count, and merge sketches. You cannot check if a specific item was added, remove items, or list them.
+
+### How it works
+
+**HyperLogLog**<sup>[11](https://antonz.org/probabilistic-data-structures/#fn:11)</sup> is based on a simple observation. If you hash items to random bit strings, about half of them start with 1, a quarter with 01, an eighth with 001, and so on. Seeing a hash with *k* leading zeros suggests there were about 2^(k+1) distinct items. Duplicates hash to the same value, so they don't affect the result.
+
+A single observation is unreliable, so the sketch divides the items into m = 2^p groups, where *p* is the selected precision. The first p bits of the hash pick a group (a *register*), and the register keeps the highest *rank* (leading zeros plus one) it has seen in the rest of the hash:
+
+```text
+        ┌──────┐   ┌──────────┬────────────────────────┐
+item ──►│ hash │──►│ 01101001 │ 0001101...             │
+        └──────┘   └────┬─────┴───────────┬────────────┘
+                        │ register i      └ rank = 3 zeros + 1 = 4
+          ┌───┬───┬───┬─▼─┬───┬───┬───┬───┬───┬───┐
+registers │ 3 │ 0 │ 5 │ 2 │ 1 │ 0 │ 4 │ 2 │ 0 │ 1 │  2 → 4
+          └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-it is variable size, an archiver needs to find it looking
-      from the back, but the magic and the size are both stored *before*
-      the variable sized comment field. Ask yourself this for a moment: how
-      would you implement this in an archiver? Demanding that there is no
-      comment? Reading the last 64k plus some change and scanning it? From
-      which direction? What if there is another valid footer inside the
-      comment field of the footer? Depending on how an implementation deals
-      with this, a specifically crafted archive can appear to contain
-      different files when viewed with different archivers.
+The count is estimated from all the registers together, using a harmonic mean of 2^register. The standard error is about 1.04/√m. Merging two sketches is just taking the maximum value from each pair of registers.
 
-Trying to make the format extensible ended up building a whole lot of
-      foot guns in there. And we are not even talking about the plethora of
-      extensions that have been tacked on to the official specification over
-      the years.
+The original estimator is biased when dealing with small counts (up to a few times m), so in these cases it uses a different formula called *linear counting*. This switch creates a sudden change in error, and some implementations (like HyperLogLog++<sup>[12](https://antonz.org/probabilistic-data-structures/#fn:12)</sup>) address it by using large tables of bias corrections based on real data.
 
-Many modern implementations decided to save themselves a lot of headaches
-      and just treat ZIP archives the same way as tarballs, linearly scanning
-      them from the front instead. They expect the archive to start with a
-      local header, skipping by the size **MUST** lead to the next entry
-      or finally, the central directory. They reject any archives where this
-      is not possible. This effectively prevents a lot of polyglot trick
-      fuckery, but at the cost of rendering possibly valid archives unreadable.
+**Unsure** uses the improved estimator by Otmar Ertl<sup>[13](https://antonz.org/probabilistic-data-structures/#fn:13)</sup>. Instead of a harmonic mean of the registers, it works from a *histogram*: how many registers have value 0, value 1, and so on. A formula applied to the histogram gives an accurate estimate for any number of items, from zero to billions, so there's no need for a separate formula for small counts or for correction tables.
 
-For the self booting ZIP archive, the challenge thus becomes: the archive
-      **MUST** start with a local file header, there cannot be *any*
-      gaps, everything must be properly contained inside files.
+The sketch updates the histogram whenever registers change. Most adds don't change any registers, so this is almost free. Counting always takes the same amount of time, no matter how big the sketch is. Other implementations scan all the registers on every count, which takes from microseconds to milliseconds.
 
-Anybody who has ever looked at a DIY toy OS tutorial has probably
-      stumbled across
-      [The Multiboot Specification](https://www.gnu.org/software/grub/manual/multiboot/multiboot.html), the possibly easiest and most beginner friendly way to get
-      a program running on bare metal x86.
+Registers are one byte each, and the histogram has 64 four-byte counters (256 bytes). The item is hashed once with *wyhash*, and the 64-bit hash is split into the register index and the rank.
 
-The multiboot spec originates in the GNU/FSF ecosystem and is implemented
-      by boot loaders like GRUB or Qemu direct kernel boot. SYSLINUX supports
-      it via a plugin. There is a draft for an over engineered 2nd version, that
-      also supports MIPS, but this is of no concert to us here.
+### Benchmarks
 
-A Multiboot 1 compliant kernel simply contains the magic
-      value **0x1BADB002** *somewhere* in the first in the first 8k.
-      This is followed by flags and a checksum (all 3 must add up to zero).
-      Depending on the flags, additional fields may follow.
+Here's an excerpt from the full benchmarks<sup>[14](https://antonz.org/probabilistic-data-structures/#fn:14)</sup>, comparing *unsure* to *axiom*<sup>[15](https://antonz.org/probabilistic-data-structures/#fn:15)</sup> (HyperLogLog with LogLog-Beta estimator and sparse mode) (ns/op, lower is better):
 
-The kernel itself can be an ELF file from which the loader extracts
-      load address and entry point. The kernel is run in 32 bit protected
-      mode with flat segments (base=0, limit=4G) and the A20 gate enabled.
+| Operation | p | Size | unsure | axiom |
+| --- | --- | --- | --- | --- |
+| Add | 10 | 1 KB | **5.5** | 7.6 |
+|  | 14 | 16 KB | **5.6** | 7.6 |
+|  | 18 | 256 KB | 8.1 | **7.9** |
+| Count | 10 | 1 KB | **68** | 18,300 |
+|  | 14 | 16 KB | **62** | 350,000 |
+|  | 18 | 256 KB | **57** | 4,710,000 |
+| Merge | 10 | 1 KB | **730** | 1,710 |
+|  | 14 | 16 KB | **20,100** | 58,600 |
+|  | 18 | 256 KB | **341,000** | 951,000 |
 
-Alternatively to a plain old ELF file, the kernel can also specify the
-      memory layout manually (indicated via a flag), allowing flat binaries or
-      other file formats to be loaded. The extended header looks like this:
+Accuracy at p=14 (0.81% standard error), relative RMSE over 100 sketches (lower is better):
 
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 1,000 | 0.63% | **0.02%** |
+| 40,000 | **0.64%** | 0.71% |
+| 1,000,000 | **0.79%** | 0.89% |
+
+Memory at p=14 after adding the given number of distinct items (lower is better):
+
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 100 | 16 KB | **1.2 KB** |
+| 1,000 | 16 KB | **4.2 KB** |
+| 10,000 | 16 KB | 16 KB |
+| 1,000,000 | 16 KB | 16 KB |
+
+*Unsure* adds about as fast as *axiom*, counts 270–83,000× faster, and merges 2.3–2.9× faster, with the same accuracy and memory for counts above the number of registers. When there are fewer items than registers, *axiom*'s sparse mode makes it more accurate and compact.
+
+## [#](https://antonz.org/probabilistic-data-structures/#t-digest)
+T-digest
+
+A t-digest is a summary of a stream of numbers that trades accuracy for space. It can give you an approximate median, 99th percentile, or any other *quantile* of the data. It can also estimate what fraction of the numbers are below a certain value (the CDF). The digest doesn't actually store the numbers, so it's much more compact than a sorted list.
+
+For example, to find the exact 99th percentile of 1,000,000 numbers, you'd have to keep all of them. With 64-bit floats, that takes 8 MB. A t-digest estimates the same percentile within about 0.03% of the rank (between the 98.97th and the 99.03rd percentile) using only 8 KB — 1,000 times smaller. The size of the digest doesn't depend on the number of values, only on the accuracy you choose. An 8 KB digest summarizes a billion values as well as a million.
+
+A t-digest is useful when you need quantiles over a large stream: latency percentiles for a service, the distribution of request sizes or prices, or the outlier thresholds in sensor data.
+
+```go
+// Response times in milliseconds.
+digest := tdigest.New()
+
+digest.Add(12.5)
+digest.Add(8.1)
+digest.Add(130.0)
+// ...
+
+digest.Quantile(0.5)  // median
+digest.Quantile(0.99) // 99th percentile
+digest.CDF(100)       // fraction of responses faster than 100 ms
 ```
 
-typedef struct {
-	uint32_t magic;
-	uint32_t flags;
-	uint32_t checksum;
-	uint32_t hdr_addr;
-	uint32_t load_addr;
-	uint32_t load_end_addr;
-	uint32_t bss_end_addr;
-	uint32_t entry_point;
-} mb_header_t;
+You can merge digests to gather data from multiple machines or segments (like by hour, endpoint, or region). A merged digest estimates the percentiles of all values, but with less accuracy than individual digests do.
+
+```go
+east := tdigest.New() // latencies on one server
+west := tdigest.New() // latencies on another
+// ...
+east.Merge(west)
+east.Quantile(0.99) // 99th percentile across both servers
 ```
 
-The **hdr_addr** specifies the in-memory address of the header after
-      loading the file, using this and the file offset where the header was
-      found, the other addresses can be converted back to file offsets by the
-      loader.
+The digest has one setting: the compression *δ*, which limits the number of centroids (see *How it works* below) to δ+2. A common default is δ=100, which takes 8 KB. Increasing δ uses more memory but reduces estimation error.
 
-This way, the **load_addr** and **load_end_addr** are used to figure
-     out *what* parts of the file to load *where* into memory. If the
-     **bss_end_addr** is past that, the loader zero-fills it, before finally
-     jumping to **entry_point** to run the kernel.
+The error is measured in ranks: a rank error of 0.03% at quantile q=0.99 means the value returned by `Quantile(0.99)` is somewhere between the 98.97th and the 99.03rd percentile of the actual values. Tail estimates, such as q=0.99 or q=0.999, are more accurate than the median (q=0.5).
 
-The Multiboot compliant loader also sets up a structure with system
-      information (e.g. memory map, APM tables), kernel command line,
-      etc… and passes the pointer to the kernel (via register
-      **EBX**, magic value **0x2BADB002** in **EAX**).
+You can add numbers to a digest, estimate quantiles and the CDF, and merge digests. You cannot remove numbers or list them.
 
-Making a Multiboot bootable ZIP archive is trivial. Simply pack a flat
-      binary with a Multiboot header as uncompressed file binary, make sure it
-      is at the beginning and the addresses line up. An external tool can then
-      fix up the headers, so that the whole archive is loaded.
+### How it works
 
-For any *practical* applications, it would make *sense* to stop
-      right here, but we're not here for "practical" or "sane".
+**T-digest**<sup>[16](https://antonz.org/probabilistic-data-structures/#fn:16)</sup> summarizes the numbers as a sorted list of *centroids*. Each centroid has a mean and a weight — the number of values it represents. To estimate a quantile, the digest finds the centroids around the requested rank and interpolates between their means.
 
-On an IBM compatible machine, the BIOS iterates over the installed
-      drives, loads the first sector from each (to location **0x7c00**),
-      until it finds one where the first sector ends with **0xaa55**.
-      It then jumps to the first byte.
+The trick is in how big the centroids are allowed to grow. A *scale function* k(q) maps a quantile *q* to a number from -δ/4 to δ/4, and each centroid may only span 1 unit of k: if a centroid covers the quantiles from q₁ to q₂, then k(q₂) − k(q₁) ≤ 1.
 
-Disks that are formatted with a filesystem, typically have a header in
-      the beginning that starts with a jump instruction across the header into
-      the bootstrap code that follows. The DOS MBR format opts to instead store
-      the partition table at the end of the first sector and all the code in
-      the front.
+The arcsine scale function, k(q) = δ/(2π)·asin(2q-1), is steep near q=0 and q=1 and flat near the median. This means the centroids it produces are larger in the center and smaller at the ends:
 
-If we stuff a BIOS boot signature into the ZIP archive, at least parts
-      of the ZIP local file header will be executed, the first few bytes are
-      a mandated magic value and we cannot just put a jump instruction there.
-
-The puzzle exercise now becomes, filling the header fields with values
-      that make sense but also happen to be valid 8086 opcodes. At least,
-      until we hit something that can be abused as a free-form field that we
-      can stuff a jump into.
-
-Let's take a look at that hex dump again:
-
+```text
+weight
+  │                ┌──┐
+  │             ┌──┤  ├──┐
+  │          ┌──┤  │  │  ├──┐
+  │       ┌──┤  │  │  │  │  ├──┐
+  │  ┌─┬──┤  │  │  │  │  │  │  ├──┬─┐
+  └──┴─┴──┴──┴──┴──┴──┴──┴──┴──┴──┴─┴──► value
+    min      q=0.25   median  q=0.75     max
 ```
 
-00000000: 50 4b 03 04 0a 00 02 80 00 00 eb 44 e4 2e 41 0f  PK.........D..A.
-00000010: 01 8f 0a 09 00 00 0a 09 00 00 10 00 00 00 62 6f  ..............bo
-00000020: 6f 74 2f 5a 49 50 48 45 41 44 2e 43 4f 4d 00 90  ot/ZIPHEAD.COM..
+With 1M values and δ=100, the centroids around the median hold about 27,000 values each, those around the 99th percentile about 5,000, and the outermost ones about 500. This keeps the error near the tails small.
+
+**Unsure** is the merging t-digest from the Dunning and Ertl paper. New values go to a buffer of 5·δ numbers. When the buffer is full, the digest sorts it and merges it with the centroids (already sorted) in a single pass, building new centroids from left to right as long as each one fits within its span of k. Every other pass goes right to left, so that neither tail ends up with fuller centroids. `Quantile`, `CDF` and `Merge` flush the buffer first.
+
+The centroids are kept in two fixed arrays of δ+2 entries (the current list and the next one being built), along with the cumulative weights for a binary search in `Quantile` and `CDF`. With δ=100, that's 16·102·2 + 8·103 bytes for the centroids, and 8·500 bytes for the buffer, about 8 KB in total.
+
+Centroids with weight 1 are treated as exact values rather than spread around their mean, and the exact minimum and maximum are used at the ends. So digests with few values give exact results, and `Quantile(0)` and `Quantile(1)` are always exact.
+
+### Benchmarks
+
+Here's an excerpt from the full benchmarks<sup>[17](https://antonz.org/probabilistic-data-structures/#fn:17)</sup>, comparing *unsure* to *influxdata*<sup>[18](https://antonz.org/probabilistic-data-structures/#fn:18)</sup> (merging t-digest with the same scale function) (ns/op, lower is better):
+
+| Operation | δ | unsure | influx |
+| --- | --- | --- | --- |
+| Add | 50 | **44** | 78 |
+|  | 100 | **49** | 86 |
+|  | 500 | **59** | 105 |
+| Quantile | 50 | 11 | 13 |
+|  | 100 | 13 | 13 |
+|  | 500 | 15 | 16 |
+| Merge | 50 | **296** | 2,060 |
+|  | 100 | **630** | 4,330 |
+|  | 500 | **2,720** | 23,950 |
+
+Accuracy at δ=100, mean rank error over 1M normal values (lower is better):
+
+| Digest | Quantile | unsure | influx |
+| --- | --- | --- | --- |
+| Single | 0.5 | 0.007% | 0.015% |
+|  | 0.99 | 0.018% | 0.016% |
+|  | 0.999 | 0.011% | 0.009% |
+| Merged | 0.5 | 0.055% | 0.037% |
+|  | 0.99 | 0.023% | 0.021% |
+|  | 0.999 | 0.006% | 0.016% |
+
+Memory at δ=100 (lower is better): *unsure* 8.5 KB, *influxdata* 14.4 KB.
+
+*Unsure* adds values about 1.8× faster than *influxdata*, queries at the same speed, merges 7–9× faster, and uses 40% less memory at about the same accuracy.
+
+## [#](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
+Top-k sketch
+
+A Top-k sketch finds the *k most frequent* items in a stream (the "heavy hitters"), along with their approximate counts. It uses a fixed amount of memory based only on k, no matter how many different items are in the stream.
+
+To find the exact top items, you'd have to count every unique item, for example with a map of per-item counts. With millions of distinct items, that takes tens or hundreds of megabytes. A Top-k sketch for the top 1000 items takes about 360 KB, and it usually finds all of them.
+
+A Top-k sketch is useful when you want to identify the "hottest" data: the most requested URLs, the most active users, or the most common search queries. Unlike a count-min sketch, it keeps the actual items, so it can list them.
+
+```go
+// Track the 2 most frequent items.
+sketch := topk.New(2)
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("carol"))
+sketch.AddN([]byte("alice"), 4)
+sketch.AddN([]byte("carol"), 2)
+
+sketch.Top()                  // [{alice 5} {carol 3}]
+sketch.Count([]byte("alice")) // 5
+sketch.Count([]byte("bob"))   // 0 (not in the top 2)
+sketch.Total()                // 9
 ```
 
-I've tried to highlight the relevant header up to the jump
-      instruction: **0xeb** is a relative jump with a single byte
-      immediate argument.
+`Top` returns up to k items, from the most frequent to the least frequent. Counts are estimates: they're usually exact for the most frequent items, but may be slightly lower than the actual count for less common items.
 
-If we take a look again at the header structure, we can make out what
-      fields those bytes correspond to:
+The sketch works best when the stream is skewed, meaning a few items appear much more often than the others. This is common in real situations. If all items are about equally frequent, there is no clear top k, and the results become less accurate.
 
+You can add items to the sketch and get the top items with their counts, but you can't decrease counts or check items that aren't in the top k.
+
+### How it works
+
+**HeavyKeeper**<sup>[19](https://antonz.org/probabilistic-data-structures/#fn:19)</sup> is a table of buckets that estimates item counts. It has *d* rows and *w* columns, and each item maps to one bucket in each row. Each bucket holds a fingerprint of the item and a count. To add an item, you update its bucket in each row:
+
+- If the bucket is empty or owned by the item, increase its count.
+- If the bucket is owned by another item, decay it: decrease its count by 1 with probability b^count (b < 1). When the count reaches 0, the new item takes over the bucket with a count of 1.
+
+```text
+          ┌──────┐
+add x ──► │ hash │──► h ──► high 32 bits ──► fingerprint = 7
+          └──────┘    │
+                      │ map to buckets
+                   ┌──┴────────────┐
+       ┌───────┬───▼───┬───────┬───│───┬───────┐
+row 1  │       │ fp=7  │ fp=3  │   │   │ fp=5  │  column 2 is owned by x:
+       │       │  41   │   2   │   │   │  980  │  41 → 42
+       ├───────┼───────┼───────┼───▼───┼───────┤
+row 2  │ fp=9  │       │       │ fp=2  │ fp=4  │  column 4 is owned by another:
+       │  17   │       │       │   3   │   1   │  3 → 2 with probability b^3
+       └───────┴───────┴───────┴───────┴───────┘
+         col 1   col 2   col 3   col 4   col 5
 ```
 
-typedef struct {
-	uint32_t magic;
-	uint16_t version;
-	uint16_t flags;
-	uint16_t method;
-	uint16_t modtime;
-	………
+The item's estimated count is the largest count among its buckets. Frequent items quickly reach counts that make decay very unlikely, so they keep their buckets. Rare items keep replacing each other without affecting the frequent ones. An item that becomes frequent later in the stream can still outnumber a less frequent owner and take over its bucket.
+
+Next to the table, the sketch keeps a min-heap with the k items that have the largest estimates so far. After an item's buckets are updated, if its estimate is larger than the smallest count in the heap, the item is added to the heap, and the smallest item is removed. If the item is already in the heap, its count is increased.
+
+```text
+                   ┌───────────┐
+add x (15) ───────►│ bob    12 │  the root has the smallest count
+                   └─────┬─────┘
+              ┌──────────┴────────┐
+        ┌─────┴─────┐       ┌─────┴─────┐
+        │ alice  30 │       │ dave   14 │  15 > 12: x replaces bob at the root
+        └─────┬─────┘       └───────────┘  15 > 14: x moves down, dave moves up
+      ┌───────┴──────┐
+┌─────┴─────┐  ┌─────┴─────┐
+│ eve   980 │  │ fay    41 │
+└───────────┘  └───────────┘
 ```
 
-The timestamp is the first best place where we can put a jump
-      instruction. The **0xeb** relative jump works out to **8:30-ish**
-      in the morning, give or take the jump distance.
+**Unsure** uses d = 2 rows of max(16k, 256) buckets, and a decay base of b = 0.8. The probabilities b^count are precomputed as 64-bit thresholds, so decay is cheap: the count *c* decreases if a random number is below the c-th threshold.
 
-The two bytes in front of the **modtime** are compression
-      **method**. We really, really want to have **0x0000** here,
-      i.e. *uncompressed*, so that an archiver doesn't choke on the
-      file data.
+The original HeavyKeeper uses b = 1.08⁻¹ ≈ 0.93, and more rows. A smaller b lets frequent items lock their buckets faster, which makes the sketch more precise on flat streams. However, if b is too small (like 0.5), the first items to claim buckets keep them permanently, so items that become frequent later are never counted, even if they end up being the most frequent. Using b = 0.8 keeps most of the precision and still catches most late-arriving frequent items. As for the rows, two are enough to protect frequent items from collisions in a single row, and adding more rows only makes the sketch slower.
 
-The first four bytes are the magic value of the format, we don't have any
-      choice what to put here either, it has to be "**PK\03\04**". The
-      **version** and **flags** fields are the only places where we have
-      some creative freedom.
+The item is hashed once. The hash is mapped to a position in each row by salting it (multiplying by a random per-row constant). The fingerprint is the top 32 bits of the hash. The heap uses the 64-bit hash to identify items, so it doesn't compare the actual item bytes.
 
-If we run the file through a dissassembler and take a look at the
-      first few bytes, we'll end up with this:
+Each bucket is 8 bytes (a 32-bit fingerprint and a 32-bit count), so the table takes 256·k bytes. The heap takes about 100 bytes per item plus the item itself.
 
+The sketch uses *wyhash* for hashing and *wyrand* for random numbers.
+
+### Benchmarks
+
+| Operation | k | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| Add | 10 | **24 ns** | 64 ns | 59 ns |
+|  | 100 | **25 ns** | 84 ns | 70 ns |
+|  | 1000 | **33 ns** | 130 ns | 73 ns |
+| Top | 10 | **0.34 µs** | 0.64 µs | 0.77 µs |
+|  | 100 | **3.7 µs** | 13 µs | 14 µs |
+|  | 1000 | **75 µs** | 270 µs | 292 µs |
+
+Precision is the fraction of the reported top k that is in the true top k (higher is better):
+
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **0.90** | 0.38 | 0.19 |
+|  | 0.8 | **1.00** | 0.78 | 0.85 |
+|  | 1.0 | 0.99 | **1.00** | **1.00** |
+|  | Size | 39 KB | **27 KB** | 39 KB |
+| 1000 | 0.6 | **0.97** | 0.70 | 0.52 |
+|  | 0.8 | **1.00** | 0.98 | **1.00** |
+|  | 1.0 | **1.00** | **1.00** | **1.00** |
+|  | Size | **364 KB** | 414 KB | 453 KB |
+
+Count error is the mean of |estimate − true| / true over the reported items (lower is better):
+
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **14%** | 94% | 428× |
+|  | 0.8 | **0.10%** | 46% | 230% |
+|  | 1.0 | 0.01% | 0.12% | **0.0%** |
+| 1000 | 0.6 | **2.4%** | 62% | 18× |
+|  | 0.8 | **0.23%** | 1.9% | 0.31% |
+|  | 1.0 | 0.05% | 0.24% | **0.02%** |
+
+*Unsure* is 2–4× faster than the others for Add and 1.8–4× faster for Top. On flat streams (s=0.6), it finds the true top k with 90–97% precision, while *keiler* drops to 38–70% precision with a count error of 62–94%, and *dgryski* to 19–52% with counts 18× or more too high. On skewed streams (s=1.0), all three are about equally accurate.
+
+## [#](https://antonz.org/probabilistic-data-structures/#wrapping-up)
+Wrapping up
+
+As engineers, we usually want exact answers from our data. But sometimes, allowing a bit of uncertainty can cut memory usage by tens, hundreds, or even thousands of times. That's where probabilistic data structures come in:
+
+- Bloom filter checks if an item might be in a set.
+- Count-min sketch estimates how many times each item has occurred.
+- HyperLogLog estimates the number of distinct items.
+- T-digest estimates quantiles of a stream of numbers.
+- Top-k sketch identifies the most frequent items in a stream.
+
+To use them in Go, try the ** [nalgeon/unsure](https://github.com/nalgeon/unsure) package:
+
+```text
+go get github.com/nalgeon/unsure
 ```
 
-$ objdump -D -m i8086 -b binary ./boot.zip
-
-./boot.zip:     file format binary
-
-Disassembly of section .data:
-
-00000000 <.data>:
-       0:       50                      push   %ax
-       1:       4b                      dec    %bx
-       2:       03 04                   add    (%si),%ax
-       4:       0a 00                   or     (%bx,%si),%al
-       6:       02 80 00 00             add    0x0(%bx,%si),%al
-       a:       eb 44                   jmp    0x50
-```
-
-This is AT&T syntax, source operands are left, destination
-      on the right. We use GNU tools in this household, deal with it.
-
-Anything that just fiddles around with a register doesn't really hurt us.
-      Same goes for memory *reads*. We don't have memory protection, no
-      matter what we access, there won't be any faults, the only memory
-      mapped hardware around should be the frame buffer.
-
-Memory writes are another story. Worst case, we could shoot up the
-      interrupt vectors, the BIOS RAM areas (BDA, EBDA), or shadowed option
-      ROMs.
-
-The **P** for Phil also happens to also decode to
-      **push %ax**. If the BIOS leaves us with a somewhat sane stack
-      pointer, the **push** instruction should hopefully not mess anything
-      up. It is part of the ZIP magic and thus unavoidable.
-
-The **version** field is itself actually *structured*, containing
-      a decimal encoded version number, followed by an OS ID byte. If we set
-      it to **0x000a** (stored as little endian), this decodes to version
-      **1.0** on **MS DOS**.
-
-**0x0a** is an **orb**, version 1.1 would be double byte sized,
-      version 0.8 and 0.9 would be register direct and not touch the memory.
-      An address of **BX + SI** is the result of a **mod-reg-r/m** field
-      with all zeros.
-
-We could try to code golf our way into consuming at least part of the
-      **flags** as well, but low-valued, "harmless" opcodes that result
-      in sane versions are sparse. Also, some version numbers change the
-      meaning how an archiver is supposed to interpret the file. Also also,
-      **mod-reg-r/m** combinations in the OS code field quickly end up as
-      an undefined OS ID. Also also also, we have the **method** as well,
-      that *has to be* **0x0000**, which would result in a memory
-      write if executed. We have to consume that somehow, rather than running
-      it.
-
-So for the **flags**, I came up with **0x8002** (stored as little
-      endian). The lowest, set bit has a compression method dependent meaning,
-      currently only defined for LZMA (14), deflate (8) and implode (6). For
-      uncompressed (method 0) there is no defined meaning (the specification
-      just ignores that part, it doesn't use nasty words like
-      *undefined*). For deflate it would mean that
-      *maximum compression* was used.
-
-The MSB is specified as "reserved for use by PKWARE", whatever they chose
-      to put there, if they ever chose anything at all. Most imporanly, the
-      opcode **0x02** decodes to a single byte, indirect add, and in the
-      **mod-reg-r/m**, the MSB tells the CPU to consume another 2 bytes of
-      immediate **DISP**lacement. This is how we can get rid of the
-      compression method.
-
-At this point, we've made it! We reached the **modtime** field
-      that we can just stuff a jump into.
-
-Once we've made it past the header, we are in 16 bit real mode. We just
-      need to go through all of the neccessary steps to set up the environment
-      that the Multiboot code expects:
-
-This might sound like a lot, but in the current version, the actual code
-      boils down to 817 bytes. That includes all the headers (ZIP, multiboot),
-      the rather bulky GDT. But it is still quite a lot and outside the scope
-      of this post anyway, I might pick some interesting parts out of it for
-      some follow-up posts (watch this space?).
-
-The Multiboot entry code re-loads the GDT, but this time using the
-      highmem location, and sets up a stack after the archive. The size is
-      extracted from the Multiboot header. Knowing the start address, the C
-      code can then iterate over itself to locate and access files in the
-      archive.
-
-Some linker script trickery is used to tie it all into one blob, but with
-      the GDT and Multiboot header visible from both lomem and highmem code at
-      different locations.
-
-At this point, you might be inclined to actually read the source code
-      in the ZIP archive. There are lots of comments trying to explain what
-      is going on.
-
-There's a README that points out the structure of the code with
-      suggestions where to start reading. I decided to keep it readable rather
-      than stuff it all into a single sector. Self-modifying trickery is kept
-      to a minimum (to safe some space, the function to enter unreal mode
-      modifies itself, the code is run twice, courtesy of a misdirected
-      **ret**, entering protected mode the first time round, leaving it
-      again and restoring the segment registers on the second run, before
-      returning for real).
-
-Code in the archive and this blog posts have been written with
-      assistance from:
-
-If you poke around in the code and have any suggestions for improvements,
-      or otherwise do anything interesting with it, please let me know.
+1. [Space/time trade-offs in hash coding with allowable errors](https://doi.org/10.1145/362686.362692) by Burton H. Bloom, 1970. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:1)
+2. [Cache-, hash-, and space-efficient Bloom filters](https://doi.org/10.1145/1498698.1594230) by Felix Putze et al., 2009. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:2)
+3. [Reference wyhash implementation](https://github.com/wangyi-fudan/wyhash) by Wang Yi. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:3)
+4. [Reference xxHash implementation](https://github.com/Cyan4973/xxHash) by Yann Collet. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:4)
+5. [Bloom filter benchmarks](https://github.com/nalgeon/unsure/tree/main/bloom#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:5)
+6. [bits-and-blooms/bloom](https://github.com/bits-and-blooms/bloom) by Daniel Lemire. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:6)
+7. [jcalabro/gloom](https://github.com/jcalabro/gloom) by Jim Calabro. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:7)
+8. [An improved data stream summary: the count-min sketch and its applications](https://doi.org/10.1016/j.jalgor.2003.12.001) by Graham Cormode and S. Muthukrishnan, 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:8)
+9. [Count-min sketch benchmarks](https://github.com/nalgeon/unsure/tree/main/countmin#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:9)
+10. [tylertreat/BoomFilters](https://github.com/tylertreat/BoomFilters) by Tyler Treat. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:10)
+11. [HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm](https://doi.org/10.46298/dmtcs.3545) by Philippe Flajolet et al., 2007. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:11)
+12. [HyperLogLog in practice](https://doi.org/10.1145/2452376.2452456) by Stefan Heuleet et al., 2013. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:12)
+13. [New cardinality estimation algorithms for HyperLogLog sketches](https://arxiv.org/abs/1702.01284) by Otmar Ertl, 2017. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:13)
+14. [HyperLogLog benchmarks](https://github.com/nalgeon/unsure/tree/main/hll#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:14)
+15. [axiomhq/hyperloglog](https://github.com/axiomhq/hyperloglog) by Axiom. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:15)
+16. [Computing extremely accurate quantiles using t-digests](https://arxiv.org/abs/1902.04023) by Ted Dunning and Otmar Ertl, 2019. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:16)
+17. [T-digest benchmarks](https://github.com/nalgeon/unsure/tree/main/tdigest#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:17)
+18. [influxdata/tdigest](https://github.com/influxdata/tdigest) by InfluxData. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:18)
+19. [HeavyKeeper: An Accurate Algorithm for Finding Top-k Elephant Flows](https://www.usenix.org/conference/atc18/presentation/gong) by Junzhi Gong et al., 2018. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:19)
+20. [Top-k benchmarks](https://github.com/nalgeon/unsure/tree/main/topk#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:20)
+21. [keilerkonzept/topk](https://github.com/keilerkonzept/topk) by KEILERKONZEPT. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:21)
+22. [dgryski/go-topk](https://github.com/dgryski/go-topk) by Damian Gryski. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:22)
+23. [Efficient Computation of Frequent and Top-k Elements in Data Streams](https://doi.org/10.1007/978-3-540-30570-5_27) by Ahmed Metwally et al., 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:23)

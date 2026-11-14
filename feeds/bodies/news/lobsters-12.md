@@ -1,32 +1,139 @@
-> So why doesn’t glue work get you promoted, if it’s so crucial to shipping projects? Are companies stupid? Are they deliberately leaving value on the table? No, I don’t think so. Companies don’t reward glue work because **they don’t want you prioritizing it.** And they don’t want you prioritizing it because they want you shipping features. Glue work is hard. If you’re capable of doing glue work well, they want you to use that ability to deliver projects instead of improving general efficiency.
+I started running decoded.legal - a small English law firm, focussing
+on Internet, telecoms, and tech law - on Free software, both client and
+server side, around five years ago. I have used Free software in my
+personal life for a lot longer than that.
 
-This is an argument to settle for mediocrity. If you’re like most people who have worked in big tech, it is plainly obvious to you that they *are* leaving value on the table. (Whether it is deliberate or not is a matter of what’s in people’s hearts.) What big tech employers want is largely incoherent. They want you delivering features. They also know that somebody’s got to do the glue work to keep the company running, and they have trouble describing or capturing its value.
+Back in 2022, [I
+wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
 
-Here, and throughout his post, Goedecke is quite accurately describing some of the incentives presented to employees at big tech. My problem with the post is that he tells you to internalize them instead of keeping in mind that a better world is possible.
+I wrote [an
+update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
 
-> The core problem is that you’re deciding for yourself what the company needs instead of doing your job. Isn’t it your job to make your team run smoother? No! **Your job is to execute the mission of your company’s leadership.**
+Someone asked me recently what I am doing now, and, while it is
+mostly the same, some bits have changed. So here is the 2026 update.
 
-If glue work is critical to the mission of a company’s leadership, how does neglecting it serve the mission?
+## Client-side stuff
 
-> It is better to execute that mission at 60% efficiency than to spend all your time increasing efficiency in general (or even worse, to execute some other mission at 100% efficiency). Why? For two main reasons: first, you’re inevitably going to burn out, which will be bad for everyone; second, it’s better to let your team get used to operating at the base efficiency level of the company instead of artificially removing friction for a brief period.
+I am still using Debian, with GNOME, and it works well for me.
 
-There are two very different things being conflated here: saving some gas in the tank for when there are real deadlines, which is great advice, versus not trying to make your coworkers’ lives better, which is a real case of misaligned incentives.
+I’m using it [on
+a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
+version, I rather like being able to fold the screen back and write on
+it to mark up documents. ([Here
+are my thoughts on the different “Active Pens” available for
+it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
 
-Besides, the premise is fundamentally wrong: there is a lot of glue work that, if you give it the respect it deserves, removes friction *permanently*. I’m obviously biased here, but I think the [cargo-nextest](https://nexte.st/) project is a great example of glue work (running tests!) done so well that the problem mostly vanishes. More recently, at Oxide I wrote an agent skill called [flake-review](https://github.com/oxidecomputer/omicron/blob/main/.claude/skills/flake-review/SKILL.md), backed by a [catalog](https://github.com/oxidecomputer/omicron/blob/main/docs/flake-patterns.adoc) I wrote<sup>[1](https://sunshowers.io/posts/glue-work/#fn:1)</sup> over a few hours. I’ve since used the skill to fix almost a dozen test flakes, making the entire team’s lives better.
+However, the machine itself seems to have a hardware problem with the
+Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
+I might need to replace it. And I have *no* idea what laptop I
+might get.
 
-> Should you never do glue work? No, you should do glue work *tactically*. That is, you should do this kind of extra work for the projects you lead — the projects whose success you’re accountable for — in order to make sure they succeed. You won’t be rewarded for the glue work specifically, but you will be rewarded for the success of the project. For other projects, you should just do your regular job.
+- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
+  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
+  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
+- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
+- Presentations: **reveal.js**
+  - I absolutely love this.
+  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
+  - Blogpost about reveal.js
+  - Here are some presentations I’ve given, using reveal.js
+- File manager: **Nautilus**
+  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
+- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
+- Text expansion: **espanso**
+  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
+- Browser: **Firefox** or **links**
+  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
+  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
+- Local wiki / knowledge management: **vimwiki**
+  - because I use vim so much, vimwiki was quite an obvious choice.
+  - I use this for keeping track of my professional development, and for various notes
+- Disk encryption: **LUKS**
+- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
+- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
+  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
+- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
+- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
+- Scanning: **paperless-ngx**
+- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
 
-With the most emphatic of feelings, *fuck that*. I do glue work whenever I’m the best situated person to do the glue work. The idea that you shouldn’t help your peers, simply because someone in middle management has trouble articulating the value of helping your peers, should be deeply offensive to any serious professional.
+Why so many terminal-based tools? The simple answer is that I am very
+comfortable in a terminal, and I like them. They have fewer distractions
+and, when compared with most GUI software, are just - IMHO - easier to
+use, especially when I don’t need to move my hands away from the
+keyboard. So, while I don’t use them exclusively, I use
+`mutt`, `vim`, `ikhal`,
+`ncmpcpp`, `newsboat`, `toot`,
+`links`, and various other TUIs, frequently.
 
-> Is this a deeply cynical take about how to succeed in office politics? I don’t actually think so. Large tech companies operate at something like 20-60% efficiency at any given time (as they get larger, they get less efficient).
+## Server-side stuff
 
-A large chunk of people’s working lives is wasted on solvable problems whose value organizations don’t recognize. How can one not be cynical about this kind of unnecessary waste and suffering? It baffles me.
+Everything here - other than Signal - is self-hosted, and I’m mostly
+using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
+than I did.
 
-So, what is going on here? Any organization beyond a certain size requires [legibility](https://en.wikipedia.org/wiki/Seeing_Like_a_State) to function. The requirement for legibility pulls in all the things many people recoil at: performance reviews, OKRs, KPIs and whatnot<sup>[2](https://sunshowers.io/posts/glue-work/#fn:2)</sup>.
+(Again, this doesn’t list everything; just the main
+applications.)
 
-Some big tech firms have figured out ways of making some of that glue work more legible. For example, Meta has fairly large internal tools and developer infrastructure teams, where goals are set around measurable indicators like performance numbers. But there will always be some glue work that will resist all attempts to measure it, and to the extent that firms don’t care about it, they will suffer.
+- Email (MTA): **postfix / dovecot**
+  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
+- File synchronisation: **Syncthing**
+  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
+- Video conferencing: **Signal**
+  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
+- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
+- Time tracking: **Kimai**
+  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
+- “Case management” / “Matter management”: **EspoCRM**
+- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
+- Vulnerability scanning: **greenbone/OpenVAS**
+- Monitoring: **Uptime Kuma**
+  - I implemented this not long after the last update. It … just works?
+- Forge / hosted git repository: **Forgejo**
+  - I use this for version tracking the website, and for a couple of template projects
+  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
+- SIEM: **Wazuh**
+- Password manager: **vaultwarden**
+- Website: it is a static site built via **mkdocs**, hosted on **apache2**
+  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
+  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
+- Blog: **BSSG**
+  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
+  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
+  - I tend to use my personal blog for posts about the more technical bits and pieces
+  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
+- Fediverse: I am using the *glitch-soc Mastodon** fork
+  - Switching from normal Mastodon to glitch-soc Mastodon was easy
+  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
+  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
+- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
+- DNS: **unbound**, with **Pi-Hole** in front of it
+  - I used to run a doh server, but I’ve stopped doing that.
+- Backups: **restic** and **rsync**
+  - Notes on restic
+- Forms: **LiberaForms**
+  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
+  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
+- Collaborative document editing: I don’t.
+  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
 
-What does one do instead? Well, [getting rid of performance reviews](https://oxide.computer/blog/oxides-compensation-model-how-is-it-going) certainly helps! For the last few years of my work life at Oxide, the distinction between glue work and feature work has largely vanished; the question I’ve repeatedly asked my coworkers and manager is “how can I be helpful?”, not “what would look good on my performance review?” But I accept that larger organizations will need a greater degree of legibility. I think all the usual answers apply: don’t overhire (and certainly don’t [incentivize managers](https://www.nbcnews.com/id/wbna54928896) to hire as many people as possible), don’t require all work to be legible, and trust your employees with the rest.
+## AI tools
 
-1. I wrote the catalog in my own words, for two reasons: to gain a deeper understanding of the kinds of test flake patterns we’ve seen in our codebase, and to not subject my peers to AI slop prose. [↩︎](https://sunshowers.io/posts/glue-work/#fnref:1)
-2. Did you know that OKR and KPI mean [slightly different things](https://www.atlassian.com/blog/teamwork/okr-vs-kpi)? Before writing this post, I did not! [↩︎](https://sunshowers.io/posts/glue-work/#fnref:2)
+## Mobile device
+
+I’m using a Pixel running GrapheneOS for my mobile device.
+
+I use F-Droid as the main app store.
+
+Using Android doesn’t thrill me, especially given Google’s direction
+of travel, but at the moment - despite trying quite a lot of different
+OSs and devices, including postmarketOS and Ubuntu Touch, as well as
+SailfishOS previously - I have not found something that does what I need
+better than GrapheneOS.
+
+## Working with others
+(who don’t use FOSS tools)
+
+No change here: zero problems.
+
+Many of my clients use Microsoft’s software, or Apple’s software.

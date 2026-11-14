@@ -1,591 +1,265 @@
-Probabilistic data structures give you approximate answers to questions about the data they handle. Does the set contain a certain item? How many unique items are in the collection? Which items appear most often? Unlike deterministic structures like sets and frequency tables, the answers might not be exact, but in return, you can drastically reduce memory usage.
+*This post (and the code behind it) was written with a lot of help from AI. I'm not going to
+apologize for that. If that bothers you, feel free to close the tab.*
 
-In this post, we'll talk about what probabilistic structures are, how they work, and what kinds of guarantees they provide. I'll also introduce [**unsure**](https://github.com/nalgeon/unsure) — a package that implements these structures in Go. It's simple (the core logic for each data structure is 100–300 LOC), fast (usually several times faster than other implementations), and has no dependencies except for the standard library.
+I maintain [Ratatui](https://ratatui.rs), so I see a lot of the TUIs people build. Many of them end up looking fairly
+same-ish: plain boxes on a boring background, missing a bunch of the things that good design in
+other mediums brings us.
 
-[Bloom filter](https://antonz.org/probabilistic-data-structures/#bloom-filter) •
-[Count-min sketch](https://antonz.org/probabilistic-data-structures/#count-min-sketch) •
-[HyperLogLog](https://antonz.org/probabilistic-data-structures/#hyperloglog) •
-[T-digest](https://antonz.org/probabilistic-data-structures/#t-digest) •
-[Top-k](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
+Borders are part of the problem. They have to take up space, so they become part of the panels
+people want to build. One option is to drop them and just use color, but borders are really nice
+for delineating and surrounding things. There are lots of ways to sort of get borders in a
+terminal, but none that are 100% good. I've drawn enough `┌──┐` by hand to have opinions about
+this.
 
-## [#](https://antonz.org/probabilistic-data-structures/#bloom-filter)
-Bloom filter
+The usual way is the Unicode Box Drawing block, which has 128 characters for lines, corners and
+joins. Somehow that's still not enough:
 
-A Bloom filter is a set that trades certainty for space. It can tell you that an item is *definitely not* in the set, or that it *probably is* (which might be a false positive). The filter doesn't actually store the items, so it's much more compact than a regular set.
+[![The Unicode Box Drawing block, U+2500 to U+257F, rendered in Ghostty](https://www.joshka.net/cell-borders/box-drawing-block.png)](https://www.joshka.net/cell-borders/box-drawing-block.png)
 
-For example, a regular set with 1,000,000 distinct 8-byte strings takes about 64 MB. A Bloom filter for the same strings, with a 1% false positive rate, uses only 1.24 MB (about 10 bits per item) — that's 50 times smaller. The size of the filter doesn't depend on the item size, so the difference gets even bigger with longer strings.
+So I've been working on a terminal protocol that draws thin lines on the edges of cells instead.
+I've got it working as [a patch to Ghostty](https://github.com/joshka/ghostty/tree/joshka/cell-borders) (and [an earlier version in
+Rio](https://github.com/raphamorim/rio/pull/1947) before that), and
+I've built demo apps for it with Ratatui. I'd like feedback from
+terminal and TUI authors.
 
-A Bloom filter often resides in memory and helps minimize expensive I/O operations such as disk reads or network calls. You check if an item is in the filter, and if the answer is "no", you skip the costly lookup. If the answer is "yes", you still have to perform the lookup because it might be a false positive.
+[![A tiling window manager demo built with Ratatui, using cell borders for panes, tabs, form fields and buttons](https://www.joshka.net/cell-borders/panes.png)](https://www.joshka.net/cell-borders/panes.png)
 
-```go
-// A filter for 1000 items with a 1% false positive rate.
-filter := bloom.New(1000, 0.01)
+Every line in that screenshot is a cell border. None of them use up a row or column. The tab
+labels sit on the top edge of each pane, the text fields are underlined right under the text, and
+the buttons are one row tall and rounded.
 
-filter.Add([]byte("alice"))
-filter.Add([]byte("bob"))
+Here's the same app in a terminal without cell borders, falling back to box-drawing characters:
 
-filter.Contains([]byte("alice")) // true
-filter.Contains([]byte("carol")) // false (or, rarely, true)
+[![The same demo drawn with box-drawing characters](https://www.joshka.net/cell-borders/panes-box.png)](https://www.joshka.net/cell-borders/panes-box.png)
+
+Each pane loses a row and a column on every side, so the log pane shows two fewer lines and the
+notes wrap differently. The tab labels move inside the frame. The text fields use the underline
+attribute instead, and the checkbox and buttons turn into brackets.
+
+- Borders, obviously. Panes and panels that don't eat a row and column on every side.
+- Menus and popups that sit on top of other content and still look like they're on top.
+- Panel style apps, where the layout is a set of regions that each want an edge.
+- Widgets like text fields, buttons and checkboxes, which want a line right up against their text.
+- Making things look neater in general. A border on the outer edge of a panel's background looks a lot cleaner, and text can run right up to it.
+
+The settings form, with cell borders and then with the box-drawing fallback:
+
+[![A form with underlined text fields, a checkbox and rounded buttons drawn with cell borders](https://www.joshka.net/cell-borders/zoom-form.png)](https://www.joshka.net/cell-borders/zoom-form.png)
+
+[![The same form with the underline attribute and bracketed buttons](https://www.joshka.net/cell-borders/zoom-form-box.png)](https://www.joshka.net/cell-borders/zoom-form-box.png)
+
+The tabs are the same story. With cell borders they sit on the pane's top edge. With box
+characters they need their own row inside the frame:
+
+[![Pane tabs drawn on the top edge of the pane with cell borders](https://www.joshka.net/cell-borders/zoom-tabs.png)](https://www.joshka.net/cell-borders/zoom-tabs.png)
+
+[![The same tabs inside a box-drawing frame](https://www.joshka.net/cell-borders/zoom-tabs-box.png)](https://www.joshka.net/cell-borders/zoom-tabs-box.png)
+
+### [Charts](https://www.joshka.net/cell-borders/#charts)
+
+Lines between cells also work for charts. btop-style braille graphs fill every cell with dots, so
+there's nowhere to put a gridline or an average line without giving up a row. With cell borders
+they sit on the cell edges between the dots. Here's a monitor in that style, built with Ratatui:
+
+[![A braille CPU graph with gridlines and an average line drawn on the cell edges](https://www.joshka.net/cell-borders/chart.png)](https://www.joshka.net/cell-borders/chart.png)
+
+And the fallback, which has to drop the gridlines:
+
+[![The same braille graph without gridlines](https://www.joshka.net/cell-borders/chart-box.png)](https://www.joshka.net/cell-borders/chart-box.png)
+
+Here's the tiling panes demo moving panes around, opening menus and the about dialog:
+
+[![An animation of panes being dragged, split and retiled, with a menu and dialog](https://www.joshka.net/cell-borders/tour.webp)](https://www.joshka.net/cell-borders/tour.webp)
+
+Partway through, it turns on a checkerboard of the cells, which shows how everything lines up
+with the grid. Toggle it here:
+
+The root of it is that box-drawing characters are text. Each line is a glyph that takes up a whole
+cell, and pretty much everything annoying about them falls out of that.
+
+Space is the obvious one. On my 16" laptop with a font I can actually read, the terminal is
+something like 200x50 (your prefs will move that around a bit). Columns are mostly fine at that
+size. Rows aren't. A layout with a couple of levels of nested panels can easily spend 6 or 8 of
+those 50 rows on nothing but lines. That's a lot of screen to give up for decoration.
+
+You also can't put a line between two cells that both have something in them. So there's no way to
+underline a text field right under its text, or to outline a button, without adding padding around
+it. Rounded corners sort of work, except the corner glyph has one background color, and when the
+panel's background is different from what's around it you get a little square of the wrong color
+in each corner. And the line itself is whatever the font decides it is, weight and position
+included.
+
+Then there's copy and paste. Select some text inside a box and you get the box too. Everyone who's
+pasted from a TUI into Slack knows the little `│` cleanup dance. Sometimes you do want the box
+(pasting a table into a chat, say), but mostly it's junk. Cell borders aren't text, so they never
+get copied, which cuts both ways.
+
+A cell border is a cell attribute, like a background color. Each cell can carry up to twelve line
+segments: the two halves of each of its four edges, and four arms from its center. Each segment
+has its own color, width, placement and style, and the terminal draws them over the cell grid.
+Borders are stored in the cells, so they scroll, erase, insert and reflow with the text. What
+happens on erase or scroll already has an answer, the same one as for colors.
+
+The edges are split into halves so borders line up with quadrant block characters (`▖▗▘▝` and
+friends). That makes it easy to draw a shape that's a half cell in from the grid and still put a
+neat border around it. Yes, that still uses a character for the fill, and there might be a better
+way to do that part. One problem at a time.
+
+The same idea could stretch to sextants and octants, or to quarter and eighth widths, if designs
+need them.
+
+[![The gallery script showing solid, double, dashed and dotted lines, rounded corners, forks and junctions](https://www.joshka.net/cell-borders/styles.png)](https://www.joshka.net/cell-borders/styles.png)
+
+[![Rounded panels with and without an outside fill color. The first has square patches of background at its corners](https://www.joshka.net/cell-borders/zoom-outside.png)](https://www.joshka.net/cell-borders/zoom-outside.png)
+
+Lines can be solid, double, dashed or dotted. Each corner and center of a cell can be square or
+rounded, with a configurable radius and anti-aliased arcs. A rounded corner can name an outside
+color, so the area outside the arc is painted correctly when the panel's background differs from
+what's behind it.
+
+When two neighboring cells both put a line on their shared edge, they merge into one line. The
+stroke with the higher `priority` wins, then the wider one, then the one to the right or below.
+That way a focused pane can raise its priority and keep its whole outline, whatever order its
+neighbors were drawn in. My first try was "right/bottom always wins", which lasted until the
+focused pane lost half its outline to its neighbor.
+
+Everything is one DCS string with a namespace:
+
+```
+ESC P 1 + b cell-border ; OP ; FIELDS... ESC \
 ```
 
-The filter is sized for the given number of items with a given false positive rate. You can add more, but the false positive rate will go up.
+The common path is a pen, held in the cursor like the current background color. Set it, print
+some text, and the printed cells get the borders:
 
-You can add an item to a Bloom filter and check if an item is in the filter, but you cannot delete an item, count the number of items, or iterate over them.
-
-### How it works
-
-**Bloom filter**<sup>[1](https://antonz.org/probabilistic-data-structures/#fn:1)</sup> is a large array of *m* bits, all set to zero at first. To add an item, you compute *k* hash values for it and set the k bits at those positions:
-
-```text
-        ┌──────┐                       ┌───────┐
-item ──►│ hash │──► h1, h2, ..., hk ──►│ mod m │──► i1, i2, ..., ik
-        └──────┘                       └───────┘
-
-          i1          i2                  ik
-┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
-│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-  0   1   2                                  m-1
+```
+ESC P 1 + b cell-border;pen;48;32;7aa2f7;0;0 ESC \     bottom edge, blue: an underline
+hello
+ESC [ 0 m                                              SGR 0 clears the pen
 ```
 
-To check if an item is in the filter, you compute the same k hashes and check if all k bits are set:
+There are also rectangle commands that set or clear borders on existing cells without touching
+the pen, and a capability query. An app sends the query followed by DA1. If the DA1 reply arrives
+without a `cell-border` reply first, the terminal doesn't support it, so the app falls back to box
+characters and reserves the space they need. Terminals that don't understand the DCS ignore it,
+the same as any unknown DCS.
 
-- If any of the bits is not set, the item definitely was never added.
-- If all the bits are set, the item was probably added, but it's not guaranteed (the bits could have been set by other items).
+The minimum a terminal needs is the pen, the rectangle commands and solid strokes. I've tried to
+keep that first cut small, because there's always one more "... and this" to add, and that's a
+slippery slope.
 
-```text
-          i1          i2                  ik
-┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
-│ 1 │ 0 │ 1 │ 0 │ 0 │ 1 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  all 1 → probably in the set
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+Line styles, rounded joints, priority and outside colors are extension fields listed in the
+capability reply, and unknown fields are ignored, so they can be added later. I'd rather the
+early decisions be two way doors where possible.
 
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1 │ 0 │ 1 │ 0 │ 0 │ 0 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  any 0 → definitely not
-└───┴───┴───┴───┴───┴─▲─┴───┴───┴───┴───┴───┴───┘          in the set
-                     (!)
+The spec calls itself version 1 (it's the `1` in `DCS 1 + b`). That's v1 in the old sense, before
+we all got bogged down in semver. It doesn't mean done or stable, it means it's the first one I was willing to write
+down. Read it as v0.1, or a draft, or whatever you prefer.
+
+## [Prior art](https://www.joshka.net/cell-borders/#prior-art)
+
+Parts of this have been done before:
+
+- DEC ruled lines in DECterm (extension 43 in the DA1 reply) draw lines around rectangles. They scroll with the text, but they're a separate layer: clearing the screen leaves them behind, and they're always one pixel wide in the normal text color.
+- SGR 51 to 65: framed, encircled, overline and the ideogram side lines. Some terminals draw borders with them, but they're on/off attributes with no color, width or joins, and there's no attribute for the bottom edge.
+- The Win32 console has per-cell grid flags for the top, left and right edges. PDCurses and X/Open curses (WA_TOP, WA_LEFT and friends) have similar attributes. These are the closest to this protocol, but they have no bottom edge (Win32), color, width or halves.
+- IBM 3270 terminals can outline whole input fields.
+
+What none of these give you is a line with its own color and width on each edge. The
+[rationale document](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) covers the prior art in more detail and explains each choice in
+the protocol.
+
+My own first prototype was in Rio ([raphamorim/rio#1947](https://github.com/raphamorim/rio/pull/1947)), with an earlier
+version of the spec that used APC instead of DCS. Feedback pointed out that APC isn't safe to
+reuse: Kermit 95 has run APC payloads as Kermit commands since the 90s. DCS is where structured
+terminal commands already live, and terminals ignore DCS strings they don't recognize, so I
+switched to that.
+
+When I first showed this around, most of the questions were about these. The spec goes into all
+of them properly, but here's roughly where I landed.
+
+Multiplexers were the first thing people asked about. tmux and friends redraw panes from their own
+idea of the cell grid, so passing these sequences through would just put borders in the wrong
+place. A multiplexer that doesn't know about the protocol should drop them and answer DA1 itself,
+and then apps running inside it fall back to box characters like they would anywhere else. One
+that does know about it can store borders like any other attribute and redraw them.
+
+Conflicting lines on a shared edge are settled when the terminal renders, using the priority rule
+above, so it doesn't matter what order the app wrote the cells in.
+
+Erase, insert and delete all work the way they do for background colors. Erased cells pick up the
+current pen, and lines that get inserted or deleted take their borders along. Scrollback, the
+alternate screen and reflow mostly come for free, because the border lives in the cell.
+
+On cost: the Ghostty change is about 1,650 lines, and a fair chunk of that is tests. Each cell gets
+a 16-bit border ID, which fits in padding that was already there, so cells don't get any bigger
+and a screen with no borders costs nothing extra. The IDs point into a table of distinct border
+sets (about 100 bytes each) that's shared by the whole terminal. A typical TUI only uses a
+handful of distinct sets, but the table is never freed, so in the worst case (all 65,535 IDs in
+use) it's somewhere around 10-15 MB.
+
+Rendering only does extra work for cells that have borders. Each one looks at its four neighbors to
+resolve shared edges, so changing a row also rebuilds the rows either side of it. Straight lines
+are a few solid quads per cell. Rounded corners cost more, because the anti-aliased arc is drawn as
+rows of small quads, roughly one per edge pixel. I haven't benchmarked any of this properly yet,
+and it's the part I'd most like another set of eyes on.
+
+The [spec](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-protocol.md) and [rationale](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) are on my Ghostty fork. The [Ghostty
+branch](https://github.com/joshka/ghostty/tree/joshka/cell-borders) implements all of version 1. I've only built and run it on macOS so far, so the
+GTK and OpenGL builds are untested. To build and run it (you'll need Zig 0.17 and Xcode):
+
+```
+git clone -b joshka/cell-borders https://github.com/joshka/ghostty.git
+cd ghostty
+zig build -Doptimize=ReleaseFast -Dxcframework-target=native
+open zig-out/Ghostty.app
 ```
 
-The k bits are randomly distributed throughout the entire array. When the filter is larger than the CPU cache, each bit access could result in a cache miss, so a lookup may wait on memory k times.
+Inside that Ghostty, the gallery script on the same branch draws the style gallery above. It
+detects support first, so it's also a quick check for another terminal's implementation:
 
-**Unsure** uses a blocked Bloom filter<sup>[2](https://antonz.org/probabilistic-data-structures/#fn:2)</sup>. The bit array is divided into 512-bit blocks, each matching the size of a CPU cache line. When you add or check an item, it is hashed once: part of the hash selects a block, and the rest selects k bits within that block. Each add or check only accesses one cache line, so the filter stays fast even when it's very large.
-
-```text
-        ┌──────┐         ┌──► high 32 bits ──► block
-item ──►│ hash │──► h ───┤                   ┌─────────┐
-        └──────┘         └──► low 32 bits ──►│ × salts │──► i1, i2, ..., ik
-                                             └─────────┘
-
-          block
-┌───────┬───▼───┬───────┬───────┬───────┬───────┐
-│   0   │   1   │   2   │   3   │  ...  │  n-1  │
-└───────┴───────┴───────┴───────┴───────┴───────┘
-        │       │
-┌───────┘       └───────────────────────────────┐
-│         i1          i2                  ik    │
-├───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┤
-│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-  0   1   2                                  511
+```
+python3 scripts/cell-borders.py            # the default view
+python3 scripts/cell-borders.py --styles   # line styles, joints and outside fill
 ```
 
-In a blocked Bloom filter, some blocks end up with more items than others, which increases the false positive rate. To make up for this, the filter needs to be a bit larger. Compared to a standard Bloom filter, it uses about 3% more memory at a 1% false positive rate, 8% more at 0.1%, and 15% more at 0.01%.
+Once it's running you can flip between views with keys: `p` placement, `c` colors, `h` blocks, `j`
+junctions, `e` halves, `s` styles and `l` live. `w` cycles the stroke width, `b` turns borders off
+so you can compare, and `q` quits. Each view also has a matching flag (`--placement`, `--styles`
+and so on) if you want to start on it.
 
-The filter uses the local *wyhash*<sup>[3](https://antonz.org/probabilistic-data-structures/#fn:3)</sup> implementation for hashing. It performs roughly the same as *xxh3*<sup>[4](https://antonz.org/probabilistic-data-structures/#fn:4)</sup> but has a much simpler implementation, without SIMD or assembly.
+The tiling panes demo is on the [Ratatui branch](https://github.com/joshka/ratatui/tree/joshka/cell-borders). It falls back to box-drawing
+characters when the terminal doesn't support cell borders, which is how I made the comparison
+shots above:
 
-### Benchmarks
-
-| Operation | Items | unsure | bits-and-blooms | gloom |
-| --- | --- | --- | --- | --- |
-| Add | 10K | **9** | 37 | 17 |
-|  | 1M | **10** | 36 | 19 |
-|  | 50M | **38** | 170 | 63 |
-| Contains, hit | 10K | **8** | 32 | 16 |
-|  | 1M | **9** | 32 | 18 |
-|  | 50M | **34** | 129 | 60 |
-| Contains, miss | 10K | **8** | 41 | 27 |
-|  | 1M | **9** | 48 | 33 |
-|  | 50M | **34** | 113 | 60 |
-
-Memory, bits per item at 10M items (lower is better):
-
-| False positive rate | unsure | bits-and-blooms | gloom |
-| --- | --- | --- | --- |
-| 10% | 4.84 | **4.80** | 5.39 |
-| 1% | 9.90 | **9.59** | 10.79 |
-| 0.1% | 15.49 | **14.38** | 16.18 |
-
-*Unsure* is about 4× faster than *bits-and-blooms* and 2× faster than *gloom*, using 1–8% more memory than *bits-and-blooms* and 4–10% less than *gloom*.
-
-## [#](https://antonz.org/probabilistic-data-structures/#count-min-sketch)
-Count-min sketch
-
-A count-min sketch is a frequency table that trades accuracy for space. It tells you approximately how many times each item has appeared. The estimate is *never less* than the actual count, but it can be *higher*. The sketch doesn't actually store the items, so it's much more compact than a regular map of per-item counts.
-
-For example, a regular map counting 1,000,000 distinct 8-byte strings takes about 64 MB. A count-min sketch for the same strings, with estimates within 0.01% of the total count (with 99% probability), uses only 0.55 MB — that's 116 times smaller. The size of the sketch doesn't depend on the number of distinct items or their size, only on the accuracy you choose. So the difference gets even bigger with more or longer strings.
-
-A count-min sketch is useful when you want to track how many times an item shows up in a large stream of events. It's often used to check if something has happened a certain number of times, like rate-limiting an IP after X requests or sending an alert after an error happens Y times. A sketch can also help decide if a key is worth keeping in the cache given how often it was requested.
-
-```go
-// Estimates within 0.1% of the total count, with 99% probability.
-sketch := countmin.New(0.001, 0.01)
-
-sketch.Add([]byte("alice"))
-sketch.Add([]byte("bob"))
-sketch.AddN([]byte("alice"), 2)
-
-sketch.Count([]byte("alice")) // 3 (or, rarely, more)
-sketch.Count([]byte("bob"))   // 1 (or, rarely, more)
-sketch.Count([]byte("carol")) // 0 (or, rarely, more)
-sketch.Total()                // 4
+```
+git clone -b joshka/cell-borders https://github.com/joshka/ratatui.git
+cd ratatui
+cargo run -p tiling-panes
 ```
 
-The sketch uses two settings: epsilon *ε* and delta *δ*. If the actual count for any given item is X and the total of all counts is N, then the estimated count for this item will usually be between X and X+ε·N. However, rarely (with a probability of δ) the estimate could be even higher.
+Drag panes around with the mouse to retile them. `n` and `v` split, `x` closes, and right click
+opens a pane menu. Press `b` to switch between cell borders and box drawing, or `g` to shade
+alternate cells and see where the edges are.
 
-For example, if ε is 0.001, δ is 0.01, and N is 1 million, then the estimate could be off by up to 1,000 (ε·N) with at least 99% probability (1−δ), and by more than 1,000 with at most 1% probability (δ).
+The btop-style monitor from the chart screenshots is in the same branch. Given how much of it an AI
+wrote, I did briefly consider calling it bslop:
 
-The counting error in a sketch depends on the total of all counts, not on each individual item. Therefore, frequent items are estimated more or less accurately relative to their count, but rare items are not — the absolute error is too high for them.
+[![The full btop-style monitor drawn with cell borders. The hostname is blurred](https://www.joshka.net/cell-borders/bslop.png)](https://www.joshka.net/cell-borders/bslop.png)
 
-You can increase the per-item counter in a sketch and get the estimated count for an item, but you cannot decrease a counter or iterate over the items.
+To run it:
 
-### How it works
-
-**Count-min sketch**<sup>[8](https://antonz.org/probabilistic-data-structures/#fn:8)</sup> is a table of counters with *d* rows and *w* columns, all starting at zero. Each row uses its own hash function that maps an item to one of the w counters. To add an item, you increment its counter in each row:
-
-```text
-        ┌──────┐                       ┌───────┐
-item ──►│ hash │──► h1, h2, ..., hd ──►│ mod w │──► i1, i2, ..., id
-        └──────┘                       └───────┘
-
-       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
-row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 5
-       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
-row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
-       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
-row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 6
-       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-                 i1              i2      id
+```
+cargo run -p cell-border-top
 ```
 
-To estimate an item's count, you take the smallest value from its d counters:
-
-- Other items might hash to the same counter, so each counter value is ≥ true count.
-- The smallest counter is the one with the fewest collisions, so it's the best estimate.
-
-```text
-       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
-row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4
-       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
-row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3
-       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
-row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5   min = 3
-       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-```
-
-With w = e/ε columns, each counter's error is at most ε·N, with probability at least 1 − 1/e. If you use d = ln(1/δ) rows, the chance that all d of the item's counters exceed its true count by more than ε·N is ≤ δ.
-
-**Unsure** uses a *conservative update*. When you add n to an item, it first finds the current estimate E (the smallest counter), then increases only the counters that are below E+n, leaving the larger ones unchanged. This keeps the same accuracy guarantee, but the actual error is about 2× lower. The tradeoff is that counts can't be decreased.
-
-```text
-       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
-row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 4
-       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
-row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
-       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
-row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 5
-       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-```
-
-Counters are 32-bit instead of the usual 64-bit, so the sketch uses 2× less memory. The item is hashed once, and each row gets its own position from that hash by salting it (multiplying by a random per-row constant).
-
-```text
-        ┌──────┐         ┌─────────┐
-item ──►│ hash │──► h ──►│ × salts │──► i1, i2, ..., id
-        └──────┘         └─────────┘
-```
-
-The sketch uses *wyhash* for hashing.
-
-### Benchmarks
-
-Here's an excerpt from the full benchmarks<sup>[9](https://antonz.org/probabilistic-data-structures/#fn:9)</sup>, comparing *unsure* to *BoomFilters*<sup>[10](https://antonz.org/probabilistic-data-structures/#fn:10)</sup> (a classic count-min sketch with 64-bit counters) (ns/op, lower is better):
-
-| Operation | ε | Size (unsure) | unsure | BoomFilters |
-| --- | --- | --- | --- | --- |
-| Add | 0.001 | 55 KB | **13** | 19 |
-|  | 0.00001 | 5.4 MB | **17** | 32 |
-|  | 0.000001 | 54 MB | **81** | 98 |
-| Count | 0.001 | 55 KB | **9** | 51 |
-|  | 0.00001 | 5.4 MB | **14** | 64 |
-|  | 0.000001 | 54 MB | **52** | 139 |
-
-Accuracy at ε=0.0001, N=10M additions over 1M distinct items, mean overestimate (lower is better):
-
-| Distribution | unsure | BoomFilters |
-| --- | --- | --- |
-| Uniform | **139** | 302 |
-| Zipf, s = 1.1 | **23** | 44 |
-| Zipf, s = 1.5 | **0.3** | 0.8 |
-| Size | **536 KB** | 1080 KB |
-
-*Unsure* is about 1.5× faster for Add and 4× faster for Count, using 2× less memory with 2–2.7× lower error.
-
-## [#](https://antonz.org/probabilistic-data-structures/#hyperloglog)
-HyperLogLog
-
-HyperLogLog is a unique items counter that trades accuracy for space. It tells you approximately how many *distinct items* it has seen, no matter how many times each one appeared. HyperLogLog (also called a *sketch* from here on) doesn't actually store the items, so it's much more compact than a regular set.
-
-For example, a regular set of 1,000,000 distinct 8-byte strings takes about 64 MB. A HyperLogLog sketch counting the same strings with about 0.8% error uses only 16 KB — that's almost 4,000 times smaller. The size of the sketch doesn't depend on the number of items or their size, only on the accuracy you choose. A 16 KB sketch counts a billion items as accurately as a thousand.
-
-HyperLogLog is useful when you need to count unique things in a large stream: unique visitors to a website, unique search queries per day, or distinct values in a database column.
-
-```go
-// Standard error about 0.8% of the true count.
-sketch := hll.New()
-
-sketch.Add([]byte("alice"))
-sketch.Add([]byte("bob"))
-sketch.Add([]byte("alice"))
-sketch.Add([]byte("carol"))
-
-sketch.Count() // 3 (approximately)
-```
-
-You can merge sketches to gather data from multiple machines or segments (like by hour, page, or region). When you merge two sketches, you get the total number of unique items from both, without counting shared items twice.
-
-```go
-home := hll.New() // visitors to the home page
-docs := hll.New() // visitors to the docs
-// ...
-home.Merge(docs)
-home.Count() // visitors to either page
-```
-
-The sketch has one setting: the precision *p*, which gives a relative standard error (stdErr) of 1.04/√(2^p). A common default is p=14, which gives 0.81% error.
-
-With p=14 and 1 million distinct items:
-
-- 68% of the time the estimate is within 0.81% (8,100) of the true count,
-- 95% within 1.6% (2·stdErr),
-- 99.7% within 2.4% (3·stdErr).
-
-The error is relative to the count, so the standard error is the same 0.81% for a thousand items or a billion.
-
-You can add items to a sketch, get the estimated count, and merge sketches. You cannot check if a specific item was added, remove items, or list them.
-
-### How it works
-
-**HyperLogLog**<sup>[11](https://antonz.org/probabilistic-data-structures/#fn:11)</sup> is based on a simple observation. If you hash items to random bit strings, about half of them start with 1, a quarter with 01, an eighth with 001, and so on. Seeing a hash with *k* leading zeros suggests there were about 2^(k+1) distinct items. Duplicates hash to the same value, so they don't affect the result.
-
-A single observation is unreliable, so the sketch divides the items into m = 2^p groups, where *p* is the selected precision. The first p bits of the hash pick a group (a *register*), and the register keeps the highest *rank* (leading zeros plus one) it has seen in the rest of the hash:
-
-```text
-        ┌──────┐   ┌──────────┬────────────────────────┐
-item ──►│ hash │──►│ 01101001 │ 0001101...             │
-        └──────┘   └────┬─────┴───────────┬────────────┘
-                        │ register i      └ rank = 3 zeros + 1 = 4
-          ┌───┬───┬───┬─▼─┬───┬───┬───┬───┬───┬───┐
-registers │ 3 │ 0 │ 5 │ 2 │ 1 │ 0 │ 4 │ 2 │ 0 │ 1 │  2 → 4
-          └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-```
-
-The count is estimated from all the registers together, using a harmonic mean of 2^register. The standard error is about 1.04/√m. Merging two sketches is just taking the maximum value from each pair of registers.
-
-The original estimator is biased when dealing with small counts (up to a few times m), so in these cases it uses a different formula called *linear counting*. This switch creates a sudden change in error, and some implementations (like HyperLogLog++<sup>[12](https://antonz.org/probabilistic-data-structures/#fn:12)</sup>) address it by using large tables of bias corrections based on real data.
-
-**Unsure** uses the improved estimator by Otmar Ertl<sup>[13](https://antonz.org/probabilistic-data-structures/#fn:13)</sup>. Instead of a harmonic mean of the registers, it works from a *histogram*: how many registers have value 0, value 1, and so on. A formula applied to the histogram gives an accurate estimate for any number of items, from zero to billions, so there's no need for a separate formula for small counts or for correction tables.
-
-The sketch updates the histogram whenever registers change. Most adds don't change any registers, so this is almost free. Counting always takes the same amount of time, no matter how big the sketch is. Other implementations scan all the registers on every count, which takes from microseconds to milliseconds.
-
-Registers are one byte each, and the histogram has 64 four-byte counters (256 bytes). The item is hashed once with *wyhash*, and the 64-bit hash is split into the register index and the rank.
-
-### Benchmarks
-
-Here's an excerpt from the full benchmarks<sup>[14](https://antonz.org/probabilistic-data-structures/#fn:14)</sup>, comparing *unsure* to *axiom*<sup>[15](https://antonz.org/probabilistic-data-structures/#fn:15)</sup> (HyperLogLog with LogLog-Beta estimator and sparse mode) (ns/op, lower is better):
-
-| Operation | p | Size | unsure | axiom |
-| --- | --- | --- | --- | --- |
-| Add | 10 | 1 KB | **5.5** | 7.6 |
-|  | 14 | 16 KB | **5.6** | 7.6 |
-|  | 18 | 256 KB | 8.1 | **7.9** |
-| Count | 10 | 1 KB | **68** | 18,300 |
-|  | 14 | 16 KB | **62** | 350,000 |
-|  | 18 | 256 KB | **57** | 4,710,000 |
-| Merge | 10 | 1 KB | **730** | 1,710 |
-|  | 14 | 16 KB | **20,100** | 58,600 |
-|  | 18 | 256 KB | **341,000** | 951,000 |
-
-Accuracy at p=14 (0.81% standard error), relative RMSE over 100 sketches (lower is better):
-
-| Distinct items | unsure | axiom |
-| --- | --- | --- |
-| 1,000 | 0.63% | **0.02%** |
-| 40,000 | **0.64%** | 0.71% |
-| 1,000,000 | **0.79%** | 0.89% |
-
-Memory at p=14 after adding the given number of distinct items (lower is better):
-
-| Distinct items | unsure | axiom |
-| --- | --- | --- |
-| 100 | 16 KB | **1.2 KB** |
-| 1,000 | 16 KB | **4.2 KB** |
-| 10,000 | 16 KB | 16 KB |
-| 1,000,000 | 16 KB | 16 KB |
-
-*Unsure* adds about as fast as *axiom*, counts 270–83,000× faster, and merges 2.3–2.9× faster, with the same accuracy and memory for counts above the number of registers. When there are fewer items than registers, *axiom*'s sparse mode makes it more accurate and compact.
-
-## [#](https://antonz.org/probabilistic-data-structures/#t-digest)
-T-digest
-
-A t-digest is a summary of a stream of numbers that trades accuracy for space. It can give you an approximate median, 99th percentile, or any other *quantile* of the data. It can also estimate what fraction of the numbers are below a certain value (the CDF). The digest doesn't actually store the numbers, so it's much more compact than a sorted list.
-
-For example, to find the exact 99th percentile of 1,000,000 numbers, you'd have to keep all of them. With 64-bit floats, that takes 8 MB. A t-digest estimates the same percentile within about 0.03% of the rank (between the 98.97th and the 99.03rd percentile) using only 8 KB — 1,000 times smaller. The size of the digest doesn't depend on the number of values, only on the accuracy you choose. An 8 KB digest summarizes a billion values as well as a million.
-
-A t-digest is useful when you need quantiles over a large stream: latency percentiles for a service, the distribution of request sizes or prices, or the outlier thresholds in sensor data.
-
-```go
-// Response times in milliseconds.
-digest := tdigest.New()
-
-digest.Add(12.5)
-digest.Add(8.1)
-digest.Add(130.0)
-// ...
-
-digest.Quantile(0.5)  // median
-digest.Quantile(0.99) // 99th percentile
-digest.CDF(100)       // fraction of responses faster than 100 ms
-```
-
-You can merge digests to gather data from multiple machines or segments (like by hour, endpoint, or region). A merged digest estimates the percentiles of all values, but with less accuracy than individual digests do.
-
-```go
-east := tdigest.New() // latencies on one server
-west := tdigest.New() // latencies on another
-// ...
-east.Merge(west)
-east.Quantile(0.99) // 99th percentile across both servers
-```
-
-The digest has one setting: the compression *δ*, which limits the number of centroids (see *How it works* below) to δ+2. A common default is δ=100, which takes 8 KB. Increasing δ uses more memory but reduces estimation error.
-
-The error is measured in ranks: a rank error of 0.03% at quantile q=0.99 means the value returned by `Quantile(0.99)` is somewhere between the 98.97th and the 99.03rd percentile of the actual values. Tail estimates, such as q=0.99 or q=0.999, are more accurate than the median (q=0.5).
-
-You can add numbers to a digest, estimate quantiles and the CDF, and merge digests. You cannot remove numbers or list them.
-
-### How it works
-
-**T-digest**<sup>[16](https://antonz.org/probabilistic-data-structures/#fn:16)</sup> summarizes the numbers as a sorted list of *centroids*. Each centroid has a mean and a weight — the number of values it represents. To estimate a quantile, the digest finds the centroids around the requested rank and interpolates between their means.
-
-The trick is in how big the centroids are allowed to grow. A *scale function* k(q) maps a quantile *q* to a number from -δ/4 to δ/4, and each centroid may only span 1 unit of k: if a centroid covers the quantiles from q₁ to q₂, then k(q₂) − k(q₁) ≤ 1.
-
-The arcsine scale function, k(q) = δ/(2π)·asin(2q-1), is steep near q=0 and q=1 and flat near the median. This means the centroids it produces are larger in the center and smaller at the ends:
-
-```text
-weight
-  │                ┌──┐
-  │             ┌──┤  ├──┐
-  │          ┌──┤  │  │  ├──┐
-  │       ┌──┤  │  │  │  │  ├──┐
-  │  ┌─┬──┤  │  │  │  │  │  │  ├──┬─┐
-  └──┴─┴──┴──┴──┴──┴──┴──┴──┴──┴──┴─┴──► value
-    min      q=0.25   median  q=0.75     max
-```
-
-With 1M values and δ=100, the centroids around the median hold about 27,000 values each, those around the 99th percentile about 5,000, and the outermost ones about 500. This keeps the error near the tails small.
-
-**Unsure** is the merging t-digest from the Dunning and Ertl paper. New values go to a buffer of 5·δ numbers. When the buffer is full, the digest sorts it and merges it with the centroids (already sorted) in a single pass, building new centroids from left to right as long as each one fits within its span of k. Every other pass goes right to left, so that neither tail ends up with fuller centroids. `Quantile`, `CDF` and `Merge` flush the buffer first.
-
-The centroids are kept in two fixed arrays of δ+2 entries (the current list and the next one being built), along with the cumulative weights for a binary search in `Quantile` and `CDF`. With δ=100, that's 16·102·2 + 8·103 bytes for the centroids, and 8·500 bytes for the buffer, about 8 KB in total.
-
-Centroids with weight 1 are treated as exact values rather than spread around their mean, and the exact minimum and maximum are used at the ends. So digests with few values give exact results, and `Quantile(0)` and `Quantile(1)` are always exact.
-
-### Benchmarks
-
-Here's an excerpt from the full benchmarks<sup>[17](https://antonz.org/probabilistic-data-structures/#fn:17)</sup>, comparing *unsure* to *influxdata*<sup>[18](https://antonz.org/probabilistic-data-structures/#fn:18)</sup> (merging t-digest with the same scale function) (ns/op, lower is better):
-
-| Operation | δ | unsure | influx |
-| --- | --- | --- | --- |
-| Add | 50 | **44** | 78 |
-|  | 100 | **49** | 86 |
-|  | 500 | **59** | 105 |
-| Quantile | 50 | 11 | 13 |
-|  | 100 | 13 | 13 |
-|  | 500 | 15 | 16 |
-| Merge | 50 | **296** | 2,060 |
-|  | 100 | **630** | 4,330 |
-|  | 500 | **2,720** | 23,950 |
-
-Accuracy at δ=100, mean rank error over 1M normal values (lower is better):
-
-| Digest | Quantile | unsure | influx |
-| --- | --- | --- | --- |
-| Single | 0.5 | 0.007% | 0.015% |
-|  | 0.99 | 0.018% | 0.016% |
-|  | 0.999 | 0.011% | 0.009% |
-| Merged | 0.5 | 0.055% | 0.037% |
-|  | 0.99 | 0.023% | 0.021% |
-|  | 0.999 | 0.006% | 0.016% |
-
-Memory at δ=100 (lower is better): *unsure* 8.5 KB, *influxdata* 14.4 KB.
-
-*Unsure* adds values about 1.8× faster than *influxdata*, queries at the same speed, merges 7–9× faster, and uses 40% less memory at about the same accuracy.
-
-## [#](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
-Top-k sketch
-
-A Top-k sketch finds the *k most frequent* items in a stream (the "heavy hitters"), along with their approximate counts. It uses a fixed amount of memory based only on k, no matter how many different items are in the stream.
-
-To find the exact top items, you'd have to count every unique item, for example with a map of per-item counts. With millions of distinct items, that takes tens or hundreds of megabytes. A Top-k sketch for the top 1000 items takes about 360 KB, and it usually finds all of them.
-
-A Top-k sketch is useful when you want to identify the "hottest" data: the most requested URLs, the most active users, or the most common search queries. Unlike a count-min sketch, it keeps the actual items, so it can list them.
-
-```go
-// Track the 2 most frequent items.
-sketch := topk.New(2)
-
-sketch.Add([]byte("alice"))
-sketch.Add([]byte("bob"))
-sketch.Add([]byte("carol"))
-sketch.AddN([]byte("alice"), 4)
-sketch.AddN([]byte("carol"), 2)
-
-sketch.Top()                  // [{alice 5} {carol 3}]
-sketch.Count([]byte("alice")) // 5
-sketch.Count([]byte("bob"))   // 0 (not in the top 2)
-sketch.Total()                // 9
-```
-
-`Top` returns up to k items, from the most frequent to the least frequent. Counts are estimates: they're usually exact for the most frequent items, but may be slightly lower than the actual count for less common items.
-
-The sketch works best when the stream is skewed, meaning a few items appear much more often than the others. This is common in real situations. If all items are about equally frequent, there is no clear top k, and the results become less accurate.
-
-You can add items to the sketch and get the top items with their counts, but you can't decrease counts or check items that aren't in the top k.
-
-### How it works
-
-**HeavyKeeper**<sup>[19](https://antonz.org/probabilistic-data-structures/#fn:19)</sup> is a table of buckets that estimates item counts. It has *d* rows and *w* columns, and each item maps to one bucket in each row. Each bucket holds a fingerprint of the item and a count. To add an item, you update its bucket in each row:
-
-- If the bucket is empty or owned by the item, increase its count.
-- If the bucket is owned by another item, decay it: decrease its count by 1 with probability b^count (b < 1). When the count reaches 0, the new item takes over the bucket with a count of 1.
-
-```text
-          ┌──────┐
-add x ──► │ hash │──► h ──► high 32 bits ──► fingerprint = 7
-          └──────┘    │
-                      │ map to buckets
-                   ┌──┴────────────┐
-       ┌───────┬───▼───┬───────┬───│───┬───────┐
-row 1  │       │ fp=7  │ fp=3  │   │   │ fp=5  │  column 2 is owned by x:
-       │       │  41   │   2   │   │   │  980  │  41 → 42
-       ├───────┼───────┼───────┼───▼───┼───────┤
-row 2  │ fp=9  │       │       │ fp=2  │ fp=4  │  column 4 is owned by another:
-       │  17   │       │       │   3   │   1   │  3 → 2 with probability b^3
-       └───────┴───────┴───────┴───────┴───────┘
-         col 1   col 2   col 3   col 4   col 5
-```
-
-The item's estimated count is the largest count among its buckets. Frequent items quickly reach counts that make decay very unlikely, so they keep their buckets. Rare items keep replacing each other without affecting the frequent ones. An item that becomes frequent later in the stream can still outnumber a less frequent owner and take over its bucket.
-
-Next to the table, the sketch keeps a min-heap with the k items that have the largest estimates so far. After an item's buckets are updated, if its estimate is larger than the smallest count in the heap, the item is added to the heap, and the smallest item is removed. If the item is already in the heap, its count is increased.
-
-```text
-                   ┌───────────┐
-add x (15) ───────►│ bob    12 │  the root has the smallest count
-                   └─────┬─────┘
-              ┌──────────┴────────┐
-        ┌─────┴─────┐       ┌─────┴─────┐
-        │ alice  30 │       │ dave   14 │  15 > 12: x replaces bob at the root
-        └─────┬─────┘       └───────────┘  15 > 14: x moves down, dave moves up
-      ┌───────┴──────┐
-┌─────┴─────┐  ┌─────┴─────┐
-│ eve   980 │  │ fay    41 │
-└───────────┘  └───────────┘
-```
-
-**Unsure** uses d = 2 rows of max(16k, 256) buckets, and a decay base of b = 0.8. The probabilities b^count are precomputed as 64-bit thresholds, so decay is cheap: the count *c* decreases if a random number is below the c-th threshold.
-
-The original HeavyKeeper uses b = 1.08⁻¹ ≈ 0.93, and more rows. A smaller b lets frequent items lock their buckets faster, which makes the sketch more precise on flat streams. However, if b is too small (like 0.5), the first items to claim buckets keep them permanently, so items that become frequent later are never counted, even if they end up being the most frequent. Using b = 0.8 keeps most of the precision and still catches most late-arriving frequent items. As for the rows, two are enough to protect frequent items from collisions in a single row, and adding more rows only makes the sketch slower.
-
-The item is hashed once. The hash is mapped to a position in each row by salting it (multiplying by a random per-row constant). The fingerprint is the top 32 bits of the hash. The heap uses the 64-bit hash to identify items, so it doesn't compare the actual item bytes.
-
-Each bucket is 8 bytes (a 32-bit fingerprint and a 32-bit count), so the table takes 256·k bytes. The heap takes about 100 bytes per item plus the item itself.
-
-The sketch uses *wyhash* for hashing and *wyrand* for random numbers.
-
-### Benchmarks
-
-| Operation | k | unsure | keiler | dgryski |
-| --- | --- | --- | --- | --- |
-| Add | 10 | **24 ns** | 64 ns | 59 ns |
-|  | 100 | **25 ns** | 84 ns | 70 ns |
-|  | 1000 | **33 ns** | 130 ns | 73 ns |
-| Top | 10 | **0.34 µs** | 0.64 µs | 0.77 µs |
-|  | 100 | **3.7 µs** | 13 µs | 14 µs |
-|  | 1000 | **75 µs** | 270 µs | 292 µs |
-
-Precision is the fraction of the reported top k that is in the true top k (higher is better):
-
-| k | Zipf s | unsure | keiler | dgryski |
-| --- | --- | --- | --- | --- |
-| 100 | 0.6 | **0.90** | 0.38 | 0.19 |
-|  | 0.8 | **1.00** | 0.78 | 0.85 |
-|  | 1.0 | 0.99 | **1.00** | **1.00** |
-|  | Size | 39 KB | **27 KB** | 39 KB |
-| 1000 | 0.6 | **0.97** | 0.70 | 0.52 |
-|  | 0.8 | **1.00** | 0.98 | **1.00** |
-|  | 1.0 | **1.00** | **1.00** | **1.00** |
-|  | Size | **364 KB** | 414 KB | 453 KB |
-
-Count error is the mean of |estimate − true| / true over the reported items (lower is better):
-
-| k | Zipf s | unsure | keiler | dgryski |
-| --- | --- | --- | --- | --- |
-| 100 | 0.6 | **14%** | 94% | 428× |
-|  | 0.8 | **0.10%** | 46% | 230% |
-|  | 1.0 | 0.01% | 0.12% | **0.0%** |
-| 1000 | 0.6 | **2.4%** | 62% | 18× |
-|  | 0.8 | **0.23%** | 1.9% | 0.31% |
-|  | 1.0 | 0.05% | 0.24% | **0.02%** |
-
-*Unsure* is 2–4× faster than the others for Add and 1.8–4× faster for Top. On flat streams (s=0.6), it finds the true top k with 90–97% precision, while *keiler* drops to 38–70% precision with a count error of 62–94%, and *dgryski* to 19–52% with counts 18× or more too high. On skewed streams (s=1.0), all three are about equally accurate.
-
-## [#](https://antonz.org/probabilistic-data-structures/#wrapping-up)
-Wrapping up
-
-As engineers, we usually want exact answers from our data. But sometimes, allowing a bit of uncertainty can cut memory usage by tens, hundreds, or even thousands of times. That's where probabilistic data structures come in:
-
-- Bloom filter checks if an item might be in a set.
-- Count-min sketch estimates how many times each item has occurred.
-- HyperLogLog estimates the number of distinct items.
-- T-digest estimates quantiles of a stream of numbers.
-- Top-k sketch identifies the most frequent items in a stream.
-
-To use them in Go, try the ** [nalgeon/unsure](https://github.com/nalgeon/unsure) package:
-
-```text
-go get github.com/nalgeon/unsure
-```
-
-1. [Space/time trade-offs in hash coding with allowable errors](https://doi.org/10.1145/362686.362692) by Burton H. Bloom, 1970. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:1)
-2. [Cache-, hash-, and space-efficient Bloom filters](https://doi.org/10.1145/1498698.1594230) by Felix Putze et al., 2009. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:2)
-3. [Reference wyhash implementation](https://github.com/wangyi-fudan/wyhash) by Wang Yi. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:3)
-4. [Reference xxHash implementation](https://github.com/Cyan4973/xxHash) by Yann Collet. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:4)
-5. [Bloom filter benchmarks](https://github.com/nalgeon/unsure/tree/main/bloom#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:5)
-6. [bits-and-blooms/bloom](https://github.com/bits-and-blooms/bloom) by Daniel Lemire. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:6)
-7. [jcalabro/gloom](https://github.com/jcalabro/gloom) by Jim Calabro. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:7)
-8. [An improved data stream summary: the count-min sketch and its applications](https://doi.org/10.1016/j.jalgor.2003.12.001) by Graham Cormode and S. Muthukrishnan, 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:8)
-9. [Count-min sketch benchmarks](https://github.com/nalgeon/unsure/tree/main/countmin#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:9)
-10. [tylertreat/BoomFilters](https://github.com/tylertreat/BoomFilters) by Tyler Treat. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:10)
-11. [HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm](https://doi.org/10.46298/dmtcs.3545) by Philippe Flajolet et al., 2007. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:11)
-12. [HyperLogLog in practice](https://doi.org/10.1145/2452376.2452456) by Stefan Heuleet et al., 2013. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:12)
-13. [New cardinality estimation algorithms for HyperLogLog sketches](https://arxiv.org/abs/1702.01284) by Otmar Ertl, 2017. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:13)
-14. [HyperLogLog benchmarks](https://github.com/nalgeon/unsure/tree/main/hll#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:14)
-15. [axiomhq/hyperloglog](https://github.com/axiomhq/hyperloglog) by Axiom. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:15)
-16. [Computing extremely accurate quantiles using t-digests](https://arxiv.org/abs/1902.04023) by Ted Dunning and Otmar Ertl, 2019. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:16)
-17. [T-digest benchmarks](https://github.com/nalgeon/unsure/tree/main/tdigest#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:17)
-18. [influxdata/tdigest](https://github.com/influxdata/tdigest) by InfluxData. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:18)
-19. [HeavyKeeper: An Accurate Algorithm for Finding Top-k Elephant Flows](https://www.usenix.org/conference/atc18/presentation/gong) by Junzhi Gong et al., 2018. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:19)
-20. [Top-k benchmarks](https://github.com/nalgeon/unsure/tree/main/topk#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:20)
-21. [keilerkonzept/topk](https://github.com/keilerkonzept/topk) by KEILERKONZEPT. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:21)
-22. [dgryski/go-topk](https://github.com/dgryski/go-topk) by Damian Gryski. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:22)
-23. [Efficient Computation of Frequent and Top-k Elements in Data Streams](https://doi.org/10.1007/978-3-540-30570-5_27) by Ahmed Metwally et al., 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:23)
+It's a real system monitor (it reads your actual CPU, memory, network and processes), so it's a
+better test of how this looks on a busy screen than the panes demo. `1` to `4` show and hide the
+boxes, `b` and `g` work the same as in the panes demo, and `h` or `?` lists the rest of the keys.
+It needs a newer Rust (1.95) than the rest of Ratatui because of the `sysinfo` dependency.
+
+I'm not attached to this being the exact solution, but I think it's a problem worth solving, and
+I'd like it to be more than one terminal's feature (and more than one weekend's worth of yak
+shaving). If you work on a terminal, would you implement this, and which parts look expensive? If you work on a TUI library or app, which of your widgets
+would use it, and what would they need that isn't here? Comments are welcome on the
+[Ghostty discussion](https://github.com/ghostty-org/ghostty/discussions/14324).
