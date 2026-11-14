@@ -1,329 +1,179 @@
-I think the most trustworthy programming languages are those which are *human-scale*: languages which a single user could reasonably write from scratch on some readily-available computational substrate. Knowing how to make your own tools provides a satisfying [feeling of power](https://en.wikipedia.org/wiki/The_Feeling_of_Power).
+Ufuk made a comment that he enjoyed my description of SSA from bytecode in
+[Aaron’s livestream with me](https://www.youtube.com/watch?v=h9_FyHYUhww).
+While filming the livestream—an intro to ZJIT internals—I got a little
+nervous that people would shy away from our 1900 line `add_iseq_to_hir`
+function. This function is responsible for converting CRuby’s stack based
+bytecode for the YARV virtual machine into a high-level SSA IR for ZJIT to
+analyze and optimize.
 
-Today I’d like to take you on a brisk journey through the process of implementing an interesting subset of the [PostScript](https://en.wikipedia.org/wiki/PostScript) programming language. We will ignore or simplify many features of the language, and we will elide most error-handling for simplicity, but every PostScript example we discuss will be a well-formed PostScript program which has the same behavior in our toy subset and a standard PostScript interpreter like [Ghostscript](https://en.wikipedia.org/wiki/Ghostscript).
-
-PostScript is primarily designed for describing printed documents: it has a rich vocabulary of features for creating and manipulating raster and vector graphics. For the purposes of this article I will narrowly focus on its mechanics as a general-purpose programming language.
-
-PostScript programs are composed of a series of whitespace-delimited tokens, plus a few special characters (`% / ( ) < > [ ] { }`) which immediately terminate the preceding token and begin a new one. The `%` character begins a line-comment. The `/` character can prefix a *literal name*, which we’ll discuss in more detail momentarily. The `( )` and `< >` characters enclose PostScript *strings*, which we will omit from our interpreter for simplicity. The `[`, `]`, `{` and `}` characters are used to enclose PostScript *arrays* and *procedures*, respectively, but are ordinary self-delimiting tokens. Given a PostScript program fragment:
-
-```
-% This is a line comment
-/double {2 mul} def
-
-3 double
-```
-
-The tokens are:
+It takes bytecode that looks roughly like this:
 
 ```
-['/double','{','2','mul','}','def','3','double']
+push 3
+push 4
+add
 ```
 
-The PostScript execution model centers around several *stacks*: chiefly, an *operand stack* which is used to pass arguments between operators and a *dictionary stack* which is used to associate names with values.
-
-The above program fragment is executed as follows:
-
-It’s also worth taking a moment to touch on PostScript *arrays*. The `[` operator pushes a special value called `mark` onto the operand stack, and the `]` operator pops all of the values of the operand stack down to the topmost `mark` and builds an array from them:
+into SSA form, giving an SSA value to each stack slot, ish:
 
 ```
-[]             % an empty array
-[1 2]          % an array of two values
-[[1 2][3 4]]   % an array of two values, each of which is an array
-[2 3 add]      % equivalent to [5]
+v0 = const 3
+v1 = const 4
+v2 = add v0, v1
 ```
 
-We’ll discuss programming in PostScript in more detail later, but this is enough to get building.
+While our function is 2000 lines long because it handles a lot of specific
+opcodes and weird facts about those opcodes, the core of it is small. Here is
+that core.
 
-Our PostScript interpreter will be written in a very concise style of JavaScript that is influenced by the philosophy of [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)), an influential ancestor of PostScript:
+The bytecode assumes that when it is run, it will be operating on a stack. This
+means that every opcode has implicit stack inputs and implicit stack outputs.
 
-Here are a few routines which illustrate this style:
+`push 3`, for example, has empty stack inputs and one stack output. By
+contrast, `add` has two stack inputs and one stack output. Some instructions
+such as `nop` are empty on both counts. As far as I can tell, all instructions
+have *at most* one output.
 
-```
-last = x=>x[x.length-1]
-iota = x=>Array.from(Array(x)).map((_,i)=>i)
-mod  = (x,y)=>x-y*Math.floor(x/y)
-```
+These counts are known when looking at the bytecode: we can reason statically
+about how many inputs and outputs each opcode has. Some are variadic, such as
+`send` (call), but they come bearing an argument count in a nearby field.
 
-If you’re finding yourself struggling to “skim” code in this style, try to slow down and read each definition carefully, character-by-character. You may also find it useful to experiment with each definition in your browser’s JavaScript console as you go along.
-
-The first step in writing any interpreter is determining how we’ll represent data, in this case describing PostScript datatypes in terms of JavaScript datatypes:
-
-| PostScript | Example | JavaScript | Example |
-| --- | --- | --- | --- |
-| number | `37` | Number | `37` |
-| boolean | `true` | Boolean | `true` |
-| name | `a` | String | `"a"` |
-| literal | `/a` | String | `"/a"` |
-| dictionary | `<</a 11>>` | Map | `new Map([['/a',11]])` |
-| array | `[11 22]` | Array | `[11,22]` |
-| procedure | `{1 add}` | Object-wrapped Array | `{t:'proc',v:[1,'add']}` |
-| operator | `add` | Function | `(x,y)=>x+y` |
-| mark | `mark` | Singleton Object | `MARK` |
-
-Using primitive JavaScript values to represent most of these types will be particularly helpful for writing the definitions of all the operators.
-
-Here are a set of definitions for constructing, accessing, and identifying various PostScript values:
+Let’s model how the first example runs on the VM by adding a view of the stack
+after each instruction has run. The stack will be displayed as a list
+left-to-right, where the left is the bottom and the right is the top.
 
 ```
-MARK    = {}
-proc    = x=>({t:'proc',v:x})
-procval = x=>x.v
-isproc  = x=>x&&x.t=='proc'
-isarray = x=>Array.isArray(x)
-isfunc  = x=>'function'==typeof x
-isname  = x=>'string'==typeof x&&`/`!=x[0]
-litval  = x=>x.slice('/'==x[0])
+       ; []
+push 3 ; [3]
+push 4 ; [3, 4]
+add    ; [7]
 ```
 
-Next, we need to translate PostScript syntax into the above data representations. We can use a JavaScript RegExp to split an input program into a sequence of tokens- line-comments (which can be discarded), special delimiters (`[]{}`), names, and numbers (which can be coerced into JavaScript numbers). While it is possible to implement `{` and `}` as PostScript operators, it is simpler for our purposes to cluster the tokens of procedures together as we parse the program:
+Because the input counts and output counts are static, when ZJIT reads through
+the bytecode, we can run the stack parts of it at compile-time.
+
+We don’t *really* need to know what the values on the stack are; we only need
+to keep track of where they came from. And when I say “where they came from”, I
+mean that we name each instruction and refer to its output by the instruction’s
+name. I like how the paper [Design of the Java HotSpot™ Client Compiler for
+Java 6](https://bernsteinbear.com/assets/img/design-hotspot-client-compiler.pdf) (PDF) puts it:
+
+> An instruction that loads or computes a value represents both the operation
+> and its result, so that operands can be represented as pointers to previous
+> instructions.
+
+Here is what that looks like for the above example. In addition to the run-time
+stack, I will also write the SSA instruction to indicate that we are generating
+new code:
 
 ```
-parse = x=>{
- const t=x.trim().match(/(%[^\n]*\n)|(\[|\]|\{|\})|(\/?[^\[\]\{\}\/% \n]+)|(-?\d+)/gm).filter(x=>x[0]!='%')
- const next=()=>t.shift()
- const peek=()=>t[0]
- const isnum=x=>+x==+x
- const rec=()=>peek()=='{'?(next(),seq()): isnum(peek())?+next(): next()
- const seq=()=>{const r=[];while(peek()&&peek()!='}')r.push(rec());return next(),proc(r)}
- return seq()
-}
+       ; []
+push 3 ; v0 = const 3
+       ; [v0]
+push 4 ; v1 = const 4
+       ; [v0, v1]
+add    ; v2 = add v0, v1
+       ; [v2]
 ```
 
-Given a PostScript program like
+This is neat! We have transformed stack based bytecode to a form where
+instructions can directly reference their inputs. You may notice, though, that
+`v0` and `v2` both end up in the same stack slot (the first element). This is
+why I said earlier “giving an SSA value to each stack slot, *ish*”.
+
+The difference between the two is *time*. `v0` was in the operand stack at one
+point but now `v2` is. This is kind of why I describe SSA as “pushing time
+through the IR”.
+
+Alright, let’s implement it.
+
+We’ll start with the real (“concrete”) interpreter of the bytecode, which
+operates on a value stack. This gives you a simplified version of how Ruby
+internals work:
 
 ```
-[10 20 30] {2 mul} forall
-```
-
-The `parse(x)` routine will break it down into
-
-```
-{t:'proc', v:['[', 10, 20, 30, ']', {t:'proc', v:[2, 'mul']}, 'forall']}
-```
-
-The PostScript operand stack and dictionary stack can be represented as simple JavaScript global arrays- `o` and `d`, respectively:
-
-```
-
-o=[]
-d=[]
-```
-
-Some simple routines for manipulating these stacks:
-
-```
-push     = x=>o.push(x)
-pop      = x=>o.pop()
-popn     = x=>{const r=[];while(x-->0)r.unshift(pop());return r}
-popmark  = ()=>{const r=[];while(o.length&&MARK!=last(o))r.unshift(pop());pop();return r}
-load     = x=>{const v=litval(x);return d.findLast(s=>s.has(v)).get(v)}
-```
-
-Executing pre-tokenized PostScript programs is very simple: we execute each token in sequence. Names are looked up in the dictionary stack and the corresponding operator or procedure is called; anything else is pushed onto the operand stack. Since operators are JavaScript functions, when we execute them we’ll pop a number of values from the operand stack corresponding to their argument list count and `apply()` them to the function. If the function returns something other than `undefined`, we’ll push the result onto the stack:
-
-```
-execfunc = x=>{const v=x.apply(null,popn(x.length));if(v!=undefined)push(v)}
-execproc = x=>{isproc(x)?procval(x).forEach(exec): exec(x)}
-exec     = x=>{isfunc(x)?execfunc(x): isname(x)?execproc(load(x)): push(x)}
-```
-
-The large bulk of the machinery of our interpreter lives in the primitive operator definitions, but each is individually fairly simple, with the possible exception of the `for` operator, which needs a few helper routines for generating stepped ranges. Many of these operators are pure JavaScript functions which do not directly access or modify either stack and can be tested and understood in isolation.
-
-```
-countup  = (x,y,z)=>{const r=[];while(x<=z)r.push(x),x+=y;return r}
-countdn  = (x,y,z)=>{const r=[];while(x>=z)r.push(x),x+=y;return r}
-range    = (x,y,z)=>x<z&&y>0?countup(x,y,z): y<0?countdn(x,y,z): []
-prims={
- true:   true,
- false:  false,
- exec:   execproc,
- for:    (x,y,z,w)=>range(x,y,z).forEach(v=>(push(v),execproc(w))),
- forall: (x,y)=>x.forEach(v=>(push(v),execproc(y))),
- repeat: (x,y)=>iota(x).forEach(v=>execproc(y)),
- ifelse: (x,y,z)=>execproc(x?y:z),
- load:   load,
- def:    (x,y)=>{last(d).set(litval(x),y)},
- begin:  x=>{d.push(x)},
- end:    ()=>{d.pop()},
- dup:    x=>(push(x),x),
- exch:   (x,y)=>(push(y),x),
- pop:    x=>{},
- index:  x=>o[o.length-(1+x)],
- copy:   x=>o.slice(-x).forEach(push),
- roll:   (x,y)=>popn(x).forEach((_,i,a)=>push(a[mod(i-y,x)])),
- floor:  x=>Math.floor(x),
- sqrt:   x=>Math.sqrt(x),
- not:    x=>!x,
- add:    (x,y)=>x+y,
- sub:    (x,y)=>x-y,
- mul:    (x,y)=>x*y,
- div:    (x,y)=>x/y,
- mod:    mod,
- eq:     (x,y)=>x==y,
- ne:     (x,y)=>x!=y,
- gt:     (x,y)=>x>y,
- ge:     (x,y)=>x>=y,
- lt:     (x,y)=>x<y,
- le:     (x,y)=>x<=y,
- '[':    ()=>MARK,
- ']':    popmark,
- length: x=>x.length,
- get:    (x,y)=>x[y],
- dict:   x=>new Map(),
-}
-```
-
-To access the primitives from within `exec()` and `execproc()` we need to install them into the dictionary stack. Here’s a procedure to initialize both stacks:
-
-```
-init = ()=>{o=[],d=[new Map(Object.entries(prims))]}
-```
-
-We can now execute programs and observe their effects on the stacks:
-
-```
-init()
-execproc(parse('2 3 add'))
-console.log(pop()) // 5
-```
-
-For interactive use, we can wire everything up into a [Read-Eval-Print-Loop](https://en.wikipedia.org/wiki/Read–eval–print_loop) (REPL). We’ll need at least some rudimentary output capabilities, so for starters we can install an extra primitive `==` which pops a value from the stack and displays it:
-
-```
-format = x=>isarray(x)?`[${x.map(format).join(' ')}]`: isproc(x)?`{${format(procval(x))}}`: `${x}`
-prims['==']=x=>{console.log(format(x))}
-init()
-```
-
-If we’re using [Node.js](https://nodejs.org) we have to write our REPL in an event-driven style:
-
-```
-// usage: node ps.js
-rl=require('readline').createInterface({input:process.stdin,output:process.stdout,prompt:'  '})
-rl.prompt()
-rl.on('line',x=>(execproc(parse(x)),rl.prompt()))
-rl.on('close',_=>(console.log(''),process.exit(0)))
-```
-
-If we’re using [QuickJS](https://bellard.org/quickjs/) we can write a more straightforward infinite loop instead:
-
-```
-// usage: qjs --std ps.js
-while(1){std.out.printf('  '),execproc(parse(std.in.getline()))}
-```
-
-Either way, we now have a fancy PostScript-style desk calculator:
-
-```
-  2 3 add ==
-5
-  [[11 22 33] {10 mul} forall] ==
-[110 220 330]
-```
-
-[The entire interpreter in one piece](https://beyondloom.com/blog/postscript-figures/ps.js), for reference.
-
-Our interpreter offers a very small subset of the primitive operators supplied with standard PostScript. There are some fun finger-exercises to be had in fleshing out more of that set in terms of what we already have:
-
-```
-/if  {{} ifelse} def
-/neg {-1 mul} def
-```
-
-Try your hand at `abs`- compute the absolute value of a number:
-
-How about `min`- find the minimum of two values on the stack?
-
-It can also be worthwhile to try some classic functional programming exercises, like recursively computing the Fibonacci sequence:
-
-```
-/fib {dup 2 ge {1 sub dup 1 sub fib exch fib add} {} ifelse} def
-
-[0 1 10 {fib} for] ==
-% [0 1 1 2 3 5 8 13 21 34 55]
-```
-
-There are, of course, more idiomatic iterative approaches:
-
-```
-[0 1 9 {2 copy add} repeat] ==
-% [0 1 1 2 3 5 8 13 21 34 55]
-```
-
-I quite enjoy the way that enclosing PostScript expressions in `[]` acts like a more composable alternative to [list comprehensions](https://en.wikipedia.org/wiki/List_comprehension).
-
-Here’s a utility routine for making a copy of an array with the elements in reversed order:
-
-```
-/reverse {[exch dup length 1 sub -1 0 {1 index exch get exch} for pop]} def
-
-[11 22 33] reverse ==
-% [33 22 11]
-```
-
-How many approaches can you think of for *concatenating* a pair of arrays, given the primitive operators we have at hand?
-
-```
-[11 22 33] [44 55] concat ==
-% [11 22 33 44 55]
-```
-
-One approach:
-
-Much of my experience with [concatenative programming languages](https://en.wikipedia.org/wiki/Concatenative_programming_language) like PostScript is with Forth, which uses slightly different names and factorings for most operators. Fortunately, PostScript is fairly malleable:
-
-```
-/swap  {exch} def
-/drop  {pop} def
-/over  {1 index} def
-/2dup  {2 copy} def
-/2drop {pop pop} def
-/rot   {3 -1 roll} def
-/-rot  {3 1 roll} def
-/@     {load exec} def
-/!     {exch def} def
-```
-
-PostScript’s `roll` and `index` operators make it easier to reach deep into the stack than the usual Forth stack-twiddlers, but this also demands the programmer retain a larger perspective of the contents of the stack in their limited working memory as they read. Even `rot`/`-rot` can be controversial “code smells” to some Forthwrights.
-
-In Forth, we can freely manipulate the “return stack” as well as the operand stack, usually with words like `r>` and `>r` for transferring values from the top of one stack to the other. Forth control structures will often store things like loop indices on the return stack between iterations in order to prevent them from interfering with the flow of arguments within the loop body. It can also be handy for temporarily stashing intermediate results to keep the operand stack shallow. PostScript has an “execution stack” for nested procedure bookkeeping, but it is not under direct control of the programmer; as a result we can’t use these sorts of idioms.
-
-The dictionary stack offers nestable scopes for named local variables:
-
-```
-2 dict begin
- /b def
- /a def
- a a mul
- b b mul
- add sqrt
+def interpret(bytecode)
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      stack << c
+    in [:add]
+      right = stack.pop
+      left = stack.pop
+      stack << left + right
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  stack.pop
 end
+
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts interpret(bytecode)  # 7
 ```
 
-It’s even possible to build tidy abstractions around this pattern:
+Now let’s look at the abstract intepreter, which by contrast operates on an SSA
+stack. You can see that they are quite similar looking:
 
 ```
-/local {1 dict begin 3 1 roll exch def exec end} def
+def to_ssa(bytecode)
+  code = []
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      name = :"v#{code.length}"
+      code << "#{name} = const #{c}"
+      stack << name
+    in [:add]
+      name = :"v#{code.length}"
+      right = stack.pop
+      left = stack.pop
+      code << "#{name} = add #{left}, #{right}"
+      stack << name
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  code
+end
 
-25 /a {a a add} local
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts to_ssa(bytecode)
+# v0 = const 3
+# v1 = const 4
+# v2 = add v0, v1
 ```
 
-But since this approach produces *dynamic* rather than *lexical* scopes, it is not transparent to procedures we `exec`. Without an auxiliary stack to “hide” intermediate state, it can be surprisingly challenging to write higher-order functions. Try defining the equivalent of a Lispy `(cond)` conditional in PostScript and you’ll see what I mean:
+The `name`s could be anything as long as they are unique. For simplicity and
+ease of reading, I picked the length of the `code` array, which grows
+monotonically. This is an array/vector-based analogue to the real-pointer
+approach in the HotSpot paper from above.
 
-```
-[{p1} {e1} {p2} {e2} ... {e}] cond
-```
+Ta da! You have built a small abstract interpreter.
 
-PostScript has a tantalyzing `bind` operator (not implemented in our interpreter) which is meant to help sidestep the footguns of dynamic scope by eagerly replacing references to operators within a procedure with their values at `bind`-time. However, since `bind` concerns itself only with resolving *operators*, it isn’t useful for simulating general-purpose lexical scope; we’d need to build a more general mechanism for performing named substitutions within procedures.
+Now to make it global (to handle control flow) you need some kind of
+inter-basic-block data flow mechanism such as phi nodes or basic block
+parameters. Perhaps more on that in another post, but for now, you may enjoy
+[my collection of other people’s writing](https://bernsteinbear.com/blog/ssa/) about that.
 
-My preceding semantic quibbles aside, I think PostScript is quite elegant, and well worth learning. Now that we have an interpreter for the language which fits on a printed page or two, we have an inviting foundation for experimentation. I’m sure that over the course of our brief explorations you’ve already thought of many new primitive operators you could add- `sin`, `cos`, `pi`, perhaps more tools for manipulating data like `type`, `cvx`, and `cvlit`, or a richer set of input and output routines?
+I originally wanted to title this blog post “you could have invented abstract
+interpretation” or similar, but I decided that I find those titles obnoxious
+because they assume the reader is or thinks of themself as unintelligent.
+Perhaps *we* could have invented it.
 
-You might find it worth the added bulk to add more robust error-handing. For example, you could make `load` tolerate undefined names and return a placeholder:
-
-```
-load = x=>{const v=litval(x);return (d.findLast(s=>s.has(v))||new Map()).get(v)||null}
-```
-
-You could also implement a more complete range of datatypes and syntax, like `(strings)`, non-integer numbers, and the `<</a 11 /b 22>>` syntax for dictionary “literals”.
-
-Take your budding new human-scale programming environment in whatever direction you like. Enjoy the feeling of power.
+The title is a bit of a tongue-in-cheek nod to the “functional pearl” papers
+that I always felt should be simpler than they are but leave me confused. And
+also kind of a nicer nod to [SSA is Functional
+Programming](https://bernsteinbear.com/assets/img/appel-basic-block-arguments.pdf) (PDF) by Andrew Appel.

@@ -1,0 +1,35 @@
+If you’re an avid user of programs like *Discord*, you might be familiar with the venerable ‘link preview’. This is a little block that shows below a link, and hints at what might lie on the other end of that URL. These are a little messaging convenience that allows for many things, like conveniently sharing social media posts without logging into a platform and providing a description for a blog post. It encourages sharing: the open internet is built on a diversity of open websites, where people can freely view content without stepping into walled gardens and discourse chambers.
+
+Discord, as a centralised platform, employs their servers to visit web pages for you, grab metadata from tags specified in markup headers, and caches that response. Clients then query that server to get a structured response on what a link preview should look like, and can easily render it without much hassle.
+
+Signal has to go about this problem in a different way. Signal doesn’t know what websites you send people in messages, and they don’t *want* to. They also don’t want users to be able to send each other websites that would reveal information about them. For example, let’s say I own `evil.example`, and I’m listening closely for every connection to my servers. If I send you a link from that domain, your *phone* will try and find information about that webpage, and a poor implementation could leak things like your IP address, which is information that *could* be used to narrow the scope of a search into where you are currently located at.
+
+So Signal doesn’t do that. Signal generates the preview on the sender’s device, which means the sender takes on the privacy burden for fetching data from a message, and my evil server can’t track your device unless I tell you to send me a link from my website, which is a much harder attack to perform.
+
+## An overview of strategies in Matrix, and why we’re deviating
+
+At first, there was the `/preview_url` Client-Server API endpoint. In short, this is used to fetch a preview from your homeserver, and display it with a message. This essentially mirrors the “Discord” model, of deferring to a server. Privacy-minded people may be concerned about their homeserver (which they might not run) observing usage of this endpoint to find out which websites people are sending each other in encrypted rooms, so clients usually disable this behavior in encrypted rooms.
+
+Supplementally, preview bots showed up: user accounts that listen for links and generate preview messages. Decoupling this behavior from the homeserver may be desirable if you happen to have opinions on how link previews should be displayed, or fetched. There’s a couple of issues with this, principally that this is quite inconvenient in Private Messages, and that to ensure privacy users would have to run their own bots. (Which we aren’t going to ask our users to do.)
+
+To address these issues, [MSC4095: Bundled URL Previews](https://msc.sable.moe/msc/4095) adds the ability for clients to attach previews directly to messages. This mirrors the Signal approach somewhat, as it makes the sender generate the preview.
+
+Hold on– the sender has to generate it? We’re principally a *web client*. Most of our users would prefer to download our program, either on mobile, or on desktop, but we have web users we can’t just abandon. The issue is CORS: a limitation that stops websites from *just* sending network requests to random websites. Essentially, we *can’t* do this for all users unless we find a server.
+
+This ended up with us having a server that generates link previews for web users, and a client that generates link previews, both with different behaviour. This is also complicated with homeserver previews, so we essentially had three different ways to get link previews.
+
+## Standardising how we generate link previews
+
+We moved link preview generation into a [separate library](https://git.sable.moe/sableclient/link-preview), which lets us do fun things. We can now make architectural decisions on *where* we do link previews without doing a ton of refactoring work.
+
+One thing this allowed us to do is to think about how we handle social media previews better. We now have an [OpenGraph extension specification](https://git.sable.moe/SableClient/link-preview/src/branch/main/docs/NOTE_TYPES.md) for specifying a social media ‘note’, as Matrix link previews are OpenGraph based. We have scrapers for handling major social media websites, Atproto, and the Fediverse, and we can work on making these better separately from the rest of our codebase and infrastructure. We now format notes separately from default previews, which is shaped more like a social media note.
+
+Another thing we are experimenting with now is a privacy-preserving proxy server, which Signal [used to run](https://signal.org/blog/i-link-therefore-i-am/) for generating link previews, but has since [rolled back](https://community.signalusers.org/t/beta-feedback-for-the-upcoming-android-4-69-release/16219/4) this change. Our monolithic media-server-thing [Soliditas](https://git.sable.moe/SableClient/soliditas) is now free from CloudFlare and running on our own infrastructure, and runs a proxy for all clients to use which should hopefully be useful for everyone. Whether this is successful will depend on a lot of things: whether we can scale up infrastructure to meet demand, whether we can harden this service against abuse, whether sites decide to block our user agents, and more. You can [donate to us](https://opencollective.com/sable) to help balance the scales in this project’s favor.
+
+## The future of link previews, with us and otherwise
+
+We’re excited to continue trying to make link previews good. We’re working on making our user interface clearer, so that the privacy implications of using this feature are more obvious to the user. We’re also interested in furthering support for note previews, so users can see *better* previews for *more services*.
+
+We might look into eliminating use of the homeserver for generating link previews entirely, at least temporarily. If we can provide a meaningful benefit to how previews are generated, users might get frustrated with us at inconsistencies between previews coming from Sable versus their homeservers. In that case, we would like to create MSCs and work with the ecosystem. Our advantage is that as a new, fast-moving project we can figure out where things fail in practice, and then come to the wider community with a proposal that’s been informed by real users.
+
+That’s our attitude in general: we’re trying out things. Matrix has been slow-moving for a long time (we’ve all heard complaints about it) and Sable hopes to be a client that sits far ahead of the specification, making experimental implementations and helping inform future movement for the protocol at large.

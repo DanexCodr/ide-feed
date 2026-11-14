@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-13T23:22:02Z",
+  "updated": "2026-11-14T05:27:18Z",
   "items": [
     {
       "id": "devto-4985077",
@@ -38,27 +38,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4911275",
-      "title": "AI is getting better. Here is my plan to stay ahead.",
-      "desc": "By Julien Avezou | 8 min read",
-      "tag": "tutorial",
-      "published": "2026-11-12T15:35:00Z",
-      "order": 4,
-      "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4978154",
       "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
       "desc": "By Randal L. Schwartz | 13 min read",
       "tag": "tutorial",
       "published": "2026-11-05T00:02:44Z",
-      "order": 5,
+      "order": 4,
       "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4911275",
+      "title": "AI is getting better. Here is my plan to stay ahead.",
+      "desc": "By Julien Avezou | 8 min read",
+      "tag": "tutorial",
+      "published": "2026-11-12T15:35:00Z",
+      "order": 5,
+      "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -206,27 +206,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4993971",
-      "title": "Ubuntu Core Desktop Is Coming in 27.04 - And It Kills sudo apt (But Maybe That Is the Point?)",
-      "desc": "By Taqui | 5 min read",
-      "tag": "tutorial",
-      "published": "2026-11-07T15:18:14Z",
-      "order": 18,
-      "url": "https://dev.to/taqui/ubuntu-core-desktop-is-coming-in-2704-and-it-kills-sudo-apt-but-maybe-that-is-the-point-3dp1",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Feu769mdbtq0xlo2cdc7i.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAHCkFulI//EABoQAAIDAQEAAAAAAAAAAAAAAAABERIhAjH/2gAIAQEAAQUC40WjIb4XlqkyWz//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPwFX/8QAGhAAAQUBAAAAAAAAAAAAAAAAEAARITFBcf/aAAgBAQAGPwLFQeB0/wD/xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQWExUYGR/9oACAEBAAE/IZVw0ezNFFEL4OoIo6K+SxOBDDkTPRH/2gAMAwEAAgADAAAAECDv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQBB/9oACAEDAQE/EANkC//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQIBAT8Qd2CpH//EABsQAQEBAQADAQAAAAAAAAAAAAERIQAxQVGR/9oACAEBAAE/EGDiE9a9AZAyhPzt2NyxnICxjApwIhHV5kSzXffKQyad5eeAgHz53//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5004421",
       "title": "I Used gp-grid to Build a React Food Festival App with Advanced Data Grid Features",
       "desc": "By Hadil Ben Abdallah | 16 min read",
       "tag": "tutorial",
       "published": "2026-11-10T09:04:10Z",
-      "order": 19,
+      "order": 18,
       "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4993971",
+      "title": "Ubuntu Core Desktop Is Coming in 27.04 - And It Kills sudo apt (But Maybe That Is the Point?)",
+      "desc": "By Taqui | 5 min read",
+      "tag": "tutorial",
+      "published": "2026-11-07T15:18:14Z",
+      "order": 19,
+      "url": "https://dev.to/taqui/ubuntu-core-desktop-is-coming-in-2704-and-it-kills-sudo-apt-but-maybe-that-is-the-point-3dp1",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Feu769mdbtq0xlo2cdc7i.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAHCkFulI//EABoQAAIDAQEAAAAAAAAAAAAAAAABERIhAjH/2gAIAQEAAQUC40WjIb4XlqkyWz//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPwFX/8QAGhAAAQUBAAAAAAAAAAAAAAAAEAARITFBcf/aAAgBAQAGPwLFQeB0/wD/xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQWExUYGR/9oACAEBAAE/IZVw0ezNFFEL4OoIo6K+SxOBDDkTPRH/2gAMAwEAAgADAAAAECDv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQBB/9oACAEDAQE/EANkC//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQIBAT8Qd2CpH//EABsQAQEBAQADAQAAAAAAAAAAAAERIQAxQVGR/9oACAEBAAE/EGDiE9a9AZAyhPzt2NyxnICxjApwIhHV5kSzXffKQyad5eeAgHz53//Z",
       "color": "#3B49DF"
     },
     {

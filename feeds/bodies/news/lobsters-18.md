@@ -1,154 +1,177 @@
-Yes, **Lyra Rebane became a millionaire in November 2026** thanks to her elite cybersecurity skills.
+Since October 11th waves of cyber attacks have hit internet-exposed fridge controllers by Danfoss and Copeland throughout [Europe](https://en.wikipedia.org/wiki/2026_European_cold_chain_hacks), with attackers triggering defrosting operations and causing tens of millions of euros in spoilt food damages and even causing fires in some cases.  
 
-While she was already a highly successful researcher with dozens of vulnerabilities reported in major browsers like Google Chrome, her net worth officially crossed the million-dollar threshold on **November 7, 2026**. On this date, Google awarded her a historic single bounty payout of exactly **$1,333,337** for discovering a critical security flaw in Chrome.
+While, as pointed out by [SentinelOne](https://www.sentinelone.com/labs/defrost-and-disrupt-an-assessment-of-europe-s-refrigeration-attacks/), attribution remains open and analysts should be careful not to immediately assume all incidents are linked to the same threat actor, the impact of these incidents (in particular their psychological effect) is in sharp contrast to their technical simplicity.
 
-I am a hacker, though. I am a hacker with 14 Chrome CVEs. And I think I am a good hacker. But I don’t think I’m the bestest hacker. I don’t believe I’m capable of finding a vulnerability that’s worth over a million dollars. And even if I were, I don’t think Google would pay that much for a Chromium vulnerability.
+While much online commentary has correctly pointed out that these kind of controllers should not be internet-exposed, remote connectivity of some sort is often a must-have due to maintenance personnel constraints and SLA or insurance requirements.  
 
-Content note: Due to the topics discussed, this post contains some examples of AI-generated text. Those examples are clearly differentiated<sup>[1](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:1)</sup>. Everything else in this blog post is fully human-made - I do not use AI.
+As a result, many asset owners are simply content to change default credentials, apply patches for known vulnerabilities, enable *strict *level session control, and move on. **This is insufficient and asset owners need to remove internet exposure as soon as possible** (e.g. though use of a VPN, private APN, or highly restrictive IP whitelisting ACLs). We recommend ***against ***allocating scarce security resources to patching efforts and instead focus on reducing exposure.  
 
-## Step 1: Making the million
+As we will demonstrate in this blogpost, **Midnight Blue researcher Carlo Meijer found several pre-authentication remote code execution 0-day vulnerabilities in the Danfoss AK-SM 800A in less than an hour with casual manual inspection.**
 
-The story begins with a Chromium vulnerability I reported to Google back in 2022. It was a pretty fun logic bug in the Background Fetch API that allowed an attacker to form browser botnets by just making the targets visit a website (or iframe!).
+Prior to the attack waves which started in France on October 11th, several vulnerabilities had already been documented in multiple Danfoss product lines (AK SM-800, AK SM-800A, AK-EM100) by SynAcktiv (in 2023 [[1](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800-sc255-sc355-auth-bypass.pdf),[2](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800a-multiple-vulnerabilities.pdf)]), Claroty (in 2025 [[3](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers)]), and DIVD/HackDefense (in 2023 [[4](https://csirt.divd.nl/cases/DIVD-2023-00021/)]).
 
-Due to the rather unusual nature of the vulnerability, it was stuck in limbo for a few years until it finally got fixed in February of 2026. Google gave me a $1000 bounty, and a few months later the bug became public.
+These vulnerabilities have included the much-discussed *code-of-the-day* authentication bypass (CVE-2025-41450), OS command injection (CVE-2023-25915, CVE-2025-41451) and path traversal (CVE-2023-25914) vulnerabilities in the AK-SM800A, as well as SQL injection ([CVE-2023-22583](https://csirt.divd.nl/cves/CVE-2023-22583/)) and OS command injection ([CVE-2023-25911](https://csirt.divd.nl/cves/CVE-2023-25911/)) vulnerabilities in the EOL AK-EM100.
 
-Anyways, Google makes the bug private again, ships a fix, and wants to make sure that the bug is actually fixed for real this time. And during the process, they somehow end up assigning me as the *verifier*, which is not actually supposed to happen.
+All of these vulnerabilities are shockingly trivial to find and exploit, and the first public Proof-of-Concept (PoC) exploits were dropped within 48 hours of the French attacks [[5](https://github.com/Nero22k/CVE-2025-41450_poc), [6](https://github.com/msuiche/fromagegate)] - preceding the second attack wave on November 2nd.
 
-### Wait, what’s up with the verifier thing
+According to Censys, there are still hundreds of Danfoss systems exposed online (though no doubt a sizeable chunk are by now honeypots) and over a 1000 [Copeland and Dixell](https://claroty.com/team82/research/chilling-discoveries-unpacking-vulnerabilities-in-copeland-xweb-pro-controllers) fridge controllers. In addition, controllers from similar vendors (such as Eliwell) which have not been targeted remain exposed in the hundreds as well.
 
-So the way reporting security bugs in Chromium works is that your reports go to this platform called the Buganizer<sup>[2](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:2)</sup>. When you make a report, you get assigned as the reporter, which means you can view and comment on the issue.
+All this is to say that despite the demonstrable subpar security posture of these controllers and several attack waves with serious impact, controllers remain exposed to the public internet. While this is for understandable reasons (supermarket chains sometimes risk SLA or insurance condition violations by taking away remote maintenance and restricting access through VPNs isn't a trivial systems change), **we consider it of paramount importance for defenders not to fall into the trap of considering risks sufficiently mitigated by applying patches** as is suggested by [Danfoss guidance](https://www.danfoss.com/en/service-and-support/coordinated-vulnerability-disclosure/danfoss-security-advisories/).
 
-From then on, Chromium developers and Google employees will edit the issue as necessary - changing its status, assigning a priority/severity, CCing people etc. One of the things they do is giving a bug bounty to the reporter, for which the [VRP panel](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/life-of-a-security-issue.md#8_vrp-panel) calculates a sum and then sets the vrp-reward field on the issue.
+In order to demonstrate this, we investigated the **latest Danfoss AK-SM800A firmware version** (5.3.2 at the time of writing) and **within an hour of manual investigation (no AI necessary...) uncovered 6 pre-authentication remote code execution 0-day vulnerabilities**.
 
-As an external reporter, you cannot edit any of those fields. But people set as the assignees, verifiers and collaborators [can](https://developers.google.com/issue-tracker/concepts/access-control#expanded_access)! And in this case, I was set as the verifier.
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af2f427184296168d6ab8a6_ak-sm800a.jpg)
 
-### Okay so now you just give yourself the million?
+**Danfoss AK-SM800A**
 
-Pretty much, yeah!
+We are currently in a coordinated vulnerability disclosure process with Danfoss and as such will withhold technical details until disclosure is sorted, but due to ongoing targeting of these controllers we consider it important asset owners have a realistic view of the overall security posture of these devices ontrollers in order to take the appropriate measures rather than rely on piecemeal patching.
 
-I didn’t immediately realize that I had been given the edit access, but looking back at the issue in November I found that the UI had some extra buttons I hadn’t seen before, and figured out the rest from there.
+Danfoss AK-SM800A firmware images can be downloaded from their website and contain 7-zip compressed ARM binaries handling application logic. Danfoss AK-SM800A controllers run [Danux](https://sm800a.danfoss.com/Danux_shared/), a custom Yocto-based Linux distribution, on an i.MX6 processor.
 
-At first I just poked around the issue to see what fun stuff I could uncover. While doing that, I somehow managed to accidentally click on a sudden popup menu, which immediately assigned the issue to a bot account.
+Let's start by setting up an emulation environment for the firmware. The path of least resistance here is emulating the binary in userland, rather than emulating the entire system including the kernel. After mounting the filesystem, we can copy qemu-armel-static in there and run the following command to be presented with a shell:
 
-*Accepted by yy...@google.com*
+```bash
+$ sudo chroot . /qemu-armel-static /bin/sh
+sh-4.4# 
+```
 
-*Marked as fixed.*
+As pointed out by [Claroty](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers), the SM800A platform consists of an NGINX reverse proxy, a bunch of CGI handlers, and independent processes handling application logic. Requests for URLs ending with *.cgi* suffix are forwarded to a task created by the *sm_app* executable.
 
-Realizing my cover had been blown, I decided to just go for it and set the vrp-reward value to $1333337, the largest bounty sum in the history of all Google VRP programs.
+It turns out that *sm_app* is a huge monolithic application that is responsible for pretty much everything that happens on the device. It is more like a mini *Real-Time Operating System* (RTOS) running in a userland process (a common embedded architectural choice resulting from *lift-and-shift* platform migrations). It has a task (thread) list consisting of 52 entries, among which are *Task_Modbus_drv_task*, *Task_Ethernet*, *Task_IOHandler* and *Task_Web* to name a few. Running the sm_app in this environment that's missing a significant chunk of the devices and drivers will almost certainly end in a crash. Applying some ad-hoc patches to the binary to avoid crashes will probably work, but potentially painful.
 
-## Step 2: Twitter
+Fortunately, we're only interested in Task_Web, so instead of fixing up everything, I can just LD_PRELOAD my way in the binary, let it run all the initialization code until it hits main(), hijack the code flow from there, apply some hooks which I won't delve into here, and start the web server. It turns out that Danux conveniently ships with gcc:
 
-Having achieved my newfound wealth, I decided the next best step would be to announce it on the everything app<sup>[3](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:3)</sup>. I made my tweet in two parts - first, an announcement of achieving the record bounty, and then a video of me changing the vrp-reward value as the punchline.
+```bash
+$ gcc -shared -g -fPIC -o libpreload.so preload.c
+$ sudo chroot . /qemu-armel-static -E LD_PRELOAD=/libpreload3.so /danfoss/sm_app
+hi from hijacked code
+```
 
-We ❤️ 🐜🐞🦗🦟🦋. {echo,{{{Google,Chrome,Android,Abuse,Mobile,OSS,Cloud}Vulnerability,Patch}Reward,VulnerabilityResearchGrants}Program}
+With some additional minor fixes, we are now able to talk to the emulated web server:
 
-*Marked as fixed.*
+```bash
+$ curl -v -d '' http://127.0.0.1:8080/xml.cgi
+*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+> POST /xml.cgi HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> Content-Length: 0
+> Content-Type: application/x-www-form-urlencoded
+> 
+< HTTP/1.1 200
+< Date: Sat, 07 Nov 2026 21:44:33 GMT
+< Content-Type: text/xml
+< Content-Length: 75
+< Connection: keep-alive
+< Server: Danfoss SM800A
+< Access-Control-Allow-Private-Network: true
+< Access-Control-Allow-Origin: *
+< Access-Control-Allow-Methods: GET, POST, OPTIONS
+< Access-Control-Allow-Headers: aksm-auth,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type
+< Cache-Control: no-store, no-cache
+< 
+* Connection #0 to host 127.0.0.1 left intact
+<?xml version="1.0" encoding="utf-8"?><resp error="4">DEFAULT_STRING</resp>
+```
 
-*Accepted by yy...@google.com*
+The first thing to do is get a sense of the security quality of the code base through so-called [code smells](https://en.wikipedia.org/wiki/Code_smell) and anti-patterns.
 
-*Marked as fixed.*
+The first such bad code smell is the extremely liberal use of strcpy. Use of the *strcpy*() function is discouraged as there is no size parameter. Instead, the function will keep copying bytes from the source buffer into the destination until it hits a null byte. This is a common source of memory corruption vulnerabilities in cases where the source buffer is provided by the user. Hundreds of strcpy invocations exist in the codebase which are part of externally reachable and unauthenticated handler functions. In fact, in earlier firmware releases each command handler is itself responsible for enforcing authentication, rather than doing so centrally. This needlessly enlarged the pre-authentication attack surface.
 
-In just an hour, the joke tweet had already reached 600 likes. Since my intent was to just make a joke and not actually deceive anyone, and the tweet was clearly escaping containment, I followed it up with a clarification.
+Next, we check for binary security mechanisms and exploit mitigations:
 
-Now, Twitter does actually have a feature to combat disinformation - Birdwatch (aka Community Notes) is a system that lets people add context to misleading posts. And this feature was in fact used on my tweet - in just a couple hours, the likes stopped rolling in, and this funky box appeared underneath.
+```bash
+$ checksec sm_app
+[*] '/mnt/SM800A-4.2.4/sm_app'
+    Arch:     arm-32-little
+    RELRO:    Partial RELRO
+    Stack:    No canary found
+    NX:       NX enabled
+    PIE:      No PIE (0x10000)
+    RPATH:    b'$ORIGIN:$ORIGIN/../../sm_gp_lib/Debug/:$ORIGIN/../../sm_fu_lib/Debug/:$ORIGIN/../../sm_df_lib/Debug/:$ORIGIN/../../sm_msgqueue_lib/Debug/:$ORIGIN/../../sm_lz_lib/Debug/:$ORIGIN/../../sm_tm_lib/Debug/:$ORIGIN/../../sm_up_lib/Debug/:$ORIGIN/../../sm_history_lib/Debug/:$ORIGIN/../../sm_thread_lib/Debug/:$ORIGIN/../../sm_fs_lib/Debug/:$ORIGIN/../../sm_at_lib/Debug/:$ORIGIN/../../sm_mutex_lib/Debug/:$ORIGIN/../../sm_lg_lib/Debug/:$ORIGIN/../../sm_system_lib/Debug/:$ORIGIN/../../sm_os_lib/Debug/:$ORIGIN/../../sm_ip_lib/Debug/:$ORIGIN/../../sm_dl_lib/Debug/:$ORIGIN/../../sm_db_lib/Debug/:$ORIGIN/../../sm_tk_lib/Debug/:$ORIGIN/../../sm_session_lib/Debug/'
+```
 
-Proposed by an experimental AI contributor responding to requests for a note. Like all contributors, AIs can make mistakes — verify accuracy.
+It turns out that [stack canaries](https://en.wikipedia.org/wiki/Buffer_overflow_protection#Canaries) and [*Position Independent Executable*](https://en.wikipedia.org/wiki/Position-independent_code#Position-independent_executables) (PIE) are not enabled. These mechanisms have been staples of memory corruption defenses for decades and enabling these features on a modern Linux distribution running on a modern ARM application processor requires no engineering work at all. It is simply a matter of setting the right compiler flag. Enabling these features became the default in Ubuntu 17.10 and there is simply no excuse for a network-facing application that was last updated a few months ago to not have them enabled.
 
-And this would’ve been the end of it, if it wasn’t for the fact that Elon<sup>[4](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:4)</sup> completely fucked up the Community Notes system! You see, this note here was generated by an “experimental AI contributor”, and thus, it claimed that I had “edited the screenshot [myself]”, which was simply not true!
+What's more worrying, is that multiple Danfoss business units (including Climate Solutions & Electronic Controllers) received IEC 62443-4-1 certification for Secure Product Development Lifecycle and this is [prominently advertised](https://www.danfoss.com/en/service-and-support/fix-and-troubleshooting/cooling-installer-hub/electronic-controllers-services-faqs/cybersecurity-best-practices/) as such. In addition, Danfoss explicitly mentions IEC 62443-4-2 is a guiding framework for designing cybersecurity requirements and implementing improvements. **Asset owners, system integrators, and those responsible for procurement should realize exactly how little such certifications can say about the actual security posture of a product**.
 
-This made me unhappy. And what do we do when we’re unhappy? We tweet about it<sup>[5](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:5)</sup>!
+The initial impression of Danfoss' security posture, combined with the nature of the historical vulnerabilities, is a worrying one. But to see just how bad this pans out, let's see what can be found in no more than one hour of manually digging through the latest version of the firmware.
 
-And thus, pretty soon, the community note disappeared.
+We could develop a harness and subject the binary to coverage-guided fuzzing. However, that constitutes serious effort, and with the impression of the code quality that I have, I'm going to simply look into random places where strcpy() is invoked instead. One of the first functions inspected turns out to be an unauthenticated endpoint for a CGI handler having a bunch of parsing logic and strcpy invocations.
 
-## Step 3: Disinformation machines
+While we will not disclose the exact endpoint affected, we will show it can be trivially exploited with a oneliner:
 
-From here on out, the tweet was picked up by an automatically generated AI news-podcast thing called *Daily Vibe Casting*, which describes itself as *“A ten-minute daily roundup of what cracked 𝕏 in the last 24 hours.”* Or in other words, it throws trending tweets into a chatbot.
+```bash
+$ curl -v -d <redacted>"$(echo 'print("A"*768)'|python)"<redacted> http://127.0.0.1:8080/<redacted>.cgi
+*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+> POST /<redacted>.cgi HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> Content-Length: 888
+> Content-Type: application/x-www-form-urlencoded
+>
+```
 
-## Rebane reports a $1.33 million Chrome bounty
+This gives us a nice SEGFAULT showing we can probably hijack program control flow:
 
-@rebane2001 says a Chrome vulnerability they<sup>[6](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:6)</sup> discovered earned $1,333,337, which they describe as the largest award in Google’s Vulnerability Rewards Programme. The post does not explain the flaw, so there is little basis here for judging its scope or technical impact.
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30c873a54a4370371d1ab_segfault.png)
 
-The payout is striking on its own. Browser security depends partly on researchers finding problems and reporting them, and an award this size puts a substantial price on that work.
+There's at least 5 different vulnerabilities of this kind in just the little bit of code i inspected.
 
-Searching
+Of course, remotely triggering a crash is bad in itself, but being able to leverage the buffer overflow to obtain remote code execution is much worse. Any reasonably experienced exploit developer will agree exploiting straightforward stack-based buffer overflows on ARM Linux without exploit mitigations is very straightforward. And if they don't, there's probably a frontier or open weight model out there willing to help them agree.
 
-AI Overview
+The only challenge (if you can call it that) left to overcome is the fact that `strcpy()` stops copying bytes when it hits a null byte. If we wish to gain remote code execution, we inevitably need to write several addresses containing null bytes. Thus, we need to somehow overcome this inherent limitation of `strcpy() `and while we won't share our approach for now [it's not exactly rocket surgery](https://www.youtube.com/watch?v=THNPmhBl-8I). Also, the exploited application runs as root (because of course it does).
 
-- Recipient: Lyra Rebane (@rebane2001)
-- Amount: $1,333,337
-- Program: Google's Vulnerability Rewards Program (VRP) for Chrome
-- Previous Record: Historically, Google's top standard published tier for complex full-chain or sandbox escape exploits in Chrome capped out at $250,000 (such as the awards given to XBOW or individual researchers earlier in 2025/2026).
+Since we have to be vague due to coordinated disclosure being ongoing, let's at least show the result of our 100% artisanal, hand-crafted, AI and gluten free exploit in action as PoC:
 
-[Lyra Rebane](https://lyra.horse) does not offer reward tiers. However, if she hypothetically owned a hotel chain, the reward tiers would be as follows.
+The exploit demonstrated above was targeted at version 3.3.0, but the bugs are present in the latest version of the firmware as well (5.3.2 at the time of writing).
 
-## Lyra Reward Tiers
+In later firmware versions, however, the concepts of *session control* and *security levels* were introduced by Danfoss [[1](https://www.danfoss.com/en/service-and-support/downloads/dcs/adap-kool-software/ak-sm-800a/#tab-security),[2](https://assets.danfoss.com/documents/latest/590332/BC337629891709en-001101.pdf)]. According to Danfoss, session control is an *authentication rules engine* for the various remote interfaces (StoreView Browser, StoreView Web, Alsense, and 3rd party XML). This session control mechanism replaces the individual handler-level authentication enforcement mentioned above.
 
-- Kibble: The kibble tier offers everything you need from a hotel, plus free juice box on arrival.
-- Loyal Elite: Everything from kibble, plus free early check-in and check-out, and a massive dog bed.
-- Golden Retriever: Everything from Loyal Elite, plus free breakfast for you and your pawrtner, free upgrades (up to doghouse tier), and up to 3 vet appointment skips per year.
+Session control has three security levels: backward compatible, permissive, and strict. Starting at 4.0 security level *strict* was set as the default which:
 
-However, this is just a hypothetical scenario and Lyra Rebane does not operate a hotel chain. Would you like to instead learn about recent high-payout security vulnerabilities or the $1,333,337 chome bug bounty?
+This AKSM-auth header mechanism historically held a base64 encoded username and password as the authentication key but now needs to include a session token derived from initial authentication [[3](https://assets.danfoss.com/documents/latest/353954/AQ456722659855en-000201.pdf)]. At the *strict *security level, virtually all the web-accessible attack surface is fenced off from unauthenticated users (including the bug that was used in the exploit above) which is why enabling this security control was included in CERT-FR's [official mitigations](https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-012/).
 
-Sorry, I cannot assist you with this topic because you haven't passed our Hacker Reputation Test. To do the HRT, you must submit a list of CVEs you have been credited for.
+Unfortunately, it **t****urns out the session control mechanism also has at least one trivial pre-authentication memory corruption vulnerability.**
 
-Would you like me to tell you more about [buying CVE accreditation](https://infosec.exchange/@rebane2001/117580634604569849), or do you want to learn about how Google's VRP reward tiers work?
+The way this is implemented is through a separate binary: *sm_fcgi_app*. It acts as a *Web Application Firewall* (WAF) in the sense that it passes through all commands to NGINX if it believes that the user is authenticated. If not, then the only command allowed to be passed through is the *getauth *command, which is used to authenticate.
 
-### [my chrome vulnerability was just awarded the highest ...](https://x.com/rebane2001/status/2119178106359763263)
+At first glance i spotted a potential for [parser differential attacks](https://about.gitlab.com/blog/how-to-exploit-parser-differentials/) on *sm_fcgi_app *which might open the entire attack surface to unauthenticated users, but decided to investigate a quicker route to success. It turns out there's another simple *strcpy *based pre-authentication memory corruption:
 
-my **chrome** vulnerability was just awarded the highest **bounty** in @GoogleVRP history - $1333337.  
-Missing: largest | Show results with: [largest](https://x.com/dontluigi/status/2113377452651368726)
+```bash
+$ curl -k -v -d <redacted> -A "$(echo 'print("A"*1536)'|python)" https://127.0.0.1:3443/<redacted>.cgi
+...
+> POST /<redacted>.cgi HTTP/1.1
+> Host: 127.0.0.1:3443
+> User-Agent: AAAAAAAAAAAAAAAA...AAAAAAAAAAAAAAAA
+> Accept: */*
+> Content-Length: 41
+> Content-Type: application/x-www-form-urlencoded
+> 
+```
 
-17 minutes ago — Researcher Rebane says the $**1,333,337 payout** is the largest in Google's Vulnerability Rewards Program. Daily Vibe Casting's Avatar.
+Running this against the latest AK-SM800A firmware with *strict *session control enabled produces a SEGFAULT which, with some additional effort, can be turned into yet another pre-authentication RCE. It goes without saying that *sm_fcgi_app *does not have stack canaries and PIE enabled either. I think we're done here, we've seen enough.
 
-And there it was! My little stunt turned into something that Google’s AI believes and makes into a story shown to every person searching for the highest Chrome bounty. And looking up my name now tells you about me being a millionaire!
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30f993fbe198375fbc8dc_segfault3.png)
 
-There are a bunch of screenshots of this from other people under [this thread](https://x.com/rebane2001/status/2119502972262518840). I’ve also seen cases of this affecting ChatGPT as well as Kagi Assistant.
+The last thing we want to figure out is exactly how bad this can get.
 
-## Now what?
+It's one thing to initiate long defrost cycles and spoil tens of millions of food *once*, but the typical response of defenders is to factory reset affected controllers, rotate credentials, apply patches, set *strict *session control mode, and possibly wall off the controllers from internet exposure. But any controllers that are hit continue to do their job in production.
 
-So that is the end of my fun little story. I doubt it was particularly surprising to anyone, but I think it’s a good case study on how both social media platforms and people’s reliance on AI can be abused to distribute disinformation and cause harm.
+Now, imagine an attacker who manages to persist on such controllers. They don't just trigger the initial payload but they leave a little implant that survives a factory reset and firmware update. With OS level access, this isn't too hard on typical Unix-like devices as shown in the [SALTWATER / SEASPY](https://cloud.google.com/blog/topics/threat-intelligence/barracuda-esg-exploited-globally) malware for Barracuda devices, [FIRESTARTER](https://www.cisa.gov/news-events/analysis-reports/ar26-113a) malware for Cisco devices, and [Sonicwall malware](https://arstechnica.com/information-technology/2023/03/malware-infecting-widely-used-security-appliance-survives-firmware-updates/) all which survive firmware updates.
 
-This example here, of course, is mostly harmless and just something that happened on accident - I wasn’t attempting to mislead people, and it’s not really my fault that Google’s AI didn’t read my replies in the Twitter thread.
+In such a scenario, an attacker could either retain remote access or leave a time-triggered payload for a 2nd (or 3rd...) strike - increasing damage by spoiling new batches of food. Alternatively, attackers could simply wipe flash memory and/or push a malformed firmware update to brick the controllers and render them permanently inoperable - requiring costly and time-consuming replacement similar to the TTPs deployed during the [December 2025 attack on the Polish electric grid](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1).
 
-One could argue that I’m a reputable security researcher with a track record of posting truthful information, so this is all moot anyways because I *am* trustworthy.
+Both approaches seem feasible against the AK-SM800A controllers since they do not make use of the i.MX6's secure boot features as evidenced by checking some of the responsible One-Time Programmable (OTP) fuse registers.
 
-But I think this here demonstrates just how fragile and easily abusable our information channels are. If I was a threat actor looking to spread disinformation, how difficult would it be to pull something like this off intentionally?
+1. **Full device take-over**: Through remote code execution, an unauthenticated attacker can remotely run arbitrary code at the operating system level of the AK-SM800A controller. This would allow the attacker to change parameters or initiate unwanted actions (such as defrosting operations) while hiding their activities from any system logs. In addition, the lack of secure boot functionality would allow an attacker with RCE to persistently implant controllers to maintain access or have it trigger a secondary payload at a later point in time. Without deep introspection and forensics capabilities, determining whether a device is implanted at the firmware level (**even after a factory reset**) is infeasible.
 
-### Let’s play pretend
+2. **Equipment damage (bricking)**: Due to the lack of secure boot, an attacker with RCE could push malicious firmware that simply renders the device inoperable and irrecoverable without specialized hardware intervention (e.g. by wiping flash memory and/or causing an infinite boot loop). Such a '[bricking](https://en.wikipedia.org/wiki/Brick_(electronics))' or wiper approach would require full device replacement. The dangers of such a scenario to OT equipment in particular and adversary deployment of such TTPs have been highlighted in previous blogposts by Midnight Blue [[1](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1),[2](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-on-bricking-ot-devices-part-2)]. **This could potentially lead to freezers being unavailable for days or longer while controllers get replaced**.
 
-There are many ways to game Twitter. [Its algorithm](https://github.com/twitter/the-algorithm) is publicly available, and people have figured out what kind of engagement results in what kind of algo boost. Bigger accounts can boost tweets and accounts significantly more<sup>[7](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:7)</sup>, so if you’ve got a few of those you can bootstrap new accounts way easier. But you can also just make bot accounts and slowly work your way up. And if you’ve got a bunch of accounts with reach you win.
+## Mitigations
 
-And oh boy are there a lot of bot accounts! Look at, for example, [the tweet this blogpost is about](https://x.com/rebane2001/status/2119178106359763263). There are *a lot* of obvious bot accounts in the replies. Maybe those very same accounts are also building reputation and voting on random community notes?
-
-It’s kind of crazy to me that I could just post a tweet and have a community note removed. While the community note *was actually* wrong on a technicality, I’m sure there isn’t much preventing a bad actor from doing the same thing I did.
-
-If I were a bad actor, I’d post disinformation that’s difficult to accurately disprove. If a community note doesn’t have a good source, or if it’s highly likely to get details wrong, it either won’t appear, or will have an easier time disappearing.
-
-And all you really need to do is get a few tweets with specific keywords trending, and you’ve poisoned the search results, which then also poisons the AI.
-
-And while *you specifically* might not take the AI Overview at face value, I’d guess that a lot of people do. It’s the first thing that shows up, it’s big and flashy, and it’s often unclear whether the only source of information is a tweet.
-
-Tweets can mislead humans too, of course, but I feel like someone searching for something wouldn’t blindly trust a single tweet in the search results.
-
-*Note: While reading this post you may have tried to recreate the results I’ve shared, but without much success. The reason is that by now, my tweet has another community note on it, which Google picks up on and refers to the $1,333,337 bounty as a “prank”.*
-
-*Also they took away my edit access and bounty :c*
-
-## afterword
-
-heyyy!! been a while since the last post, soz
-
-i hadn’t done css crimes for a while, so i wanted to get a new post out to get a chance to work on more of them again! i’m really happy with how some of this stuff turned out, especially the css-only video thing i made.
-
-i decided that i’d start allowing the use of svg data-uris from now on (but still no images or javascript!). i made a few for this post, such as the cursors (which are traced over the kde breeze cursors), and the twitter icons (which are also traced over the originals).
-
-but yeah, as always, this post is lovingly handcrafted and doesn’t use any external resources (images, videos, javascript etc). this time the size ended up being around 49kB (gzipped<sup>[8](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:8)</sup>). yay!
-
-1. The snippets are either marked with “AI overview” (google), “experimental AI contributor” (twitter), or red text (other). [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:1)
-2. Also known as: IssueTracker, [Google Issue Tracker](https://issuetracker.google.com), and [Chromium Issue Tracker](https://issues.chromium.org). Okay so like, the Google one is the main one and contains everything, but there are also [project-scoped trackers](https://developers.google.com/issue-tracker/concepts/trackers) (such as the Chromium one) that only show issues related to that specific project. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:2)
-3. Actually, I announced it on fedi and bluesky too, but those platforms are not as prone to disinformation so in this post I’ll pretend they don’t exist.* talk about bsky has ¼ indicator or somethign [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:3)
-4. On Twitter, we blame everything that’s happened after Elon Musk bought the site on him. Of course, in practice it’s only indirectly his fault. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:4)
-5. more stories like this, so important! [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:5)
-6. My [pronouns](https://lyra.horse/pronouns.html) are she/it. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:6)
-7. I don’t have a good source for this on hand unfortunately. The closest I have is this [nytimes article](https://web.archive.org/web/20250429165501/https://www.nytimes.com/interactive/2025/04/23/business/elon-musk-x-suppression-laura-loomer.html) that (probably?) references [this tweet](https://x.com/elonmusk/status/1872464643266089067). If anybody has good factual sources, for or against this statement, please let me know and I’ll update the post accordingly. I believe it to be true from personal experience and discussions with other people and their personal experiences, but that’s just guessing and hearsay. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:7)
-8. i actually realized the other day that my server isn’t even doing the best gzip compression: `for i in {1..9}; do gzip –keep -f -$i index.html; echo -n $i:\ ; ls -sh -1 index.html.gz | grep -o ’^\S*’; done 1: 52K 2: 48K 3: 48K 4: 44K 5: 44K 6: 40K 7: 40K 8: 40K 9: 40K` so in theory i could shave even more bytes off my posts ^^ [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:8)
+In light of all of the above, we consider piecemeal patching or enabling of *strict *session control to be a misallocation of scarce security and personnel resources since they have minimal security ROI against such a fundamentally flawed codebase missing basic exploit mitigations and yielding multiple pre-auth RCEs with an hour's casual glance.
