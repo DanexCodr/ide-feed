@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-14T05:27:18Z",
+  "updated": "2026-11-14T13:08:59Z",
   "items": [
     {
       "id": "devto-4985077",
@@ -38,27 +38,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978154",
-      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
-      "desc": "By Randal L. Schwartz | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T00:02:44Z",
-      "order": 4,
-      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4911275",
       "title": "AI is getting better. Here is my plan to stay ahead.",
       "desc": "By Julien Avezou | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-12T15:35:00Z",
-      "order": 5,
+      "order": 4,
       "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4978154",
+      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
+      "desc": "By Randal L. Schwartz | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T00:02:44Z",
+      "order": 5,
+      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -290,27 +290,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4966183",
-      "title": "The Postcard That Ate Six Grammars: 1980 Smalltalk-80, 1976 Make, TDD, and the Four Attractors of Agentic Coding",
-      "desc": "By Randal L. Schwartz | 43 min read",
-      "tag": "tutorial",
-      "published": "2026-11-03T02:41:46Z",
-      "order": 25,
-      "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5005200",
       "title": "A VS Code extension to turn ANY free chatbot website into an AI agent (kind of)",
       "desc": "By EffessDev | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-12T14:00:15Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1jfb",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fajrw5ue6qipaycfbsrh0.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcKoQF//xAAWEAEBAQAAAAAAAAAAAAAAAAABIBH/2gAIAQEAAQUChMj/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAWEAEBAQAAAAAAAAAAAAAAAAAgITH/2gAIAQEAAT8hE10f/9oADAMBAAIAAwAAABA2D//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxAdn//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAgEBPxBMn//EABkQAQADAQEAAAAAAAAAAAAAAAEAEBFRIf/aAAgBAQABPxDSKRzrQhicb7EwHtE//9k=",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fkmhyr0912qeoxsoo11q2.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAIBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhy4QF/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQABBQKFh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABcQAAMBAAAAAAAAAAAAAAAAAAERIDH/2gAIAQEAAT8hg7OP/9oADAMBAAIAAwAAABBUD//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxAdn//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAECAQE/EIf/xAAaEAEBAAIDAAAAAAAAAAAAAAABEQAQQVGB/9oACAEBAAE/ELMW68ww8zJiQHvf/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4966183",
+      "title": "The Postcard That Ate Six Grammars: 1980 Smalltalk-80, 1976 Make, TDD, and the Four Attractors of Agentic Coding",
+      "desc": "By Randal L. Schwartz | 43 min read",
+      "tag": "tutorial",
+      "published": "2026-11-03T02:41:46Z",
+      "order": 26,
+      "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
       "color": "#3B49DF"
     },
     {

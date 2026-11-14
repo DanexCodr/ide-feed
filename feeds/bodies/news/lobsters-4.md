@@ -1,508 +1,591 @@
-That’s not quite true for computer game history (though NetHack was [very early and very influential](https://en.wikipedia.org/wiki/NetHack)), but it’s true for the history of Antithesis. The company started when I got lunch with Dave and said: “let’s make [the FDB simulator but for everything](https://antithesis.com/blog/is_something_bugging_you/)” and he was like: “no, let’s make a fuzzer so smart it can beat NetHack,” and then we gradually realized that we were actually talking about the same thing.
+Probabilistic data structures give you approximate answers to questions about the data they handle. Does the set contain a certain item? How many unique items are in the collection? Which items appear most often? Unlike deterministic structures like sets and frequency tables, the answers might not be exact, but in return, you can drastically reduce memory usage.
 
-In the years that followed, NetHack continued to inspire and challenge us. The first Antithesis VCS repo (long since deleted) was called “fuzzhack” because it was a fuzzer for NetHack. Before we built our [deterministic hypervisor](https://antithesis.com/blog/deterministic_hypervisor/), we tried [Hermit-style](https://github.com/facebookexperimental/hermit) deterministic Linux userland because it’s the bare minimum you need to beat NetHack. NetHack inspired our thinking about the [importance of strategy](https://antithesis.com/blog/sdtalk/), about the importance of code coverage and also about its inadequacy, and about why you need intrinsic curiosity rewards to have any hope of applying AI to this problem. NetHack inspired many of our early experiments in visualization. Wanting to interactively explore NetHack performance and coverage maps is why we wrote the first version of the [reactive notebook](https://antithesis.com/blog/notebook_interfaces/) that now powers our UI. Processing reams of NetHack data that wouldn’t fit in memory was why we decided to put a GCP subscription on my credit card so we could crunch the data in BigQuery, which later led us to invent [skip trees](https://antithesis.com/blog/2026/skiptrees/), and finally [Pangolin](https://antithesis.com/blog/2025/testing_pangolin/).
+In this post, we'll talk about what probabilistic structures are, how they work, and what kinds of guarantees they provide. I'll also introduce [**unsure**](https://github.com/nalgeon/unsure) — a package that implements these structures in Go. It's simple (the core logic for each data structure is 100–300 LOC), fast (usually several times faster than other implementations), and has no dependencies except for the standard library.
 
-All of this is because it was a worthy adversary – perhaps even what my colleague David MacIver likes to call [a “dragon problem.”](https://drmaciver.substack.com/p/dragon-problems) NetHack is famously difficult for human beings because it combines permadeath, extreme information scarcity (reading the source code of the game to figure out how to beat it is practically a rite of passage for aficionados), and a brutal intolerance for error. But it’s also very difficult for autonomous systems like fuzzers and AI agents due to its sprawling state space and to the need for long-horizon planning to make any real progress. People have [written bots](https://nethackwiki.com/wiki/Bot) that have successfully beaten the game, but despite Meta’s investment in the [NetHack Learning Environment](https://github.com/facebookresearch/nle), AI agents have struggled with it. The wins that both the hardcoded bots and the AIs (most recently GPT-6 Astra) have eked out have been skin-of-their-teeth affairs involving lucky seeds and “beginner-friendly” roles. Nobody has produced a system that can reliably and quickly beat the game over and over again as any character build.
+[Bloom filter](https://antonz.org/probabilistic-data-structures/#bloom-filter) •
+[Count-min sketch](https://antonz.org/probabilistic-data-structures/#count-min-sketch) •
+[HyperLogLog](https://antonz.org/probabilistic-data-structures/#hyperloglog) •
+[T-digest](https://antonz.org/probabilistic-data-structures/#t-digest) •
+[Top-k](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
 
-“Beginner-friendly” by NetHack standards, at least.
+## [#](https://antonz.org/probabilistic-data-structures/#bloom-filter)
+Bloom filter
 
-Until now.
+A Bloom filter is a set that trades certainty for space. It can tell you that an item is *definitely not* in the set, or that it *probably is* (which might be a false positive). The filter doesn't actually store the items, so it's much more compact than a regular set.
 
-Antithesis can now find a path to victory within 5 wall-clock minutes on nearly 80% of NetHack seeds. Moreover, the median time to victory within the seeds that finish is under 2 minutes. To explain how we did this, we need to let you in on a secret: Antithesis is not *just* a system for unopinionated state space exploration, it is also something akin to a probabilistic programming language, a new computing paradigm for partially describing tests or other tasks and letting search and optimization fill in the rest. When you put this tool in the hands of capable AI agents, they can do things like beat NetHack in 30 seconds. But first… back to our story.
+For example, a regular set with 1,000,000 distinct 8-byte strings takes about 64 MB. A Bloom filter for the same strings, with a 1% false positive rate, uses only 1.24 MB (about 10 bits per item) — that's 50 times smaller. The size of the filter doesn't depend on the item size, so the difference gets even bigger with longer strings.
 
-> *The game is considered one of the hardest games in the world, with winning episodes lasting hundreds of thousands of steps, and a permadeath setting that starts agents at the beginning in a whole new world if they die in the dungeon.  – [Insights from the NeurIPS 2021 NetHack Challenge](https://discovery.ucl.ac.uk/id/eprint/10177325/1/hambro22a.pdf), Hambro et al.*
+A Bloom filter often resides in memory and helps minimize expensive I/O operations such as disk reads or network calls. You check if an item is in the filter, and if the answer is "no", you skip the costly lookup. If the answer is "yes", you still have to perform the lookup because it might be a false positive.
 
-The overall goal of NetHack is straightforward to state, if not to achieve. You begin on the top floor of a dungeon; your objective, the Amulet of Yendor, is at the bottom, in Moloch’s Sanctum. To beat the game, you must descend to Sanctum, take the Amulet from the High Priest of Moloch, and make your way back to the top. Upon exiting the dungeon with the Amulet in your possession, you are transported to the Elemental Planes; from here, you must travel to the Astral Plane, seek out the high altar of your god, and offer the Amulet there, for which your god will grant you immortality and ascension to demigodhood. (Beating the game is called *ascending.*)
+```go
+// A filter for 1000 items with a 1% false positive rate.
+filter := bloom.New(1000, 0.01)
 
-When I started working on fuzzing NetHack in 2020, there was minimal prior art. We were a new company, building new tools and learning in real time how best to hold them, and previous bot ascensions were few. Two, to be precise, both targeting an earlier version of the game.
+filter.Add([]byte("alice"))
+filter.Add([]byte("bob"))
 
-[SWAGGINZZZ](https://pellsson.github.io/), an RNG-predicting bot, had speed-ascended a Tourist in 2019 using zero-turn RNG manipulations that were quickly patched out. (This remains the fastest ascension on NAO, a popular NetHack server, in both real time and turn count.)
+filter.Contains([]byte("alice")) // true
+filter.Contains([]byte("carol")) // false (or, rarely, true)
+```
 
-[BotHack](https://github.com/krajj7/BotHack), an earlier (2015) hand-rolled expert system made of about 16,000 lines of Clojure, had [ascended](https://www.reddit.com/r/nethack/comments/2tluxv/yaap_fullauto_bot_ascension_bothack/) a Valkyrie (the easiest role in NetHack and standard beginner recommendation, with strong melee and intrinsic cold resistance and stealth), and later a Samurai and a Knight, using a technique known as *pudding farming*.
+The filter is sized for the given number of items with a given false positive rate. You can add more, but the false positive rate will go up.
 
-In NetHack, there’s a monster called a *black pudding*, which can divide when hit with iron weapons. When BotHack was written, a black pudding could leave a corpse when slain, which could produce a *death drop:* a random item on the corpse square that the monster didn’t have while alive – any item, from the weak orcish dagger to the coveted amulet of life saving. Consequently, a player who could hit black puddings for minimal damage could divide and kill them indefinitely, producing effectively unbounded black pudding corpses (which could be sacrificed at an altar to gain favor with the player’s god) and effectively unbounded random items. A player willing to grind through thousands of turns of pudding farming could generate as many amulets of life saving as they wanted.
+You can add an item to a Bloom filter and check if an item is in the filter, but you cannot delete an item, count the number of items, or iterate over them.
 
-BotHack didn’t sacrifice puddings at altars – its game plan didn’t need to – but it relied on pudding farming for experience and items. A player must reach experience level (XL) 14 to become worthy of the Quest, whose completion is required to beat the game; BotHack’s fifty thousand turns of pudding farming took it from XL 11 to XL 22. It assembled much of its *ascension kit* (a shopping list of items that experienced players will collect before entering the late game) from pudding farming: a full kit of armor, an assortment of scrolls and magical rings, a pair of gauntlets of power – and a Hawaiian shirt, which provides no value by itself but can be enchanted to +7.
+### How it works
 
-In the subsequent version of NetHack, 3.6.0, pudding farming was removed.
+**Bloom filter**<sup>[1](https://antonz.org/probabilistic-data-structures/#fn:1)</sup> is a large array of *m* bits, all set to zero at first. To add an item, you compute *k* hash values for it and set the k bits at those positions:
 
-Will and Dave had started with 3.6.0, all the way back in 2017. We didn’t want to downgrade. So pudding farming was out.
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hk ──►│ mod m │──► i1, i2, ..., ik
+        └──────┘                       └───────┘
 
-> *– NetHack played by our agent, internal Zulip, April 2020*
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  m-1
+```
 
-We began with a simple agent that fed random bytes to NetHack and looked for new code coverage, a notebook to display coverage maps, and some functionality to play back recordings of our agent’s runs. We kicked off a run and quickly found a problem: after about an hour, we stopped making progress. 47 cores of our 48-core machine sat idle, and the remaining core’s CPU was locked at 100% utilization, returning zero new states.
+To check if an item is in the filter, you compute the same k hashes and check if all k bits are set:
 
-We were relieved to find that we could deterministically reproduce the bug. After investigating, we found a minimal repro: start a new game, type `;|:`, and, as Will put it, “now your computer is a space heater.” Locally, a player could `^C` out of the pathological state, but NetHack’s input loop itself had ceased to respond, and our agent could no longer reach the game. We opened GDB, read the function at the bottom of the backtrace, and found a comment: `/* warning: no bounds checking performed */`.
+- If any of the bits is not set, the item definitely was never added.
+- If all the bits are set, the item was probably added, but it's not guaranteed (the bits could have been set by other items).
 
-These were the early days; this wasn’t yet a given.
+```text
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 1 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  all 1 → probably in the set
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-We patched a workaround into our harness and tried again. In this run, our agent gained its first-ever experience level and found dungeon level 2 for the first time! And then we had a different problem.
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 0 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  any 0 → definitely not
+└───┴───┴───┴───┴───┴─▲─┴───┴───┴───┴───┴───┴───┘          in the set
+                     (!)
+```
 
-Dungeon levels in NetHack are lazily generated. A level is only created when the player reaches it for the first time. In normal play, NetHack presents the appearance of a pre-existing dungeon, but in our tree fuzzing context, there are many level 2s that can be reached. From the same stairwell on level 1, an agent could descend immediately to level 2a, or wait a turn, burning some RNG values, and descend to a different level 2b… or wait two turns, and so on. From any level 2, there’s a lot of work to do to reach level 3 – but how could an agent with so many options commit to one?
+The k bits are randomly distributed throughout the entire array. When the filter is larger than the CPU cache, each bit access could result in a cache miss, so a lookup may wait on memory k times.
 
-We also had more prosaic problems. Our agent generated random bytes to use as input. Most random bytes aren’t sensible inputs, and don’t make progress; worse, some inputs lead to menus that are hard to exit. Every time the fuzzer sent a `V`, it had to advance through a 14-page description of NetHack’s history, in a menu where most possible inputs don’t advance. Our agent spent a lot of time reading.
+**Unsure** uses a blocked Bloom filter<sup>[2](https://antonz.org/probabilistic-data-structures/#fn:2)</sup>. The bit array is divided into 512-bit blocks, each matching the size of a CPU cache line. When you add or check an item, it is hashed once: part of the hash selects a block, and the rest selects k bits within that block. Each add or check only accesses one cache line, so the filter stays fast even when it's very large.
 
-> *I had heard that NetHack was complex, but this didn’t really sink in until I played the game past a certain point. – Mikael Henaff, [First NetHack ascension, and insights into the AI capabilities it requires](https://mikaelhenaff.substack.com/p/first-nethack-ascension-and-insights)*
+```text
+        ┌──────┐         ┌──► high 32 bits ──► block
+item ──►│ hash │──► h ───┤                   ┌─────────┐
+        └──────┘         └──► low 32 bits ──►│ × salts │──► i1, i2, ..., ik
+                                             └─────────┘
 
-> *> is there some kind of kill count we could use to train the Antithesis wizard to kill*
->
-> *This is one of the weirder work-related discussions I’ve ever seen.  – [Justin Moore](https://antithesis.com/author/justin-moore/), internal Zulip, February 2024*
+          block
+┌───────┬───▼───┬───────┬───────┬───────┬───────┐
+│   0   │   1   │   2   │   3   │  ...  │  n-1  │
+└───────┴───────┴───────┴───────┴───────┴───────┘
+        │       │
+┌───────┘       └───────────────────────────────┐
+│         i1          i2                  ik    │
+├───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┤
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  511
+```
 
-With little progress to show and much foundational work to be done, our energies drifted from NetHack to more tractable games. Each one taught us a valuable lesson.
+In a blocked Bloom filter, some blocks end up with more items than others, which increases the false positive rate. To make up for this, the filter needs to be a bit larger. Compared to a standard Bloom filter, it uses about 3% more memory at a 1% false positive rate, 8% more at 0.1%, and 15% more at 0.01%.
 
-From [*Super Mario Bros.*](https://antithesis.com/blog/sdtalk/), we learned the effectiveness of maximizing a single progress metric; defining this metric would later prove to be key to progress in NetHack. From [*The Legend of Zelda*](https://antithesis.com/blog/zelda/) and [*Metroid*](https://antithesis.com/blog/2025/metroid/), we learned to work with the complex state spaces of adventure games: to deliberately linearize the many possible orders down to one concrete game plan, and to manage inventories of consumable resources. From [*Castlevania*](https://antithesis.com/blog/castlevania/), we learned the importance of pruning doomed states; we expanded this into a definition of *just how doomed* a state was. How beset was our hero by monsters? How incomplete was our agent’s inventory? How much HP was it missing? And from [*Tetris*](https://antithesis.com/blog/2026/tetris-quest/), we learned the usefulness of custom input generators… and that sometimes our value functions have bugs.
+The filter uses the local *wyhash*<sup>[3](https://antonz.org/probabilistic-data-structures/#fn:3)</sup> implementation for hashing. It performs roughly the same as *xxh3*<sup>[4](https://antonz.org/probabilistic-data-structures/#fn:4)</sup> but has a much simpler implementation, without SIMD or assembly.
 
-At this point, it’s worth thinking about the shape of NetHack’s state space. We had understood the importance of this question since the beginning, but it was particularly underscored by [*Gradius*](https://antithesis.com/blog/2025/gradius/). After we beat *Gradius* with the style of config we’d refined over time – defining a value function, building an inventory, pruning doomed states, and making progress through levels – we realized it could also be beaten by a strategy that *only* pruned doomed states. The whole game is an autoscroller! Every state that isn’t doomed leads inexorably to a better one, so depth is all you need.
+### Benchmarks
 
-NetHack’s state space is very different: both extremely deep and extremely broad. One adventurer could find a wand of wishing on dungeon level 2 and get most of an ascension kit in the early game; another could step on an unlucky polymorph trap and be turned into a quivering blob, or be zapped by the proverbial (but possible) [Gnome with the Wand of Death](https://nethackwiki.com/wiki/Gnome_With_the_Wand_of_Death). Quaffing from a fountain could grant the player a wish, but could also summon an angry water demon – or, worse, a horde of venomous snakes. And unlike *Gradius*, with its linear progression through the seven stages, NetHack’s game plan is highly nonlinear and almost fractally complex.
+| Operation | Items | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- | --- |
+| Add | 10K | **9** | 37 | 17 |
+|  | 1M | **10** | 36 | 19 |
+|  | 50M | **38** | 170 | 63 |
+| Contains, hit | 10K | **8** | 32 | 16 |
+|  | 1M | **9** | 32 | 18 |
+|  | 50M | **34** | 129 | 60 |
+| Contains, miss | 10K | **8** | 41 | 27 |
+|  | 1M | **9** | 48 | 33 |
+|  | 50M | **34** | 113 | 60 |
 
-What about depth? As we’ve said, the high-level objective is to retrieve the Amulet of Yendor from Moloch’s Sanctum and sacrifice it on the correct high altar on the Astral Plane. To reach Moloch’s Sanctum, the player must complete the Invocation Ritual, which is as follows: while standing on a certain square on the bottom floor of Gehennom, light seven candles on the Candelabrum of Invocation, ring the Bell of Opening, and read from the Book of the Dead. Upon completion, a ring of fire and a moat will surround the invoker, and the downstair to the Sanctum will be revealed.
+Memory, bits per item at 10M items (lower is better):
 
-To complete the Invocation Ritual, the player must first find the three items it requires. The Candelabrum of Invocation is guarded by Vlad the Impaler, whose tower must be found; the Bell of Opening is in the possession of the player’s quest nemesis, who lives beyond a magic portal to be found somewhere in the Dungeons of Doom; and the Book of the Dead is in the possession of the Wizard of Yendor himself, who, after being killed for the first time, will revive himself to harass the player for the rest of the game.
+| False positive rate | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- |
+| 10% | 4.84 | **4.80** | 5.39 |
+| 1% | 9.90 | **9.59** | 10.79 |
+| 0.1% | 15.49 | **14.38** | 16.18 |
 
-To be admitted to the Quest, the player must be judged worthy by its Leader; to defeat the nemesis, the player must be skilled in both offense and defense, and be well on the way to the ascension kit.
+*Unsure* is about 4× faster than *bits-and-blooms* and 2× faster than *gloom*, using 1–8% more memory than *bits-and-blooms* and 4–10% less than *gloom*.
 
-The Quest is often the first required branch that players tackle, after taking on the Gnomish Mines and retrieving a good item from the optional Sokoban levels, but it can be done at any point before the invocation ritual – it may be unwise to slay the Wizard of Yendor before thinking about the Quest, but the game won’t stop you.
+## [#](https://antonz.org/probabilistic-data-structures/#count-min-sketch)
+Count-min sketch
 
-A long time passed. Our NES scorecard grew. The [NeurIPS NetHack Challenge](https://nethackchallenge.com/) came and went. NetHack 3.6.7 was released, and we upgraded from 3.6.0, but we were an early-stage startup with many irons in the fire, and ascending fell off our to-do list.
+A count-min sketch is a frequency table that trades accuracy for space. It tells you approximately how many times each item has appeared. The estimate is *never less* than the actual count, but it can be *higher*. The sketch doesn't actually store the items, so it's much more compact than a regular map of per-item counts.
 
-### [Antithesis the Necromancer](https://antithesis.com/blog/2026/nethack/#antithesis-the-necromancer)
+For example, a regular map counting 1,000,000 distinct 8-byte strings takes about 64 MB. A count-min sketch for the same strings, with estimates within 0.01% of the total count (with 99% probability), uses only 0.55 MB — that's 116 times smaller. The size of the sketch doesn't depend on the number of distinct items or their size, only on the accuracy you choose. So the difference gets even bigger with more or longer strings.
 
-> *“We told our Nethack AI to level up, and it abused the RNG and a cursed ring of polymorph to optimize only that one thing” could be a fun blog post in itself. – Will, internal Zulip, February 2024*
+A count-min sketch is useful when you want to track how many times an item shows up in a large stream of events. It's often used to check if something has happened a certain number of times, like rate-limiting an IP after X requests or sending an alert after an error happens Y times. A sketch can also help decide if a key is worth keeping in the cache given how often it was requested.
 
-In 2024, we felt ready to attack NetHack again, and kicked off some new runs. One of these runs smashed our old record, reaching the twelfth floor of the dungeons at experience level 22. (The player’s experience level, or XL, starts at 1 and caps at 30.) With no weapon, no armor, and mediocre stats, this run – a human wizard – was not on the path to ascension, but it was a new milestone. Curious about how this happened, we opened the best moment in our [multiverse debugger](https://antithesis.com/blog/multiverse_debugging/) – and found, welded to our human wizard’s *foreclaw*, a cursed ring of polymorph. Antithesis the Necromancer had come down with polymorphitis!
+```go
+// Estimates within 0.1% of the total count, with 99% probability.
+sketch := countmin.New(0.001, 0.01)
 
-This run had just been lucky, but it gave us some ideas.
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.AddN([]byte("alice"), 2)
 
-Polymorph is one of NetHack’s more complex mechanics. With a certain form of magic, anything can be turned into anything else of its type: a lucky zap of a wand of polymorph can turn a fedora into a pair of speed boots, or a black dragon into a woodchuck, but an unlucky step on a polymorph trap could turn the player into a newt. The danger of an uncontrolled self-polymorph leads most players to seek out polymorph control, which removes the element of randomness and allows them to specify which monster they’d like to become. Our agent didn’t have this, but our tree fuzzing model meant it didn’t need it.
+sketch.Count([]byte("alice")) // 3 (or, rarely, more)
+sketch.Count([]byte("bob"))   // 1 (or, rarely, more)
+sketch.Count([]byte("carol")) // 0 (or, rarely, more)
+sketch.Total()                // 4
+```
 
-Polymorphitis helped us in two different ways. First, turning into a monster could provide us with useful capabilities: some monsters can fly, some can walk through walls, and some have very powerful attacks, and a player who takes the form of that monster inherits its abilities. Second, an uncontrolled polymorph has a chance to cause *own-race polymorph*: a human, for instance, might simply turn into a human, or a gnome into a gnome. Own-race polymorph, in addition to having a 1-in-10 chance to change the player’s gender, applies random deltas to experience level and stats, in ways designed to have an expected value of zero. Our fuzzer can make great use of an expected value of zero. Since we’d configured our fuzzer to care about experience gained, every favorable own-race polymorph in this run was saved as an interesting state to explore further from, and the fuzzer was able to ride the expected value of zero from XL 1 to XL 22.
+The sketch uses two settings: epsilon *ε* and delta *δ*. If the actual count for any given item is X and the total of all counts is N, then the estimated count for this item will usually be between X and X+ε·N. However, rarely (with a probability of δ) the estimate could be even higher.
 
-And curing food poisoning.
+For example, if ε is 0.001, δ is 0.01, and N is 1 million, then the estimate could be off by up to 1,000 (ε·N) with at least 99% probability (1−δ), and by more than 1,000 with at most 1% probability (δ).
 
-In a follow-up run, we found that uncontrolled polymorphitis could reliably get us to the highest experience level possible. There were unlucky polymorphs along the way, which the fuzzer didn’t prune – not all monsters can wear armor, or even hold a weapon, so we reached XL 30 with minimal inventory – but with the ability to become a fearsome jabberwock in our pocket, we weren’t convinced this mattered.
+The counting error in a sketch depends on the total of all counts, not on each individual item. Therefore, frequent items are estimated more or less accurately relative to their count, but rare items are not — the absolute error is too high for them.
 
-Jabberwocks have good natural armor, decent magic resistance, and four 2d10 attacks per turn. They’re vulnerable to immediate beheading by the [Vorpal Blade](https://nethackwiki.com/wiki/Vorpal_Blade), but this is a rare artifact weapon whose generation the fuzzer can easily prevent. We never saw one.
+You can increase the per-item counter in a sketch and get the estimated count for an item, but you cannot decrease a counter or iterate over the items.
 
-We told our fuzzer to seek out polymorphitis on purpose. The next night, after retrieving the luckstone at the end of the Gnomish Mines, it reached the Castle – dungeon level 27, one floor before the Valley of the Dead which heralds the entrance to Gehennom. The run after that unlocked the Quest.
+### How it works
 
-The Quest state, alas, looked doomed. With no weapons and no armor, we were no match for the ravens of the Lonely Tower, let alone the Dark One, and the downstair to the next Quest level was far away. The portal back to the dungeon was blocked by a crocodile and a battalion of elves, so we couldn’t retrieve the resources we’d lost when we’d absentmindedly turned into an ant. And our magical power was spent. Without armor, we couldn’t advance; without weapons, we couldn’t retreat. Our only choice, it seemed, was between being pecked to death in the search for the upstair and being slaughtered by the elves, one of whom had a wand of fire. The only thing in our inventory was our cursed ring of polymorph.
+**Count-min sketch**<sup>[8](https://antonz.org/probabilistic-data-structures/#fn:8)</sup> is a table of counters with *d* rows and *w* columns, all starting at zero. Each row uses its own hash function that maps an item to one of the w counters. To add an item, you increment its counter in each row:
 
-This seemed like an interesting challenge, so we loaded the state in our multiverse debugger and kicked off an exploration campaign, and our agent surprised us all by finding a way through: it turned into a purple worm and *ate* all the monsters. The next problem was much more tractable: we needed to talk to Neferet the Green in the Lonely Tower’s throne room to receive the quest, but our purple worm, being a worm and thus without hands, couldn’t open the door. This too was resolved by polymorph.
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hd ──►│ mod w │──► i1, i2, ..., id
+        └──────┘                       └───────┘
 
-With proof of progress in hand, we started thinking about defining a value function. We’d gotten this far with simple placeholders – experience, dungeon level, score, code coverage, and enough nutrition not to starve – but we knew we’d soon need to give the fuzzer a real game plan. Our next run made it to the Castle… but its best state was doomed.
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 5
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 6
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+                 i1              i2      id
+```
 
-In this screenshot, our character is the `h`: Antithesis the Master Mind Flayer, formerly a wizard. Around us is a one-tile passage, blocked on our right by a cockatrice: one of the most feared monsters in all of NetHack, standing on the upstair. Not only can the cockatrice’s hiss turn you to stone, a delayed instadeath with only a few methods of prevention, *any skin contact* with a cockatrice will *immediately* turn you to stone. The master mind flayer’s primary attack is to suck the brains of its foe with its tentacles – skin contact! If we attack to the right, we immediately die; if we don’t attack, we die a slow death.
+To estimate an item's count, you take the smallest value from its d counters:
 
-With more fuzzing, we could have found a convenient polymorph or a more favorable Castle, but this was only a test run: the instrumentation by which the fuzzer read information out of the game was still under active development, and because we’d patched the instrumentation directly into NetHack in a lazy way, every change required a new run. We started over and iterated, and in time, we found the Quest.
+- Other items might hash to the same counter, so each counter value is ≥ true count.
+- The smallest counter is the one with the fewest collisions, so it's the best estimate.
 
-Our fuzzer keeps a distribution of interesting states to explore further from, rather than only ever exploring from a single frontier. This stuck-at-the-Castle scenario is one reason why. Our value function can only imperfectly approximate the true value function, so it has to degrade gracefully when it’s wrong – in this case, by exploring from the dungeon level above and going down to the Castle with a different RNG value, producing a different Castle. Even if our strategies had only ever advised states on this lineage of the Castle, though, there are a few ways we could’ve gotten out. When a state is advised, the fuzzer can choose to rewind it slightly and roll out from its recent ancestor, which could’ve put us on the floor above. And if all else fails, we could’ve tried to stay alive long enough to roll a new polymorph form.
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5   min = 3
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+```
 
-It was around this time that we switched our character’s role from Wizard to Valkyrie. The Valkyrie has a powerful starting kit, strong combat abilities, and a melee-focused playstyle that we thought would be much easier for our fuzzer to navigate than the Wizard’s menu-heavy spellcasting.
+With w = e/ε columns, each counter's error is at most ε·N, with probability at least 1 − 1/e. If you use d = ln(1/δ) rows, the chance that all d of the item's counters exceed its true count by more than ε·N is ≤ δ.
 
-### [Linear campaigns](https://antithesis.com/blog/2026/nethack/#linear-campaigns)
+**Unsure** uses a *conservative update*. When you add n to an item, it first finds the current estimate E (the smallest counter), then increases only the counters that are below E+n, leaving the larger ones unchanged. This keeps the same accuracy guarantee, but the actual error is about 2× lower. The tradeoff is that counts can't be decreased.
 
-> *we should write the blog post now just to title it “We made it to hell!” – [Harrison Brown](https://antithesis.com/author/harrison-brown/), internal Zulip, May 2024*
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 5
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+```
 
-With our agent’s tree fuzzing powers, we could make use of polymorphitis in ways no human could. This was what drove us to the Quest. But our system had another power, which we used to scout the next phases of the game: the ability to alternate between fuzzing campaigns and *linear campaigns*, sequences of input manually specified by a human. (We planned to eliminate human input in time, and eventually we did, but in the early days it gave us the useful ability to scout multiple bottlenecks at once.) The fuzzer could get to the Quest home level, but could it reach the Norn to *receive* the Quest? After reaching the Norn, could it make its way to the fortress of Lord Surtur, the Valkyrie’s quest nemesis? After reaching the fortress, could it defeat Lord Surtur? And after defeating Lord Surtur, could it retrieve the Bell of Opening from his corpse?
+Counters are 32-bit instead of the usual 64-bit, so the sketch uses 2× less memory. The item is hashed once, and each row gets its own position from that hash by salting it (multiplying by a random per-row constant).
 
-Instead of solving one problem only to be faced by another, we could face them all in parallel. We fuzzed to Quest Home and then branched: one campaign would fuzz, to see what the fuzzer could do alone, and another could send NetHack a series of human-generated inputs to solve the current problem and progress to the next. We got into a rhythm: kick off a job overnight, analyze it in the morning, tune the config in response after lunch, and kick off a new job seeded with the last run’s best state at the end of the day. In time, we made it past the Castle (by turning into a jabberwock to fly over the moat) to the Valley of the Dead.
+```text
+        ┌──────┐         ┌─────────┐
+item ──►│ hash │──► h ──►│ × salts │──► i1, i2, ..., id
+        └──────┘         └─────────┘
+```
 
-From here, the game was open. We were out of the early game’s scramble for resources and well into the midgame. We had *options*. What to do? We could go back for that luckstone at Mines’ End. We could defeat Croesus at Fort Ludios for gold beyond our wildest dreams. We could wander the dungeons in search of loot. But, most importantly, we could traverse the Castle – and here we had a decision to make.
+The sketch uses *wyhash* for hashing.
 
-In a corner of the Castle, there lies a special treasure chest. Inside this chest is a wand of wishing, which is the most powerful item in the game. Zap the wand of wishing and type in the name of an item, and that item is yours. But while our fuzzer’s input generation had grown more sophisticated than the random bytes of early years, randomly generating the exact sequence `blessed rustproof +3 gray dragon scale mail` was far beyond its abilities. With linear campaigns, a human could make use of the wand, but with uncontrolled polymorphitis, armor was out of the question, and weapons would likely be lost. What to do? We considered wishing for highly enchanted rings and polymorphing into a monster that could eat rings to gain their powers, but in the end, given the fuzzer’s sharp division of responsibility between [tactics and strategy](https://antithesis.com/blog/sdtalk/) and our commitment to eventually getting a fully autonomous run, we resolved to let the wand go.
+### Benchmarks
 
-With a few exceptions. You can’t wish for the three invocation items, your own role’s quest artifact, the Amulet of Yendor, or a source of more wishes, and wishes for artifacts have a chance to fail depending on how many artifacts have been generated.
+Here's an excerpt from the full benchmarks<sup>[9](https://antonz.org/probabilistic-data-structures/#fn:9)</sup>, comparing *unsure* to *BoomFilters*<sup>[10](https://antonz.org/probabilistic-data-structures/#fn:10)</sup> (a classic count-min sketch with 64-bit counters) (ns/op, lower is better):
 
-Or so I thought. The building blocks that we later used to unlock wishing had been there all along.
+| Operation | ε | Size (unsure) | unsure | BoomFilters |
+| --- | --- | --- | --- | --- |
+| Add | 0.001 | 55 KB | **13** | 19 |
+|  | 0.00001 | 5.4 MB | **17** | 32 |
+|  | 0.000001 | 54 MB | **81** | 98 |
+| Count | 0.001 | 55 KB | **9** | 51 |
+|  | 0.00001 | 5.4 MB | **14** | 64 |
+|  | 0.000001 | 54 MB | **52** | 139 |
 
-We traveled through Gehennom to Vlad’s Tower, home of Vlad the Impaler and the Candelabrum of Invocation – and then realized our instrumentation was once again insufficient. We thought we were unlikely to beat Vlad the Impaler without a value function to guide us, but our value function had no way to know that Vlad was there. We would have to add more code to our harness to tell the fuzzer about Vlad – and since our harness was patched into NetHack itself and many changes to it modified NetHack’s internal data structures, we knew we’d soon have to restart.
+Accuracy at ε=0.0001, N=10M additions over 1M distinct items, mean overestimate (lower is better):
 
-We could have written some linear campaigns to beat Vlad by hand, but in the end, the decision to restart was made for us. We’d been advancing slowly over the course of weeks, starting each night’s run from the best game state found by the previous night’s run, constructing a chain of runs whose beginning – and build artifacts – receded further every day into the past. Eventually the build artifacts aged out of what our retention policy allowed and were deleted. Lesson learned! We switched to a setup with a longer retention period and kicked off a new run from scratch.
+| Distribution | unsure | BoomFilters |
+| --- | --- | --- |
+| Uniform | **139** | 302 |
+| Zipf, s = 1.1 | **23** | 44 |
+| Zipf, s = 1.5 | **0.3** | 0.8 |
+| Size | **536 KB** | 1080 KB |
 
-> *“my variable named `_totally_safe_buffer` has people asking a lot of questions already answered by the variable name” – Harrison Brown, internal Zulip, September 2025*
->
-> *“Man I hate C.” – Will, internal Zulip, September 2025*
+*Unsure* is about 1.5× faster for Add and 4× faster for Count, using 2× less memory with 2–2.7× lower error.
 
-Our plan was to *beat* NetHack, but our fuzzer is a tool for finding bugs, and find bugs it did. In our next run, we saw an interesting termination:
+## [#](https://antonz.org/probabilistic-data-structures/#hyperloglog)
+HyperLogLog
 
-We opened the multiverse debugger again and investigated. At the moment before the double free, we were engulfed by a purple worm – and *punished*, a niche mechanic in NetHack with whole source files to support it.
+HyperLogLog is a unique items counter that trades accuracy for space. It tells you approximately how many *distinct items* it has seen, no matter how many times each one appeared. HyperLogLog (also called a *sketch* from here on) doesn't actually store the items, so it's much more compact than a regular set.
 
-There are only two ways for a character to become punished: by reading a scroll of punishment, which is almost always a bad idea, or as a consequence of prayer to an extremely angry god. A punished character is attached to a heavy iron ball (the only item of the ‘iron ball’ object class) by a heavy iron chain (the only item of the ‘chain’ object class). The ball and chain drag behind the player, are rendered on screen, and have many unique effects; for our purposes here, it suffices to note that a punished player may pick up the heavy iron ball and add it to inventory, and that the game has special logic to track the state of the ball and handle the rendering of it and the chain.
+For example, a regular set of 1,000,000 distinct 8-byte strings takes about 64 MB. A HyperLogLog sketch counting the same strings with about 0.8% error uses only 16 KB — that's almost 4,000 times smaller. The size of the sketch doesn't depend on the number of items or their size, only on the accuracy you choose. A 16 KB sketch counts a billion items as accurately as a thousand.
 
-We still had code coverage as a component of our value function. The fuzzer, seeking to visit as much of the code as it can, had found a way to become punished, then become engulfed by a purple worm, then pick up the ball, then save – which triggered a double free! For a minute, we were excited, thinking we’d found an unknown bug – but then we found that [a development version had already patched it out](https://github.com/NetHack/NetHack/commit/4d6a140d34323af547cb790bb8ffc2c6d9b6d9b2). [The DevTeam thinks of everything.](https://nethackwiki.com/wiki/The_DevTeam_Thinks_of_Everything)
+HyperLogLog is useful when you need to count unique things in a large stream: unique visitors to a website, unique search queries per day, or distinct values in a database column.
 
-Or do they? We later found a different bug that, as far as I know, was unreported at the time. Certain artifacts, at certain times, can blast the player for damage, and a polymorphed player who takes fatal damage will revert to base form rather than die. While polymorphing into a yellow light, the Orb of Fate blasted us, which depleted the light’s meager HP and produced an assertion failure reading `del_light_source: not found.`
+```go
+// Standard error about 0.8% of the true count.
+sketch := hll.New()
 
-We didn’t investigate this very much, because it led us to a more severe problem: from the moment that found the assertion failure to the frontier of our exploration, our alignment with our god had dropped to -70. This explained why the Orb – our role’s own artifact! – blasted us, but it looked like a horrible bug in our strategy. The light source bug was a curiosity, but failure to maintain alignment threatened to impede our progress – there were the consequences of negative alignment themselves to worry about, but also, if it could get this wrong, what else could it be getting wrong? But it was just a NetHack moment. On the variant of the Medusa level whose entrance contains a puddle of water, a magic trap, and a gremlin, we stepped on the magic trap, which tamed all adjacent monsters. If a gremlin comes into contact with water, it spawns an additional gremlin. One accidentally tamed gremlin, locked in a room with a puddle, became a roomful of them; our fuzzer hacked its way through the horde to escape and incurred a -15 alignment penalty per kill.
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("carol"))
 
-We also found a few known issues, a minor bug in our instrumentation (revisiting a level on which an item with a custom name had been dropped would crash the game), and one especially literal bug: in one run, our inventory contained a potion that was also a giant ant corpse.
+sketch.Count() // 3 (approximately)
+```
 
-Every item in inventory has an `int corpsenm`. For most items, this is set to -1; for corpses, it’s set to the index of a monster class, to track which type of corpse it is. This particular potion had a `corpsenm` of `0`: the ID of the giant ant.
+You can merge sketches to gather data from multiple machines or segments (like by hour, page, or region). When you merge two sketches, you get the total number of unique items from both, without counting shared items twice.
 
-With further refinement of our strategy, we were able to beat the Quest and descend to Gehennom without manual intervention… and then we hit the *really* bad bug. Try as it might, the fuzzer couldn’t pass the tenth floor of Gehennom. Every time it tried, NetHack would segfault.
+```go
+home := hll.New() // visitors to the home page
+docs := hll.New() // visitors to the docs
+// ...
+home.Merge(docs)
+home.Count() // visitors to either page
+```
 
-The situation was otherwise promising. We’d eliminated every point of manual intervention. We knew we could beat Vlad the Impaler. We’d need a plan to obtain the seven candles for the Candelabrum, but in the worst case we could backtrack all the way to the Gnomish Mines, near the beginning of the game. If we could just fix the segfault, we could probably ascend by the end of the year.
+The sketch has one setting: the precision *p*, which gives a relative standard error (stdErr) of 1.04/√(2^p). A common default is p=14, which gives 0.81% error.
 
-The year was 2024. We did not ascend.
+With p=14 and 1 million distinct items:
 
-In retrospect, our problems were likely overdetermined. We had an unusual setup for launching the game that we’d last thought about in 2020. Our harness directed all input to NetHack itself and died alongside it, so we couldn’t run diagnostics on the rest of the system. Our initial investigations pointed to string fortification in the Nix compiler wrappers, which had bitten us in other ways some years ago, and to a part of the NetHack codebase with a long and storied history of memory safety bugfixes.
+- 68% of the time the estimate is within 0.81% (8,100) of the true count,
+- 95% within 1.6% (2·stdErr),
+- 99.7% within 2.4% (3·stdErr).
 
-We fixed our harness, we turned off source fortification, and we pored over `sp_lev.c`, but no matter what we did, every run hit a wall: past a certain point, progress was impossible, and every descent ended in a crash. We couldn’t even tell which level the game crashed trying to generate, since we had no way of reaching it, and teleporting to the level in NetHack’s debug mode made the segfaults disappear. We became unsure if we’d even succeeded in disabling source fortification. The only hint we had to go on was the discovery, late in the search, that the crash couldn’t happen until we’d seen the Valley of the Dead. Over time, the effort lost steam: we’d kick off a run from time to time to see if anything new could be learned, but after we missed our 2024 target, the enthusiasm was gone.
+The error is relative to the count, so the standard error is the same 0.81% for a thousand items or a billion.
 
-Then, in late 2025, a particularly unlucky run segfaulted while entering the Valley of the Dead, with a slightly different message. With another year of diagnosing bugs for customers under our belt, and another year of tricks up our sleeve, we were finally able to get a diagnostic…
+You can add items to a sketch, get the estimated count, and merge sketches. You cannot check if a specific item was added, remove items, or list them.
 
-The buffer, located in the part of our instrumentation code that told our agent about the level’s monsters, was not totally safe. We made it ten times larger and the segfaults went away.
+### How it works
 
-> *Welcome back to experience level 28. You totally digest it.* – NetHack
+**HyperLogLog**<sup>[11](https://antonz.org/probabilistic-data-structures/#fn:11)</sup> is based on a simple observation. If you hash items to random bit strings, about half of them start with 1, a quarter with 01, an eighth with 001, and so on. Seeing a hash with *k* leading zeros suggests there were about 2^(k+1) distinct items. Duplicates hash to the same value, so they don't affect the result.
 
-Our next run got off to a good start. After the fuzzer spent the early game bashing monsters with a suit of bronze plate mail, it found the ring of polymorph (and the similarly useful ring of teleportation), beat the Quest, and descended past the Castle to Gehennom. We still didn’t have a strategy in place for the Vlad the Impaler fight, but we were confident that our days of starting over to fix the harness were behind us: we’d had plenty of time to improve the instrumentation over the course of our many restarts, the remaining issues could be solved in strategy alone, and we’d much improved our insight into the game. We’d built a hex viewer into the notebook to inspect raw dumps of data from the game, a whole plotting library had grown around the needs of NetHack data analysis, and we even had an interactive game history viewer in the notebook, inspired by the [simple multiverse debugger](https://antithesis.com/docs/product/debugging/simple_mvd/) that I was prototyping at the time.
+A single observation is unreliable, so the sketch divides the items into m = 2^p groups, where *p* is the selected precision. The first p bits of the hash pick a group (a *register*), and the register keeps the highest *rank* (leading zeros plus one) it has seen in the rest of the hash:
 
-We’d also improved the strategy along the way, and fixed a few unexpected bugs. In April of 2025, we discovered that a wielded potion of acid was reported as a katana; in June, we switched from rewarding teleportitis to rewarding a ring of teleportation, to avoid providing unexpected reward to the relatively weak quantum mechanic polyform; and in August, we found that previous runs had merely gotten lucky in finding the quest portal and wrote a proper reward function that the fuzzer could hill-climb toward. We also discouraged the fuzzer from entering the Gnomish Mines, which for whatever reason it loved doing nothing in. There were still a few problems – rings of polymorph were rare, so it took some time to get a new run off the ground – but things had improved.
+```text
+        ┌──────┐   ┌──────────┬────────────────────────┐
+item ──►│ hash │──►│ 01101001 │ 0001101...             │
+        └──────┘   └────┬─────┴───────────┬────────────┘
+                        │ register i      └ rank = 3 zeros + 1 = 4
+          ┌───┬───┬───┬─▼─┬───┬───┬───┬───┬───┬───┐
+registers │ 3 │ 0 │ 5 │ 2 │ 1 │ 0 │ 4 │ 2 │ 0 │ 1 │  2 → 4
+          └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+```
 
-NetHack also served as a testbed to improve our whole system. One day, we found that some of the emoji we’d used in our analysis notebook’s status bar had been replaced with Unicode [replacement characters](https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character) – recent edits had placed them at chunk boundaries, and we found that we’d had a latent UTF-16 surrogate pair issue (one of many banes of the JavaScript developer) in our local file save path for years. In the early days, NetHack, an output-heavy game fast enough to run on a computer from the ‘80s (to this day [nethack.org](http://nethack.org) still ships Amiga binaries), had served as an ideal stress test; it was heartening to see that, five years later, pursuing the dragon could still turn up loot.
+The count is estimated from all the registers together, using a harmonic mean of 2^register. The standard error is about 1.04/√m. Merging two sketches is just taking the maximum value from each pair of registers.
 
-But back to our run. We turned out not to need a Vlad strategy at all. The fuzzer found the Candelabrum on its own. In the middle of a long and drawn-out fight, where Antithesis the Champion had taken several level drain attacks, the fuzzer found a timeline that polymorphed into a purple worm and ate Vlad the Impaler – an engulfing attack that instantly kills any monster of size less than `huge`.
+The original estimator is biased when dealing with small counts (up to a few times m), so in these cases it uses a different formula called *linear counting*. This switch creates a sudden change in error, and some implementations (like HyperLogLog++<sup>[12](https://antonz.org/probabilistic-data-structures/#fn:12)</sup>) address it by using large tables of bias corrections based on real data.
 
-This is NetHack’s own technical term. All monsters are classified as one of six sizes: tiny, small, medium, large, huge, and gigantic.
+**Unsure** uses the improved estimator by Otmar Ertl<sup>[13](https://antonz.org/probabilistic-data-structures/#fn:13)</sup>. Instead of a harmonic mean of the registers, it works from a *histogram*: how many registers have value 0, value 1, and so on. A formula applied to the histogram gives an accurate estimate for any number of items, from zero to billions, so there's no need for a separate formula for small counts or for correction tables.
 
-The problem came immediately after the Vlad fight: with the Candelabrum in our possession, we needed seven candles to light it, and we had zero. Vlad’s Tower has a supply of candles, hidden in chests behind secret doors, which take too many implausible inputs to uncover – and anyway, the chests were locked, and we had no way to open them. A long and grueling linear campaign back up through Gehennom could probably find an opening item and save the run through manual intervention. Alternatively, we could teach the fuzzer, which still relied on lucky trapdoors for descent, to get better at stairs, backtrack all the way to the Gnomish Mines and luck our way through an interaction with a shopkeeper. But what would we do then? Our thesis that the fuzzer could rely on lucky polymorphs and teleports had gotten us this far, but did we really believe that polymorphitis alone could carry us through the swarms of monsters in Moloch’s Sanctum, where no teleport can succeed?
+The sketch updates the histogram whenever registers change. Most adds don't change any registers, so this is almost free. Counting always takes the same amount of time, no matter how big the sketch is. Other implementations scan all the registers on every count, which takes from microseconds to milliseconds.
 
-Our next advance would come from an unexpected place. We would end up rethinking our whole game plan, which had remained stable since the beginning, and which our polymorphitis discovery from early 2024 had only reinforced.
+Registers are one byte each, and the histogram has 64 four-byte counters (256 bytes). The item is hashed once with *wyhash*, and the 64-bit hash is split into the register index and the rank.
 
-> *“Sorry for ruining the RBY metagame.” – [Crystal_](https://www.smogon.com/forums/threads/normal-types-cannot-be-paralyzed-by-body-slam.3525371/), smogon.com*
+### Benchmarks
 
-Why do we play games? Not just we at Antithesis, but we as humans? What is it about games that draws people in? A game is a constructed system without any direct relation to the real world – why do we take the time to memorize the rules of these systems, which are often elaborate beyond reason, and exert ourselves within them? What could lead someone, for instance, to memorize the 324 different interactions of the Pokemon type chart?
+Here's an excerpt from the full benchmarks<sup>[14](https://antonz.org/probabilistic-data-structures/#fn:14)</sup>, comparing *unsure* to *axiom*<sup>[15](https://antonz.org/probabilistic-data-structures/#fn:15)</sup> (HyperLogLog with LogLog-Beta estimator and sparse mode) (ns/op, lower is better):
 
-This is a difficult philosophical question, and a comprehensive answer is out of our scope. But I think a partial reason is that games are a valuable source of “[dragon problems](https://drmaciver.substack.com/p/dragon-problems)”: in pursuing our goal of beating NetHack with the fuzzer, we developed tools and techniques that went on to have broader applications. Another partial reason is that lessons derived from games can generalize to other domains. Consider common claims like “team sports build character” and “puzzle games keep the mind sharp” – implicit in ideas like these is a view of games as *training*, as a form of exercise, from which useful skills and knowledge can be drawn, and in which abilities can be developed. Sometimes these are general things, like character and a sharp mind… but they can also be highly specific. One never really knows when a niche piece of game arcana could generalize in a surprising way.
+| Operation | p | Size | unsure | axiom |
+| --- | --- | --- | --- | --- |
+| Add | 10 | 1 KB | **5.5** | 7.6 |
+|  | 14 | 16 KB | **5.6** | 7.6 |
+|  | 18 | 256 KB | 8.1 | **7.9** |
+| Count | 10 | 1 KB | **68** | 18,300 |
+|  | 14 | 16 KB | **62** | 350,000 |
+|  | 18 | 256 KB | **57** | 4,710,000 |
+| Merge | 10 | 1 KB | **730** | 1,710 |
+|  | 14 | 16 KB | **20,100** | 58,600 |
+|  | 18 | 256 KB | **341,000** | 951,000 |
 
-Consider the Generation 1 Pokemon metagame. As one of the most successful video game franchises in the world, Pokemon developed a strong multiplayer scene; because it predated always-online consoles, simulators were developed to enable online play, but real cartridges were used for official tournaments. Competitive teambuilding offered little variety, and mostly centralized around the same few Normal-types: the physical attackers Tauros and Snorlax and the defensive Chansey. Many games were decided by the luck-dependent “mirror match”, where a Tauros faced a Tauros, or a Snorlax faced a Snorlax, and they hit each other with their best move, the Normal-type Body Slam, until one hit landed its 30% chance to paralyze the opponent on contact. The paralyzed Pokemon would quickly be taken down, and the advantage this provided would usually decide the game.
+Accuracy at p=14 (0.81% standard error), relative RMSE over 100 sketches (lower is better):
 
-In 2014, it was discovered that this was a bug. The dataminer Crystal_ dumped the assembly code of the game cartridges’ battle routines and found that no attack could land a secondary chance to paralyze against a Pokemon of the same type. For 16 years, every cartridge player who’d failed to land a Body Slam paralysis against an opposing Tauros or Snorlax had assumed they’d gotten unlucky, when in fact the lucky outcome was impossible.
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 1,000 | 0.63% | **0.02%** |
+| 40,000 | **0.64%** | 0.71% |
+| 1,000,000 | **0.79%** | 0.89% |
 
-This is a common class of bug in video games. Let’s call them *distribution bugs:* in any timeline where you see the bug, it’s impossible to see that there *is* a bug, because the observed outcome could just come down to luck. The Gen 1 same-type bug is my favorite example of this, because it shows just how hard it is to notice distributional bugs – every simulator and every player’s model of the game was wrong for 16 years! – but there are many others. The Pokemon series also had the [catch rate bugs](https://bulbapedia.bulbagarden.net/wiki/List_of_battle_glitches_in_Generation_II#Catch_rate), where claimed multipliers to success chances were never applied, and the [Focus Energy bug](https://glitchcity.wiki/wiki/Focus_Energy_glitch), where a move intended to quadruple the likelihood of a critical hit instead divided it by 4. In the first Final Fantasy game for the NES, the routine to roll for a critical hit looked at the wielded weapon’s index number instead of its critical hit chance, and the Thief’s bonus to the success rate of fleeing from battle was never applied. More recently, a prerelease of Slay the Spire 2 was found to have such extreme [RNG correlation](https://tck.mn/blog/correlated-randomness-sts2/) that certain items intended to be obtainable as drops were impossible to get in normal play.
+Memory at p=14 after adding the given number of distinct items (lower is better):
 
-This has substantial overlap with the formal verification world’s concept of [*hyperproperties*](https://hillelwayne.com/post/hyperproperties/)*:* properties which can only be validated by a set of executions, not a single trace. Whether or not a distribution bug corresponds to a property or a hyperproperty can depend on how it’s worded. If battle simulator developers had tested their models of battle mechanics against a Gen 1 cartridge, they would’ve needed a hyperproperty that a Pokemon hit by Body Slam is paralyzed ~30% of the time; but if they had extracted the true properties from the cartridge and tested their simulators against those, they would’ve needed a simple property that Pokemon are never paralyzed (or burned or frozen) by the secondary effect of a move of the same type.
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 100 | 16 KB | **1.2 KB** |
+| 1,000 | 16 KB | **4.2 KB** |
+| 10,000 | 16 KB | 16 KB |
+| 1,000,000 | 16 KB | 16 KB |
 
-What does it take to find a distribution bug? Once you suspect you have a distribution bug, you can perform a statistical analysis of many simulated timelines – but you first have to suspect you have a distribution bug. For this reason, distribution bugs are often discovered by close analysis of code (as with the Body Slam paralysis chance bug) or mass computation of simulated timelines by other means (as with the Slay the Spire 2 RNG correlation) rather than observation. Finding a distribution bug isn’t hard once you suspect you have one, but to get to the point where you suspect you have one, you first have to stop believing that you were just unlucky.
+*Unsure* adds about as fast as *axiom*, counts 270–83,000× faster, and merges 2.3–2.9× faster, with the same accuracy and memory for counts above the number of registers. When there are fewer items than registers, *axiom*'s sparse mode makes it more accurate and compact.
 
-At this point in NetHack, we were getting very unlucky.
+## [#](https://antonz.org/probabilistic-data-structures/#t-digest)
+T-digest
 
-Our runs were completing the Quest with no human interaction and getting to Vlad’s Tower. Our problems were becoming more complex. Now that we’d solved things like survival and early progress, we had to start thinking about things like collecting seven candles for the Invocation. NetHack tracks possession of key items, like the Candelabrum and the Bell, in a separate bitfield from main inventory, but candles aren’t key items. We had finally reached the point where we had to instrument inventory – and once the fuzzer could see what it was holding, we made it try harder to hold onto *other* useful items, and check the tendency for inventory to be lost to unfavorable polymorph forms. An ant has very little carrying capacity, but why did it seem that every run that made progress had spent time as an ant?
+A t-digest is a summary of a stream of numbers that trades accuracy for space. It can give you an approximate median, 99th percentile, or any other *quantile* of the data. It can also estimate what fraction of the numbers are below a certain value (the CDF). The digest doesn't actually store the numbers, so it's much more compact than a sorted list.
 
-No human interaction other than selecting a state from the previous run to seed the next run with, that is. We replaced the human selection with a database query sometime after the second run to Vlad’s.
+For example, to find the exact 99th percentile of 1,000,000 numbers, you'd have to keep all of them. With 64-bit floats, that takes 8 MB. A t-digest estimates the same percentile within about 0.03% of the rank (between the 98.97th and the 99.03rd percentile) using only 8 KB — 1,000 times smaller. The size of the digest doesn't depend on the number of values, only on the accuracy you choose. An 8 KB digest summarizes a billion values as well as a million.
 
-We weren’t convinced it mattered. We’d developed our game plan in an era when the fuzzer knew very little about the game, and stuck to it ever since. Lucky polymorphitis rolls had carried us this far – sure, they’d cost us wands of wishing, but what good would inventory do us when we dropped it?
+A t-digest is useful when you need quantiles over a large stream: latency percentiles for a service, the distribution of request sizes or prices, or the outlier thresholds in sensor data.
 
-One day we looked closely at our NetHack config and found an integer overflow in our reward function.
+```go
+// Response times in milliseconds.
+digest := tdigest.New()
 
-Why didn’t we find this earlier? The truth is that we hadn’t looked very hard. We still believed that, with the fuzzer’s powerful luck manipulation, polymorphitis and teleportitis could carry the run. If we’d thought to plot dungeon level transitions and player weapon drops on the [multiverse map](https://antithesis.com/docs/product/understanding_test_results/logs_explorer/#the-multiverse-map), we likely would’ve noticed earlier.
+digest.Add(12.5)
+digest.Add(8.1)
+digest.Add(130.0)
+// ...
 
-When we watched our old runs back, it checked out. We were able to hold onto our starting longsword until the Quest. But past a certain dungeon level, we’d drop it. After one descent too many, reward crossed 2³¹ and went negative, so the most rewarding action the fuzzer could take was to drop something.
+digest.Quantile(0.5)  // median
+digest.Quantile(0.99) // 99th percentile
+digest.CDF(100)       // fraction of responses faster than 100 ms
+```
 
-Oops.
+You can merge digests to gather data from multiple machines or segments (like by hour, endpoint, or region). A merged digest estimates the percentiles of all values, but with less accuracy than individual digests do.
 
-> *I kind of think Nethack is probably beatable with a little bit more strategic guidance and compute. – Will, internal Zulip, September 2020*
+```go
+east := tdigest.New() // latencies on one server
+west := tdigest.New() // latencies on another
+// ...
+east.Merge(west)
+east.Quantile(0.99) // 99th percentile across both servers
+```
 
-As you may have inferred, there was a year-long gap from the previous NetHack progress to when we found the reward function overflow. During that time, no one at Antithesis was seriously working on NetHack. There was a company to build! So what revived the effort?
+The digest has one setting: the compression *δ*, which limits the number of centroids (see *How it works* below) to δ+2. A common default is δ=100, which takes 8 KB. Increasing δ uses more memory but reduces estimation error.
 
-During my internship, I worked on a specialized platform for the Antithesis fuzzer that enables a super-fast iteration loop for our researchers. The Determinator lets us run systems in an environment that’s incredibly similar to how they are actually deployed, but it’s a bit overkill for fuzzing NetHack. Accurately simulating your entire OS and network cluster is a lot of work! Our new research platform is incredibly fast, but has limited program support and bugfinding fidelity compared to the Determinator.
+The error is measured in ranks: a rank error of 0.03% at quantile q=0.99 means the value returned by `Quantile(0.99)` is somewhere between the 98.97th and the 99.03rd percentile of the actual values. Tail estimates, such as q=0.99 or q=0.999, are more accurate than the median (q=0.5).
 
-After seeing [this tweet](https://x.com/vladkurenkov/status/2102864659413872889), Will offhandedly mentioned that it might not be much effort for our research platform to support NetHack. I bit. Soon after it was up and running, Paul found the config overflow. Right after that, [GPT-6 Astra beat NetHack](https://kenforthewin.github.io/blog/posts/llm-nethack-ascension).
+You can add numbers to a digest, estimate quantiles and the CDF, and merge digests. You cannot remove numbers or list them.
 
-Beating NetHack was still not exactly the company’s top priority. But we were so close! I decided to see what I could do.
+### How it works
 
-The super-fast iteration loop is nice for humans. But it’s pretty much a necessity for effective LLM use. And since I’ve never played NetHack, and Paul was preoccupied with real work, we weren’t going to ascend without relying heavily on Claude. Custom strategies leverage domain knowledge, and I had none.
+**T-digest**<sup>[16](https://antonz.org/probabilistic-data-structures/#fn:16)</sup> summarizes the numbers as a sorted list of *centroids*. Each centroid has a mean and a weight — the number of values it represents. To estimate a quantile, the digest finds the centroids around the requested rank and interpolates between their means.
 
-My initial progress was lethargic and not very intentional. At first, my plan was just to make sure our new platform could reach the end of the old strategy, before eventually handing it back to Paul. This consisted almost entirely of starting a run whenever I was bored and asking Claude to debug when the fuzzer stopped making progress.
+The trick is in how big the centroids are allowed to grow. A *scale function* k(q) maps a quantile *q* to a number from -δ/4 to δ/4, and each centroid may only span 1 unit of k: if a centroid covers the quantiles from q₁ to q₂, then k(q₂) − k(q₁) ≤ 1.
 
-The general character of these first few iterations was that they smoothed over rough corners of the game that the strategy didn’t account for, making runs less likely to get stuck rather than pushing the frontier. For example, one fix added a few phrases to the fuzzer, allowing it to randomly attempt previously inaccessible actions. Another slightly tweaked the value function, after encountering a few runs that got stuck due to poorly ranked states. These kinds of changes are infeasible without a fast iteration loop, since we would otherwise be unable to do enough runs to evaluate consistency. They are also somewhat LLM-flavored. Claude in a tight feedback loop is inhumanly detail-oriented, to the point of overfitting, and patient enough to spend time on entirely uninteresting (but worthwhile) changes.
+The arcsine scale function, k(q) = δ/(2π)·asin(2q-1), is steep near q=0 and q=1 and flat near the median. This means the centroids it produces are larger in the center and smaller at the ends:
 
-> *“What is brain damage? I can only think of the Pink Floyd song” - [Serdar Benderli](https://antithesis.com/author/serdar-benderli/), internal Zulip, September 2026*
+```text
+weight
+  │                ┌──┐
+  │             ┌──┤  ├──┐
+  │          ┌──┤  │  │  ├──┐
+  │       ┌──┤  │  │  │  │  ├──┐
+  │  ┌─┬──┤  │  │  │  │  │  │  ├──┬─┐
+  └──┴─┴──┴──┴──┴──┴──┴──┴──┴──┴──┴─┴──► value
+    min      q=0.25   median  q=0.75     max
+```
 
-After iterating through enough boring, specialized strategy fixes, I wanted to find something more general. It’s nice that Claude can tirelessly cycle through fixes to unforeseen obstacles, but ideally our search should be resistant to slight inaccuracies in the optimization objective.
+With 1M values and δ=100, the centroids around the median hold about 27,000 values each, those around the 99th percentile about 5,000, and the outermost ones about 500. This keeps the error near the tails small.
 
-I stumbled on an easy fix to this by coincidence. To enable quick strategy iteration on the research platform, we’d developed a simple record/resume mechanism for the fuzzer, enabling us to continue fuzzing campaigns from some milestone in the game with an updated strategy. Since we assume the search strategy changes between runs, we didn’t bother saving any of its internal state. Instead, whatever strategy we restart with would repopulate its memory with the milestone game states we wanted to resume from.
+**Unsure** is the merging t-digest from the Dunning and Ertl paper. New values go to a buffer of 5·δ numbers. When the buffer is full, the digest sorts it and merges it with the centroids (already sorted) in a single pass, building new centroids from left to right as long as each one fits within its span of k. Every other pass goes right to left, so that neither tail ends up with fuller centroids. `Quantile`, `CDF` and `Merge` flush the buffer first.
 
-As I was reviewing yet another tedious strategy bump, I noticed that we were getting stuck in spots that were supposed to have been fixed. Claude would kind of paper over them with another supposed edge case, but I was suspicious that its fixes weren’t all as good as they seemed. So maybe something else was enabling the run to make progress. Next time a run got stuck, I stopped it, didn’t make any strategy changes, and then resumed it. And sure enough, the run was suddenly unstuck.
+The centroids are kept in two fixed arrays of δ+2 entries (the current list and the next one being built), along with the cumulative weights for a binary search in `Quantile` and `CDF`. With δ=100, that's 16·102·2 + 8·103 bytes for the centroids, and 8·500 bytes for the buffer, about 8 KB in total.
 
-If you’ve experience with machine learning or other sorts of numerical optimization problems, the reason for this might seem familiar. Our fuzzer aims to maximize a hyperdimensional value function, in this case representing game progress. If we greedily optimize towards local improvements, we might get stuck at a local maximum and miss the real objective for fear of temporary loss. This is worsened by the fact that our value function is an approximation of actual game progress, and might construct egregious local maxima by overestimating a state’s value! Forgetting a large portion of our strategy state is an easy way to kill the influence of these bad estimates. We call this strategy modifier “brain damage.”
+Centroids with weight 1 are treated as exact values rather than spread around their mean, and the exact minimum and maximum are used at the ends. So digests with few values give exact results, and `Quantile(0)` and `Quantile(1)` are always exact.
 
-This is similar to dropout in neural-network training, which reduces overfitting on patterns in the training set that may not be present in the test set. These patterns correspond to minor inaccuracies of the loss landscape of the training set relative to the “true” landscape of production data.
+### Benchmarks
 
-We’d been doing something akin to brain damage in some of our production strategies for a while, but for reasons of technical debt it was implemented at the individual strategy level rather than as a fuzzer-wide meta-strategic optimization pass, so our hot-rodded Nethack strategies were missing it. Fixing this paid off quickly. Not only were runs more consistent, they also got faster. While forgetting search state loses some progress, it also drastically speeds up strategy evaluation, since there is so much less data to process.
+Here's an excerpt from the full benchmarks<sup>[17](https://antonz.org/probabilistic-data-structures/#fn:17)</sup>, comparing *unsure* to *influxdata*<sup>[18](https://antonz.org/probabilistic-data-structures/#fn:18)</sup> (merging t-digest with the same scale function) (ns/op, lower is better):
 
-In this way, brain damage is also similar to clause-forgetting in CDCL-based SAT solvers.
+| Operation | δ | unsure | influx |
+| --- | --- | --- | --- |
+| Add | 50 | **44** | 78 |
+|  | 100 | **49** | 86 |
+|  | 500 | **59** | 105 |
+| Quantile | 50 | 11 | 13 |
+|  | 100 | 13 | 13 |
+|  | 500 | 15 | 16 |
+| Merge | 50 | **296** | 2,060 |
+|  | 100 | **630** | 4,330 |
+|  | 500 | **2,720** | 23,950 |
 
-With brain damage mitigating the extent to which runs got blocked on subtle value function inaccuracies, many of the next runs ran into more interesting problems. After turning into a purple worm and eating Vlad, the player needs to pick up the Candelabrum of Invocation that he drops and attach seven candles to it, later using it for the invocation ritual. While the fuzzer could emit all the inputs necessary to find all the candles and attach them to the Candelabrum, it had only managed to attach four candles in an overnight run. In 2024, that would’ve been fine; the Candelabrum might be complete in another night. But I live for instant gratification, and I wanted it done fast.
+Accuracy at δ=100, mean rank error over 1M normal values (lower is better):
 
-The fuzzer’s consistently slow, but nonzero, progress at this point was different behavior than what we’d observed from value function inaccuracies or missing inputs. It instead pointed to the fuzzer being able to pull the right inputs, but with very low probability.
+| Digest | Quantile | unsure | influx |
+| --- | --- | --- | --- |
+| Single | 0.5 | 0.007% | 0.015% |
+|  | 0.99 | 0.018% | 0.016% |
+|  | 0.999 | 0.011% | 0.009% |
+| Merged | 0.5 | 0.055% | 0.037% |
+|  | 0.99 | 0.023% | 0.021% |
+|  | 0.999 | 0.006% | 0.016% |
 
-To attach a candle to the Candelabrum, the player must input an [apply command](https://nethackwiki.com/wiki/Apply) of the form `a{L}`, where `{L}` is the letter denoting the candle’s slot in their inventory. Then, they must input `y` to accept the resulting confirmation dialogue. We previously had a tactic that could emit `a{L}` with a random inventory slot, and a different one that would emit `y`. Moreover, the `a{L}` tactic was biased towards lower inventory slots, since they’re more frequently useful, but the candles usually ended up in the higher slots.
+Memory at δ=100 (lower is better): *unsure* 8.5 KB, *influxdata* 14.4 KB.
 
-From some rough math, only one in ten thousand fuzzer commands might attach a candle. Worse, inputting the wrong letter to `a{L}` could worsen the state in ways the value function didn’t account for, by using up resources or even lighting the Candelabrum early. We want our fuzzer to be able to just *learn* better tactical distributions in situations like this, but as I said I like instant gratification (and when you’re hunting for bugs it’s fine for you, or Claude, to cheat). Smarter tactics would both drastically improve our chances at making progress and reduce our need for such a comprehensive value function.
+*Unsure* adds values about 1.8× faster than *influxdata*, queries at the same speed, merges 7–9× faster, and uses 40% less memory at about the same accuracy.
 
-The solution was conceptually straightforward. Instead of using a general “apply an inventory item” tactic, we wanted an “apply an inventory candle” tactic. But this simple goal used a fuzzer capability that we hadn’t previously exercised in NetHack. For a tactic to emit only candle-holding inventory slots, it has to be able to read the game’s state. Until this point, all of our tactics were entirely [blind](https://antithesis.com/blog/2025/alchemical_intelligence/)! Beyond NetHack, we’ve found that AI is good at noticing these distributional weaknesses in real customer workloads and suggesting improvements, and are releasing a cool product feature based on this soon!
+## [#](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
+Top-k sketch
 
-The new candle tactic was immediately effective. The next run attached all seven candles within a few minutes. Later, we found many other uses for state-reading tactics, which sped up our run immensely. For example, instead of blindly spamming buttons on every menu, we could first figure out which buttons were valid responses.
+A Top-k sketch finds the *k most frequent* items in a stream (the "heavy hitters"), along with their approximate counts. It uses a fixed amount of memory based only on k, no matter how many different items are in the stream.
 
-### [The Endgame](https://antithesis.com/blog/2026/nethack/#the-endgame)
+To find the exact top items, you'd have to count every unique item, for example with a map of per-item counts. With millions of distinct items, that takes tens or hundreds of megabytes. A Top-k sketch for the top 1000 items takes about 360 KB, and it usually finds all of them.
 
-> *Asmodeus is one of the least scary ones – Paul, internal Zulip, October 2026*
+A Top-k sketch is useful when you want to identify the "hottest" data: the most requested URLs, the most active users, or the most common search queries. Unlike a count-min sketch, it keeps the actual items, so it can list them.
 
-The new run made it all the way to the Wizard of Yendor, and swiftly killed him. Minimizing boss HP is a very straightforward optimization goal for the fuzzer. Unfortunately, this run immediately ended after getting eaten by a Purple Worm, and our value function ranked any states that had killed the wizard over any that hadn’t, even if they were predestined for death.
+```go
+// Track the 2 most frequent items.
+sketch := topk.New(2)
 
-Beating the Wizard was very exciting. In fact, I had thought he was the final boss before Claude told me otherwise. That’s largely because the existing NetHack strategy ended after killing him! To make further progress, we needed to come up with a reasonable high level strategy rather than just tuning value functions.
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("carol"))
+sketch.AddN([]byte("alice"), 4)
+sketch.AddN([]byte("carol"), 2)
 
-At this point, I thought the fuzzer had all the tools needed to win, and all it would need was a lot of value function iteration. I finally let Claude take the wheel with an actual `/loop`, and then I waited. Overnight progress was promising. The fuzzer had beaten the High Priest of Moloch! But it had never managed to pick up the Amulet of Yendor that he dropped.
+sketch.Top()                  // [{alice 5} {carol 3}]
+sketch.Count([]byte("alice")) // 5
+sketch.Count([]byte("bob"))   // 0 (not in the top 2)
+sketch.Total()                // 9
+```
 
-Confused, I asked Claude for an explanation. It turns out that the Wizard of Yendor periodically respawns to harass the player. So our fuzzer had arrived at the Sanctum, but it wasn’t able to actually get into the temple. It idled outside until one of the Wizard’s summoned dragons killed the High Priest by accident while aiming for the player. While this was going on, the Wizard looted the Amulet from the High Priest’s corpse.
+`Top` returns up to k items, from the most frequent to the least frequent. Counts are estimates: they're usually exact for the most frequent items, but may be slightly lower than the actual count for less common items.
 
-The strategy’s optimization goal was to reduce the High Priest’s HP to zero, so Claude considered progress very slow, rather than blocked. This meant that it spent most of the overnight run waiting for the Priest to die, instead of stopping the run and diagnosing strategy. After the Priest finally died, the fuzzer aimed to pick up the Amulet, not realizing that it was held by the Wizard.
+The sketch works best when the stream is skewed, meaning a few items appear much more often than the others. This is common in real situations. If all items are about equally frequent, there is no clear top k, and the results become less accurate.
 
-As someone who has never played NetHack by hand, that explanation sounded absolutely insane, especially for a game of its time. It goes to show how detailed NetHack’s systems are, and why its state space is so massive.
+You can add items to the sketch and get the top items with their counts, but you can't decrease counts or check items that aren't in the top k.
 
-In its next strategy iteration, Claude added logic to the strategy for retrieving the Amulet from the Wizard after the High Priest died. This worked, but the player then got stuck leaving the Sanctum. The Wizard summons monsters while alive, and it takes a long time for them to accidentally kill the High Priest. By the time the player killed him, picked up the Amulet, and tried to leave, the exit was surrounded by so many monsters that it was impossible to survive more than a few turns.
+### How it works
 
-Rather than working around the Wizard’s theft, I told Claude to make sure we actually entered the Temple of Moloch and killed him quickly. The next update worked quite well, and the fuzzer was well on its way to the Astral Plane. Within a few more routine strategy updates, we reached the Plane of Air, just a few levels away from Ascension!
+**HeavyKeeper**<sup>[19](https://antonz.org/probabilistic-data-structures/#fn:19)</sup> is a table of buckets that estimates item counts. It has *d* rows and *w* columns, and each item maps to one bucket in each row. Each bucket holds a fingerprint of the item and a count. To add an item, you update its bucket in each row:
 
-Unfortunately, progress stalled there. Every run that reached the Plane of Air did so barehanded, unarmored, hungry, and wounded. The fuzzer is incredibly good at surviving any remotely escapable situation, but our player was far too weak for the horde of monsters that awaited.
+- If the bucket is empty or owned by the item, increase its count.
+- If the bucket is owned by another item, decay it: decrease its count by 1 with probability b^count (b < 1). When the count reaches 0, the new item takes over the bucket with a count of 1.
 
-This was the same problem we’d hit in [Metroid](https://antithesis.com/blog/2025/metroid/): we needed to better manage our resources to make progress. In Metroid, the resource was just missile count, but NetHack is a bit more complicated. Along with simple numeric resources like Health, Armor, and Nutrition, it seemed like we would also want to obtain some important items for our ascension kit.
+```text
+          ┌──────┐
+add x ──► │ hash │──► h ──► high 32 bits ──► fingerprint = 7
+          └──────┘    │
+                      │ map to buckets
+                   ┌──┴────────────┐
+       ┌───────┬───▼───┬───────┬───│───┬───────┐
+row 1  │       │ fp=7  │ fp=3  │   │   │ fp=5  │  column 2 is owned by x:
+       │       │  41   │   2   │   │   │  980  │  41 → 42
+       ├───────┼───────┼───────┼───▼───┼───────┤
+row 2  │ fp=9  │       │       │ fp=2  │ fp=4  │  column 4 is owned by another:
+       │  17   │       │       │   3   │   1   │  3 → 2 with probability b^3
+       └───────┴───────┴───────┴───────┴───────┘
+         col 1   col 2   col 3   col 4   col 5
+```
 
-I was tempted to try pushing the run further without re-optimizing the earlier stages, which would cost many more rounds of value function iteration. But it had to be done. After consulting with Paul to figure out what sorts of items might be useful, I had Claude update the value function to optimize for the relevant stats. We also decided to make use of the wand of wishing in the Castle. Now that we had tactics smart enough to make good wishes (and to hold onto good items!), manipulating level generation to provide the maximum possible number of wishes was an obvious way to make use of the fuzzer’s time travel.
+The item's estimated count is the largest count among its buckets. Frequent items quickly reach counts that make decay very unlikely, so they keep their buckets. Rare items keep replacing each other without affecting the frequent ones. An item that becomes frequent later in the stream can still outnumber a less frequent owner and take over its bucket.
 
-The fresh run progressed pretty quickly. The fuzzer blasted through the Quest and made seven wishes at the Castle, the maximum number that can be granted from one wand. Among other less interesting sounding items, it gained the magic saber Grayswandir, a suit of gray dragon scale mail, and a shield of reflection. From there, I thought it would be quick. After all, it was just the same steps we’d accomplished previously, but with vastly better gear. Right?
+Next to the table, the sketch keeps a min-heap with the k items that have the largest estimates so far. After an item's buckets are updated, if its estimate is larger than the smallest count in the heap, the item is added to the heap, and the smallest item is removed. If the item is already in the heap, its count is increased.
 
-The full list was:
+```text
+                   ┌───────────┐
+add x (15) ───────►│ bob    12 │  the root has the smallest count
+                   └─────┬─────┘
+              ┌──────────┴────────┐
+        ┌─────┴─────┐       ┌─────┴─────┐
+        │ alice  30 │       │ dave   14 │  15 > 12: x replaces bob at the root
+        └─────┬─────┘       └───────────┘  15 > 14: x moves down, dave moves up
+      ┌───────┴──────┐
+┌─────┴─────┐  ┌─────┴─────┐
+│ eve   980 │  │ fay    41 │
+└───────────┘  └───────────┘
+```
 
-- blessed scroll of charging
-- blessed +2 gray dragon scale mail
-- blessed +2 shield of reflection
-- blessed +2 Grayswandir
-- blessed unicorn horn
-- blessed +2 speed boots
-- blessed amulet of life saving
+**Unsure** uses d = 2 rows of max(16k, 256) buckets, and a decay base of b = 0.8. The probabilities b^count are precomputed as 64-bit thresholds, so decay is cheap: the count *c* decreases if a random number is below the c-th threshold.
 
-I was underestimating NetHack again. There are so many ways to lose gear, making it to the endgame with the kit intact seemed nearly as hard as getting there barehanded. I’m exaggerating though. It took the Claude loop like a day to get back to the Plane of Air.
+The original HeavyKeeper uses b = 1.08⁻¹ ≈ 0.93, and more rows. A smaller b lets frequent items lock their buckets faster, which makes the sketch more precise on flat streams. However, if b is too small (like 0.5), the first items to claim buckets keep them permanently, so items that become frequent later are never counted, even if they end up being the most frequent. Using b = 0.8 keeps most of the precision and still catches most late-arriving frequent items. As for the rows, two are enough to protect frequent items from collisions in a single row, and adding more rows only makes the sketch slower.
 
-Along the way, Claude made a type of mistake that it had made several times before. When met with a blocker caused by an unlucky event, Claude often attempted to work around it instead of just pruning out unlucky games. For example, if it saw that a bad polymorph had broken our armor, it would spend many iterations writing strategies that would help us continue progressing as that polymorph. But pruning out bad luck is one of the main strengths of the fuzzer! For whatever reason, no amount of instruction or memory consistently prevented Claude from repeating this mistake. It will probably get much better at this in the next few months.
+The item is hashed once. The hash is mapped to a position in each row by salting it (multiplying by a random per-row constant). The fingerprint is the top 32 bits of the hash. The heap uses the 64-bit hash to identify items, so it doesn't compare the actual item bytes.
 
-After reaching the Plane of Air with a proper ascension kit, we were in new territory. That came with a few more tedious strategy iterations as Claude learned how the final levels worked. For example, it turns out that the lava on the Plane of Fire burns through speed boots, so the fuzzer should probably know how to fly over it.
+Each bucket is 8 bytes (a 32-bit fingerprint and a 32-bit count), so the table takes 256·k bytes. The heap takes about 100 bytes per item plus the item itself.
 
-At last, the fuzzer reached the Astral Plane. Soon after, Antithesis ascended, beating NetHack.
+The sketch uses *wyhash* for hashing and *wyrand* for random numbers.
 
-> *ok i’ll just tell my friends that my ceo told me to retrieve the amulet of yendor and ascend to the astral plane – Mikail, internal Zulip, September 2026*
+### Benchmarks
 
-Here is the tale of Agent the Champion’s ascension.
+| Operation | k | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| Add | 10 | **24 ns** | 64 ns | 59 ns |
+|  | 100 | **25 ns** | 84 ns | 70 ns |
+|  | 1000 | **33 ns** | 130 ns | 73 ns |
+| Top | 10 | **0.34 µs** | 0.64 µs | 0.77 µs |
+|  | 100 | **3.7 µs** | 13 µs | 14 µs |
+|  | 1000 | **75 µs** | 270 µs | 292 µs |
 
-Agent the Stripling, a lawful dwarven valkyrie, entered the Dungeons of Doom and descended to dungeon level 7, where she picked up an engagement ring. She put it on two levels later, one turn before becoming weak with hunger. A lucky own-race polymorph reset her nutrition counter shortly thereafter, saving her from fainting. Sixteen more own-race polymorphs in the next 1300 turns brought her to XL 30, and in time (and at least one change of gender), she found the magic portal to the Quest. Faced with navigating the Cave of Lord Surtur, he instead polymorphed into a wood nymph, a monster class with intrinsic teleportitis, and teleported near the downstair inside it. He repeated this trick for Lord Surtur’s fortress, teleporting inside it immediately upon entering its level and angering Lord Surtur before turning into a wraith. The wraith’s flight made navigating the lakes of fire around Lord Surtur’s fortress trivial, and its level-drain attack weakened Lord Surtur enough for stray boulders thrown by fire giants to finish him off.
+Precision is the fraction of the reported top k that is in the true top k (higher is better):
 
-Then, Agent the Vampire Lord collected the Bell of Opening and Orb of Fate from Surtur’s corpse, and invoked the Orb to hasten the climb out of the Quest. Once he’d left the other world beyond the magic portal, he turned into a xorn, descended to the Castle, walked through the moat, and phased through the wall to the chest with the wand of wishing. Seven wishes provided a blessed scroll of charging (wands of wishing can be recharged once), a suit of blessed +2 gray dragon scale mail, a blessed +2 shield of reflection, the legendary silver saber blessed +2 Grayswandir, a blessed unicorn horn, a pair of blessed +2 speed boots, and, out of a final wrest from the wand, a blessed amulet of life saving. Agent the Lord, newly disincentivized to polymorph, cut his way through the Castle’s throne room and found the first trap door to the Valley of the Dead, where the Valkyrie’s stealth proved useful in cutting a path through the graveyards.
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **0.90** | 0.38 | 0.19 |
+|  | 0.8 | **1.00** | 0.78 | 0.85 |
+|  | 1.0 | 0.99 | **1.00** | **1.00** |
+|  | Size | 39 KB | **27 KB** | 39 KB |
+| 1000 | 0.6 | **0.97** | 0.70 | 0.52 |
+|  | 0.8 | **1.00** | 0.98 | **1.00** |
+|  | 1.0 | **1.00** | **1.00** | **1.00** |
+|  | Size | **364 KB** | 414 KB | 453 KB |
 
-A player who polymorphs without polymorph control while wearing dragon scale mail will always become the corresponding dragon, unless that dragon species has been [genocided](https://nethackwiki.com/wiki/Genocide). In addition to being bad for other reasons – polymorph into a dragon causes most other worn items to break or fall off, and dragons can’t wield swords – this would have downgraded the dragon scale mail back to dragon scales, which provide much less protection.
+Count error is the mean of |estimate − true| / true over the reported items (lower is better):
 
-Agent descended through Gehennom with the aid of two lucky trap doors, skipping most of every dungeon level from 30 to 37 – including the lairs of the major demons Juiblex, Asmodeus, and Baalzebub. He found Vlad’s Tower and killed Vlad with Grayswandir for the Candelabrum, then found a second wand of wishing in the remaining Gehennom descent, which would come in handy later.
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **14%** | 94% | 428× |
+|  | 0.8 | **0.10%** | 46% | 230% |
+|  | 1.0 | 0.01% | 0.12% | **0.0%** |
+| 1000 | 0.6 | **2.4%** | 62% | 18× |
+|  | 0.8 | **0.23%** | 1.9% | 0.31% |
+|  | 1.0 | 0.05% | 0.24% | **0.02%** |
 
-Next was the Wizard of Yendor, who holds the Book of the Dead – the last item needed for the invocation. The Wizard of Yendor lives at the top of his tower, a three-level box in Gehennom whose walls can’t be dug into, phased through, or teleported past. The only way in is a magic portal, which is hidden inside a decoy: Gehennom contains two *Fake Wizard’s Towers:* doorless boxes whose walls must be dug or phased. One holds the portal. To reach the Wizard, you break into the fake tower, step onto the portal, and arrive at the bottom of the real one.
+*Unsure* is 2–4× faster than the others for Add and 1.8–4× faster for Top. On flat streams (s=0.6), it finds the true top k with 90–97% precision, while *keiler* drops to 38–70% precision with a count error of 62–94%, and *dgryski* to 19–52% with counts 18× or more too high. On skewed streams (s=1.0), all three are about equally accurate.
 
-Faced with the Fake Wizard’s Tower, he took off his armor, sheathed his sword, and turned into an earth elemental, one of a few monsters capable of phasing through walls. He walked through the tower and into the portal, turned back into a valkyrie, and got stuck in an empty room for many turns, passing through a few useless polymorphs and at least one own-race gender change along the way, before turning into a xorn, another monster with phasing.
+## [#](https://antonz.org/probabilistic-data-structures/#wrapping-up)
+Wrapping up
 
-A polymorphed player reduced to zero HP reverts to base form. Agent the Xorn became Agent the Lady in the Wizard of Yendor’s inner sanctum, between a blue dragon and a biting vampire lord. She fled downstairs without killing the Wizard, who had been awoken by an unseen monster’s aggravate spell and followed her downstairs – to the Tower’s treasure zoo, where, to escape the malevolent hug of a carnivorous ape, she invoked the Orb again to flee the Tower. The Wizard followed her out, and she killed him in Gehennom and obtained the Book of the Dead.
+As engineers, we usually want exact answers from our data. But sometimes, allowing a bit of uncertainty can cut memory usage by tens, hundreds, or even thousands of times. That's where probabilistic data structures come in:
 
-Upon finding the vibrating square at the bottom of Gehennom, Agent the Hero descended to Moloch’s Sanctum to retrieve the Amulet, rushed into the graveyard that stands before the Temple, became blinded in the melee, and died.
+- Bloom filter checks if an item might be in a set.
+- Count-min sketch estimates how many times each item has occurred.
+- HyperLogLog estimates the number of distinct items.
+- T-digest estimates quantiles of a stream of numbers.
+- Top-k sketch identifies the most frequent items in a stream.
 
-*But wait… Your medallion feels warm! You feel much better!*
+To use them in Go, try the ** [nalgeon/unsure](https://github.com/nalgeon/unsure) package:
 
-The amulet of life saving from the ascension kit came in handy. Our agent outran the rest of the graveyard’s hordes and promptly wished for another one, but forgot to put it on. He entered the Temple of Moloch, slew its High Priestess, and took the Amulet of Yendor.
+```text
+go get github.com/nalgeon/unsure
+```
 
-He made his way out of the temple slowly and absentmindedly. A wish for a blessed ring of levitation was interrupted by a different tactic. The `blessed ring of lev#force` provided a topaz ring that he never wore. Then he remembered to wear his new amulet of life saving. Three turns later, held in place by *another* carnivorous ape, unable to escape the swarms that had been waiting for him outside, he died again.
-
-Strategies can advise from any state they see. The blessed ring of levitation completed in one timeline, but the fuzzer branched from *inside* the wish and did something else. That lineage was the one that ascended. It may have been that obtaining levitation at this point was worse for the fuzzer, but it may just have been luck.
-
-He never needed a third amulet.
-
-> *“Gehennom on 5 zorkmids a day – more like 500 a day if you ask me.”* – Tourist quest guide, NetHack
-
-On the way out of the Sanctum, an unseen monster summoned Juiblex, a demon lord whose lair we’d skipped. He proved to be no match for Grayswandir and luck.
-
-Agent the Hero exited the Sanctum and immediately wished for a ring of levitation. His position was difficult. The invocation ritual had created a moat and a ring of fire, which he would need to pass. Without a source of levitation, his only way across was a flying polymorph. He was under strict instructions not to permit polymorph while wearing the gray dragon scale mail, but he’d previously put on a mummy wrapping, an item which NetHack treats as a cloak. Cloaks are worn over armor; clothes must be taken off in order. He couldn’t shed his mail, which he had a dedicated tactic for, without removing his wrapping, which he was never told how to do. So, a ring. He put it on and kept it on until the Plane of Earth.
-
-Early in his ascent, trapped by a boulder that our levitating agent didn’t have the leverage to push out of the way, he found the inputs to take off his wrapping by chance, then took off his armor again, polymorphed into a water nymph, and teleported past it. We’d instructed the fuzzer to use polymorphitis on the climb purely for nutrition resets, but fuzzers can find creative uses for the tools they’re given.
-
-On the same dungeon level, he was mauled by a minotaur for almost half of his HP and zapped a third wand of wishing he’d found in the Sanctum for two blessed potions of full healing, one of which he drank immediately.
-
-The climb up forced Agent the Heroine (the 10% chance to change gender applied again on level 38) to deal with the demon rulers she’d skipped on the way down. Juiblex had been dispatched in the Sanctum, but two demon princes remained: Asmodeus, with a powerful cold attack, and Baalzebub, with a fearsome stunning gaze. Valkyries have innate cold resistance, so Asmodeus wasn’t too scary; once our agent awakened him, he ineffectually harassed her all the way to the Plane of Earth. But there’s no such thing as stun resistance. Baalzebub called for a different strategy, and the fuzzer found an interesting one.
-
-To explain what happened, we’ll have to get into a lot of the complexity of NetHack.
-
-On turn 8348, our agent climbed into Baalzebub’s lair. On turn 8351, she found and opened the secret door from the downstair to Baalzebub’s chamber, where she spent a few turns being bitten by vampire bats. Turn 8355 is divisible by 15, which triggers a coin flip for the Amulet of Yendor’s clairvoyance effect. [CODE: src/allmain.c:331-333] The coin flip succeeds.
-
-When a player attracts Baalzebub’s attention, he appears before them and asks for a bribe. All four demon princes who ask for a bribe – Asmodeus, Baalzebub, Dispater, and Geryon – are generated invisible, and peaceful unless the player is wielding Excalibur, which our agent never created. [CODE: src/makemon.c:1329-1334] Asmodeus and Baalzebub, who await the player in their respective lairs, are generated in the *waiting* state. [CODE: src/makemon.c:1399-1401]
-
-When a peaceful bribing demon moves, he first checks for two conditions. If his HP is below maximum or he can see the player, he exits the waiting state. [CODE: src/monmove.c:387-390] He then checks whether the square he sees the player on is next to him, which his tactics make likely: all demon lords and princes want the Amulet of Yendor, making them *covetous*, and a monster in good health who covets the Amulet will try to teleport next to a player carrying the Amulet of Yendor on every move. If the player is not carrying the Amulet, different monster tactics apply – but our player was carrying the Amulet, so we don’t need to get into them here.
-
-The square that a bribing demon sees the player on may not be the player’s true square. The player could be wearing a cloak of displacement, for example. If he’s wrong, he “whispers at thin air”; if the player isn’t polymorphed into a demon, he then gets angry and removes his invisibility. [CODE: src/monmove.c:468-489] If he correctly identifies the player’s square, he enters a long routine called `demon_talk`. [CODE: src/minion.c:228-317] If the player is wielding Excalibur, he gets angry without becoming invisible. Otherwise, he appears before the player – removes his invisibility – and, unless the player is polymorphed into a demon, asks for a bribe. If the bribe is paid, the demon vanishes; if not, he gets angry.
-
-(There are two other cases. If the player offers something less than the amount demanded, a roll for charisma determines whether the bribe counts as paid or unpaid. If the player is helpless or has no gold, he skips the demand and just gets angry.)
-
-Asking for a bribe opens a unique text prompt. Our fuzzer config has a tactic intended to deal with bribe prompts. For whatever reason, it never fired in this run.
-
-Baalzebub has a stunning gaze attack. Because it’s a gaze attack, it only works if the player can see him. Unless the fuzzer can navigate the bribe prompt, which it’s unlikely to do correctly without special tactical handling – paying a bribe is *slightly* more likely than guessing a password, but they’re the same class of problem – Baalzebub is guaranteed to be hostile. Life would be much easier for the fuzzer if its hostile Baalzebub could be made to stay invisible – but how?
-
-What if Baalzebub just doesn’t get a turn?
-
-Turns in NetHack are determined based on *movement points*. (Think subpixels, but temporal.) Every action that takes time costs 12 points. When the player takes an action that takes time, the game subtracts 12 points from the player, then gives every monster with at least 12 points an action. If the player still has at least 12 points, the player acts next; otherwise, the game gives monsters actions until none has 12 points left. When neither the player nor any monster has 12 points, the game starts a new turn and gives every creature a new round of movement points according to their speed. [CODE: src/allmain.c:95-119]
-
-Monsters can only receive movement points in multiples of 12. A monster with 12 speed will receive 12 movement points, a monster with 24 speed will receive 24, and so on. When a monster has a speed that *isn’t* a multiple of 12, it’s rounded randomly: a monster with a speed of 9, for example, has a 75% chance on each turn boundary of receiving 12 movement points, and a 25% chance of receiving none.
-
-Baalzebub has a speed of 9.
-
-In a typical playthrough, Baalzebub is generated peaceful and invisible, but appears before the player on his turn. While our agent was making her way to Baalzebub in his chamber, the fuzzer *never let him get a turn* – he rolled an unlucky 25% for seven turns in a row. Agent the Heroine sensed Baalzebub’s presence using the Amulet of Yendor’s clairvoyance, walked up to him, and punched into his square, which angered him without giving him a chance to undo his invisibility. He spent the whole fight invisible, which disabled his stunning gaze – a gaze attack can only harm a creature that can see it.
-
-Later, our agent polymorphed into a master mind flayer, which sees invisible, and got stunned from Baalzebub’s gaze. Oh well. But after she ate his brains, he teleported away and was never seen again.
-
-The rest of the climb was uneventful. Our agent declined to bribe Asmodeus, who harassed him or her ineffectually all the way to the Plane of Earth. Soon after our agent left the Castle, an energy vortex broke his unworn topaz ring… and his ring of polymorph, but luckily he had a backup. Our agent prayed for the first and only time on the Plane of Air, for a heal while engulfed by an air elemental, which prompted the fuzzer to wait on the Plane of Water for the prayer timeout to reset. Agent the Champion reached the Astral Plane, had an unpleasant encounter with a green slime near the door to the high temple of Tyr, and ascended three turns before she would’ve died of [sliming](https://nethackwiki.com/wiki/Sliming).
-
-There were at least two gender changes from own-race polymorph on the climb.
-
-> *Maybe I should open your skull and see if my instructions are inside?* – [The Master of Thieves](https://nethackwiki.com/wiki/Master_of_Thieves)
-
-Because our agent is powered by a grey-box fuzzer that reads features from a patch of the game, we had the option to make use of any information available to the game. We had to decide what was in the spirit of the fuzzer and what wasn’t.
-
-We first decided that mechanical knowledge was fair game. An experienced player will have memorized most of the wiki, and may have done some “source diving” – reading NetHack’s source to learn its mechanics. We decided that our agent could know anything an experienced human could – the best armor for its gameplan, the ascension kit to wish for, and details like the invocation ritual.
-
-We also gave the fuzzer some information about the underlying system. NetHack itself provides players with some of it, with limitations. Players can see the remaining hit points of an enemy with a stethoscope (a free action once per turn) or a wand of probing, for example, but our harness reads the remaining HP of every monster on the level, and our agents use it to choose targets and score boss fights.
-
-Other information is inaccessible in a normal environment. In normal NetHack gameplay, for example, much of the early game revolves around identifying items: many items in the game start unidentified, with a randomized appearance, and the use of every magical item must be determined, either with scarce sources of magical identification or with tricks like [price identification](https://nethackwiki.com/wiki/Price_identification) and [engrave-testing](https://nethackwiki.com/wiki/Wand#Engrave-identification). Many items are only useful in certain contexts and others have negative effects, so using items blindly is not a good idea in normal play. A human player running NetHack inside the Antithesis environment, however, could use an item to identify it, then rewind, branch from a moment before the item was used, and track its identity.
-
-We decided that anything that a human could trivially access with branching was acceptable for our agent, so we gave it access to its raw item inventory – as if every item had been fully identified for it. We obtain almost all of our inventory from wishes, where items arrive with their identity known, and determining whether an unknown wand is a wand of wishing costs a single charge per unknown wand type and doesn’t even waste a wish.
-
-We read out some hidden numbers that we could’ve tracked. Consider the player’s hidden luck stat: because every action that affects luck is either the player’s own or indicated with a message, and luck [times out](https://nethackwiki.com/wiki/Luck#Luck_timeout) on a predictable schedule, a conscientious human player – or a regular agent harness – could reliably track luck to within a reasonable bound. Rather than write the tracking code, we elected to read it from the game. We handled alignment record similarly: a human could estimate it, but we read it. Prayer timeout, which we read, can’t be known exactly by a human, but can be given a conservative estimate. At the time of our first ascension, our tactics used the player’s raw nutrition counter, but we later removed this and used only the player-visible hunger state.
-
-Some of our tricks were more consequential. The fuzzer reads the full current level, including every trap, item, and monster, and every monster’s inventory, directly from the harness; it doesn’t have to discover as it goes. Our later runs also read the dungeon’s layout and knew which level held features like the quest portal, the entrance to Vlad’s Tower, and the vibrating square. Certain applications of this are small optimizations: knowing which high altar is the correct one, for example, would be immensely useful for a human, but for a branching fuzzer is a mere 3x optimization on the final level of the game. Other optimizations are perhaps larger: the fuzzer can reward descent to a level containing a wand of wishing as soon as it lands on the level, and our first ascension rerolled the Castle until its wand had enough charges. And a few are trivial: because the agent can see the age of a corpse, for instance, it can fearlessly eat monsters it didn’t see die, but players eating tainted meat are made immediately aware, so this instrumentation only saves us some rewinds.
-
-And, finally, our agent knows that, in our harness, the fuzzer controls `/dev/urandom`, which derives its entropy from the input history up to each moment. NetHack only reads `/dev/urandom` at the start of the game and when the player changes dungeon level, but the agent is able to provide meaningless inputs before seeing a new level to draw new entropy when it descends.
-
-At the time of writing, we’re actively working on removing this scaffolding. We’ve already found some success with tracking estimated bounds for values like luck and prayer timeout instead of reading them out, and replacing inventory instrumentation with menu information – prohibiting even the cross-branch identification trials that any human playing NetHack in our system would do. Using only what’s on screen would make NetHack very unlike the real systems we test – most systems don’t have screens! – but we think a black-box ascension is within reach. Who knows? Maybe we’ll even have a [zen](https://nethackwiki.com/wiki/Zen) ascension someday.
-
-Our first run had another trick up its sleeve which subsequent ascensions didn’t, but we’ll talk about it later.
-
-> *tbh I still have zero clue on how to play nethack after all this 🤣 – [Shuxian Wang](https://antithesis.com/author/shuxian-wang/), internal Zulip, October 2026*
-
-While Mikail was pushing the existing fuzzer config to its limits, a separate workstream was rethinking our whole approach to the game. My colleague [Shuxian Wang](https://antithesis.com/author/shuxian-wang/) was working on an experimental system for facilitating the development of *workloads* – drivers that sit between the fuzzer and the system under test and translate entropy into inputs – and used NetHack as a test bed.
-
-Up to this point, we’d treated NetHack the same way we treat NES games. In a typical NES setup, the game receives fuzzer entropy directly. We can tune the distribution of bytes that the fuzzer produces, but they’re still just bytes. This is fine for action games on a console where bytes map naturally to controller input, but NetHack requires much more high-level planning and has a much wider range of inputs. The invocation ritual, for example – lighting the Candelabrum of Invocation, ringing the Bell of Opening, and reading the Book of the Dead, all while standing on the vibrating square – was expressed as a complicated series of nested value functions, which spelled out in exacting detail the *reward gradient* of the menuing required.
-
-Remember the 14-page history dialog? we eventually configured the fuzzer to never send NetHack a `V`.
-
-Needless to say, this is not how we handle typical systems. When testing a SQL database, we don’t wait for the fuzzer’s raw bytes to produce interesting SQL. Instead, we have a driver that *translates* those bytes into operations and assertions to be exercised under faults – a workload. Similarly, `Player`, the system Shuxian built for NetHack, translated bytes into sensible actions, like “wield this weapon”, “drink a potion of full healing”, or “light the Candelabrum with seven candles”.
-
-With `Player` able to translate bytes into high-level actions, we were able to radically simplify our strategy, which had ballooned to thousands of lines of code, and produce new ascensions in minutes. NetHack wasn’t quite a well-behaved system under test yet – it maintained its own PRNG instead of drawing its rolls from the fuzzer – but `Player` brought it in line with the customer workloads that it was complex enough to resemble. Right after its first ascension, the old strategy was superseded.
-
-The new strategy’s game plan was different. Instead of waiting until the Castle’s wand to wish for an ascension kit, it farmed fountains and thrones for early-game wishes. It spent some of its increased wish budget on blessed potions of gain level to expedite the XL grind, and *cursed* potions of gain level to expedite the climb back from the Sanctum, and the rest to assemble a fuller ascension kit: a pick-axe and a wand of digging to break into the Fake Wizard’s Tower, a complete suit of armor and a cloak, and an amulet of magical breathing for the Plane of Water, among others.
-
-Sitting on a throne has a 1 in 39 chance to grant a wish. Quaffing from a fountain or dipping an object into it has a 1 in 30 chance of summoning a water demon, which has a small chance of granting a wish.
-
-A normal potion of gain level causes the player to gain an experience level. A cursed one causes the player to gain a *dungeon* level. “You rise up, through the ceiling!”
-
-This increased wish budget let us change our game plan in another way. The old strategy had already fixed its ability to retain items and armor, which had made it less reliant on polymorph for combat, but it still needed polymorph in a few places – to phase into the Fake Wizard’s Tower and the Castle for the wand, and to reroll nutrition to ward off hunger on the long climb up. With the Tower diggable and the Castle wand removed, polymorph became a hindrance. We replaced its last use case with a wish for a ring of slow digestion. Our first ascension run was our last run to abuse polymorphitis.
-
-> *when AI takes all our jobs I hope I can be a quantum mechanic* – *Harrison Brown, internal Zulip, April 2025*
-
-With our first ascension under our belt, we asked ourselves: *could we take this further?* We hadn’t been the first to get an autonomous ascent – BotHack had done this in 2015 – but could we really settle for fourth place when there was so much else that had yet to be done?
-
-We considered a few directions. A detour through speed ascensions prompted us to refine how we hunted for wishes, and to briefly restructure our gameplan to do the Quest late. (Your Quest leader won’t admit you until 2000 turns have passed.) We also added a new RNG manipulation with an expected time of less than a turn. SWAGGINZZZ’s zero-turn manips had been patched out, but we noticed that toggling `twoweapon` had a DEX/20 chance to *not* use a turn. But in time we decided to ascend every role.
-
-Every role and every race. There are five playable races in NetHack: human, dwarf, elf, gnome, and orc. These each have their strengths and weaknesses, but the player’s choice of race has fewer implications than the player’s choice of role. In the end, we ascended a dwarven Valkyrie, an elven Wizard, a gnomish Archeologist, an orcish Rogue, and humans for everything else.
-
-Like BotHack and Astra, we’d started as a Valkyrie. BotHack had later ascended a Knight and a Samurai, and SWAGGINZZZ had ascended a Tourist, an ordinarily difficult class whose wide range of starting inventory possibilities made it ideal for RNG prediction. But this left nine roles unascended. Some, like the Barbarian, were melee-focused roles, widely regarded as on the easier side, which we expected to beat without much difficulty. Others, like the Priest and the Wizard, had playstyles we hadn’t yet had cause to support: the Valkyrie makes minimal use of magic. And then there was the Monk – bound by restrictive conducts backed by massive penalties, bearing the most feared Quest nemesis in the game, and relying heavily on spellcasting. We expected to have a hard time with the Monk.
-
-We patched logic into our workload to parameterize our character build, generalized a few things in our strategy, and kicked off some more runs.
-
-Our new runs quickly revealed problems in our workload that we’d lucked out of seeing before. In one of our first runs, our hero wasted hundreds of turns trying to dig through an undiggable square, only freeing herself when a randomly spawned quantum mechanic hit her with its teleportation attack, and then got stuck *again* trying to squeeze through a diagonal gap that she was carrying too much to fit through, only resuming progress when an umber hulk summoned by the Wizard of Yendor ate the offending wall. A Samurai wished for gray dragon scale mail and then stood at the throne for 1400 turns, not realizing it had to take off its starting splint mail to put its new armor on.
-
-Because we’d started with Valkyrie, an all-female role, our workload defaulted to female characters. Gender has very little effect on gameplay, so we left it.
-
-We fixed the problems as we found them. When a Barbarian died swarmed by trolls in its Quest, we had Barbarians wish for a tinning kit: trolls can return from the dead as long as their corpses aren’t tinned. When a different hero (a Valkyrie, run for testing) stalled out at a shop door, barred from entry because of her open-carried pick-axe but fixated on the cursed scroll of teleportation sold therein, we added a `CONTRARY` term to give our agent a chance to do something other than what it believes to be best.
-
-Most roles ascended uneventfully. With a table of artifact weapons and a generalized Quest, we won as a Knight, a Ranger, and a Samurai. Our first Caveman stalled at the Quest, as did our second; we patched our pathfinding code to handle boulders dropped by hill giants and ascended on our third attempt. Our next role, a Rogue, *also* stalled out at the Quest – the Stronghold of the Master Assassin is impenetrable by normal means, so pathfinding failed. Polymorph into a xorn could allow us to phase through walls and reach the Master Assassin in his lair, but a means of aggravating monsters could wake him and bring him to us. We added `2 cursed potions of invisibility` to the Rogue’s wish list and ascended on our next attempt. Archeologist, with its starting pick-axe and stealth, proved to be one of the easiest roles for our fuzzer – maybe even easier than the Valkyrie. When the Barbarian’s new tinning kit gave us a winning run, the only roles remaining were the spellcasters and the Monk.
-
-Our gameplan thus far had been designed around melee. We gathered strong weapons to bash monsters with, the Gauntlets of Power to boost our strength further, and iron armor to protect our heroes at the cost of spellcasting penalties. We ignored spellbooks completely. Could we pivot into a very different build? Because runs were cheap, we tried running a Wizard before we made any changes, just to see what would happen – and it ascended! Priest and Healer followed. Only the Monk remained.
-
-### [The Monk](https://antithesis.com/blog/2026/nethack/#the-monk)
-
-> Monks are much different in design from the other roles of *NetHack.* – [NetHack Wiki](https://nethackwiki.com/wiki/Monk)
-
-Maybe we could’ve ascended a Monk with our existing strategy, but I wanted to see if we could ascend while playing into the role – perhaps the most unusual role in the game. In NetHack’s combat skill system, the Monk can’t advance beyond `Basic` in any weapon class, and most weapon classes are locked to unskilled, but the highest skill of all is reserved for the Monk’s martial arts, the replacement for other roles’ bare-handed combat. Monks suffer punishing to-hit penalties from wearing armor, but to make up for it, they gain more intrinsics by leveling up than any other role. Monks are particularly well-suited to *conduct ascensions*, in which the player adheres to additional limitations beyond the rules of the game: never using a weapon, for instance, or never eating meat. (Monks incur an alignment penalty from eating meat.) We wouldn’t just ascend a Monk; we would ascend a *weaponless vegan Monk.*
-
-But *could* we?
-
-First we had to ascend a Monk at all.
-
-We started by customizing our strategy. To maintain weaponless conduct, the Monk’s artifact wish wouldn’t go to a weapon; to avoid penalties to martial arts, the Monk would wear no body armor. In place of the artifact weapon, the Monk would wish for a co-aligned quest artifact with defensive utility, like the Master Key of Thievery (chaotic; halves physical damage) or the Orb of Fate (neutral; halves physical and spell damage). The Monk would wear its own quest artifact, the Eyes of the Overworld, for magic resistance, but wish for a cloak of magic resistance (not considered armor) besides, because the Wizard of Yendor can steal artifacts. The Monk would eat only vegan food, make use of its intrinsic teleport control, and obtain a wand of death, by a wish if necessary, to dispatch Master Kaen.
-
-Our first few attempts failed. Our next few attempts also failed. The few extra wishes we’d added strained our ability to control our luck, which was already limited by the Monk’s inability to two-weapon. Without a new way to manipulate RNG – ideally in zero turns, the way SWAGGINZZZ had – we’d need to trim our wish list, imperiling our ability to survive in the endgame.
-
-We weren’t sure if any zero-turn RNG manipulations still existed. After SWAGGINZZZ, the NetHack developers had split random numbers used for display – like hallucination, which was faster and easier than walking into walls – into a separate RNG stream, and patched out the walk-into-walls exploit. But a close inspection of the code found one that we’d overlooked: artifact naming.
-
-In NetHack, no object of a certain type can be given the name of an artifact of that type. The Eyes of the Overworld are an artifact pair of lenses, so no pair of lenses can be given the name `The Eyes of the Overworld`. A player who attempted to name an ordinary pair of lenses `The Eyes of the Overworld` – which, in the world of NetHack, meant engraving the name on the object – would find their hand to slip, and their lenses to emerge with a name like `The Lyes of the Overworld` instead, mutating exactly one letter in the name. And this mutation called the game’s main RNG!
-
-We patched `Player` to find an orcish dagger (a common early-game item) to repeatedly fail to name after the mediocre artifact Grimtooth and kicked off a few dozen jobs to run overnight.
-
-The conducts weren’t in our plan yet – our first Monk ascensions came from these overnight runs – but in our first ascensions, we missed them only narrowly. In one run, our fuzzer, digging through Gehennom, became engulfed by the miniboss Juiblex and carelessly bashed him with its pick-axe; in another, it broke vegan conduct by eating a fortune cookie, which NetHack counts as containing eggs.
-
-We updated our strategy to reject runs that had broken their conducts, kicked off a new batch, and had our first ascension twelve minutes later: a weaponless vegan atheist Monk. We’d gotten a third conduct for free! Our fuzzer doesn’t use altars and only prays in certain emergencies, so this came down to luck: this run had never encountered a situation that called for prayer. Of the two other ascensions that this batch produced, one more also kept atheist conduct.
-
-Then we got more ambitious and added another conduct to the wishlist. This called for some changes to our fuzzer config. We’d replaced polymorph with weapons and armor, but a weaponless nudist has neither. Instead of wishing for gray dragon scale mail, this monk would get a ring of polymorph. We thought about adding code to drive the protection racket, but in the end, we didn’t need two: two hours after we’d started on the fourth conduct, we had its first win.
-
-Here is the ascension of Agent the weaponless vegan atheist nudist Monk, with our [multiverse map](https://antithesis.com/docs/product/understanding_test_results/logs_explorer/#the-multiverse-map) plotted below:
-
-> *with the RNG workload twiddle we can ascend in 20 seconds sometimes. as a neutral monk – Paul, internal Zulip, Nov 2026*
-
-One question still remained. We’d introduced `Player` to bring NetHack in line with our real-world engagements. But NetHack violates an important best practice of real-world Antithesis use – it [maintains its own PRNG](https://antithesis.com/docs/reference/sdk/generate_randomness/). NetHack versions released after 3.6.1 (the version SWAGGINZZZ played) maintain two ISAAC64 PRNGs, one for game logic and one for display, seeded at the start of the game and only reseeded when the fuzzer changes dungeon level. Our environment controls `/dev/urandom`, the external entropy source that NetHack reseeds from, which allows the fuzzer to steer the generation of new levels. But within a level, the fuzzer can only control the player, not the game.
-
-This is a desirable property for an ascension generator: every run is something that could’ve happened in stock NetHack. But it comes with a cost. When the fuzzer has indirect or otherwise limited control over the system it’s exercising, it’ll take longer to find interesting states. As an experiment, we patched our NetHack harness to reseed its RNG with a fuzzer-controlled value after every keypress, and found that time to ascension became up to three times faster.
-
-Really, we *removed* a patch. Our first ascension was generated with NetHack wired in as a well-behaved system under test. This was the trick up its sleeve that we hinted at above: the fuzzer could force-reseed NetHack’s RNG. After we’d generated our first few ascensions, we decided to see what we could do with stock RNG – and we found we could still get ascensions. Lots of ascensions.
-
-In 100 trials out of 120, the fuzzer, configured to play as a dwarven Valkyrie and running on the workstation at my desk (not a super-fast cluster – but I wish I had a super-fast cluster at my desk!), found an ascension in NetHack within five minutes – using stock RNG. The median time to ascension was 49 seconds, the p90 ascension time was 78 seconds, and the fastest ascension in these 120 trials took only 28 seconds to find. With the well-behaved system patch, it ascended within five minutes in 113 of 120 trials, with a p90 of 64.8 seconds and a fastest of only 7.5 seconds.
-
-As a Tourist, traditionally considered one of the hardest roles in NetHack, the fuzzer ascended within five minutes in 95 trials out of 120 using stock RNG, with a median time of 74 seconds. With the patch, it ascended 111 of 120 within five minutes, with a median of 28 seconds.
-
-We also ran Monks (the hardest role for our fuzzer, and the one with the most special handling) and Wizards. A full data table is under the expander.
-
-| Role | Arm | n | Ascended | Rate (95% CI) | Median win | p90 win | Fastest win |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Valkyrie | stock | 120 | 100 | 83.3% (76–89%) | 49.4 s | 77.8 s | 27.8 s |
-| Valkyrie | workload | 120 | 113 | 94.2% (88–97%) | 17.3 s | 64.8 s | 7.5 s |
-| Monk | stock | 120 | 85 | 70.8% (62–78%) | 114.5 s | 211.3 s | 32.7 s |
-| Monk | workload | 120 | 110 | 91.7% (85–95%) | 35.8 s | 113.7 s | 9.8 s |
-| Tourist | stock | 120 | 95 | 79.2% (71–85%) | 74.2 s | 152.6 s | 27.7 s |
-| Tourist | workload | 120 | 111 | 92.5% (86–96%) | 28.3 s | 99.7 s | 10.6 s |
-| Wizard | stock | 120 | 99 | 82.5% (75–88%) | 95.9 s | 196.4 s | 34.8 s |
-| Wizard | workload | 120 | 114 | 95.0% (90–98%) | 33.3 s | 85.4 s | 12.2 s |
-| **All** | **stock** | **480** | **379** | **79.0% (75–82%)** | **76.8 s** | **179.3 s** | **27.7 s** |
-| **All** | **workload** | **480** | **448** | **93.3% (91–95%)** | **27.6 s** | **91.1 s** | **7.5 s** |
-
-Below, you can watch the fuzzer ascend as every role. (Note: these runs use stock RNG, not our well-tempered workload patch.)
-
-> *You hear a faint typing noise.* – NetHack, when the player uses a stethoscope on the edge of a map
-
-At the start of this post, we said Antithesis is something like a probabilistic programming language: a way to partially describe a task and let search and optimization fill in the rest. Here’s what we meant. `Player`’s plan for the early game fits in a sentence: sit on thrones and drink from fountains until you have all the wishes you need. It doesn’t say how to get the wishes. Nothing could – a sit on a throne only grants a wish one time in 39, and if it doesn’t, it can curse you, surround you with enemies, or vanish. But we can throw those other 38 timelines out. We tell the fuzzer how to sit on a throne, we tell it that a moment with one more wish beats the one before, and we tell it how to shake the dice. The fuzzer does the rest.
-
-Sometimes it surprises even us. When we threw it into a battle we’d given it no way to score, it didn’t give up or get stuck. In the middle of a long and losing fight with Vlad the Impaler, with no reward until it could get the Candelabrum in its hands, it turned into a purple worm and ate him. When we rewarded it for code coverage and gave it the tools to construct situations, it started finding bugs. And when we told it what pointed toward victory and how to play the game, it ascended.
-
-This partial specification paradigm has three advantages.
-
-First, it lets you do less work. Any bot needs three kinds of knowledge. The first is how to act: how to turn “put seven candles on the Candelabrum” into keystrokes. These are the tactics. The second is a vision of the good: high health, great strength, alignment with your god, and a magic silver saber. This is the strategy. The third is foresight: knowledge of the paths from here to there, and of how to recover from a misstep. This is what search replaces. BotHack needed 16,000 lines of Clojure and Astra needed a trillion or so dollars of CapEx; our fuzzer ascended with a short config file, and I hear Antithesis has received a tiny bit less funding than OpenAI.
-
-Second, it’s more robust to evolution of the system under test. If you move a block in *Super Mario Bros.*, your scripted run might fail, but partial specification doesn’t care. If you change the CSS of your website, your scripted tests won’t know where to click, but [Bombadil](https://github.com/antithesishq/bombadil) will. And if your partial specification can ascend a Valkyrie, it can probably ascend a Wizard.
-
-And finally, it can find [unknown unknowns](https://antithesis.com/blog/unknown_unknowns/). The usual way to gain confidence in a program is to understand it: to read the code really hard, reason through the logic, and try to consider each case. Few programs have been read harder than NetHack. Its players have been source-diving for decades, and there’s extensive documentation for nearly every mechanic. We read it too. Reading is how we found the 1-in-39 wish chance and the Grimtooth naming trick. But years of reading never turned up the [`del_light_source` bug](https://antithesis.com/blog/2026/nethack/#the-bug-hunt). The fuzzer found it by wandering into it. So did its eventual reporter.
-
-Every piece of that bug was known. A quest artifact blasts a hero whose alignment is negative, even its rightful owner. A player’s polymorph is an opportunity for artifacts to blast. A polymorphed hero who runs out of hit points returns to normal form. A yellow light gives off light. What nobody had read about was the moment where all four combine: a Valkyrie at -70 alignment turning into a yellow light, blasted by her own Orb for all the light’s HP before her new body had started to glow. Once the reporter had stumbled into it, AI-assisted testing found related bugs in the same code. Reasoning, whether human or machine, is great at checking a bug’s vicinity. It’s much worse at telling you where to look.
-
-We never told the fuzzer where to look. We wrote down the pieces – what a player can do, what counts as getting better, and that new code is worth visiting – and let search find the combinations.
-
-A good Antithesis test works the same way. You don’t write down the precise sequence of events that breaks your system. (You probably haven’t thought of it yet.) Instead, you tell the system what should never happen and what a client can do, and our exploration agent – Dave’s “fuzzer so smart it can beat NetHack” – uses the actions you’ve provided to discover paths to the impossible.
+1. [Space/time trade-offs in hash coding with allowable errors](https://doi.org/10.1145/362686.362692) by Burton H. Bloom, 1970. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:1)
+2. [Cache-, hash-, and space-efficient Bloom filters](https://doi.org/10.1145/1498698.1594230) by Felix Putze et al., 2009. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:2)
+3. [Reference wyhash implementation](https://github.com/wangyi-fudan/wyhash) by Wang Yi. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:3)
+4. [Reference xxHash implementation](https://github.com/Cyan4973/xxHash) by Yann Collet. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:4)
+5. [Bloom filter benchmarks](https://github.com/nalgeon/unsure/tree/main/bloom#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:5)
+6. [bits-and-blooms/bloom](https://github.com/bits-and-blooms/bloom) by Daniel Lemire. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:6)
+7. [jcalabro/gloom](https://github.com/jcalabro/gloom) by Jim Calabro. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:7)
+8. [An improved data stream summary: the count-min sketch and its applications](https://doi.org/10.1016/j.jalgor.2003.12.001) by Graham Cormode and S. Muthukrishnan, 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:8)
+9. [Count-min sketch benchmarks](https://github.com/nalgeon/unsure/tree/main/countmin#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:9)
+10. [tylertreat/BoomFilters](https://github.com/tylertreat/BoomFilters) by Tyler Treat. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:10)
+11. [HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm](https://doi.org/10.46298/dmtcs.3545) by Philippe Flajolet et al., 2007. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:11)
+12. [HyperLogLog in practice](https://doi.org/10.1145/2452376.2452456) by Stefan Heuleet et al., 2013. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:12)
+13. [New cardinality estimation algorithms for HyperLogLog sketches](https://arxiv.org/abs/1702.01284) by Otmar Ertl, 2017. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:13)
+14. [HyperLogLog benchmarks](https://github.com/nalgeon/unsure/tree/main/hll#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:14)
+15. [axiomhq/hyperloglog](https://github.com/axiomhq/hyperloglog) by Axiom. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:15)
+16. [Computing extremely accurate quantiles using t-digests](https://arxiv.org/abs/1902.04023) by Ted Dunning and Otmar Ertl, 2019. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:16)
+17. [T-digest benchmarks](https://github.com/nalgeon/unsure/tree/main/tdigest#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:17)
+18. [influxdata/tdigest](https://github.com/influxdata/tdigest) by InfluxData. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:18)
+19. [HeavyKeeper: An Accurate Algorithm for Finding Top-k Elephant Flows](https://www.usenix.org/conference/atc18/presentation/gong) by Junzhi Gong et al., 2018. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:19)
+20. [Top-k benchmarks](https://github.com/nalgeon/unsure/tree/main/topk#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:20)
+21. [keilerkonzept/topk](https://github.com/keilerkonzept/topk) by KEILERKONZEPT. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:21)
+22. [dgryski/go-topk](https://github.com/dgryski/go-topk) by Damian Gryski. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:22)
+23. [Efficient Computation of Frequent and Top-k Elements in Data Streams](https://doi.org/10.1007/978-3-540-30570-5_27) by Ahmed Metwally et al., 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:23)

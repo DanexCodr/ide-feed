@@ -1,299 +1,560 @@
-I’ve been exploring Rust, and one topic that got me intrigued is pointer
-provenance, particularly because it’s not easy to visualize.
+We have a lot of performance-critical SIMD code (single-instruction, multiple-data)
+running on CPUs across the firm. These are highly parallel programs where you run the same
+computation across arrays of data, in our case for options pricing or for low-latency risk
+checks. Because OCaml hasn’t historically exposed SIMD instructions, these programs often
+involve an inner loop written in fairly esoteric C. Writing these loops requires
+implementers to think carefully about hardware, and doing performance tuning, such as
+modifying unroll factors or vector widths, can require major changes to the code.
+Moreover, these programs are constrained to a specific instruction set. If we were to
+target a different architecture or a newer processor, we’d have to rewrite the program.
 
-To get a feel for
-[vtables](https://sofiabelen.github.io/projects/visualizing-rusts-vtables-how-dyn-trait-works-in-memory/),
-what I wanted was to look at the actual memory, to see what it really looked
-like and prove that I could in fact call these functions through their
-respective function pointers. With provenance, I wanted to take it apart the
-same way, but it turns out it’s not so straightforward. This only got me more
-intrigued, so let’s see what we can find!
+For his summer internship, Sai Konkimalla built a compiler for a domain specific language
+(DSL) that makes SIMD more ergonomic and widely accessible. The compiler takes advantage
+of [OxCaml](https://oxcaml.org/) features that were only very recently added to the
+language, such as runtime metaprogramming, to enable users to write a kernel just once as
+a regular-ish OxCaml function, then compile and run it on multiple architectures.
 
-My first time hearing about provenance, I wondered, why hadn’t I heard about it
-before? It seems so crucial, yet a bit of an obscure concept.
+## Single Program, Multiple Data
 
-## What is Provenance: Pointers Are Not Just Glorified Ints
+To help solve the problem of SIMD code being rather difficult to write and maintain, our
+DSL uses the S**P**MD, or “single **program**, multiple data” programming model. As
+opposed to SIMD intrinsics, SPMD is higher level and not tied to a specific instruction
+set. We might normally think of higher-level languages as slower, but with SPMD, a higher
+level of abstraction lets the compiler make better decisions about how to optimally use
+the underlying hardware. This ability can lead to significantly faster code.
 
-Let’s start by taking a good look at this snippet. It’s short, but our intuition
-can trick us if it’s our first time coming across this concept. `void opaque(int*)` is forward declared here, so for us it’s a black box. Neither we
-nor the compiler can rule out that this function dereferences `p` and writes to
-memory.
+SPMD was popularized by CUDA (for Nvidia GPUs) and ISPC (for Intel CPUs). In this model,
+you write a program describing what happens at each index of a loop, then the compiler
+converts it into a parallel computation. For example, in CUDA:
 
-```cpp
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    return x;
+```
+__global__ void kernel(const float* x, float* out, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        out[idx] = 2.0f * x[idx] + idx;
+    }
 }
 ```
 
-If we compile this with `-O2`, Clang optimizes this to return 1. Let’s try this
-on Godbolt:
+Notice how there’s no loop here: you only define the loop body, and the compiler decides
+how to run it. In CUDA, when you launch a kernel on a GPU, you can declare how many blocks
+of threads to run and the GPU will schedule them accordingly.
 
-The question is, how does it know that `int* p` doesn’t point to the same memory
-address where `x` lives (meaning that `opaque(p)` could end up modifying `x`)?
+In ISPC, `foreach` also abstracts away how the loop is actually executed:
 
-The compiler assumes `p` can’t equal `&x` because `p` wasn’t *derived* from `x`.
-
-When I first heard about this, I thought it was a bit of a strange concept. What
-does it mean that something is *derived* from something?
-
-I mean, if pointers were just numbers (memory addresses), `p` could
-theoretically happen to hold the same memory address as `x`’s allocation on the
-stack. Good thing they’re not just numbers!
-
-Let us follow the white rabbit.
-
-This brings us to the core of provenance. <mark>That “*derived from*” relation
-is **provenance**: for every pointer, the compiler keeps track of which
-allocation it belongs to and may, therefore, touch.</mark>
-
-I tried to find a way to print this mysterious provenance, but it turns out that
-it’s purely a compiler abstraction. It does not exist as an actual data field
-stored alongside the memory address. (There are exceptions though: feel free to
-look up the CHERI architecture to go down another rabbit hole).
-
-## Inspecting Provenance: LLVM IR
-
-So what can we do to inspect it? If the compiler knows about it then it must
-exist somewhere. If so, there must be a way to *see* it.
-
-This is how I learned about LLVM IR (intermediate representation), which is
-essentially a low-level programming language that acts as a bridge between
-high-level languages (like Rust, C++, etc) and machine code.
-
-Let’s try it for this code instead, where we also pass `&x` to `opaque` to see
-what happens when the compiler doesn’t optimize that part away:
-
-```c++
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    opaque(&x);
-    return x;
+```
+export void kernel(uniform float x[], uniform float out[], uniform int n) {
+    foreach (i = 0 ... n) {
+        out[i] = 2.0f * x[i] + i;
+    }
 }
 ```
 
-We can use the `-emit-llvm` flag on Godbolt to [see the LLVM
-IR](https://godbolt.org/#g:!%28%28g:!%28%28g:!%28%28h:codeEditor,i:%28filename:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,selection:%28endColumn:2,endLineNumber:8,positionColumn:2,positionLineNumber:8,selectionStartColumn:2,selectionStartLineNumber:8,startColumn:2,startLineNumber:8%29,source:%27void+opaque%28int*%29%3B%0A%0Aint+f%28int*+p%29+%7B%0A++++int+x+%3D+1%3B%0A++++opaque%28p%29%3B%0A++++opaque%28%26x%29%3B%0A++++return+x%3B%0A%7D%27%29,l:%275%27,n:%270%27,o:%27C%2B%2B+source+%231%27,t:%270%27%29%29,k:44.33887569279493,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29,%28g:!%28%28h:compiler,i:%28compiler:clang2310,filters:%28b:%270%27,binary:%271%27,binaryObject:%271%27,commentOnly:%270%27,debugCalls:%271%27,demangle:%270%27,directives:%270%27,execute:%271%27,intel:%270%27,libraryCode:%270%27,trim:%271%27,verboseDemangling:%270%27%29,flagsViewOpen:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,libs:!%28%29,options:%27-O2++-emit-llvm%27,overrides:!%28%29,selection:%28endColumn:29,endLineNumber:24,positionColumn:1,positionLineNumber:1,selectionStartColumn:29,selectionStartLineNumber:24,startColumn:1,startLineNumber:1%29,source:1%29,l:%275%27,n:%270%27,o:%27+x86-64+clang+23.1.0+%28Editor+%231%29%27,t:%270%27%29%29,k:55.66112430720507,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29%29,l:%272%27,n:%270%27,o:%27%27,t:%270%27%29%29,version:4):
+In both cases, the compiler translates the code into low-level SIMD instructions. Not
+specifying the exact instructions also means SPMD programs can benefit from future
+hardware improvements. If we get a new, faster CPU with a different instruction set, the
+SPMD compiler can seamlessly compile existing code to it.
+
+## A quick overview of the DSL
+
+Let’s go over an example of the DSL that Sai implemented. We start by defining the
+kernel’s signature, including its output type, input types, and the dimension of the
+output:
 
 ```
+Spmd.Kernel.create
+ F32           (* output element type *)
+ [ F32; F32 ]  (* input slice types   *)
+ [ () ]        (* one output dimension *)
+ (fun graph [ x; scale] [ Dim i ] -> exclave_
+   ...)
+```
 
-define dso_local noundef i32 @f(int*)(ptr noundef %0) local_unnamed_addr #0 !dbg !14 {
-  %2 = alloca i32, align 4 // --> root of %2 allocation (x)
-    #dbg_assign(i1 poison, !22, !DIExpression(), !23, ptr %2, !DIExpression(), !24)
-    #dbg_value(ptr %0, !21, !DIExpression(), !24)
-  call void @llvm.lifetime.start.p0(ptr nonnull %2) #3, !dbg !25
-  store i32 1, ptr %2, align 4, !dbg !26
-    #dbg_assign(i32 1, !22, !DIExpression(), !28, ptr %2, !DIExpression(), !24)
-  tail call void @opaque(int*)(ptr noundef %0), !dbg !29
-  call void @opaque(int*)(ptr noundef nonnull %2), !dbg !30
-  %3 = load i32, ptr %2, align 4, !dbg !31
-  call void @llvm.lifetime.end.p0(ptr nonnull %2) #3, !dbg !32
-  ret i32 %3, !dbg !33
+In this example, we’re writing a kernel that takes in two `F32` slices and returns one
+`F32` slice.
+
+Future work on a ppx syntax extension will make it possible to rewrite the above simply
+as:
+
+```
+let%spmd kernel (x : f32 slice) (scale : f32) (i : dim) : f32 =
+```
+
+Next, we write the actual computation:
+
+```
+Spmd.Kernel.create
+  F32           (* output element type *)
+  [ F32; F32 ]  (* input slice types   *)
+  [ () ]        (* one output dimension *)
+  (fun graph [ x; scale ] [ Dim i ] -> exclave_
+     let open (val Spmd.open_ graph) in
+     let i = index i in
+     F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
+```
+
+Note the `let open (val Spmd.open_ graph) in`. This brings the DSL operations which
+construct a computational graph into scope. You can think of the `graph` value as proof
+that you’re in the graph-construction phase, not the runtime of the generated program.
+([Bonsai](https://github.com/janestreet/bonsai) uses a [similar
+trick](https://github.com/janestreet/bonsai_web/blob/master/docs/guide/thinking_in_bonsai.md#what-is-bonsaigraph)
+for creating its incremental graph.)
+
+Like CUDA, we don’t write the kernel as a loop. Instead, the developer writes a function
+that computes a single entry of the output slice, and the SPMD compiler generates code to
+loop over the output slice and compute the value at each index.
+
+You may wonder why we loop over the *output* and not the inputs. Looping over the output
+is easier to model because each iteration writes to exactly one location, so iterations
+can be easily vectorized, reordered, or parallelized. If we were to loop over the inputs,
+different iterations could write to the same output entry. The compiler would then have to
+reason about whether the writes could be re-ordered. By guaranteeing that each output
+entry is written exactly once, we can avoid this complexity.
+
+## Where runtime metaprogramming comes in
+
+One wrinkle with Sai’s project is that we wanted to execute the SPMD compiler at runtime.
+Runtime compilation (often called just-in-time or JIT compilation) is when the compiler
+generates code while the program is running. This gives us two main advantages: we don’t
+have to worry about building for all potential target architectures at compile time, and
+we can use data obtained at runtime for optimizations.
+
+That latter point is especially important for generating high-performance code. When
+executing at runtime, the compiler has more data that it can use to optimize the code than
+it would when executing ahead-of-time. For example, our compiler can use runtime data to
+compile away branch instructions, which can slow down execution by consuming CPU
+resources.
+
+To implement our JIT compiler, we used runtime metaprogramming, a feature that lets us
+generate, compile, and evaluate OxCaml code at runtime by using the OxCaml compiler as a
+library. As far as we know, Sai’s project was the first real program at Jane Street to use
+it. (He discovered some bugs in its implementation and helped report/reproduce them for
+the OxCaml team.)
+
+Let’s take a look at an example that illustrates the power of compiling at runtime. In
+this code, we match on the `metric` to choose which algorithm to execute:
+
+```
+type metric =
+  | Euclidean
+  | Manhattan
+
+let measure ~metric =
+  Spmd.Kernel.create
+    F32
+    [ F32; F32 ]
+    [ () ]
+    (fun graph [ samples; targets ] [ Dim i ] -> exclave_
+       let open (val Spmd.open_ graph) in
+       let sample = samples.!(index i) in
+       let target = targets.!(index i) in
+       let diff = F32.(sample -. target) in
+       match metric with
+       | Euclidean -> F32.(diff *. diff)
+       | Manhattan ->
+         let zero = broadcast (F32.lit #0.s) in
+         select F32.(diff >=. zero) ~pass:diff ~fail:F32.(zero -. diff))
+;;
+```
+
+With a normal OCaml program, this would create a branch and two code paths. Every time we
+execute this code, we’d have to spend time evaluating the branch and picking the right
+code path.
+
+With the SPMD compiler, we can compile *after* we know the value of `metric`. Then the JIT
+compiler can evaluate the branch during compilation and produce more efficient code. For
+example, here’s the intermediate representation that the code gets compiled into:
+
+```
+let%expect_test "IR: euclidean" =
+  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
+  print_string (For_testing.Ir_body.to_string lowered.body);
+  [%expect
+    {|
+    let n = shape[0]
+    for i in n (normal) {
+      let v = load_f32 in0[i]
+      let v1 = load_f32 in1[i]
+      let v2 = f32_sub v v1
+      let v3 = f32_mul v2 v2
+      store out[i] = v3
+    }
+    |}]
+;;
+
+let%expect_test "IR: manhattan" =
+  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
+  print_string (For_testing.Ir_body.to_string lowered.body);
+  [%expect
+    {|
+    let n = shape[0]
+    for i in n (normal) {
+      let v = load_f32 in0[i]
+      let v1 = load_f32 in1[i]
+      let v2 = f32_sub v v1
+      let v3 = f32 0.
+      let v4 = f32_ge v2 v3
+      let v5 = f32_sub v3 v2
+      let v6 = select v4 v2 v5
+      store out[i] = v6
+    }
+    |}]
+;;
+```
+
+Notice how we don’t branch on `metric` in the emitted code. Because the compiler knows the
+value of `metric`, it can emit just the chosen algorithm.
+
+## Implementing the front end
+
+Sai started his project by working on the compiler’s front end. The front end takes the
+kernel definition that we saw above and translates it into the following
+[GADT](https://dev.realworldocaml.org/gadts.html) that models a directed acyclic graph
+(DAG):
+
+```
+type (_ : any, _) node =
+  | Literal   : 'a Literal.t                                     -> ('a, uniform) node
+  | Broadcast : ('a, uniform) t                                  -> ('a, varying) node
+  | Load      : { storage : 'a Storage.t; idx : (i32, 'u) t }    -> ('a, 'u) node
+  | Dimop     : { op : ('a, 'u) Dimop.t; dim : 'd Dim.t }        -> ('a, 'u) node
+  | Binop     : { op : ('o, 'x, 'y) Binop.t
+                ; x : ('x, 'u) t; y : ('y, 'u) t }               -> ('o, 'u) node
+  | Unop      : { op : ('o, 'x) Unop.t; x : ('x, 'u) t }         -> ('o, 'u) node
+  | Select    : { cond : (bool#, varying) t
+                ; pass : ('a, 'u) t; fail : ('a, 'u) t }         -> ('a, varying) node
+  | If        : { cond : (bool#, uniform) t; then_; else_ }      -> ('a, 'u) node
+  | If_var    : { cond : (bool#, varying) t; then_; else_ }      -> ('a, varying) node
+
+and ('a : any, 'u) t = { node : ('a, 'u) node; ty : 'a Ty.t; id : int }
+```
+
+(The `'u` type variable in this GADT declares the expression’s *rate*, which indicates
+whether an expression is the same for every index in the entire output slice (`uniform`)
+or may change at each element in the slice (`varying`). In other words, it signals which
+pieces of your computation only need to be computed once and which pieces need to be
+computed per index.)
+
+Sai’s first task was to add support for numeric data types such as `I8`, `I16`, `I64`,
+`U8`–`U64` and `F64`, including arithmetic operations and conversion operators. After
+that, he started implementing booleans and control flow constructs. Unlike most
+conventional programming languages, SPMD has some nuances to its control flow. Instead of
+a single `if` construct, SPMD has three separate constructs all designed for parallel
+execution:
+
+| form | condition | semantics |
+| --- | --- | --- |
+| `select` | bool# varying | The selected branch can vary per index. Both branches are always evaluated. |
+| `if_` | bool# uniform | Every index picks the same branch. The untaken branch is not executed. |
+| `if_var` | bool# varying | The selected branch can vary based on index. The untaken branch is not observable, but may or may not be executed. |
+
+`if_var` lets you branch on data that varies per index (i.e., per SIMD lane). In the code
+below, the `if_var` allows the user to guard code that should only be run when `g` happens
+to be positive:
+
+```
+(fun graph [ group; totals; counts ] [ Dim i ] -> exclave_
+   let open (val Spmd.open_ graph) in
+   let g = group.!(index i) in
+   let zero = broadcast (I32.lit #0l) in
+   if_var I32.(g > zero)
+     ~then_:F32.(totals.!(g) /. of_i32 counts.!(g))
+     ~else_:(broadcast (F32.lit #0.s)))
+```
+
+The plain `if_` can’t do that, because the condition is a `bool# uniform` and therefore it
+must be the same value for all lanes.
+
+`select` and `if_var` are similar in that they both take in a condition of type `bool#
+varying`. Where the two constructs differ is in how the branches are evaluated. With
+`if_var`, the compiler can decide whether to execute the branch that is *not* chosen by
+the condition, whereas with `select`, both branches are always evaluated. Further,
+if `if_var` executes an untaken branch, any potential side effects, such as raising
+exceptions, will not be observable. So `select true 1 (1/0)` will raise an exception,
+but `{if,if_var} true 1 (1/0)` will not.
+
+## Writing the backend
+
+Usually, a high-performance JIT compiler would target a low-level language such as
+assembly or LLVM IR, which necessitates thinking quite hard about complicated details such
+as registers, pointers, and so on. Luckily, we didn’t have to do this, since we could use
+metaprogramming to emit OxCaml code. This also lets us rely on optimizations in the OxCaml
+compiler, saving us from having to implement them ourselves.
+
+OxCaml’s metaprogramming features let us explicitly generate OxCaml code at runtime using
+*quotes* and *splices*. A quotation represents an OxCaml expression that is created at
+runtime and will be evaluated at a later time. For example, `<[if Random.bool () then 42
+else 5]>` represents an unevaluated expression of type `int`, so the quotation itself has
+type `<[int]> expr`. Once this expression is evaluated, its result will be an `int`.
+
+Quotations can be interpolated into other quotations by splicing (`$`):
+
+```
+# let quote = <[2 + 3]> in <[$quote * 4]>;;
+- : <[int]> expr = <[Base.( * ) (Base.( + ) 2 3) 4]>
+```
+
+So rather than writing the standard recursive `power` function that computes `x^n`:
+
+```
+# let rec power n x =
+    if n = 0 then 1 else x * power (n - 1) x;;
+val power : int -> int -> int = <fun>
+```
+
+you can write a `power_expr` function that creates a quoted expression that will compute
+`x^n` for a given `n`, effectively inlining and optimizing the recursive function into a
+single expression. This is a form of [partial
+evaluation](https://en.wikipedia.org/wiki/Partial_evaluation) where we’re able to take a
+function and produce a much faster version specialized to a particular value of `n`.
+
+```
+# let rec power_expr n xq =
+    if n = 0 then <[1]>
+    else <[$xq * $(power_expr (n - 1) xq)]>;;
+val power_expr : int -> <[int]> expr -> <[int]> expr @ once = <fun>
+
+# <[ fun x -> $(power_expr 5 <[x]>) ]>;;
+- : <[int -> int]> expr =
+<[fun x -> Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x 1))))]>
+```
+
+Sai’s backend walked the DAG and emitted OxCaml code for each node. For instance, the
+backend emits the following quoted OxCaml code for arithmetic expressions:
+
+```
+let rec emit node =
+  match node with
+  | Add (x, y) -> <[ F32.O.( + ) $(emit x) $(emit y) ]>
+  | Mul (x, y) -> <[ F32.O.( * ) $(emit x) $(emit y) ]>
+  | Load (input, idx) -> <[ Slice.Imm.unsafe_get $input $(emit idx) ]>
+```
+
+If we were to compile a basic kernel such as:
+
+```
+(fun graph [ a; b; c ] [ Dim i ] -> exclave_
+   let open (val Spmd.open_ graph) in
+   let i = index i in
+   F32.((a.!(i) +. b.!(i)) *. c.!(i)))
+```
+
+we’d get a DAG that represents the arithmetic operations, and use that to generate quoted
+OxCaml code:
+
+```
+emit (Mul (Add (Load a, Load b), Load c))
+= <[ F32.O.( * ) $(emit (Add (Load a, Load b))) $(emit (Load c)) ]>
+= <[ F32.O.( * )
+       (F32.O.( + ) $(emit (Load a)) $(emit (Load b)))
+       $(emit (Load c)) ]>
+= <[ F32.O.( * )
+       (F32.O.( + )
+          (Slice.Imm.unsafe_get a (I32.to_i64 i))
+          (Slice.Imm.unsafe_get b (I32.to_i64 i)))
+       (Slice.Imm.unsafe_get c (I32.to_i64 i)) ]>
+```
+
+Sai implemented these emitters for all of the node types in the DAG, such as the `if_`,
+`if_var` and `select` control flow constructs.
+
+## Cross-checking and benchmarking every program and implementation
+
+At this point, Sai needed to validate that his JIT implementation was both fast and
+correct. One strategy he used was to compare the JIT against a reference implementation.
+We had previously implemented an interpreter that took the front-end representation and
+directly executed it. While extremely slow, we could be fairly confident that the
+interpreter would have the correct behavior, so could be used to verify that the JIT was
+also correct.
+
+Sai wrote four example programs, including an implementation of Newton’s square root
+algorithm and a kernel adapted from some production code, in plain OxCaml, C with AVX2
+intrinsics, C with AVX512 intrinsics, and as an SPMD kernel (which could be either
+executed by the interpreter or JIT compiled). Each combination was benchmarked on inputs
+of various sizes.
+
+Sai also worked on an extensive test suite for all of the different language features and
+edge-cases. This suite included a test that generated random inputs with Quickcheck
+generators, then ran those inputs on the four example programs. Their outputs were
+cross-checked and compared bit by bit. He also wrote tests confirming that the code didn’t
+allocate on the heap.
+
+### How did the JIT do?
+
+[![Bar chart of the interpreter, plain OxCaml, and the first JIT for four kernels, as time relative to C with AVX2 on a wide scale; the interpreter is 237x to 1,267x slower than C, while the JIT and plain OxCaml are within 36x](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)
+
+The benchmarks found that the JIT was much faster than the interpreter. However, the JIT
+was about the same speed (or slightly slower) than the manual OxCaml code and
+significantly slower than the C implementations. This wasn’t that surprising, since we
+hadn’t implemented any real optimizations or tuning in the compiler. Naturally, this
+needed to change if we wanted to catch up to the C implementations.
+
+## Optimizing using an intermediate representation
+
+Sai then started looking at adding optimizations to the compiler. With the current
+compilation pipeline, this would have been slightly painful. Our front end representation
+was not designed to be easily analyzed or optimized. While that wouldn’t have necessarily
+stopped us from doing analysis, it’s often a better idea to add an intermediate
+representation (IR) that is more amenable to optimization. Sai implemented an IR based on
+A-normal form (ANF), a format where each intermediate value gets its own variable. This is
+the IR that we saw in the previous section about optimizing away control flow:
+
+```
+let%expect_test "IR: euclidean" =
+  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
+  print_string (For_testing.Ir_body.to_string lowered.body);
+  [%expect
+    {|
+    let n = shape[0]
+    for i in n (normal) {
+      let v = load_f32 in0[i]
+      let v1 = load_f32 in1[i]
+      let v2 = f32_sub v v1
+      let v3 = f32_mul v2 v2
+      store out[i] = v3
+    }
+    |}]
+;;
+
+let%expect_test "IR: manhattan" =
+  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
+  print_string (For_testing.Ir_body.to_string lowered.body);
+  [%expect
+    {|
+    let n = shape[0]
+    for i in n (normal) {
+      let v = load_f32 in0[i]
+      let v1 = load_f32 in1[i]
+      let v2 = f32_sub v v1
+      let v3 = f32 0.
+      let v4 = f32_ge v2 v3
+      let v5 = f32_sub v3 v2
+      let v6 = select v4 v2 v5
+      store out[i] = v6
+    }
+    |}]
+;;
+```
+
+The IR is more verbose but easier to analyze. For example, because all intermediate values
+are assigned a variable, it becomes easy to remove dead code; just look if an intermediate
+value is used anywhere after its definition.
+
+### Designing the IR to make code generation trivial
+
+Sai designed this IR with a key design principle in mind: Generating the final OxCaml code
+from the IR should be a trivial process. Any interesting compilation logic should end up
+explicitly represented in the IR.
+
+One instance of this principle shows up in how we model loops. As we mentioned before,
+kernels only declare *what* we do on each loop iteration, not *how* we loop over the code
+itself.
+
+```
+(fun graph [ x; scale ] [ Dim i ] -> exclave_
+   let open (val Spmd.open_ graph) in
+   let i = index i in
+   F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
+```
+
+But in the IR, we explicitly specify the loop, as well as load/store logic. That way, the
+optimizer can reason about how to re-order or unroll loops. For example, the above kernel
+would produce the following IR:
+
+```
+let n = shape[0]
+for i in n (normal) {
+  let v = load_f32 in0[i]
+  let v1 = i32 0
+  let v2 = load_f32 in1[v1]
+  let v3 = f32_mul v v2
+  let v4 = f32_of_i32 i
+  let v5 = f32_add v3 v4
+  store out[i] = v5
 }
-
-declare void @llvm.lifetime.start.p0(ptr captures(none)) #1
-
-declare !dbg !34 void @opaque(int*)(ptr noundef) local_unnamed_addr #2
-
-declare void @llvm.lifetime.end.p0(ptr captures(none)) #1
-
-attributes #0 = { mustprogress uwtable "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #1 = { mustprogress nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
-attributes #2 = { "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #3 = { nounwind }
 ```
 
-What the compiler does is to conceptually construct a DAG (directed acyclic
-graph), to answer the question of where a pointer comes from and whether two
-pointers can touch the same memory.
+The optimizer can analyze this IR and see that `v1` and `v2` do not depend on `i` and
+therefore can be lifted out of the loop:
 
-If the root origins don’t match, LLVM can guarantee that writing through `%0`
-will never alter the value stored at `%2`.
-
-There is so much more to explore here that it’s hard not to get carried away
-because it’s truly fascinating. However, my original goal was to compare how C++
-and Rust handle this, so let’s continue.
-
-## C++: What Happens If We Cast to an Integer?
-
-If we were to cast `&x` to an integer, then LLVM must assume that anyone could
-rebuild a pointer to `x` from that integer.
-
-```cpp
-#include <cstdint>
-
-void g(std::uintptr_t);
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    g(reinterpret_cast<std::uintptr_t>(&x)); // address of x is now 'exposed'
-    opaque(p);
-    return x;
+```
+let n = shape[0]
+let v1 = i32 0
+let v2 = load_f32 in1[v1]
+for i in n (normal) {
+  let v = load_f32 in0[i]
+  let v3 = f32_mul v v2
+  let v4 = f32_of_i32 i
+  let v5 = f32_add v3 v4
+  store out[i] = v5
 }
 ```
 
-The result is that the compiler gives up the optimization:
-
-That’s a pity if we only wanted to read the address and never intended to cast
-it back to a pointer. Wouldn’t it be nice if we could communicate this intent to
-the compiler?
-
-## Rust: Making Your Intent Explicit
-
-This is exactly what Rust provides with its powerful provenance APIs.
-
-### Inspecting Without Exposing
-
-```rust
-let p: *const u32 = &x;
-let a: usize = p.addr();
-```
-
-`p.addr()` extracts the raw memory address integer while telling Rust’s abstract
-machine:
-
-> I am reading this numeric address for inspection, but I guarantee I WILL NOT
-> cast it back to a valid pointer.
-
-Provenance is therefore not exposed.
-
-To mirror our previous experiments, we can try to see if the optimization was
-avoided or not:
-
-What we see is that `mov eax, dword ptr [rsp + 12]` reloads `x` after
-`opaque(p)`, meaning that, at least for now, the optimization is given up. Same
-as in the C++ case.
-
-Still, we can benefit from using the more expressive API, and not relying on
-exposure semantics. It gives the compiler room to optimize in the future, and,
-by telling Miri explicitly what we mean, it can better help us catch bugs.
-
-### Preserving Provenance
-
-In lock-free data structures, we sometimes need to store status flags in the
-lower unused bits of a pointer. It’s a very cool trick, which left me with my
-eyes wide open for a minute when I first read about it. I talk more about it in
-[this
-post](https://sofiabelen.github.io/projects/visualizing-crossbeam-epoch-based-reclamation/#q2-dissecting-crossbeamepochshared).
-Essentially, due to alignment, the lower bits of pointers are “wasted” (always
-0), so we can use them to store flags.
-
-What we can do is work with an intermediate pointer value, which will have the
-flag bit set BUT that also inherits provenance from the original pointer. This
-is exactly the functionality that `with_addr` provides us. After we’re done, we
-can recreate our valid initial pointer.
-
-The tagged value is stays a pointer rather than ‘usize’ because an integer is
-just a number and can’t carry provenance.
-
-```rust
-let tagged: *const u32 = p.with_addr(p.addr() | 1);
-// ...
-let revived_ptr: *const u32 = tagged.with_addr(tagged.addr() & !1);
-```
-
-Keep in mind that `tagged` isn’t dereferenceable, given that `p.addr() | 1` is
-misaligned for `u32`. Dereferencing it would be UB.
-
-In short:
-
-- `addr()` reads the address without exposing provenance.
-- `with_addr()` builds a new pointer with a new address but the *same* provenance as the original.
-
-### Legacy Rust, Similar To C++
-
-In legacy code, we’d have to do something like this:
-
-```rust
-let addr = p as usize;
-let tagged_addr = addr | 1;
-let revived_ptr = (tagged_addr & !1) as *const u32;
-println!("*revived_ptr: {}", unsafe { *revived_ptr});
-```
-
-This code will run, but if we run it with Miri, it emits a warning:
-
-```mysql
-warning: integer-to-pointer cast
- --> src/main.rs:6:22
-  |
-6 |     let revived_ptr = (tagged_addr & !1) as *const u32;
-  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ integer-to-pointer cast
-  |
-  = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
-  = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
-  = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
-  = help: you can then set `MIRIFLAGS=-Zmiri-strict-provenance` to ensure you are not relying on `with_exposed_provenance` semantics
-  = help: alternatively, `MIRIFLAGS=-Zmiri-permissive-provenance` disables this warning
-
-*revived_ptr: 1
-warning: 1 warning emitted
-```
-
-Actually, the reason that it runs is also interesting. What happens is similar
-to the C++ example. `p as usize` exposes the provenance of `p`, and since the
-reconstructed pointer points to the same allocation, provenance is recovered.
-
-Provenance would be lost if we did some pointer arithmetic and landed in a
-different allocation.
-
-### Casting Without Exposing Provenance
-
-To see what happens when provenance is **not** exposed, we can use
-`ptr::without_provenance`, which creates a bare address with no allocation
-behind it. (It’s useful for dangling or sentinel pointers, but it can’t be
-dereferenced).
-
-```rust
-let bare_ptr = std::ptr::without_provenance::<u32>(p.addr());
-println!("*tagged_ptr: {}", unsafe { *bare_ptr});
-```
-
-As expected, Miri complains about a <mark>*dangling pointer*</mark> and tells us explicitly that <mark>it has no provenance.</mark>
+It can also rewrite the loop to process 4 elements at a time, which reduces the amount of
+branching in the code.
 
 ```
-
-error: Undefined Behavior: memory access failed: attempting to access 4 bytes, but got 0x20b28[noalloc] which is a dangling pointer (it has no provenance)
-  --> src/main.rs:11:42
-   |
-11 |     println!("*tagged_ptr: {}", unsafe { *bare_ptr});
-   |                                          ^^^^^^^^^ Undefined Behavior occurred here
-   |
-   = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
-   = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
-
-note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
-
-error: aborting due to 1 previous error
+let n = shape[0]
+let v1 = i32 0
+let v2 = load_f32 in1[v1]
+for io in div n 4 (normal) {
+  let i_0 = add (mul io 4) 0
+  let i_1 = add (mul io 4) 1
+  let i_2 = add (mul io 4) 2
+  let i_3 = add (mul io 4) 3
+  let v_0 = load_f32 in0[i_0]
+  let v_1 = load_f32 in0[i_1]
+  let v_2 = load_f32 in0[i_2]
+  let v_3 = load_f32 in0[i_3]
+  let v3_0 = f32_mul v_0 v2
+  let v3_1 = f32_mul v_1 v2
+  let v3_2 = f32_mul v_2 v2
+  let v3_3 = f32_mul v_3 v2
+  let v4_0 = f32_of_i32 i_0
+  let v4_1 = f32_of_i32 i_1
+  let v4_2 = f32_of_i32 i_2
+  let v4_3 = f32_of_i32 i_3
+  let v5_0 = f32_add v3_0 v4_0
+  let v5_1 = f32_add v3_1 v4_1
+  let v5_2 = f32_add v3_2 v4_2
+  let v5_3 = f32_add v3_3 v4_3
+  store out[i_0] = v5_0
+  store out[i_1] = v5_1
+  store out[i_2] = v5_2
+  store out[i_3] = v5_3
+}
 ```
 
-## Recap
+By making the IR fairly explicit, we’re able to reason about—and therefore optimize—the
+code effectively.
 
-Provenance, in short, is a hidden piece of information tracking “which
-allocation” a pointer originates from, which LLVM uses for optimizations.
+### Validating the IR backend
 
-In C++, `uintptr_t` casts force the optimizer to prepare for the worst case by
-disabling some optimizations.
+Like with the previous backend implementation, Sai put in a lot of work to validate the
+correctness of the new compilation path. He added the new backend to the existing
+cross-validation logic across the test suite, then added expect tests that printed the IR
+and the emitted OxCaml for various examples, which helped us confirm that the behavior was
+exactly as expected.
 
-In Rust, `addr()`, `with_addr()` and `without_provenance()` let you state your
-intent explicitly: you only want the number, or you are deriving a new pointer
-from an existing one. In principle, that gives the compiler room to optimize
-more aggressively. In our experiment, however, the Rust version is unoptimized
-too: `x` was still reloaded from the stack. Using more expressive
-APIs is still valuable though, as Miri can enforce the rules and catch bugs that
-stem from unintended usage.
+Once we were confident that the new IR-based path was correct, Sai deleted the previous
+backend.
 
-I had planned to compare what Miri and ASan can catch, but I’ll save that for
-another post. It was enough new info as it is and it takes some time to fully
-wrap my head around it.
+## How fast is the new backend?
 
-I’m currently between jobs and looking for a Rust role, so writing these posts
-keeps me motivated and has helped me find a sense of community. Thank you for
-reading, and I hope you enjoyed it!
+With the current implementation, the IR backend generates essentially the same code as the
+first JIT, so the two perform about the same.
+
+[![Bar chart of plain OxCaml, the first JIT, and the IR JIT for four kernels, as time relative to C with AVX2; the two JIT backend bars are nearly the same length for every kernel](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)
+
+However, optimizations are now significantly easier to add. We’re currently working on
+adding vectorization and constant hoisting to the compiler. Preliminary benchmarks have found
+that these changes result in code that is on-par with our C AVX2 implementation.
+
+[![Bar chart of the vectorized JIT and plain OxCaml for four kernels at 65,536 elements, as time relative to C with AVX2; the vectorized JIT is within 1.4x of C for every kernel and matches C on newton sqrt](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)
+
+We’re also working on adding scheduling. Scheduling lets users customize how the kernel
+loops over the code with a sophisticated set of transformations like “split this loop into 8
+piece chunks, vectorize these chunks, then unroll by 4”. Intelligent scheduling is important
+for getting the maximum possible performance out of the kernel. Eventually these schedules
+could also be auto-generated and benchmarked, so that the compiler can find the optimal
+one for your kernel.

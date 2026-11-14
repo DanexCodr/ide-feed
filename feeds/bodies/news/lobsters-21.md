@@ -1,560 +1,177 @@
-We have a lot of performance-critical SIMD code (single-instruction, multiple-data)
-running on CPUs across the firm. These are highly parallel programs where you run the same
-computation across arrays of data, in our case for options pricing or for low-latency risk
-checks. Because OCaml hasn’t historically exposed SIMD instructions, these programs often
-involve an inner loop written in fairly esoteric C. Writing these loops requires
-implementers to think carefully about hardware, and doing performance tuning, such as
-modifying unroll factors or vector widths, can require major changes to the code.
-Moreover, these programs are constrained to a specific instruction set. If we were to
-target a different architecture or a newer processor, we’d have to rewrite the program.
+Since October 11th waves of cyber attacks have hit internet-exposed fridge controllers by Danfoss and Copeland throughout [Europe](https://en.wikipedia.org/wiki/2026_European_cold_chain_hacks), with attackers triggering defrosting operations and causing tens of millions of euros in spoilt food damages and even causing fires in some cases.  
 
-For his summer internship, Sai Konkimalla built a compiler for a domain specific language
-(DSL) that makes SIMD more ergonomic and widely accessible. The compiler takes advantage
-of [OxCaml](https://oxcaml.org/) features that were only very recently added to the
-language, such as runtime metaprogramming, to enable users to write a kernel just once as
-a regular-ish OxCaml function, then compile and run it on multiple architectures.
+While, as pointed out by [SentinelOne](https://www.sentinelone.com/labs/defrost-and-disrupt-an-assessment-of-europe-s-refrigeration-attacks/), attribution remains open and analysts should be careful not to immediately assume all incidents are linked to the same threat actor, the impact of these incidents (in particular their psychological effect) is in sharp contrast to their technical simplicity.
 
-## Single Program, Multiple Data
+While much online commentary has correctly pointed out that these kind of controllers should not be internet-exposed, remote connectivity of some sort is often a must-have due to maintenance personnel constraints and SLA or insurance requirements.  
 
-To help solve the problem of SIMD code being rather difficult to write and maintain, our
-DSL uses the S**P**MD, or “single **program**, multiple data” programming model. As
-opposed to SIMD intrinsics, SPMD is higher level and not tied to a specific instruction
-set. We might normally think of higher-level languages as slower, but with SPMD, a higher
-level of abstraction lets the compiler make better decisions about how to optimally use
-the underlying hardware. This ability can lead to significantly faster code.
+As a result, many asset owners are simply content to change default credentials, apply patches for known vulnerabilities, enable *strict *level session control, and move on. **This is insufficient and asset owners need to remove internet exposure as soon as possible** (e.g. though use of a VPN, private APN, or highly restrictive IP whitelisting ACLs). We recommend ***against ***allocating scarce security resources to patching efforts and instead focus on reducing exposure.  
 
-SPMD was popularized by CUDA (for Nvidia GPUs) and ISPC (for Intel CPUs). In this model,
-you write a program describing what happens at each index of a loop, then the compiler
-converts it into a parallel computation. For example, in CUDA:
+As we will demonstrate in this blogpost, **Midnight Blue researcher Carlo Meijer found several pre-authentication remote code execution 0-day vulnerabilities in the Danfoss AK-SM 800A in less than an hour with casual manual inspection.**
 
-```
-__global__ void kernel(const float* x, float* out, int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
-        out[idx] = 2.0f * x[idx] + idx;
-    }
-}
-```
+Prior to the attack waves which started in France on October 11th, several vulnerabilities had already been documented in multiple Danfoss product lines (AK SM-800, AK SM-800A, AK-EM100) by SynAcktiv (in 2023 [[1](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800-sc255-sc355-auth-bypass.pdf),[2](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800a-multiple-vulnerabilities.pdf)]), Claroty (in 2025 [[3](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers)]), and DIVD/HackDefense (in 2023 [[4](https://csirt.divd.nl/cases/DIVD-2023-00021/)]).
 
-Notice how there’s no loop here: you only define the loop body, and the compiler decides
-how to run it. In CUDA, when you launch a kernel on a GPU, you can declare how many blocks
-of threads to run and the GPU will schedule them accordingly.
+These vulnerabilities have included the much-discussed *code-of-the-day* authentication bypass (CVE-2025-41450), OS command injection (CVE-2023-25915, CVE-2025-41451) and path traversal (CVE-2023-25914) vulnerabilities in the AK-SM800A, as well as SQL injection ([CVE-2023-22583](https://csirt.divd.nl/cves/CVE-2023-22583/)) and OS command injection ([CVE-2023-25911](https://csirt.divd.nl/cves/CVE-2023-25911/)) vulnerabilities in the EOL AK-EM100.
 
-In ISPC, `foreach` also abstracts away how the loop is actually executed:
+All of these vulnerabilities are shockingly trivial to find and exploit, and the first public Proof-of-Concept (PoC) exploits were dropped within 48 hours of the French attacks [[5](https://github.com/Nero22k/CVE-2025-41450_poc), [6](https://github.com/msuiche/fromagegate)] - preceding the second attack wave on November 2nd.
 
-```
-export void kernel(uniform float x[], uniform float out[], uniform int n) {
-    foreach (i = 0 ... n) {
-        out[i] = 2.0f * x[i] + i;
-    }
-}
+According to Censys, there are still hundreds of Danfoss systems exposed online (though no doubt a sizeable chunk are by now honeypots) and over a 1000 [Copeland and Dixell](https://claroty.com/team82/research/chilling-discoveries-unpacking-vulnerabilities-in-copeland-xweb-pro-controllers) fridge controllers. In addition, controllers from similar vendors (such as Eliwell) which have not been targeted remain exposed in the hundreds as well.
+
+All this is to say that despite the demonstrable subpar security posture of these controllers and several attack waves with serious impact, controllers remain exposed to the public internet. While this is for understandable reasons (supermarket chains sometimes risk SLA or insurance condition violations by taking away remote maintenance and restricting access through VPNs isn't a trivial systems change), **we consider it of paramount importance for defenders not to fall into the trap of considering risks sufficiently mitigated by applying patches** as is suggested by [Danfoss guidance](https://www.danfoss.com/en/service-and-support/coordinated-vulnerability-disclosure/danfoss-security-advisories/).
+
+In order to demonstrate this, we investigated the **latest Danfoss AK-SM800A firmware version** (5.3.2 at the time of writing) and **within an hour of manual investigation (no AI necessary...) uncovered 6 pre-authentication remote code execution 0-day vulnerabilities**.
+
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af2f427184296168d6ab8a6_ak-sm800a.jpg)
+
+**Danfoss AK-SM800A**
+
+We are currently in a coordinated vulnerability disclosure process with Danfoss and as such will withhold technical details until disclosure is sorted, but due to ongoing targeting of these controllers we consider it important asset owners have a realistic view of the overall security posture of these devices ontrollers in order to take the appropriate measures rather than rely on piecemeal patching.
+
+Danfoss AK-SM800A firmware images can be downloaded from their website and contain 7-zip compressed ARM binaries handling application logic. Danfoss AK-SM800A controllers run [Danux](https://sm800a.danfoss.com/Danux_shared/), a custom Yocto-based Linux distribution, on an i.MX6 processor.
+
+Let's start by setting up an emulation environment for the firmware. The path of least resistance here is emulating the binary in userland, rather than emulating the entire system including the kernel. After mounting the filesystem, we can copy qemu-armel-static in there and run the following command to be presented with a shell:
+
+```shell
+$ sudo chroot . /qemu-armel-static /bin/sh
+sh-4.4# 
 ```
 
-In both cases, the compiler translates the code into low-level SIMD instructions. Not
-specifying the exact instructions also means SPMD programs can benefit from future
-hardware improvements. If we get a new, faster CPU with a different instruction set, the
-SPMD compiler can seamlessly compile existing code to it.
+As pointed out by [Claroty](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers), the SM800A platform consists of an NGINX reverse proxy, a bunch of CGI handlers, and independent processes handling application logic. Requests for URLs ending with *.cgi* suffix are forwarded to a task created by the *sm_app* executable.
 
-## A quick overview of the DSL
+It turns out that *sm_app* is a huge monolithic application that is responsible for pretty much everything that happens on the device. It is more like a mini *Real-Time Operating System* (RTOS) running in a userland process (a common embedded architectural choice resulting from *lift-and-shift* platform migrations). It has a task (thread) list consisting of 52 entries, among which are *Task_Modbus_drv_task*, *Task_Ethernet*, *Task_IOHandler* and *Task_Web* to name a few. Running the sm_app in this environment that's missing a significant chunk of the devices and drivers will almost certainly end in a crash. Applying some ad-hoc patches to the binary to avoid crashes will probably work, but potentially painful.
 
-Let’s go over an example of the DSL that Sai implemented. We start by defining the
-kernel’s signature, including its output type, input types, and the dimension of the
-output:
+Fortunately, we're only interested in Task_Web, so instead of fixing up everything, I can just LD_PRELOAD my way in the binary, let it run all the initialization code until it hits main(), hijack the code flow from there, apply some hooks which I won't delve into here, and start the web server. It turns out that Danux conveniently ships with gcc:
 
-```
-Spmd.Kernel.create
- F32           (* output element type *)
- [ F32; F32 ]  (* input slice types   *)
- [ () ]        (* one output dimension *)
- (fun graph [ x; scale] [ Dim i ] -> exclave_
-   ...)
+```shell
+$ gcc -shared -g -fPIC -o libpreload.so preload.c
+$ sudo chroot . /qemu-armel-static -E LD_PRELOAD=/libpreload3.so /danfoss/sm_app
+hi from hijacked code
 ```
 
-In this example, we’re writing a kernel that takes in two `F32` slices and returns one
-`F32` slice.
+With some additional minor fixes, we are now able to talk to the emulated web server:
 
-Future work on a ppx syntax extension will make it possible to rewrite the above simply
-as:
-
-```
-let%spmd kernel (x : f32 slice) (scale : f32) (i : dim) : f32 =
-```
-
-Next, we write the actual computation:
-
-```
-Spmd.Kernel.create
-  F32           (* output element type *)
-  [ F32; F32 ]  (* input slice types   *)
-  [ () ]        (* one output dimension *)
-  (fun graph [ x; scale ] [ Dim i ] -> exclave_
-     let open (val Spmd.open_ graph) in
-     let i = index i in
-     F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
-```
-
-Note the `let open (val Spmd.open_ graph) in`. This brings the DSL operations which
-construct a computational graph into scope. You can think of the `graph` value as proof
-that you’re in the graph-construction phase, not the runtime of the generated program.
-([Bonsai](https://github.com/janestreet/bonsai) uses a [similar
-trick](https://github.com/janestreet/bonsai_web/blob/master/docs/guide/thinking_in_bonsai.md#what-is-bonsaigraph)
-for creating its incremental graph.)
-
-Like CUDA, we don’t write the kernel as a loop. Instead, the developer writes a function
-that computes a single entry of the output slice, and the SPMD compiler generates code to
-loop over the output slice and compute the value at each index.
-
-You may wonder why we loop over the *output* and not the inputs. Looping over the output
-is easier to model because each iteration writes to exactly one location, so iterations
-can be easily vectorized, reordered, or parallelized. If we were to loop over the inputs,
-different iterations could write to the same output entry. The compiler would then have to
-reason about whether the writes could be re-ordered. By guaranteeing that each output
-entry is written exactly once, we can avoid this complexity.
-
-## Where runtime metaprogramming comes in
-
-One wrinkle with Sai’s project is that we wanted to execute the SPMD compiler at runtime.
-Runtime compilation (often called just-in-time or JIT compilation) is when the compiler
-generates code while the program is running. This gives us two main advantages: we don’t
-have to worry about building for all potential target architectures at compile time, and
-we can use data obtained at runtime for optimizations.
-
-That latter point is especially important for generating high-performance code. When
-executing at runtime, the compiler has more data that it can use to optimize the code than
-it would when executing ahead-of-time. For example, our compiler can use runtime data to
-compile away branch instructions, which can slow down execution by consuming CPU
-resources.
-
-To implement our JIT compiler, we used runtime metaprogramming, a feature that lets us
-generate, compile, and evaluate OxCaml code at runtime by using the OxCaml compiler as a
-library. As far as we know, Sai’s project was the first real program at Jane Street to use
-it. (He discovered some bugs in its implementation and helped report/reproduce them for
-the OxCaml team.)
-
-Let’s take a look at an example that illustrates the power of compiling at runtime. In
-this code, we match on the `metric` to choose which algorithm to execute:
-
-```
-type metric =
-  | Euclidean
-  | Manhattan
-
-let measure ~metric =
-  Spmd.Kernel.create
-    F32
-    [ F32; F32 ]
-    [ () ]
-    (fun graph [ samples; targets ] [ Dim i ] -> exclave_
-       let open (val Spmd.open_ graph) in
-       let sample = samples.!(index i) in
-       let target = targets.!(index i) in
-       let diff = F32.(sample -. target) in
-       match metric with
-       | Euclidean -> F32.(diff *. diff)
-       | Manhattan ->
-         let zero = broadcast (F32.lit #0.s) in
-         select F32.(diff >=. zero) ~pass:diff ~fail:F32.(zero -. diff))
-;;
+```shell
+$ curl -v -d '' http://127.0.0.1:8080/xml.cgi
+*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+> POST /xml.cgi HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> Content-Length: 0
+> Content-Type: application/x-www-form-urlencoded
+> 
+< HTTP/1.1 200
+< Date: Sat, 07 Nov 2026 21:44:33 GMT
+< Content-Type: text/xml
+< Content-Length: 75
+< Connection: keep-alive
+< Server: Danfoss SM800A
+< Access-Control-Allow-Private-Network: true
+< Access-Control-Allow-Origin: *
+< Access-Control-Allow-Methods: GET, POST, OPTIONS
+< Access-Control-Allow-Headers: aksm-auth,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type
+< Cache-Control: no-store, no-cache
+< 
+* Connection #0 to host 127.0.0.1 left intact
+<?xml version="1.0" encoding="utf-8"?><resp error="4">DEFAULT_STRING</resp>
 ```
 
-With a normal OCaml program, this would create a branch and two code paths. Every time we
-execute this code, we’d have to spend time evaluating the branch and picking the right
-code path.
+The first thing to do is get a sense of the security quality of the code base through so-called [code smells](https://en.wikipedia.org/wiki/Code_smell) and anti-patterns.
 
-With the SPMD compiler, we can compile *after* we know the value of `metric`. Then the JIT
-compiler can evaluate the branch during compilation and produce more efficient code. For
-example, here’s the intermediate representation that the code gets compiled into:
+The first such bad code smell is the extremely liberal use of strcpy. Use of the *strcpy*() function is discouraged as there is no size parameter. Instead, the function will keep copying bytes from the source buffer into the destination until it hits a null byte. This is a common source of memory corruption vulnerabilities in cases where the source buffer is provided by the user. Hundreds of strcpy invocations exist in the codebase which are part of externally reachable and unauthenticated handler functions. In fact, in earlier firmware releases each command handler is itself responsible for enforcing authentication, rather than doing so centrally. This needlessly enlarged the pre-authentication attack surface.
 
-```
-let%expect_test "IR: euclidean" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32_mul v2 v2
-      store out[i] = v3
-    }
-    |}]
-;;
+Next, we check for binary security mechanisms and exploit mitigations:
 
-let%expect_test "IR: manhattan" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32 0.
-      let v4 = f32_ge v2 v3
-      let v5 = f32_sub v3 v2
-      let v6 = select v4 v2 v5
-      store out[i] = v6
-    }
-    |}]
-;;
+```shell
+$ checksec sm_app
+[*] '/mnt/SM800A-4.2.4/sm_app'
+    Arch:     arm-32-little
+    RELRO:    Partial RELRO
+    Stack:    No canary found
+    NX:       NX enabled
+    PIE:      No PIE (0x10000)
+    RPATH:    b'$ORIGIN:$ORIGIN/../../sm_gp_lib/Debug/:$ORIGIN/../../sm_fu_lib/Debug/:$ORIGIN/../../sm_df_lib/Debug/:$ORIGIN/../../sm_msgqueue_lib/Debug/:$ORIGIN/../../sm_lz_lib/Debug/:$ORIGIN/../../sm_tm_lib/Debug/:$ORIGIN/../../sm_up_lib/Debug/:$ORIGIN/../../sm_history_lib/Debug/:$ORIGIN/../../sm_thread_lib/Debug/:$ORIGIN/../../sm_fs_lib/Debug/:$ORIGIN/../../sm_at_lib/Debug/:$ORIGIN/../../sm_mutex_lib/Debug/:$ORIGIN/../../sm_lg_lib/Debug/:$ORIGIN/../../sm_system_lib/Debug/:$ORIGIN/../../sm_os_lib/Debug/:$ORIGIN/../../sm_ip_lib/Debug/:$ORIGIN/../../sm_dl_lib/Debug/:$ORIGIN/../../sm_db_lib/Debug/:$ORIGIN/../../sm_tk_lib/Debug/:$ORIGIN/../../sm_session_lib/Debug/'
 ```
 
-Notice how we don’t branch on `metric` in the emitted code. Because the compiler knows the
-value of `metric`, it can emit just the chosen algorithm.
+It turns out that [stack canaries](https://en.wikipedia.org/wiki/Buffer_overflow_protection#Canaries) and [*Position Independent Executable*](https://en.wikipedia.org/wiki/Position-independent_code#Position-independent_executables) (PIE) are not enabled. These mechanisms have been staples of memory corruption defenses for decades and enabling these features on a modern Linux distribution running on a modern ARM application processor requires no engineering work at all. It is simply a matter of setting the right compiler flag. Enabling these features became the default in Ubuntu 17.10 and there is simply no excuse for a network-facing application that was last updated a few months ago to not have them enabled.
 
-## Implementing the front end
+What's more worrying, is that multiple Danfoss business units (including Climate Solutions & Electronic Controllers) received IEC 62443-4-1 certification for Secure Product Development Lifecycle and this is [prominently advertised](https://www.danfoss.com/en/service-and-support/fix-and-troubleshooting/cooling-installer-hub/electronic-controllers-services-faqs/cybersecurity-best-practices/) as such. In addition, Danfoss explicitly mentions IEC 62443-4-2 is a guiding framework for designing cybersecurity requirements and implementing improvements. **Asset owners, system integrators, and those responsible for procurement should realize exactly how little such certifications can say about the actual security posture of a product**.
 
-Sai started his project by working on the compiler’s front end. The front end takes the
-kernel definition that we saw above and translates it into the following
-[GADT](https://dev.realworldocaml.org/gadts.html) that models a directed acyclic graph
-(DAG):
+The initial impression of Danfoss' security posture, combined with the nature of the historical vulnerabilities, is a worrying one. But to see just how bad this pans out, let's see what can be found in no more than one hour of manually digging through the latest version of the firmware.
 
-```
-type (_ : any, _) node =
-  | Literal   : 'a Literal.t                                     -> ('a, uniform) node
-  | Broadcast : ('a, uniform) t                                  -> ('a, varying) node
-  | Load      : { storage : 'a Storage.t; idx : (i32, 'u) t }    -> ('a, 'u) node
-  | Dimop     : { op : ('a, 'u) Dimop.t; dim : 'd Dim.t }        -> ('a, 'u) node
-  | Binop     : { op : ('o, 'x, 'y) Binop.t
-                ; x : ('x, 'u) t; y : ('y, 'u) t }               -> ('o, 'u) node
-  | Unop      : { op : ('o, 'x) Unop.t; x : ('x, 'u) t }         -> ('o, 'u) node
-  | Select    : { cond : (bool#, varying) t
-                ; pass : ('a, 'u) t; fail : ('a, 'u) t }         -> ('a, varying) node
-  | If        : { cond : (bool#, uniform) t; then_; else_ }      -> ('a, 'u) node
-  | If_var    : { cond : (bool#, varying) t; then_; else_ }      -> ('a, varying) node
+We could develop a harness and subject the binary to coverage-guided fuzzing. However, that constitutes serious effort, and with the impression of the code quality that I have, I'm going to simply look into random places where strcpy() is invoked instead. One of the first functions inspected turns out to be an unauthenticated endpoint for a CGI handler having a bunch of parsing logic and strcpy invocations.
 
-and ('a : any, 'u) t = { node : ('a, 'u) node; ty : 'a Ty.t; id : int }
+While we will not disclose the exact endpoint affected, we will show it can be trivially exploited with a oneliner:
+
+```shell
+$ curl -v -d <redacted>"$(echo 'print("A"*768)'|python)"<redacted> http://127.0.0.1:8080/<redacted>.cgi
+*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+> POST /<redacted>.cgi HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> Content-Length: 888
+> Content-Type: application/x-www-form-urlencoded
+>
 ```
 
-(The `'u` type variable in this GADT declares the expression’s *rate*, which indicates
-whether an expression is the same for every index in the entire output slice (`uniform`)
-or may change at each element in the slice (`varying`). In other words, it signals which
-pieces of your computation only need to be computed once and which pieces need to be
-computed per index.)
+This gives us a nice SEGFAULT showing we can probably hijack program control flow:
 
-Sai’s first task was to add support for numeric data types such as `I8`, `I16`, `I64`,
-`U8`–`U64` and `F64`, including arithmetic operations and conversion operators. After
-that, he started implementing booleans and control flow constructs. Unlike most
-conventional programming languages, SPMD has some nuances to its control flow. Instead of
-a single `if` construct, SPMD has three separate constructs all designed for parallel
-execution:
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30c873a54a4370371d1ab_segfault.png)
 
-| form | condition | semantics |
-| --- | --- | --- |
-| `select` | bool# varying | The selected branch can vary per index. Both branches are always evaluated. |
-| `if_` | bool# uniform | Every index picks the same branch. The untaken branch is not executed. |
-| `if_var` | bool# varying | The selected branch can vary based on index. The untaken branch is not observable, but may or may not be executed. |
+There's at least 5 different vulnerabilities of this kind in just the little bit of code i inspected.
 
-`if_var` lets you branch on data that varies per index (i.e., per SIMD lane). In the code
-below, the `if_var` allows the user to guard code that should only be run when `g` happens
-to be positive:
+Of course, remotely triggering a crash is bad in itself, but being able to leverage the buffer overflow to obtain remote code execution is much worse. Any reasonably experienced exploit developer will agree exploiting straightforward stack-based buffer overflows on ARM Linux without exploit mitigations is very straightforward. And if they don't, there's probably a frontier or open weight model out there willing to help them agree.
 
-```
-(fun graph [ group; totals; counts ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let g = group.!(index i) in
-   let zero = broadcast (I32.lit #0l) in
-   if_var I32.(g > zero)
-     ~then_:F32.(totals.!(g) /. of_i32 counts.!(g))
-     ~else_:(broadcast (F32.lit #0.s)))
-```
+The only challenge (if you can call it that) left to overcome is the fact that `strcpy()` stops copying bytes when it hits a null byte. If we wish to gain remote code execution, we inevitably need to write several addresses containing null bytes. Thus, we need to somehow overcome this inherent limitation of `strcpy() `and while we won't share our approach for now [it's not exactly rocket surgery](https://www.youtube.com/watch?v=THNPmhBl-8I). Also, the exploited application runs as root (because of course it does).
 
-The plain `if_` can’t do that, because the condition is a `bool# uniform` and therefore it
-must be the same value for all lanes.
+Since we have to be vague due to coordinated disclosure being ongoing, let's at least show the result of our 100% artisanal, hand-crafted, AI and gluten free exploit in action as PoC:
 
-`select` and `if_var` are similar in that they both take in a condition of type `bool#
-varying`. Where the two constructs differ is in how the branches are evaluated. With
-`if_var`, the compiler can decide whether to execute the branch that is *not* chosen by
-the condition, whereas with `select`, both branches are always evaluated. Further,
-if `if_var` executes an untaken branch, any potential side effects, such as raising
-exceptions, will not be observable. So `select true 1 (1/0)` will raise an exception,
-but `{if,if_var} true 1 (1/0)` will not.
+The exploit demonstrated above was targeted at version 3.3.0, but the bugs are present in the latest version of the firmware as well (5.3.2 at the time of writing).
 
-## Writing the backend
+In later firmware versions, however, the concepts of *session control* and *security levels* were introduced by Danfoss [[1](https://www.danfoss.com/en/service-and-support/downloads/dcs/adap-kool-software/ak-sm-800a/#tab-security),[2](https://assets.danfoss.com/documents/latest/590332/BC337629891709en-001101.pdf)]. According to Danfoss, session control is an *authentication rules engine* for the various remote interfaces (StoreView Browser, StoreView Web, Alsense, and 3rd party XML). This session control mechanism replaces the individual handler-level authentication enforcement mentioned above.
 
-Usually, a high-performance JIT compiler would target a low-level language such as
-assembly or LLVM IR, which necessitates thinking quite hard about complicated details such
-as registers, pointers, and so on. Luckily, we didn’t have to do this, since we could use
-metaprogramming to emit OxCaml code. This also lets us rely on optimizations in the OxCaml
-compiler, saving us from having to implement them ourselves.
+Session control has three security levels: backward compatible, permissive, and strict. Starting at 4.0 security level *strict* was set as the default which:
 
-OxCaml’s metaprogramming features let us explicitly generate OxCaml code at runtime using
-*quotes* and *splices*. A quotation represents an OxCaml expression that is created at
-runtime and will be evaluated at a later time. For example, `<[if Random.bool () then 42
-else 5]>` represents an unevaluated expression of type `int`, so the quotation itself has
-type `<[int]> expr`. Once this expression is evaluated, its result will be an `int`.
+This AKSM-auth header mechanism historically held a base64 encoded username and password as the authentication key but now needs to include a session token derived from initial authentication [[3](https://assets.danfoss.com/documents/latest/353954/AQ456722659855en-000201.pdf)]. At the *strict *security level, virtually all the web-accessible attack surface is fenced off from unauthenticated users (including the bug that was used in the exploit above) which is why enabling this security control was included in CERT-FR's [official mitigations](https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-012/).
 
-Quotations can be interpolated into other quotations by splicing (`$`):
+Unfortunately, it **t****urns out the session control mechanism also has at least one trivial pre-authentication memory corruption vulnerability.**
 
-```
-# let quote = <[2 + 3]> in <[$quote * 4]>;;
-- : <[int]> expr = <[Base.( * ) (Base.( + ) 2 3) 4]>
+The way this is implemented is through a separate binary: *sm_fcgi_app*. It acts as a *Web Application Firewall* (WAF) in the sense that it passes through all commands to NGINX if it believes that the user is authenticated. If not, then the only command allowed to be passed through is the *getauth *command, which is used to authenticate.
+
+At first glance i spotted a potential for [parser differential attacks](https://about.gitlab.com/blog/how-to-exploit-parser-differentials/) on *sm_fcgi_app *which might open the entire attack surface to unauthenticated users, but decided to investigate a quicker route to success. It turns out there's another simple *strcpy *based pre-authentication memory corruption:
+
+```shell
+$ curl -k -v -d <redacted> -A "$(echo 'print("A"*1536)'|python)" https://127.0.0.1:3443/<redacted>.cgi
+...
+> POST /<redacted>.cgi HTTP/1.1
+> Host: 127.0.0.1:3443
+> User-Agent: AAAAAAAAAAAAAAAA...AAAAAAAAAAAAAAAA
+> Accept: */*
+> Content-Length: 41
+> Content-Type: application/x-www-form-urlencoded
+> 
 ```
 
-So rather than writing the standard recursive `power` function that computes `x^n`:
+Running this against the latest AK-SM800A firmware with *strict *session control enabled produces a SEGFAULT which, with some additional effort, can be turned into yet another pre-authentication RCE. It goes without saying that *sm_fcgi_app *does not have stack canaries and PIE enabled either. I think we're done here, we've seen enough.
 
-```
-# let rec power n x =
-    if n = 0 then 1 else x * power (n - 1) x;;
-val power : int -> int -> int = <fun>
-```
+![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30f993fbe198375fbc8dc_segfault3.png)
 
-you can write a `power_expr` function that creates a quoted expression that will compute
-`x^n` for a given `n`, effectively inlining and optimizing the recursive function into a
-single expression. This is a form of [partial
-evaluation](https://en.wikipedia.org/wiki/Partial_evaluation) where we’re able to take a
-function and produce a much faster version specialized to a particular value of `n`.
+The last thing we want to figure out is exactly how bad this can get.
 
-```
-# let rec power_expr n xq =
-    if n = 0 then <[1]>
-    else <[$xq * $(power_expr (n - 1) xq)]>;;
-val power_expr : int -> <[int]> expr -> <[int]> expr @ once = <fun>
+It's one thing to initiate long defrost cycles and spoil tens of millions of food *once*, but the typical response of defenders is to factory reset affected controllers, rotate credentials, apply patches, set *strict *session control mode, and possibly wall off the controllers from internet exposure. But any controllers that are hit continue to do their job in production.
 
-# <[ fun x -> $(power_expr 5 <[x]>) ]>;;
-- : <[int -> int]> expr =
-<[fun x -> Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x 1))))]>
-```
+Now, imagine an attacker who manages to persist on such controllers. They don't just trigger the initial payload but they leave a little implant that survives a factory reset and firmware update. With OS level access, this isn't too hard on typical Unix-like devices as shown in the [SALTWATER / SEASPY](https://cloud.google.com/blog/topics/threat-intelligence/barracuda-esg-exploited-globally) malware for Barracuda devices, [FIRESTARTER](https://www.cisa.gov/news-events/analysis-reports/ar26-113a) malware for Cisco devices, and [Sonicwall malware](https://arstechnica.com/information-technology/2023/03/malware-infecting-widely-used-security-appliance-survives-firmware-updates/) all which survive firmware updates.
 
-Sai’s backend walked the DAG and emitted OxCaml code for each node. For instance, the
-backend emits the following quoted OxCaml code for arithmetic expressions:
+In such a scenario, an attacker could either retain remote access or leave a time-triggered payload for a 2nd (or 3rd...) strike - increasing damage by spoiling new batches of food. Alternatively, attackers could simply wipe flash memory and/or push a malformed firmware update to brick the controllers and render them permanently inoperable - requiring costly and time-consuming replacement similar to the TTPs deployed during the [December 2025 attack on the Polish electric grid](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1).
 
-```
-let rec emit node =
-  match node with
-  | Add (x, y) -> <[ F32.O.( + ) $(emit x) $(emit y) ]>
-  | Mul (x, y) -> <[ F32.O.( * ) $(emit x) $(emit y) ]>
-  | Load (input, idx) -> <[ Slice.Imm.unsafe_get $input $(emit idx) ]>
-```
+Both approaches seem feasible against the AK-SM800A controllers since they do not make use of the i.MX6's secure boot features as evidenced by checking some of the responsible One-Time Programmable (OTP) fuse registers.
 
-If we were to compile a basic kernel such as:
+1. **Full device take-over**: Through remote code execution, an unauthenticated attacker can remotely run arbitrary code at the operating system level of the AK-SM800A controller. This would allow the attacker to change parameters or initiate unwanted actions (such as defrosting operations) while hiding their activities from any system logs. In addition, the lack of secure boot functionality would allow an attacker with RCE to persistently implant controllers to maintain access or have it trigger a secondary payload at a later point in time. Without deep introspection and forensics capabilities, determining whether a device is implanted at the firmware level (**even after a factory reset**) is infeasible.
 
-```
-(fun graph [ a; b; c ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let i = index i in
-   F32.((a.!(i) +. b.!(i)) *. c.!(i)))
-```
+2. **Equipment damage (bricking)**: Due to the lack of secure boot, an attacker with RCE could push malicious firmware that simply renders the device inoperable and irrecoverable without specialized hardware intervention (e.g. by wiping flash memory and/or causing an infinite boot loop). Such a '[bricking](https://en.wikipedia.org/wiki/Brick_(electronics))' or wiper approach would require full device replacement. The dangers of such a scenario to OT equipment in particular and adversary deployment of such TTPs have been highlighted in previous blogposts by Midnight Blue [[1](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1),[2](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-on-bricking-ot-devices-part-2)]. **This could potentially lead to freezers being unavailable for days or longer while controllers get replaced**.
 
-we’d get a DAG that represents the arithmetic operations, and use that to generate quoted
-OxCaml code:
+## Mitigations
 
-```
-emit (Mul (Add (Load a, Load b), Load c))
-= <[ F32.O.( * ) $(emit (Add (Load a, Load b))) $(emit (Load c)) ]>
-= <[ F32.O.( * )
-       (F32.O.( + ) $(emit (Load a)) $(emit (Load b)))
-       $(emit (Load c)) ]>
-= <[ F32.O.( * )
-       (F32.O.( + )
-          (Slice.Imm.unsafe_get a (I32.to_i64 i))
-          (Slice.Imm.unsafe_get b (I32.to_i64 i)))
-       (Slice.Imm.unsafe_get c (I32.to_i64 i)) ]>
-```
-
-Sai implemented these emitters for all of the node types in the DAG, such as the `if_`,
-`if_var` and `select` control flow constructs.
-
-## Cross-checking and benchmarking every program and implementation
-
-At this point, Sai needed to validate that his JIT implementation was both fast and
-correct. One strategy he used was to compare the JIT against a reference implementation.
-We had previously implemented an interpreter that took the front-end representation and
-directly executed it. While extremely slow, we could be fairly confident that the
-interpreter would have the correct behavior, so could be used to verify that the JIT was
-also correct.
-
-Sai wrote four example programs, including an implementation of Newton’s square root
-algorithm and a kernel adapted from some production code, in plain OxCaml, C with AVX2
-intrinsics, C with AVX512 intrinsics, and as an SPMD kernel (which could be either
-executed by the interpreter or JIT compiled). Each combination was benchmarked on inputs
-of various sizes.
-
-Sai also worked on an extensive test suite for all of the different language features and
-edge-cases. This suite included a test that generated random inputs with Quickcheck
-generators, then ran those inputs on the four example programs. Their outputs were
-cross-checked and compared bit by bit. He also wrote tests confirming that the code didn’t
-allocate on the heap.
-
-### How did the JIT do?
-
-[![Bar chart of the interpreter, plain OxCaml, and the first JIT for four kernels, as time relative to C with AVX2 on a wide scale; the interpreter is 237x to 1,267x slower than C, while the JIT and plain OxCaml are within 36x](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)
-
-The benchmarks found that the JIT was much faster than the interpreter. However, the JIT
-was about the same speed (or slightly slower) than the manual OxCaml code and
-significantly slower than the C implementations. This wasn’t that surprising, since we
-hadn’t implemented any real optimizations or tuning in the compiler. Naturally, this
-needed to change if we wanted to catch up to the C implementations.
-
-## Optimizing using an intermediate representation
-
-Sai then started looking at adding optimizations to the compiler. With the current
-compilation pipeline, this would have been slightly painful. Our front end representation
-was not designed to be easily analyzed or optimized. While that wouldn’t have necessarily
-stopped us from doing analysis, it’s often a better idea to add an intermediate
-representation (IR) that is more amenable to optimization. Sai implemented an IR based on
-A-normal form (ANF), a format where each intermediate value gets its own variable. This is
-the IR that we saw in the previous section about optimizing away control flow:
-
-```
-let%expect_test "IR: euclidean" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32_mul v2 v2
-      store out[i] = v3
-    }
-    |}]
-;;
-
-let%expect_test "IR: manhattan" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32 0.
-      let v4 = f32_ge v2 v3
-      let v5 = f32_sub v3 v2
-      let v6 = select v4 v2 v5
-      store out[i] = v6
-    }
-    |}]
-;;
-```
-
-The IR is more verbose but easier to analyze. For example, because all intermediate values
-are assigned a variable, it becomes easy to remove dead code; just look if an intermediate
-value is used anywhere after its definition.
-
-### Designing the IR to make code generation trivial
-
-Sai designed this IR with a key design principle in mind: Generating the final OxCaml code
-from the IR should be a trivial process. Any interesting compilation logic should end up
-explicitly represented in the IR.
-
-One instance of this principle shows up in how we model loops. As we mentioned before,
-kernels only declare *what* we do on each loop iteration, not *how* we loop over the code
-itself.
-
-```
-(fun graph [ x; scale ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let i = index i in
-   F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
-```
-
-But in the IR, we explicitly specify the loop, as well as load/store logic. That way, the
-optimizer can reason about how to re-order or unroll loops. For example, the above kernel
-would produce the following IR:
-
-```
-let n = shape[0]
-for i in n (normal) {
-  let v = load_f32 in0[i]
-  let v1 = i32 0
-  let v2 = load_f32 in1[v1]
-  let v3 = f32_mul v v2
-  let v4 = f32_of_i32 i
-  let v5 = f32_add v3 v4
-  store out[i] = v5
-}
-```
-
-The optimizer can analyze this IR and see that `v1` and `v2` do not depend on `i` and
-therefore can be lifted out of the loop:
-
-```
-let n = shape[0]
-let v1 = i32 0
-let v2 = load_f32 in1[v1]
-for i in n (normal) {
-  let v = load_f32 in0[i]
-  let v3 = f32_mul v v2
-  let v4 = f32_of_i32 i
-  let v5 = f32_add v3 v4
-  store out[i] = v5
-}
-```
-
-It can also rewrite the loop to process 4 elements at a time, which reduces the amount of
-branching in the code.
-
-```
-let n = shape[0]
-let v1 = i32 0
-let v2 = load_f32 in1[v1]
-for io in div n 4 (normal) {
-  let i_0 = add (mul io 4) 0
-  let i_1 = add (mul io 4) 1
-  let i_2 = add (mul io 4) 2
-  let i_3 = add (mul io 4) 3
-  let v_0 = load_f32 in0[i_0]
-  let v_1 = load_f32 in0[i_1]
-  let v_2 = load_f32 in0[i_2]
-  let v_3 = load_f32 in0[i_3]
-  let v3_0 = f32_mul v_0 v2
-  let v3_1 = f32_mul v_1 v2
-  let v3_2 = f32_mul v_2 v2
-  let v3_3 = f32_mul v_3 v2
-  let v4_0 = f32_of_i32 i_0
-  let v4_1 = f32_of_i32 i_1
-  let v4_2 = f32_of_i32 i_2
-  let v4_3 = f32_of_i32 i_3
-  let v5_0 = f32_add v3_0 v4_0
-  let v5_1 = f32_add v3_1 v4_1
-  let v5_2 = f32_add v3_2 v4_2
-  let v5_3 = f32_add v3_3 v4_3
-  store out[i_0] = v5_0
-  store out[i_1] = v5_1
-  store out[i_2] = v5_2
-  store out[i_3] = v5_3
-}
-```
-
-By making the IR fairly explicit, we’re able to reason about—and therefore optimize—the
-code effectively.
-
-### Validating the IR backend
-
-Like with the previous backend implementation, Sai put in a lot of work to validate the
-correctness of the new compilation path. He added the new backend to the existing
-cross-validation logic across the test suite, then added expect tests that printed the IR
-and the emitted OxCaml for various examples, which helped us confirm that the behavior was
-exactly as expected.
-
-Once we were confident that the new IR-based path was correct, Sai deleted the previous
-backend.
-
-## How fast is the new backend?
-
-With the current implementation, the IR backend generates essentially the same code as the
-first JIT, so the two perform about the same.
-
-[![Bar chart of plain OxCaml, the first JIT, and the IR JIT for four kernels, as time relative to C with AVX2; the two JIT backend bars are nearly the same length for every kernel](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)
-
-However, optimizations are now significantly easier to add. We’re currently working on
-adding vectorization and constant hoisting to the compiler. Preliminary benchmarks have found
-that these changes result in code that is on-par with our C AVX2 implementation.
-
-[![Bar chart of the vectorized JIT and plain OxCaml for four kernels at 65,536 elements, as time relative to C with AVX2; the vectorized JIT is within 1.4x of C for every kernel and matches C on newton sqrt](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)
-
-We’re also working on adding scheduling. Scheduling lets users customize how the kernel
-loops over the code with a sophisticated set of transformations like “split this loop into 8
-piece chunks, vectorize these chunks, then unroll by 4”. Intelligent scheduling is important
-for getting the maximum possible performance out of the kernel. Eventually these schedules
-could also be auto-generated and benchmarked, so that the compiler can find the optimal
-one for your kernel.
+In light of all of the above, we consider piecemeal patching or enabling of *strict *session control to be a misallocation of scarce security and personnel resources since they have minimal security ROI against such a fundamentally flawed codebase missing basic exploit mitigations and yielding multiple pre-auth RCEs with an hour's casual glance.
