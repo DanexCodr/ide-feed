@@ -1,177 +1,32 @@
-Since October 11th waves of cyber attacks have hit internet-exposed fridge controllers by Danfoss and Copeland throughout [Europe](https://en.wikipedia.org/wiki/2026_European_cold_chain_hacks), with attackers triggering defrosting operations and causing tens of millions of euros in spoilt food damages and even causing fires in some cases.  
+> So why doesn’t glue work get you promoted, if it’s so crucial to shipping projects? Are companies stupid? Are they deliberately leaving value on the table? No, I don’t think so. Companies don’t reward glue work because **they don’t want you prioritizing it.** And they don’t want you prioritizing it because they want you shipping features. Glue work is hard. If you’re capable of doing glue work well, they want you to use that ability to deliver projects instead of improving general efficiency.
 
-While, as pointed out by [SentinelOne](https://www.sentinelone.com/labs/defrost-and-disrupt-an-assessment-of-europe-s-refrigeration-attacks/), attribution remains open and analysts should be careful not to immediately assume all incidents are linked to the same threat actor, the impact of these incidents (in particular their psychological effect) is in sharp contrast to their technical simplicity.
+This is an argument to settle for mediocrity. If you’re like most people who have worked in big tech, it is plainly obvious to you that they *are* leaving value on the table. (Whether it is deliberate or not is a matter of what’s in people’s hearts.) What big tech employers want is largely incoherent. They want you delivering features. They also know that somebody’s got to do the glue work to keep the company running, and they have trouble describing or capturing its value.
 
-While much online commentary has correctly pointed out that these kind of controllers should not be internet-exposed, remote connectivity of some sort is often a must-have due to maintenance personnel constraints and SLA or insurance requirements.  
+Here, and throughout his post, Goedecke is quite accurately describing some of the incentives presented to employees at big tech. My problem with the post is that he tells you to internalize them instead of keeping in mind that a better world is possible.
 
-As a result, many asset owners are simply content to change default credentials, apply patches for known vulnerabilities, enable *strict *level session control, and move on. **This is insufficient and asset owners need to remove internet exposure as soon as possible** (e.g. though use of a VPN, private APN, or highly restrictive IP whitelisting ACLs). We recommend ***against ***allocating scarce security resources to patching efforts and instead focus on reducing exposure.  
+> The core problem is that you’re deciding for yourself what the company needs instead of doing your job. Isn’t it your job to make your team run smoother? No! **Your job is to execute the mission of your company’s leadership.**
 
-As we will demonstrate in this blogpost, **Midnight Blue researcher Carlo Meijer found several pre-authentication remote code execution 0-day vulnerabilities in the Danfoss AK-SM 800A in less than an hour with casual manual inspection.**
+If glue work is critical to the mission of a company’s leadership, how does neglecting it serve the mission?
 
-Prior to the attack waves which started in France on October 11th, several vulnerabilities had already been documented in multiple Danfoss product lines (AK SM-800, AK SM-800A, AK-EM100) by SynAcktiv (in 2023 [[1](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800-sc255-sc355-auth-bypass.pdf),[2](https://www.synacktiv.com/sites/default/files/2023-10/synacktiv-danfoss-sm800a-multiple-vulnerabilities.pdf)]), Claroty (in 2025 [[3](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers)]), and DIVD/HackDefense (in 2023 [[4](https://csirt.divd.nl/cases/DIVD-2023-00021/)]).
+> It is better to execute that mission at 60% efficiency than to spend all your time increasing efficiency in general (or even worse, to execute some other mission at 100% efficiency). Why? For two main reasons: first, you’re inevitably going to burn out, which will be bad for everyone; second, it’s better to let your team get used to operating at the base efficiency level of the company instead of artificially removing friction for a brief period.
 
-These vulnerabilities have included the much-discussed *code-of-the-day* authentication bypass (CVE-2025-41450), OS command injection (CVE-2023-25915, CVE-2025-41451) and path traversal (CVE-2023-25914) vulnerabilities in the AK-SM800A, as well as SQL injection ([CVE-2023-22583](https://csirt.divd.nl/cves/CVE-2023-22583/)) and OS command injection ([CVE-2023-25911](https://csirt.divd.nl/cves/CVE-2023-25911/)) vulnerabilities in the EOL AK-EM100.
+There are two very different things being conflated here: saving some gas in the tank for when there are real deadlines, which is great advice, versus not trying to make your coworkers’ lives better, which is a real case of misaligned incentives.
 
-All of these vulnerabilities are shockingly trivial to find and exploit, and the first public Proof-of-Concept (PoC) exploits were dropped within 48 hours of the French attacks [[5](https://github.com/Nero22k/CVE-2025-41450_poc), [6](https://github.com/msuiche/fromagegate)] - preceding the second attack wave on November 2nd.
+Besides, the premise is fundamentally wrong: there is a lot of glue work that, if you give it the respect it deserves, removes friction *permanently*. I’m obviously biased here, but I think the [cargo-nextest](https://nexte.st/) project is a great example of glue work (running tests!) done so well that the problem mostly vanishes. More recently, at Oxide I wrote an agent skill called [flake-review](https://github.com/oxidecomputer/omicron/blob/main/.claude/skills/flake-review/SKILL.md), backed by a [catalog](https://github.com/oxidecomputer/omicron/blob/main/docs/flake-patterns.adoc) I wrote<sup>[1](https://sunshowers.io/posts/glue-work/#fn:1)</sup> over a few hours. I’ve since used the skill to fix almost a dozen test flakes, making the entire team’s lives better.
 
-According to Censys, there are still hundreds of Danfoss systems exposed online (though no doubt a sizeable chunk are by now honeypots) and over a 1000 [Copeland and Dixell](https://claroty.com/team82/research/chilling-discoveries-unpacking-vulnerabilities-in-copeland-xweb-pro-controllers) fridge controllers. In addition, controllers from similar vendors (such as Eliwell) which have not been targeted remain exposed in the hundreds as well.
+> Should you never do glue work? No, you should do glue work *tactically*. That is, you should do this kind of extra work for the projects you lead — the projects whose success you’re accountable for — in order to make sure they succeed. You won’t be rewarded for the glue work specifically, but you will be rewarded for the success of the project. For other projects, you should just do your regular job.
 
-All this is to say that despite the demonstrable subpar security posture of these controllers and several attack waves with serious impact, controllers remain exposed to the public internet. While this is for understandable reasons (supermarket chains sometimes risk SLA or insurance condition violations by taking away remote maintenance and restricting access through VPNs isn't a trivial systems change), **we consider it of paramount importance for defenders not to fall into the trap of considering risks sufficiently mitigated by applying patches** as is suggested by [Danfoss guidance](https://www.danfoss.com/en/service-and-support/coordinated-vulnerability-disclosure/danfoss-security-advisories/).
+With the most emphatic of feelings, *fuck that*. I do glue work whenever I’m the best situated person to do the glue work. The idea that you shouldn’t help your peers, simply because someone in middle management has trouble articulating the value of helping your peers, should be deeply offensive to any serious professional.
 
-In order to demonstrate this, we investigated the **latest Danfoss AK-SM800A firmware version** (5.3.2 at the time of writing) and **within an hour of manual investigation (no AI necessary...) uncovered 6 pre-authentication remote code execution 0-day vulnerabilities**.
+> Is this a deeply cynical take about how to succeed in office politics? I don’t actually think so. Large tech companies operate at something like 20-60% efficiency at any given time (as they get larger, they get less efficient).
 
-![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af2f427184296168d6ab8a6_ak-sm800a.jpg)
+A large chunk of people’s working lives is wasted on solvable problems whose value organizations don’t recognize. How can one not be cynical about this kind of unnecessary waste and suffering? It baffles me.
 
-**Danfoss AK-SM800A**
+So, what is going on here? Any organization beyond a certain size requires [legibility](https://en.wikipedia.org/wiki/Seeing_Like_a_State) to function. The requirement for legibility pulls in all the things many people recoil at: performance reviews, OKRs, KPIs and whatnot<sup>[2](https://sunshowers.io/posts/glue-work/#fn:2)</sup>.
 
-We are currently in a coordinated vulnerability disclosure process with Danfoss and as such will withhold technical details until disclosure is sorted, but due to ongoing targeting of these controllers we consider it important asset owners have a realistic view of the overall security posture of these devices ontrollers in order to take the appropriate measures rather than rely on piecemeal patching.
+Some big tech firms have figured out ways of making some of that glue work more legible. For example, Meta has fairly large internal tools and developer infrastructure teams, where goals are set around measurable indicators like performance numbers. But there will always be some glue work that will resist all attempts to measure it, and to the extent that firms don’t care about it, they will suffer.
 
-Danfoss AK-SM800A firmware images can be downloaded from their website and contain 7-zip compressed ARM binaries handling application logic. Danfoss AK-SM800A controllers run [Danux](https://sm800a.danfoss.com/Danux_shared/), a custom Yocto-based Linux distribution, on an i.MX6 processor.
+What does one do instead? Well, [getting rid of performance reviews](https://oxide.computer/blog/oxides-compensation-model-how-is-it-going) certainly helps! For the last few years of my work life at Oxide, the distinction between glue work and feature work has largely vanished; the question I’ve repeatedly asked my coworkers and manager is “how can I be helpful?”, not “what would look good on my performance review?” But I accept that larger organizations will need a greater degree of legibility. I think all the usual answers apply: don’t overhire (and certainly don’t [incentivize managers](https://www.nbcnews.com/id/wbna54928896) to hire as many people as possible), don’t require all work to be legible, and trust your employees with the rest.
 
-Let's start by setting up an emulation environment for the firmware. The path of least resistance here is emulating the binary in userland, rather than emulating the entire system including the kernel. After mounting the filesystem, we can copy qemu-armel-static in there and run the following command to be presented with a shell:
-
-```shell
-$ sudo chroot . /qemu-armel-static /bin/sh
-sh-4.4# 
-```
-
-As pointed out by [Claroty](https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers), the SM800A platform consists of an NGINX reverse proxy, a bunch of CGI handlers, and independent processes handling application logic. Requests for URLs ending with *.cgi* suffix are forwarded to a task created by the *sm_app* executable.
-
-It turns out that *sm_app* is a huge monolithic application that is responsible for pretty much everything that happens on the device. It is more like a mini *Real-Time Operating System* (RTOS) running in a userland process (a common embedded architectural choice resulting from *lift-and-shift* platform migrations). It has a task (thread) list consisting of 52 entries, among which are *Task_Modbus_drv_task*, *Task_Ethernet*, *Task_IOHandler* and *Task_Web* to name a few. Running the sm_app in this environment that's missing a significant chunk of the devices and drivers will almost certainly end in a crash. Applying some ad-hoc patches to the binary to avoid crashes will probably work, but potentially painful.
-
-Fortunately, we're only interested in Task_Web, so instead of fixing up everything, I can just LD_PRELOAD my way in the binary, let it run all the initialization code until it hits main(), hijack the code flow from there, apply some hooks which I won't delve into here, and start the web server. It turns out that Danux conveniently ships with gcc:
-
-```shell
-$ gcc -shared -g -fPIC -o libpreload.so preload.c
-$ sudo chroot . /qemu-armel-static -E LD_PRELOAD=/libpreload3.so /danfoss/sm_app
-hi from hijacked code
-```
-
-With some additional minor fixes, we are now able to talk to the emulated web server:
-
-```shell
-$ curl -v -d '' http://127.0.0.1:8080/xml.cgi
-*   Trying 127.0.0.1:8080...
-* Connected to 127.0.0.1 (127.0.0.1) port 8080
-> POST /xml.cgi HTTP/1.1
-> Host: 127.0.0.1:8080
-> User-Agent: curl/8.5.0
-> Accept: */*
-> Content-Length: 0
-> Content-Type: application/x-www-form-urlencoded
-> 
-< HTTP/1.1 200
-< Date: Sat, 07 Nov 2026 21:44:33 GMT
-< Content-Type: text/xml
-< Content-Length: 75
-< Connection: keep-alive
-< Server: Danfoss SM800A
-< Access-Control-Allow-Private-Network: true
-< Access-Control-Allow-Origin: *
-< Access-Control-Allow-Methods: GET, POST, OPTIONS
-< Access-Control-Allow-Headers: aksm-auth,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type
-< Cache-Control: no-store, no-cache
-< 
-* Connection #0 to host 127.0.0.1 left intact
-<?xml version="1.0" encoding="utf-8"?><resp error="4">DEFAULT_STRING</resp>
-```
-
-The first thing to do is get a sense of the security quality of the code base through so-called [code smells](https://en.wikipedia.org/wiki/Code_smell) and anti-patterns.
-
-The first such bad code smell is the extremely liberal use of strcpy. Use of the *strcpy*() function is discouraged as there is no size parameter. Instead, the function will keep copying bytes from the source buffer into the destination until it hits a null byte. This is a common source of memory corruption vulnerabilities in cases where the source buffer is provided by the user. Hundreds of strcpy invocations exist in the codebase which are part of externally reachable and unauthenticated handler functions. In fact, in earlier firmware releases each command handler is itself responsible for enforcing authentication, rather than doing so centrally. This needlessly enlarged the pre-authentication attack surface.
-
-Next, we check for binary security mechanisms and exploit mitigations:
-
-```shell
-$ checksec sm_app
-[*] '/mnt/SM800A-4.2.4/sm_app'
-    Arch:     arm-32-little
-    RELRO:    Partial RELRO
-    Stack:    No canary found
-    NX:       NX enabled
-    PIE:      No PIE (0x10000)
-    RPATH:    b'$ORIGIN:$ORIGIN/../../sm_gp_lib/Debug/:$ORIGIN/../../sm_fu_lib/Debug/:$ORIGIN/../../sm_df_lib/Debug/:$ORIGIN/../../sm_msgqueue_lib/Debug/:$ORIGIN/../../sm_lz_lib/Debug/:$ORIGIN/../../sm_tm_lib/Debug/:$ORIGIN/../../sm_up_lib/Debug/:$ORIGIN/../../sm_history_lib/Debug/:$ORIGIN/../../sm_thread_lib/Debug/:$ORIGIN/../../sm_fs_lib/Debug/:$ORIGIN/../../sm_at_lib/Debug/:$ORIGIN/../../sm_mutex_lib/Debug/:$ORIGIN/../../sm_lg_lib/Debug/:$ORIGIN/../../sm_system_lib/Debug/:$ORIGIN/../../sm_os_lib/Debug/:$ORIGIN/../../sm_ip_lib/Debug/:$ORIGIN/../../sm_dl_lib/Debug/:$ORIGIN/../../sm_db_lib/Debug/:$ORIGIN/../../sm_tk_lib/Debug/:$ORIGIN/../../sm_session_lib/Debug/'
-```
-
-It turns out that [stack canaries](https://en.wikipedia.org/wiki/Buffer_overflow_protection#Canaries) and [*Position Independent Executable*](https://en.wikipedia.org/wiki/Position-independent_code#Position-independent_executables) (PIE) are not enabled. These mechanisms have been staples of memory corruption defenses for decades and enabling these features on a modern Linux distribution running on a modern ARM application processor requires no engineering work at all. It is simply a matter of setting the right compiler flag. Enabling these features became the default in Ubuntu 17.10 and there is simply no excuse for a network-facing application that was last updated a few months ago to not have them enabled.
-
-What's more worrying, is that multiple Danfoss business units (including Climate Solutions & Electronic Controllers) received IEC 62443-4-1 certification for Secure Product Development Lifecycle and this is [prominently advertised](https://www.danfoss.com/en/service-and-support/fix-and-troubleshooting/cooling-installer-hub/electronic-controllers-services-faqs/cybersecurity-best-practices/) as such. In addition, Danfoss explicitly mentions IEC 62443-4-2 is a guiding framework for designing cybersecurity requirements and implementing improvements. **Asset owners, system integrators, and those responsible for procurement should realize exactly how little such certifications can say about the actual security posture of a product**.
-
-The initial impression of Danfoss' security posture, combined with the nature of the historical vulnerabilities, is a worrying one. But to see just how bad this pans out, let's see what can be found in no more than one hour of manually digging through the latest version of the firmware.
-
-We could develop a harness and subject the binary to coverage-guided fuzzing. However, that constitutes serious effort, and with the impression of the code quality that I have, I'm going to simply look into random places where strcpy() is invoked instead. One of the first functions inspected turns out to be an unauthenticated endpoint for a CGI handler having a bunch of parsing logic and strcpy invocations.
-
-While we will not disclose the exact endpoint affected, we will show it can be trivially exploited with a oneliner:
-
-```shell
-$ curl -v -d <redacted>"$(echo 'print("A"*768)'|python)"<redacted> http://127.0.0.1:8080/<redacted>.cgi
-*   Trying 127.0.0.1:8080...
-* Connected to 127.0.0.1 (127.0.0.1) port 8080
-> POST /<redacted>.cgi HTTP/1.1
-> Host: 127.0.0.1:8080
-> User-Agent: curl/8.5.0
-> Accept: */*
-> Content-Length: 888
-> Content-Type: application/x-www-form-urlencoded
->
-```
-
-This gives us a nice SEGFAULT showing we can probably hijack program control flow:
-
-![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30c873a54a4370371d1ab_segfault.png)
-
-There's at least 5 different vulnerabilities of this kind in just the little bit of code i inspected.
-
-Of course, remotely triggering a crash is bad in itself, but being able to leverage the buffer overflow to obtain remote code execution is much worse. Any reasonably experienced exploit developer will agree exploiting straightforward stack-based buffer overflows on ARM Linux without exploit mitigations is very straightforward. And if they don't, there's probably a frontier or open weight model out there willing to help them agree.
-
-The only challenge (if you can call it that) left to overcome is the fact that `strcpy()` stops copying bytes when it hits a null byte. If we wish to gain remote code execution, we inevitably need to write several addresses containing null bytes. Thus, we need to somehow overcome this inherent limitation of `strcpy() `and while we won't share our approach for now [it's not exactly rocket surgery](https://www.youtube.com/watch?v=THNPmhBl-8I). Also, the exploited application runs as root (because of course it does).
-
-Since we have to be vague due to coordinated disclosure being ongoing, let's at least show the result of our 100% artisanal, hand-crafted, AI and gluten free exploit in action as PoC:
-
-The exploit demonstrated above was targeted at version 3.3.0, but the bugs are present in the latest version of the firmware as well (5.3.2 at the time of writing).
-
-In later firmware versions, however, the concepts of *session control* and *security levels* were introduced by Danfoss [[1](https://www.danfoss.com/en/service-and-support/downloads/dcs/adap-kool-software/ak-sm-800a/#tab-security),[2](https://assets.danfoss.com/documents/latest/590332/BC337629891709en-001101.pdf)]. According to Danfoss, session control is an *authentication rules engine* for the various remote interfaces (StoreView Browser, StoreView Web, Alsense, and 3rd party XML). This session control mechanism replaces the individual handler-level authentication enforcement mentioned above.
-
-Session control has three security levels: backward compatible, permissive, and strict. Starting at 4.0 security level *strict* was set as the default which:
-
-This AKSM-auth header mechanism historically held a base64 encoded username and password as the authentication key but now needs to include a session token derived from initial authentication [[3](https://assets.danfoss.com/documents/latest/353954/AQ456722659855en-000201.pdf)]. At the *strict *security level, virtually all the web-accessible attack surface is fenced off from unauthenticated users (including the bug that was used in the exploit above) which is why enabling this security control was included in CERT-FR's [official mitigations](https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-012/).
-
-Unfortunately, it **t****urns out the session control mechanism also has at least one trivial pre-authentication memory corruption vulnerability.**
-
-The way this is implemented is through a separate binary: *sm_fcgi_app*. It acts as a *Web Application Firewall* (WAF) in the sense that it passes through all commands to NGINX if it believes that the user is authenticated. If not, then the only command allowed to be passed through is the *getauth *command, which is used to authenticate.
-
-At first glance i spotted a potential for [parser differential attacks](https://about.gitlab.com/blog/how-to-exploit-parser-differentials/) on *sm_fcgi_app *which might open the entire attack surface to unauthenticated users, but decided to investigate a quicker route to success. It turns out there's another simple *strcpy *based pre-authentication memory corruption:
-
-```shell
-$ curl -k -v -d <redacted> -A "$(echo 'print("A"*1536)'|python)" https://127.0.0.1:3443/<redacted>.cgi
-...
-> POST /<redacted>.cgi HTTP/1.1
-> Host: 127.0.0.1:3443
-> User-Agent: AAAAAAAAAAAAAAAA...AAAAAAAAAAAAAAAA
-> Accept: */*
-> Content-Length: 41
-> Content-Type: application/x-www-form-urlencoded
-> 
-```
-
-Running this against the latest AK-SM800A firmware with *strict *session control enabled produces a SEGFAULT which, with some additional effort, can be turned into yet another pre-authentication RCE. It goes without saying that *sm_fcgi_app *does not have stack canaries and PIE enabled either. I think we're done here, we've seen enough.
-
-![](https://cdn.prod.website-files.com/64a2900ed5e9bb672af9b2ed/6af30f993fbe198375fbc8dc_segfault3.png)
-
-The last thing we want to figure out is exactly how bad this can get.
-
-It's one thing to initiate long defrost cycles and spoil tens of millions of food *once*, but the typical response of defenders is to factory reset affected controllers, rotate credentials, apply patches, set *strict *session control mode, and possibly wall off the controllers from internet exposure. But any controllers that are hit continue to do their job in production.
-
-Now, imagine an attacker who manages to persist on such controllers. They don't just trigger the initial payload but they leave a little implant that survives a factory reset and firmware update. With OS level access, this isn't too hard on typical Unix-like devices as shown in the [SALTWATER / SEASPY](https://cloud.google.com/blog/topics/threat-intelligence/barracuda-esg-exploited-globally) malware for Barracuda devices, [FIRESTARTER](https://www.cisa.gov/news-events/analysis-reports/ar26-113a) malware for Cisco devices, and [Sonicwall malware](https://arstechnica.com/information-technology/2023/03/malware-infecting-widely-used-security-appliance-survives-firmware-updates/) all which survive firmware updates.
-
-In such a scenario, an attacker could either retain remote access or leave a time-triggered payload for a 2nd (or 3rd...) strike - increasing damage by spoiling new batches of food. Alternatively, attackers could simply wipe flash memory and/or push a malformed firmware update to brick the controllers and render them permanently inoperable - requiring costly and time-consuming replacement similar to the TTPs deployed during the [December 2025 attack on the Polish electric grid](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1).
-
-Both approaches seem feasible against the AK-SM800A controllers since they do not make use of the i.MX6's secure boot features as evidenced by checking some of the responsible One-Time Programmable (OTP) fuse registers.
-
-1. **Full device take-over**: Through remote code execution, an unauthenticated attacker can remotely run arbitrary code at the operating system level of the AK-SM800A controller. This would allow the attacker to change parameters or initiate unwanted actions (such as defrosting operations) while hiding their activities from any system logs. In addition, the lack of secure boot functionality would allow an attacker with RCE to persistently implant controllers to maintain access or have it trigger a secondary payload at a later point in time. Without deep introspection and forensics capabilities, determining whether a device is implanted at the firmware level (**even after a factory reset**) is infeasible.
-
-2. **Equipment damage (bricking)**: Due to the lack of secure boot, an attacker with RCE could push malicious firmware that simply renders the device inoperable and irrecoverable without specialized hardware intervention (e.g. by wiping flash memory and/or causing an infinite boot loop). Such a '[bricking](https://en.wikipedia.org/wiki/Brick_(electronics))' or wiper approach would require full device replacement. The dangers of such a scenario to OT equipment in particular and adversary deployment of such TTPs have been highlighted in previous blogposts by Midnight Blue [[1](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-part-1),[2](https://www.midnightblue.nl/blog/have-you-tried-turning-it-off-and-on-again-on-bricking-ot-devices-part-2)]. **This could potentially lead to freezers being unavailable for days or longer while controllers get replaced**.
-
-## Mitigations
-
-In light of all of the above, we consider piecemeal patching or enabling of *strict *session control to be a misallocation of scarce security and personnel resources since they have minimal security ROI against such a fundamentally flawed codebase missing basic exploit mitigations and yielding multiple pre-auth RCEs with an hour's casual glance.
+1. I wrote the catalog in my own words, for two reasons: to gain a deeper understanding of the kinds of test flake patterns we’ve seen in our codebase, and to not subject my peers to AI slop prose. [↩︎](https://sunshowers.io/posts/glue-work/#fnref:1)
+2. Did you know that OKR and KPI mean [slightly different things](https://www.atlassian.com/blog/teamwork/okr-vs-kpi)? Before writing this post, I did not! [↩︎](https://sunshowers.io/posts/glue-work/#fnref:2)

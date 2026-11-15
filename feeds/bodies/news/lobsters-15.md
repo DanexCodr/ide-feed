@@ -1,275 +1,602 @@
-Here is a program that, until July, never finished in Bun or Safari.
+I think everyone can agree code needs to be modular.
+Modularity lets us reason locally about our code no matter how big it grows.
+However, no one seems to agree on *how* code should be modular.
+There are a bunch of different approaches and each new language seems to bring their own spin on it.
 
-never.mjs
+Today we’re going to talk about a pretty old spin: ML Modules.
+ML here stands for Meta Language, as seen in SML and OCaml (and not machine learning).
+Despite SML first appearing in 1983, ML Modules have not caught on.
+OCaml is the sole production language you’ll find with an ML module system, and at the height of its popularity it’s niche.
 
+This is a shame because ML modules have a lot to offer.
+We’re going to talk about what ML modules are and then touch a little on why ML modules are.
+Who better after all to explain modules, than the guy who doesn’t know [what’s in a module
+**](https://thunderseethe.dev/posts/whats-in-a-module/)?  
+…On second thought, don’t answer that.  
+…I already wrote the blog post.
+
+Modules exist to make our code modular, duh, but what does that mean in practice?
+I think most programmers have some intuitive sense of modularity:
+
+- Bundle up related logic as one “thing”
+- Encapsulate invariants
+- Decouple from dependencies
+
+Most languages have a way to do this, and if they don’t, one gets created for them (looking at you JavaScript).
+
+## Modules Bundle Functions
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-bundle-functions)
+
+ML modules achieves this with, you guessed it, the Module.
+ML modules, however, are a little different from the modules we know and love.
+To explain their differences, we’ll lean on a made-up Rust-inspired syntax.
+It will start off looking a little weird and gradually, as we introduce concepts, end up looking really weird (but hopefully more familiar than SML syntax).
+We’ll start by defining a module with just functions:
+
+```rust
+mod AModule {
+  fn add(a: i32, b: i32) -> i32 {
+    a + b
+  }
+
+  fn sub(a: i32, b: i32) -> i32 {
+    a - b
+  }
+
+  // mult, div, etc...
+}
 ```
-const p = Promise.resolve(1);
-p.constructor = {
-	get [Symbol.species]() {
-		throw new Error("boom");
-	},
-};
 
-console.log("before");
-await p;
-console.log("done");
+`AModule` bundles together related arithmetic functions as one thing we can reason about.
+Each function can see every other function in the module.
+This is useful, but any language with namespaces offers this.
+
+## Modules (also) Bundle Types
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-also-bundle-types)
+
+A little more unique is that ML modules will let us put not only function definitions in modules, but also type definitions:
+
+```rust
+mod Set {
+  type Set = Vec<i32>;
+
+  fn new() -> Set {
+    vec![]
+  }
+
+  fn index_of(this: &Set, ele: &i32) -> Result<usize, usize> {
+    this.binary_search(ele)
+  }
+
+  fn insert(this: Set, ele: i32) -> Set {
+    match index_of(&ele) {
+      Ok(_) => {} // we're done the element is already present
+      Err(indx) => {
+        this.insert(indx, ele);
+      }
+    }
+    this
+  }
+
+  fn contains(this: &Set, ele: &i32) -> bool {
+    index_of(this, ele).is_ok()
+  }
+
+  fn remove(this: Set, ele: &i32) -> Set {
+    match index_of(this, ele) {
+      Err(_) => {}, // we're done the element is already removed
+      Ok(indx) => {
+        this.remove(indx)
+      }
+    }
+    this
+  }
+}
 ```
 
-Don't worry if this looks confusing. The JavaScript spec says that because the getter throws an error, then `await p` should also throw, and so the program should crash. Node.js does, but Safari 26 and Bun 1.3.14 print `'before'`, report the error, and then hang.
+Here we have a `Set` module with a `Set` type, which is a sorted `Vec<i32>`.
+Our module’s functions can refer to the type definitions much the same way they can refer to their module’s function definitions.
+Okay but that’s not that crazy, still well within the realm of Rust modules.
 
-Safari 26 fails the same way as Bun:
+## The Type of a Module is a Signature
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#the-type-of-a-module-is-a-signature)
 
-![](https://alistair.sh/_next/static/immutable/media/traffic-lights-light.076k7um4vfh1l.png)
+Not only can modules contain type definitions.
+Modules themselves have types.
+A module type is called a signature (so we don’t get it confused with “normal” types).
+The signature of our `Set` module is:
 
-Bun and Safari both embed JavaScriptCore so the behaviour is the same - the promise is never settled! It is neither fulfilled nor rejected, so it stays pending forever. This was  [WebKit bug 318399](https://bugs.webkit.org/show_bug.cgi?id=318399). I fixed it in  [WebKit/WebKit#68749](https://github.com/WebKit/WebKit/pull/68749), and the fix was only +16 lines!
+```rust
+sig FullSetSig {
+  type Set = Vec<i32>;
 
-What went wrong?
-
-## What `resolve` does
-
-Let's quickly brush up on promises.
-
-When you construct a new promise in JavaScript, the engine creates two functions,  `resolve` and `reject`, and passes them to the callback you pass to the promise constructor.
-
-new-promise.js
-
+  fn new() -> Set;
+  fn index_of(&Set, &i32) -> Result<usize, usize>;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
 ```
-new Promise((resolve, reject) => {
-	console.log("I got my resolve function!", resolve);
-	console.log("I got my reject function!", reject);
-	resolve(42);
+
+A module signature declares every definition of a module alongside its type.
+This might look similar to the way we define a trait in Rust.
+That’s because much like traits act as interfaces in Rust, signatures act as interfaces in ML Modules.
+Modules having signatures is the single most important thing to understand about ML Modules.
+All the complexity and expressiveness of modules results from them having signatures and the wonderful wacky things that enables.
+
+# Signatures Support Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#signatures-support-encapsulation)
+
+Signatures resemble the way a C/C++ implementation file conforms to its header.
+Modules, unlike `.cc` files, aren’t in a 1:1 relationship with signatures.
+Our `Set` module can conform to *any* signature that it matches.
+A module matches a signature when it defines every declaration in the signature and they agree on type.
+
+Matching a signature provides [Encapsulation
+**](https://en.wikipedia.org/wiki/Encapsulation_%28computer_programming%29), hiding internal details of our module from our public API.
+Take a look at `FullSetSig`.
+Do callers of `Set` really need to know about `index_of`?
+Encapsulation advocates shout a resounding no: `index_of` is an implementation detail of `Set.Set` being a `Vec<i32>` and not integral to our `Set` API.
+
+We can encapsulate `index_of` by matching our `Set` module to a new signature:
+
+```rust
+sig SetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  // index_of is missing.
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
+
+`SetSig` removes `index_of`, hiding the implementation detail.
+We can then ascribe our signature to our `Set` module:
+
+```rust
+mod Set : SetSig {
+    // Our module implementation stays unchanged...
+}
+```
+
+Now the rest of our code sees `Set` as `SetSig` without `index_of`.
+Importantly, our `Set` module hasn’t changed.
+`index_of` is still available inside the module.
+Ascribing the signature only changes the public view of the module, similar to a private function in Rust.
+
+A module’s definition isn’t the only place we can ascribe a signature.
+We can also make a “new” module by matching an old module to a new signature.
+Let’s say we want an `InsertOnlySet` (never you mind why I need that):
+
+```rust
+sig InsertOnlySetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+}
+```
+
+We can create that from our `Set` module purely by matching the signature:
+
+```rust
+mod InsertOnlySet: InsertOnlySetSig = Set;
+```
+
+Now `InsertOnlySet` is effectively a whole new module, despite the underlying implementation being shared with `Set`.
+This is what’s cool about modules.
+We can repurpose modules “for free” simply by giving them a different signature.
+If we want to do this in an OO language, we’d have to add a new interface in our class definitiion.
+But we can slap one of these bad boys anywhere in our codebase.
+
+## Sealed Types Seal Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#sealed-types-seal-encapsulation)
+
+Ascribing a signature to a module lets us hide implementation details, but there’s a bit of a glaring hole here.
+Sure we’ve hidden away `index_of`, but our module broadcasts to the world that `type Set` is a `Vec<i32>`!
+Set relies on our vector being kept in sorted order, but anybody is free to write a function:
+
+```rust
+fn whoops() {
+    let mut set = Set::new();
+    // teehee
+    set.extend([3, 2, 1]);
+    // 💥
+    let uh_oh = Set::insert(set, 1);
+    // Now our set is [1, 3, 2, 1]
+}
+```
+
+Nothing but a small flesh wound in our encapsulation.
+Fortunately, ML modules foresaw this problem and provided a solution using signatures.
+
+Much the same way a signature lets us hide functions, it also lets us hide types.
+ML Modules call this an abstract type.
+If we update `SetSig` to be:
+
+```rust
+sig SetSig {
+  type Set;
+
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
+
+Our signature no longer broadcasts that `type Set` is `Vec<i32>`.
+Within the `Set` module we’re free to use `type Set` as `Vec<i32>`, but everywhere outside the module `type Set` is now some unknown type.
+Because callers know nothing about our newly abstract `Set` type, all they can do is pass it to and from the methods provided by the `Set` module.
+As long as we keep our underlying `Vec<i32>` sorted within `Set`, we know no one else is able to mess with it.
+They simply don’t know enough about the type!
+
+## Module’s Version of Generics
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-version-of-generics)
+
+Our Set module is nearing perfection, but it still leaves a little to be desired: it only works for `i32`.
+Now we could of course write a new module `SetU64`, `SetString`, on and on everytime we need one, but c’mon there’s gotta be a better way.
+This isn’t Go.
+
+Generics is the go-to solution for this problem.
+Heck we’ve even used it ourselves with `Vec<i32>`.
+ML Modules, however, have a more *modular* solution.
+You can parameterize a module by another a module.
+
+Think of a parameterized module as a function that takes a module and returns another module.
+To make our `Set` accept any type and not just `i32`, we parameterize it by a module that provides the type of our Set’s elements:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T
+}) {
+  type Set = Vec<Elem.T>;
+
+  fn new() -> Set {
+    vec![]
+  }
+
+  fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+    // ...
+  }
+
+  fn insert(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+
+  fn contains(this: &Set, ele: &Elem.T) -> bool {
+    index_of(this, ele).is_ok()
+  }
+
+  fn remove(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+}
+```
+
+Our newly parameterized `Set` accepts any module that conforms to `Elem`.
+Any module can match `Elem` as long as it has at least a `T` definition.
+
+## A Teensy Problem
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#a-teensy-problem)
+
+With that our `Set` module supports any type.
+Except for one teensy detail.
+I’ve deceived you with some tactical `// ...`s.
+If we actually try to implement `index_of`, we quickly encounter a problem:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| ele ??? a)
+}
+```
+
+We don’t know how to compare `T`’s.
+Rust’s `Ord` would solve this, of course, but ML modules have modules not traits.
+`Set` doesn’t take in just a type, however, it takes in a full module.
+If we need to know how to compare `T`’s, we can just ask our `Elem` module:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T;
+  fn cmp(&T, &T) -> Ordering;
+}) {
+  // ...
+}
+```
+
+Now it’s clear how to implement `index_of`:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| Elem::cmp(ele, a))
+}
+```
+
+With our parameterized module implemented, we can create new `Set` modules by applying them to new argument modules:
+
+```rust
+mod SetU32 = Set(mod U32 {
+  type T = u32;
+  fn cmp(a: &T, b: &T) { a < b }
 });
-
-// In V8 this logs:
-//		I got my resolve function! ƒ () { [native code] }
-//		I got my reject function! ƒ () { [native code] }
 ```
 
-The builtin helper function `Promise.resolve(value)` does the same thing by constructing a promise and immediately calling `resolve` with the value you passed (with the exception that if `value` is a promise, and has a  `.constructor` property equal to `Promise`, it is returned as is). A simple userland implementation would look like this:
+`SetU32.Set` is a `Vec<u32>` and provides an interface that takes and returns `u32` instead of `i32`.
+We can do it again as easy as:
 
-promise-resolve.js
-
+```rust
+mod SetString = Set(mod String {
+  type T = String;
+  fn cmp(a: &T, b: &T) { /* lexographic ordering probably... */ }
+});
 ```
-function PromiseDotResolve(value) {
-	if (value instanceof Promise && value.constructor === Promise) {
-		return value;
-	}
 
-	return new Promise(resolve => resolve(value));
+Just like that, a whole new module.
+This time a set of Strings.
+I could do this all day.
+
+Because we accept a module, we can request anything a module can hold (even a whole other submodule or parameterized module!).
+The downside is that we have to specify the whole module every time.
+We *have* to specify `cmp` every time we apply our `Set` module.
+Rust traits let us write `Ord` for a type once and use it everywhere implicitly.
+
+## Include Keeps Modules Small
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#include-keeps-modules-small)
+
+In practice, we don’t actually repeat how to order our type every time we want a `Set`.
+Recall that a signature will match *any* module that provides what it needs.
+If we make a big module called `U64`:
+
+```rust
+mod U64 {
+  type T = u64;
+
+  fn cmp(a: &u64, b: &u64) { a < b }
+
+  fn add(a: u64, b: u64) -> u64 { a + b }
+  fn sub(a: u64, b: u64) -> u64 { a - b }
+  // ...
 }
 ```
 
-The same is also true for literally writing `await 42`. The engine creates a promise and immediately calls `resolve(42)`, just like  `Promise.resolve()` does, and the same exception applies.
+Then we can use that as our argument to Set:
 
-Many folks think of a promise as a value that can end in two ways - fulfilled with a value or rejected with a reason. This is a reasonable approximation since it maps pretty closely to how using promises actually feels when writing JavaScript day-to-day. Therefore, a naive implementation of a promise might look like this:
-
-mediocre-promise.ts
-
+```rust
+mod SetU64 = Set(U64);
 ```
-type PromiseState<T> =
-	| {type: 'pending'}
-	| {type: 'resolved', value: T}
-	| {type: 'rejected', value: unknown};
 
-class MediocrePromise<T> {
-	private state: PromiseState<T> = {type: 'pending'};
-	private callbacks: Array<() => void> = []; // registered by .then()
+But hang on, we got into this whole Module business to break up our code.
+Now we’ve got to dump everything into one module just in case we need it later?
+That’s not very cash modular of us.
 
-	private resolve(value: T) {
-		this.settle({type: 'resolved', value});
-	}
+ML modules have a final feature to get us the best of both worlds: `include`.
+`include` expands a module inline within another module.
+We’re free to split up our `U64` module into various submodules: `U64Order`, `U64Arithmetic`, etc.
+Our final `U64` module only has to include these submodules:
 
-	private reject(reason: unknown) {
-		this.settle({type: 'rejected', value: reason});
-	}
+```rust
+mod U64 {
+  type T = u64;
 
-	private settle(state: PromiseState<T>) {
-		this.state = state;
-		for (const callback of this.callbacks) callback();
-	}
-
-	// For example's sake this is missing `constructor`, `then`, etc.
+  include U64Order;
+  include U64Arithmetic;
+  // ...
 }
 ```
 
-I've called it MediocrePromise. It has a pending state, a way to resolve with a value, and a way to reject with a reason. It even has a list of callbacks to run, just like a real promise! Is this a good implementation?
+Modules can be organized into logical components and then combined later to provide convenience (wow!).
+We’re free to cut up and reassemble modules at the whims’ of the wind.
+We can even apply a module and include it inline:
 
-Sadly, no. It is not a good implementation. MediocrePromise misses an important difference between how resolving and rejecting work.
+```rust
+mod ABunchOfSetForSomeReason {
+  mod SetU64 = Set(U64);
+  include SetU64;
 
-Let's start with rejections. Rejecting a promise is simple! Calling  `reject(reason)` marks the promise as rejected, with `reason` as the rejected value. Excellent! MediocrePromise implements rejections correctly!
-
-Resolving is more complex. Calling `resolve(value)` does *not* store  `value` straight away. First, it checks whether `value` has a  `.then()` method. If it **doesn't** (e.g. a number, a string, an object without one, ..) the promise is **fulfilled** with `value` and we are done. Otherwise, if it **does** have a `.then()` method, `value` is treated like *another* promise. Our original promise is *not* settled yet and instead, `resolve` passes itself and the reject function to  `value.then(resolve, reject)`. Whichever of those functions  `value.then()` *eventually* calls is what settles the promise. Sorry, that was a mouthful. There's a diagram in a sec to explain. Bear with me.
-
-The `resolve` function  [is defined in the spec](https://tc39.es/ecma262/#sec-promise-resolve-functions)  as the **resolve procedure**. To find out whether `value` has a  `.then`, it reads `value.then`, and a property read can run a getter, and a getter can throw (just like in our program at the beginning). So, looking for a `.then()` method on some value can result in three possible outcomes:
-
-Our MediocrePromise is missing the extra check and additional behaviour!
-
-This asymmetry exists because  ***a failure is not a pending operation***. When something fails, you **already** have the reason in your code (presumably an error)! So you can call `reject(reason)` immediately. This is not the case for the happy path of resolving, where a useful value might arrive later:
-
-```
-reject(new Error("bad request")); // the reason is right here
-resolve(response.json());         // the body is still arriving
+  mod SetString = Set(String);
+  include SetString;
+}
 ```
 
-This is why the extra behaviour is only implemented in `resolve`.
+Why do you need one module that’s a bunch of overlapping Sets?
+I don’t know!
+I’m not your supervisor.
+Either way, modules will happily let you do it.
 
-In the path where `value.then` *is* a function, the spec considers  `value` to be a **thenable**. Promises are thenables, since they have a  `.then()` method. Any other object with a `.then()` method is a thenable too. Thenables work everywhere a promise would.
+## Putting It All Together
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#putting-it-all-together)
 
-Simply put: a **thenable** is any value with a `.then()` method. Therefore, any promise is also a thenable.
+We’ve covered the basics of modules.
+Let’s take a look at a more involved examples to get a sense of what modules can offer.
+We’re gonna use modules to assemble a little build executor.
+Out build step will be a parameterized module:
 
-For example:
-
-```
-// `thenable` is not a promise!
-const thenable = {
-	// resolve(thenable) calls this with the outer promise's resolve and reject
-	then(resolve, _reject) {
-		resolve(42);
-	},
-};
-
-// resolve() called with the thenable
-await new Promise(resolve => resolve(thenable)); // 42
-
-// a .then callback returning the thenable
-await Promise.resolve().then(() => thenable); // 42
-
-// await on the thenable directly
-await thenable; // 42
+```rust
+mod BuildStep(sig Env {
+  mod Cache: CacheSig;
+  mod Runner: RunnerSig;
+}) {
+  // ...
+}
 ```
 
-The spec calls the aforementioned process of passing the resolve/reject functions to a thenable's `.then()` **assimilation**. But, perhaps a friendlier word is  **flattening**: instead of holding the inner thenable as its value, the outer promise waits for it, so two layers become one.
+Where `CacheSig` represents a cache of build steps and `RunnerSig` represents running some command:
 
-Lastly, note that "resolved" isn't a real promise state. MediocrePromise also got this one wrong! Once `resolve` has been called the promise is **locked-in** to an outcome, but it can absolutely still be pending:
-
-```
-const inner = new Promise(() => {}); // never settles
-const outer = new Promise(resolve => resolve(inner));
-```
-
-Here, `outer` was resolved, but it stays pending forever because  `inner` never settles. MediocrePromise's `resolved` state was actually the spec's definition of fulfilled.
-
-## Railways
-
-Let's go down a quick tangent.
-
-Scott Wlaschin's article  [Railway Oriented Programming](https://fsharpforfunandprofit.com/rop/)  draws fallible code as a piece of track with one input and two outputs: a success track and a failure track.
-
-Once a request hits the failure track it stays there, skipping every later step, until something at the end deals with the result. Wlaschin calls joining two pieces of the railway *binding* - not to be confused with JavaScript's `fn.bind()`. Rust folks might know binding as `and_then`, or maybe the `?` operator. They all mean the same thing: run the next bit of code only if the previous bit succeeded, otherwise pass the failure straight through.
-
-Look at how the last step is skipped because the `update()` failed:
-
-You can think of each piece of the railway as a function returning a `Result`. In statically typed programming languages, implementations of a `Result` type will usually accept **two type parameters**, the success type and the failure type, one per track. For example in Rust you could imagine a `validate` function's signature being:
-
-```
-fn validate(request: Request) -> Result<Request, ValidationError>
-```
-
-To chain `validate()` with the other steps using `and_then`, every piece has to fail with the *same* type. So instead of `ValidationError`, lets make each function return an `AppError`, an enum of every way a request can fail:
-
-```
-enum AppError {
-	Validation(ValidationError),
-	Database(DatabaseError),
-	Network(NetworkError),
+```rust
+sig CacheSig {
+  fn is_cached(inputs: &[String], output: &Path) -> bool;
+  fn store(inputes: &[String], output: &Path);
 }
 
-fn validate(request: Request) -> Result<Request, AppError> { /* ... */ }
-fn update(request: Request) -> Result<Record, AppError> { /* ... */ }
-fn send(record: Record) -> Result<Receipt, AppError> { /* ... */ }
-
-validate(request).and_then(update).and_then(send) // Result<Receipt, AppError>
+sig RunnerSig {
+  fn run(inputs: &[String], output: &Path);
+}
 ```
 
-Promises in JavaScript kinda look a lot like this! There's a fulfilled track and a rejected track, and `.then(onFulfilled, onRejected)` is a switch between them.
+For brevity we’ll keep these pretty simple, but hopefully you can imagine how these might expand.
+We can then implement `BuildSet` in terms of our input modules:
 
-## The job
+```rust
+mod BuildSet(...) {
+  fn run_cached(inputs: &[String], output: &Path) {
+    if !Env::Cache::is_cached(inputs, output) {
+      Env::Runner::run(inputs, output);
+      Env::Cache::store(inputs, output);
+    }
+  }
 
-As a reminder, here's that **resolve procedure** diagram again:
+  fn compile(src: String) -> String {
+    let obj = PathBuf::from(format!("{src}.o"));
+    run_cached(&[src], &obj);
+    obj.display().to_string()
+  }
 
-In the path on the right, where `value.then` is a function, the engine does not call the `.then()` immediately. Instead, the engine queues a job, which we call a microtask. The spec names this particular job a  [`NewPromiseResolveThenableJob`](https://tc39.es/ecma262/#sec-newpromiseresolvethenablejob)  and it is defined as follows:
-
-> a. Let *resolvingFunctions* be CreateResolvingFunctions(*promiseToResolve*).
->
-> b. Let *thenCallResult* be Completion(HostCallJobCallback(*then*,  *thenable*, « *resolvingFunctions*.[[Resolve]], *resolvingFunctions*.[[Reject]] »)).
->
-> c. If *thenCallResult* is an abrupt completion, return ? Call(*resolvingFunctions*.[[Reject]], undefined, « *thenCallResult*.[[Value]] »).
-
-Sorry, that's another mouthful. Let me translate:
-
-1. Create a new resolve/reject function pair
-2. Call the thenable's .then(resolve, reject) function (with the newly created resolve/reject functions)
-3. If calling .then() throws, reject the promise with whatever was thrown
-
-Remember that `.then` is simply whatever is defined on the thenable. If the thenable is a real promise, the method being called is the one on the prototype,  `Promise.prototype.then`.
-
-Here's the important line of our program again:
-
-```
-p.constructor = {
-	get [Symbol.species]() {
-		throw new Error("boom");
-	},
-};
+  fn build(srcs: &[String], output: &Path) {
+    let objs: Vec<String> = srcs.iter().map(compile).collect();
+    run_cached(objs, output)
+  }
+}
 ```
 
-We only changed `p` here, so the global `Promise` is untouched.
+Our `build` functions takes a list of source files, compiles them, and then links the object files into a final binary.
+How does `run` tell when it’s compiling and when it’s linking?
+Don’t worry about it!
+Now that we’ve set that up we can toggle the functionality of our build by controlling what modules we pass to `BuildStep`.
+For a real build, we’ll want something like an in-memory cache:
 
-Remember the exception from earlier? When you `await` a real promise whose  `constructor` is `Promise` (which, by default, is true for all promises), the engine takes a shortcut and waits on that promise directly. We just replaced `p.constructor`, meaning we cannot take the shortcut. Instead, the engine treats `p` in `await p` like any other value: it makes a fresh promise and calls `resolve(p)` on it.
+```rust
+mod MemCache {
+  // Pretend this works without locking for multithreading
+  static ENTRIES: Vec<(Vec<String>, PathBuf)> = vec![];
 
-`p` has a `.then()`, so it is a thenable, so `resolve(p)`  calls `p.then(resolve, reject)`. Now, we saw our program crash, so  `Promise.prototype.then` must somehow eventually be accessing  `p.constructor[Symbol.species]`, right? But why on earth would  `.then()` care about a `Symbol.species` getter?
+  fn is_cached(inputs: &[String], output: &Path) {
+    ENTRIES.iter().any(|(cached_inputs, cached_outputs)| {
+      inputs == cached_inputs && output == cached_outputs
+    })
+  }
 
-It cares because `.then()` returns a *new* promise, which is what lets you chain `.then().then()`. If you subclass `Promise`, you'd expect  `.then()` to return an instance of your subclass, not a plain  `Promise`:
-
-```
-class MyPromise extends Promise {}
-MyPromise.resolve(1).then(x => x) instanceof MyPromise; // true
-```
-
-So before a real promise's `then` does anything with its arguments, it works out which constructor to build the *new* promise with. It does this by first reading  `this.constructor` and then by reading `constructor[Symbol.species]`  (the spec calls this step  [`SpeciesConstructor`](https://tc39.es/ecma262/#sec-speciesconstructor)). Both are ordinary property reads and, as we found out, property reads can run getters, and getters can throw!
-
-This is precisely what our original program at the beginning does! We made  `p.constructor` have a `Symbol.species` getter that throws, so  `p.then(resolve, reject)` throws during the species lookup, before it has stored `resolve` and `reject` as callbacks. Recall that Step C of  `NewPromiseResolveThenableJob` makes the engine reject the promise if calling  `.then()` throws - this is the spec-correct behaviour we saw in V8/Node.js.
-
-So why do Safari and Bun hang instead of rejecting the promise?
-
-JavaScriptCore had a fast path for the most-common case where the thenable is a real, normal promise, and that fast path did the species lookup *first*, only creating the resolve/reject functions afterwards. When the lookup threw (like how our program does), the resolving functions didn't exist yet, so there was nothing to reject with. The exception escaped the job entirely (that's the red `Error: boom` in the inspector) and our promise stayed pending forever.
-
-Here's that as a railway:
-
-Our train had effectively derailed! We didn't even get the chance to finish our journey on either track and so the original program hung because the train never even arrived at the station!
-
-Luckily, the fix is simple, and might already be obvious to you! We must create our resolve/reject functions before calling `.then()`, so that we actually have the ability to reject the promise if calling `.then()` throws. Creating the resolving functions is just an allocation and allocations can't throw, and once the functions exist, the existing error handling rejects the promise just like any other failure would.
-
-With the two steps in the right order, Bun 1.4 and Safari 27 now behave like the spec, and like Node:
-
-Bug fixed! But it left me with a question. Earlier I drew promises as railways, with a fulfilled track and a rejected track. However, we just watched the engine put an error on the rejected track that no line of our code ever passed to `reject()`. So does that mean we can't actually ever know what's on that track?
-
-## So is a promise a railway?
-
-In TypeScript, the `Promise<T>` interface has only one type parameter and offers no way for a developer to express ways in which the promise might reject:
-
-```
-declare const p: Promise<number>;
+  fn store(inputs: &[String], output: &Path) {
+    ENTRIES.push((inputs.to_vec(), PathBuf::from(output)))
+  }
+}
 ```
 
-TypeScript users have asked for a `Promise<T, E>` to exist since 2015 - see this issue:  [microsoft/TypeScript#6283](https://github.com/microsoft/TypeScript/issues/6283)! Ron Buckton, who used to work on TypeScript at Microsoft, closed this issue, stating:
+Next we’ll want something that runs our commands:
 
-> we cannot guarantee the correct type of the exception at design time.
+```rust
+mod ShellRunner {
+  fn run(inputs: &[String], output: &Path) {
+    let cmd = // magically pick between `cc` and `lld`;
+    let output = format!("-o {}", output.display());
+    Command::new(cmd)
+      .args(inputs)
+      .args(output)
+      .output()
+      .expect("All our commands work first try");
+  }
+}
+```
 
-Which we have now learnt is true! Earlier, we saw the runtime reject a promise with  `boom`: `p.then()` read a `Symbol.species` getter that threw the error, and Step C of the job rejected the promise with it, very far away from any userland `reject()` call! If the spec itself can put values on the reject track, then even code that only ever calls `reject()` with one type cannot be given an `E`. The failure track has to be `any` (okay, yes, it could technically be `unknown`, but adoption and backwards compatibility are also important things for a project of TypeScript's scope and size to care about!).
+We can then assemble our build system via:
 
-Here's that represented as a railway:
+```rust
+mod CachedBuild = BuildStep(mod Env {
+  mod Cache = MemCache;
+  mod Runner = ShellRunner;
+});
+```
 
-Look - we have no control over that failure track! This means we *can* draw promises as railways but it's a bit less useful than a real result type, like Rust's.
+But maybe we don’t always want caching.
+Maybe we want a build that always reruns actions for local testing.
+We simply swap out our cache module:
 
-## What did we learn?
+```rust
+mod NoCache {
+  fn is_cached(inputs: &[String], outputs: &Path) -> bool {
+    false
+  }
 
-Let's summarise!
+  fn store(inputs: &[String], outputs: &Path) {
+    // nothing to do here
+  }
+}
 
-- resolve(value) does not immediately fulfil a promise. It reads value.then first, and if that is a function the promise follows value instead.
-- "Resolved" is not a state because a resolved promise can still be pending.
-- Reading value.then, and reading constructor[Symbol.species] inside Promise.prototype.then, are ordinary property reads. Getters can throw, and the spec puts whatever they throw on the rejected track.
-- JavaScriptCore did the species read before creating the resolving functions, so when it threw there was nothing to reject with. The fix (WebKit/WebKit#68749) was to create the functions first and call them when the getter throws.
-- A promise has the shape of a railway, but its failure track can't be labelled, because the engine shares it with you. That is why TypeScript's Promise<T> has no E.
+mod LocalBuild = BuildStep(mod Env {
+  mod Cache = NoCache;
+  mod Runner = ShellRunner;
+});
+```
 
-If you read all the way to the end, then I am glad you are as excited about promises as I am. Thank you very much for reading!
+Our build system works first try.
+We wouldn’t write the code bad, of course, but just in case we might want to test it.
+A `FakeRunner` will let us do just that:
+
+```rust
+mod FakeRunner() {
+  static COMMANDS: Vec<(Vec<String>, PathBuf)> = vec![];
+
+  fn run(inputs: &[String], output: &Path) {
+    COMMANDS.push((inputs.to_vec(), PathBuf::from(output)));
+  }
+
+  // A test only helper.
+  fn contains_command(inputs: &[String], output: &Path) -> bool {
+    // ...
+  }
+}
+```
+
+Because `FakeRunner` is a parameterize module, we can create a new module (and a new empty `COMMANDS`) every time we apply it:
+
+```rust
+mod Tests {
+  mod TestRunner = FakeRunner();
+  mod TestBuild = BuildStep(mod Env {
+    mod Cache = MemCache;
+    mod Runner = TestRunner
+  });
+
+  // Write tests against TestBuild using `TestRunner::contains_command`...
+}
+```
+
+If we want to check that caching works we can extend our tests with a new fake runner and compare their commands:
+
+```rust
+mod Tests {
+  // TestBuild setup...
+
+  mod UncachedTestRunner = FakeRunner();
+  mod UncachedTestBuild = BuildStep(mod Env {
+    mod Cache = NoCache;
+    mod Runner = UncachedTestRunner;
+  })
+
+  // Compare the results of `TestRunner::contains_command` and `UncachedTestRunner::contains_command`...
+}
+```
+
+This isn’t earth shattering stuff.
+If we wanted to replicate this setup in an OO language, however, we would need runtime objects or, heaven forbid, a DI framework.
+Here we can do it all by wiring up modules statically.
+
+Hopefully this has helped you see what’s cool about modules.
+Module’s power lies in their signatures.
+What would require a newtype wrapper or a visibility change in other languages can be accomplished by simply changing the signature a module is viewed at.
+
+With abstract types, this allows for constructing webs of encapsulation where each piece knows precisely what it needs to about its neighbor and no more.
+Signatures act as this encapsulation boundary, freeing us to reason about our code modularly.
+As long as our module conforms to the expected signature we can contort and refactor it to our wildest whims and trust that it will continue to integrate into our system as expected.
+ML Modules are neat and I think they deserve more love and exploration in programming languages.

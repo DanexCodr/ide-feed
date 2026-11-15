@@ -1,191 +1,275 @@
-The Rust team is happy to announce a new version of Rust, 1.100.0. Rust is a programming language empowering everyone to build reliable and efficient software.
+Here is a program that, until July, never finished in Bun or Safari.
 
-If you have a previous version of Rust installed via `rustup`, you can get 1.100.0 with:
-
-```
-$ rustup update stable
-```
-
-If you don't have it already, you can get [`rustup`](https://www.rust-lang.org/install.html) from the appropriate page on our website, and check out the [detailed release notes for 1.100.0](https://doc.rust-lang.org/stable/releases.html#version-11000-2026-11-12).
-
-If you'd like to help us out by testing future releases, you might consider updating locally to use the beta channel (`rustup default beta`) or the nightly channel (`rustup default nightly`). Please [report](https://github.com/rust-lang/rust/issues/new/choose) any bugs you might come across!
-
-## What's in 1.100.0 stable
-
-### Never type
-
-After 10 years and 5 failed stabilization attempts, **the [never type](https://doc.rust-lang.org/stable/std/primitive.never.html) is finally stable**! This also completes the [project goal](https://goals.rust-lang.org/2026/stabilize-never-type.html) for this work.
-
-The never type, spelled `!` in code, is the canonical uninhabited type. It represents the type of diverging computations – computations which never resolve to any value – where any code that follows is unreachable. Expressions that terminate control flow, such as `return`, `break`, and [`std::process::exit`](https://doc.rust-lang.org/stable/std/process/fn.exit.html), also have the type `!`.
-
-Since having a value of the never type is impossible, Rust permits a never-to-any coercion, allowing to turn `!` into any other type (this is what distinguishes it from any other uninhabited types). This can be used, for example, to not return a value from one of the branches of a `match` or an `if`:
+never.mjs
 
 ```
-fn mrrrow(option: Option<u32>) {
-    let value = match option {
-        // `x` has type `u32`
-        Some(x) => x,
-        // `return` has type `!`, which is then coerced to `u32`,
-        // allowing the `match` to pass type checking.
-        None => return,
-    };
-    // ...
+const p = Promise.resolve(1);
+p.constructor = {
+	get [Symbol.species]() {
+		throw new Error("boom");
+	},
+};
+
+console.log("before");
+await p;
+console.log("done");
+```
+
+Don't worry if this looks confusing. The JavaScript spec says that because the getter throws an error, then `await p` should also throw, and so the program should crash. Node.js does, but Safari 26 and Bun 1.3.14 print `'before'`, report the error, and then hang.
+
+Safari 26 fails the same way as Bun:
+
+![](https://alistair.sh/_next/static/immutable/media/traffic-lights-light.076k7um4vfh1l.png)
+
+Bun and Safari both embed JavaScriptCore so the behaviour is the same - the promise is never settled! It is neither fulfilled nor rejected, so it stays pending forever. This was  [WebKit bug 318399](https://bugs.webkit.org/show_bug.cgi?id=318399). I fixed it in  [WebKit/WebKit#68749](https://github.com/WebKit/WebKit/pull/68749), and the fix was only +16 lines!
+
+What went wrong?
+
+## What `resolve` does
+
+Let's quickly brush up on promises.
+
+When you construct a new promise in JavaScript, the engine creates two functions,  `resolve` and `reject`, and passes them to the callback you pass to the promise constructor.
+
+new-promise.js
+
+```
+new Promise((resolve, reject) => {
+	console.log("I got my resolve function!", resolve);
+	console.log("I got my reject function!", reject);
+	resolve(42);
+});
+
+// In V8 this logs:
+//		I got my resolve function! ƒ () { [native code] }
+//		I got my reject function! ƒ () { [native code] }
+```
+
+The builtin helper function `Promise.resolve(value)` does the same thing by constructing a promise and immediately calling `resolve` with the value you passed (with the exception that if `value` is a promise, and has a  `.constructor` property equal to `Promise`, it is returned as is). A simple userland implementation would look like this:
+
+promise-resolve.js
+
+```
+function PromiseDotResolve(value) {
+	if (value instanceof Promise && value.constructor === Promise) {
+		return value;
+	}
+
+	return new Promise(resolve => resolve(value));
 }
 ```
 
-While the never type could already be used and observed this way, and even named in the return type of functions (`-> !`), this release allows naming the never type anywhere:
+The same is also true for literally writing `await 42`. The engine creates a promise and immediately calls `resolve(42)`, just like  `Promise.resolve()` does, and the same exception applies.
+
+Many folks think of a promise as a value that can end in two ways - fulfilled with a value or rejected with a reason. This is a reasonable approximation since it maps pretty closely to how using promises actually feels when writing JavaScript day-to-day. Therefore, a naive implementation of a promise might look like this:
+
+mediocre-promise.ts
 
 ```
-fn infallible_unwrap<T>(res: Result<T, !>) -> T {
-    // ^^ writing `Result<_, !>` was not allowed before
-    let Ok(v) = res;
-    v
+type PromiseState<T> =
+	| {type: 'pending'}
+	| {type: 'resolved', value: T}
+	| {type: 'rejected', value: unknown};
+
+class MediocrePromise<T> {
+	private state: PromiseState<T> = {type: 'pending'};
+	private callbacks: Array<() => void> = []; // registered by .then()
+
+	private resolve(value: T) {
+		this.settle({type: 'resolved', value});
+	}
+
+	private reject(reason: unknown) {
+		this.settle({type: 'rejected', value: reason});
+	}
+
+	private settle(state: PromiseState<T>) {
+		this.state = state;
+		for (const callback of this.callbacks) callback();
+	}
+
+	// For example's sake this is missing `constructor`, `then`, etc.
 }
 ```
 
-Additionally this release changes [`Infallible`](https://doc.rust-lang.org/stable/std/convert/type.Infallible.html) to be an alias to the never type. That makes all old APIs that used `Infallible` be compatible with using `!`. This was the plan ever since the introduction of `Infallible` and is one of the reasons why the never type stabilization was so hard (waffle gave a [talk](https://www.youtube.com/watch?v=3jM4cnEVrLc) about some of the troubles of the stabilization).
+I've called it MediocrePromise. It has a pending state, a way to resolve with a value, and a way to reject with a reason. It even has a list of callbacks to run, just like a real promise! Is this a good implementation?
 
-Unfortunately, to allow changing `Infallible`, we had to introduce a breaking change. This release changes the "never type fallback" from `()` to `!` in editions **before** 2024 (i.e. 2015, 2018, and 2021), similarly to what has [already been done in edition 2024](https://doc.rust-lang.org/edition-guide/rust-2024/never-type-fallback.html). This should largely be unnoticeable, but can affect code in some rare cases (for example when ignoring a result of a function returning a generic parameter). Note that this change might also make the compiler detect more code as unreachable.
+Sadly, no. It is not a good implementation. MediocrePromise misses an important difference between how resolving and rejecting work.
 
-We tried to minimize the impact of this breaking change as much as possible, by providing future compatibility warnings far in advance and releasing fixes to public crates that have been broken by this. If a dependency is failing due to issues with the never type, consider updating it, as a fix might have already been released for it.
+Let's start with rejections. Rejecting a promise is simple! Calling  `reject(reason)` marks the promise as rejected, with `reason` as the rejected value. Excellent! MediocrePromise implements rejections correctly!
 
-### `Allocator` API
+Resolving is more complex. Calling `resolve(value)` does *not* store  `value` straight away. First, it checks whether `value` has a  `.then()` method. If it **doesn't** (e.g. a number, a string, an object without one, ..) the promise is **fulfilled** with `value` and we are done. Otherwise, if it **does** have a `.then()` method, `value` is treated like *another* promise. Our original promise is *not* settled yet and instead, `resolve` passes itself and the reject function to  `value.then(resolve, reject)`. Whichever of those functions  `value.then()` *eventually* calls is what settles the promise. Sorry, that was a mouthful. There's a diagram in a sec to explain. Bear with me.
 
-This release brings about the stabilization of the core parts of [`allocator_api`](https://github.com/rust-lang/rust/issues/32838), enabling library authors to define custom allocators that can be used together with certain standard library types - currently `Vec` and `Box`. These are enabled through the newly-stabilized [`Allocator`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) trait.
+The `resolve` function  [is defined in the spec](https://tc39.es/ecma262/#sec-promise-resolve-functions)  as the **resolve procedure**. To find out whether `value` has a  `.then`, it reads `value.then`, and a property read can run a getter, and a getter can throw (just like in our program at the beginning). So, looking for a `.then()` method on some value can result in three possible outcomes:
 
-This is the foundation of the [Allocators 1.0 project goal](https://goals.rust-lang.org/2026/allocators-1.0.html). A lot remains to be done still, including expanding the API surface usable with custom allocators and stabilizing their use on more collections and pointer types; with the core trait and design out of the way though, expect to see more being stabilized soon!
+Our MediocrePromise is missing the extra check and additional behaviour!
 
-### `DropGuard`: run a closure on every exit path
-
-The `Drop` trait in Rust makes it possible to run code when a variable goes out of scope, regardless of whether we `return`, `?`, or panic. `Drop` being a part of types means that [in Rust you never have to close a socket](https://blog.skylight.io/rust-means-never-having-to-close-a-socket/).
-
-Implementing `Drop` can however feel a little inconvenient when all you want is to run some code unconditionally when a function exits. This is why we’re introducing `core::mem::DropGuard`: a new helper type that runs a closure when dropped.
-
-`DropGuard` takes two arguments: a variable and a closure. It implements `Deref` and `DerefMut` so you can keep working with the variable as normal. But when dropped it runs the closure and consumes the variable.
-
-`DropGuard` also implements a `dismiss` associated function<sup>[[1]](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/#fn-not_a_method)</sup> which returns the variable from the guard without running the destructor. This makes it possible to quickly implement all-or-nothing transaction-like APIs with a rollback. Here is an example implementing a parser which uses a guard to roll back mutations in case of failure:
+This asymmetry exists because  ***a failure is not a pending operation***. When something fails, you **already** have the reason in your code (presumably an error)! So you can call `reject(reason)` immediately. This is not the case for the happy path of resolving, where a useful value might arrive later:
 
 ```
-use std::mem::DropGuard;
-use std::num::ParseIntError;
+reject(new Error("bad request")); // the reason is right here
+resolve(response.json());         // the body is still arriving
+```
 
-/// Attempt to parse all `strings` and push them into `nums`.
-/// If parsing any of them fails, `nums` remains unchanged.
-fn parse_all(nums: &mut Vec<u32>, strings: &[&str]) -> Result<(), ParseIntError> {
-    let len = nums.len();
-    let mut nums = DropGuard::new(nums, move |nums| {
-        nums.truncate(len);    // ← 1. Reset the vec on failure
-    });
+This is why the extra behaviour is only implemented in `resolve`.
 
-    for s in strings {
-        nums.push(s.parse()?); // ← 2. If `?` returns an error, roll back
-    }
+In the path where `value.then` *is* a function, the spec considers  `value` to be a **thenable**. Promises are thenables, since they have a  `.then()` method. Any other object with a `.then()` method is a thenable too. Thenables work everywhere a promise would.
 
-    DropGuard::dismiss(nums);  // ← 3. Parsing successful, dismiss the guard
-    Ok(())
+Simply put: a **thenable** is any value with a `.then()` method. Therefore, any promise is also a thenable.
+
+For example:
+
+```
+// `thenable` is not a promise!
+const thenable = {
+	// resolve(thenable) calls this with the outer promise's resolve and reject
+	then(resolve, _reject) {
+		resolve(42);
+	},
+};
+
+// resolve() called with the thenable
+await new Promise(resolve => resolve(thenable)); // 42
+
+// a .then callback returning the thenable
+await Promise.resolve().then(() => thenable); // 42
+
+// await on the thenable directly
+await thenable; // 42
+```
+
+The spec calls the aforementioned process of passing the resolve/reject functions to a thenable's `.then()` **assimilation**. But, perhaps a friendlier word is  **flattening**: instead of holding the inner thenable as its value, the outer promise waits for it, so two layers become one.
+
+Lastly, note that "resolved" isn't a real promise state. MediocrePromise also got this one wrong! Once `resolve` has been called the promise is **locked-in** to an outcome, but it can absolutely still be pending:
+
+```
+const inner = new Promise(() => {}); // never settles
+const outer = new Promise(resolve => resolve(inner));
+```
+
+Here, `outer` was resolved, but it stays pending forever because  `inner` never settles. MediocrePromise's `resolved` state was actually the spec's definition of fulfilled.
+
+## Railways
+
+Let's go down a quick tangent.
+
+Scott Wlaschin's article  [Railway Oriented Programming](https://fsharpforfunandprofit.com/rop/)  draws fallible code as a piece of track with one input and two outputs: a success track and a failure track.
+
+Once a request hits the failure track it stays there, skipping every later step, until something at the end deals with the result. Wlaschin calls joining two pieces of the railway *binding* - not to be confused with JavaScript's `fn.bind()`. Rust folks might know binding as `and_then`, or maybe the `?` operator. They all mean the same thing: run the next bit of code only if the previous bit succeeded, otherwise pass the failure straight through.
+
+Look at how the last step is skipped because the `update()` failed:
+
+You can think of each piece of the railway as a function returning a `Result`. In statically typed programming languages, implementations of a `Result` type will usually accept **two type parameters**, the success type and the failure type, one per track. For example in Rust you could imagine a `validate` function's signature being:
+
+```
+fn validate(request: Request) -> Result<Request, ValidationError>
+```
+
+To chain `validate()` with the other steps using `and_then`, every piece has to fail with the *same* type. So instead of `ValidationError`, lets make each function return an `AppError`, an enum of every way a request can fail:
+
+```
+enum AppError {
+	Validation(ValidationError),
+	Database(DatabaseError),
+	Network(NetworkError),
 }
+
+fn validate(request: Request) -> Result<Request, AppError> { /* ... */ }
+fn update(request: Request) -> Result<Record, AppError> { /* ... */ }
+fn send(record: Record) -> Result<Receipt, AppError> { /* ... */ }
+
+validate(request).and_then(update).and_then(send) // Result<Receipt, AppError>
 ```
 
-### Conjuring zero-sized types
+Promises in JavaScript kinda look a lot like this! There's a fulfilled track and a rejected track, and `.then(onFulfilled, onRejected)` is a switch between them.
 
-As Rust's [unsafe code guidelines](https://github.com/rust-lang/unsafe-code-guidelines) are still being decided, it became clear that it would be very useful to decide what exactly it means to create zero-sized types in an unsafe way, and what we should recommend for people to do this.
+## The job
 
-This question is answered in Rust 1.100 with a single function: [`std::mem::conjure_zst`](https://doc.rust-lang.org/stable/std/mem/fn.conjure_zst.html).
+As a reminder, here's that **resolve procedure** diagram again:
 
-Instead of transmuting `()`, `MaybeUninit::uninit().assume_init()`, or various other incantations, this is the dedicated way to create a value of a zero-sized type when you know that doing so is safe to do. If an inhabited type has no size, we know exactly what value it must be: nothing.
+In the path on the right, where `value.then` is a function, the engine does not call the `.then()` immediately. Instead, the engine queues a job, which we call a microtask. The spec names this particular job a  [`NewPromiseResolveThenableJob`](https://tc39.es/ecma262/#sec-newpromiseresolvethenablejob)  and it is defined as follows:
 
-Of course, APIs often rely on the inability to construct such types for safety, and that's why this function is unsafe. For example, PyO3's [`Python<'py>`](https://docs.rs/pyo3/0.30.1/pyo3/marker/struct.Python.html) is a zero-sized marker token that represents holding the Python GIL (global interpreter lock). Many of Python's APIs require holding this lock to be safe, but conjuring a token from thin air would allow safe PyO3 calls to violate that precondition.
+> a. Let *resolvingFunctions* be CreateResolvingFunctions(*promiseToResolve*).
+>
+> b. Let *thenCallResult* be Completion(HostCallJobCallback(*then*,  *thenable*, « *resolvingFunctions*.[[Resolve]], *resolvingFunctions*.[[Reject]] »)).
+>
+> c. If *thenCallResult* is an abrupt completion, return ? Call(*resolvingFunctions*.[[Reject]], undefined, « *thenCallResult*.[[Value]] »).
 
-### Reporting unused dependencies in Cargo
+Sorry, that's another mouthful. Let me translate:
 
-Building dependencies that are no longer used or are only needed for specific platforms can slow down builds.
-Rustc has the `unused_crate_dependencies` lint for this but it has false positives when used with Cargo because dependencies may be shared between multiple build targets, e.g. `dependencies.tracing-subscriber` being available for every `bin` in a package when only some may use it.
+1. Create a new resolve/reject function pair
+2. Call the thenable's .then(resolve, reject) function (with the newly created resolve/reject functions)
+3. If calling .then() throws, reject the promise with whatever was thrown
 
-Cargo now reports unused dependencies to users, e.g.
+Remember that `.then` is simply whatever is defined on the thenable. If the thenable is a real promise, the method being called is the one on the prototype,  `Promise.prototype.then`.
 
-```
-warning: unused dependency `tracing-subscriber`
-  --> Cargo.toml:23:1
-   |
-23 | tracing-subscriber.workspace = true
-   | ^^^^^^^^^^^^^^^^^^
-   |
-   = note: `cargo::unused_dependencies` is set to `warn` by default
-help: consider removing the dependency on `tracing-subscriber`
-```
-
-A limitation of this warning is that it will only appear when building every build target that may use an entry in a dependencies table.
-For example, running `cargo check --bin foo` won't show warnings for unused `[dependencies]` because another `bin` may be present that uses them.
-No warning will be shown for unused `dev-dependencies` because there isn't a way to ensure every development build target is built.
-
-This warning is being introduced as part of a new linting system for Cargo, controlled by the `[lints.cargo]` table in `Cargo.toml`, completing this [project goal](https://goals.rust-lang.org/2026/cargo-lints.html). See also the [other lints that have been introduced](https://doc.rust-lang.org/stable/cargo/reference/lints.html).
-
-### Reducing Cargo cache collisions
-
-Cargo builds all libraries and binaries in the `build-dir` and then uplifts final artifacts to the `target-dir`. At this time, these share a common parent directory.
-Different build configurations, like `--features`, can lead to different copies of libraries and binaries in the `build-dir`.
-These copies are kept unique by a build-configuration hash but this hash was not always applied due to platform constraints.
-This can lead to extra rebuilds, missed rebuilds, confusion over what binaries or libraries are used, and so on.
-These problems get exacerbated when sharing a `build-dir` across git worktrees.
-
-The `build-dir` now consistently applies the build-configuration hash to all content by organizing the directories around their build step, rather than their file type, and moving the hash from a file's name to the parent directory.
-
-This work began with the [build directory layout project goal](https://goals.rust-lang.org/2025h2/cargo-build-dir-layout.html) in 2025, and its stabilization is a milestone toward a new [project goal](https://goals.rust-lang.org/2026/cargo-cross-workspace-cache.html), unblocking future improvements such as cache garbage collection, cross-workspace cache de-duplication, cross-workspace caching, and fine grain locking.
-
-We previously published a [call for testing](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/) for the changes that are now taking effect.
-While this is an internal change, this may break build processes and tests that had workarounds for missing or incomplete features.
-In some cases, the workaround is no longer needed.
-See [cargo#17287](https://github.com/rust-lang/cargo/issues/17287) for possible solutions and to add any new use cases.
-
-### Cargo min-publish-age a.k.a. dependency cooldowns
-
-Malicious versions of packages are often caught within hours or days after being published, by either automated scanners or by the community.
-Rust 1.100 stabilizes Cargo's min-publish-age aware dependency resolution, which lets you wait for that window before it picks up newly published versions.
-This practice is also known as dependency cooldowns.
-
-You can opt in via [`.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html#registryglobal-min-publish-age):
+Here's the important line of our program again:
 
 ```
-[registry]
-global-min-publish-age = "3 days"
+p.constructor = {
+	get [Symbol.species]() {
+		throw new Error("boom");
+	},
+};
 ```
 
-When selecting versions, Cargo now skips any version published more recently than that, and tells you what it held back:
+We only changed `p` here, so the global `Promise` is untouched.
+
+Remember the exception from earlier? When you `await` a real promise whose  `constructor` is `Promise` (which, by default, is true for all promises), the engine takes a shortcut and waits on that promise directly. We just replaced `p.constructor`, meaning we cannot take the shortcut. Instead, the engine treats `p` in `await p` like any other value: it makes a fresh promise and calls `resolve(p)` on it.
+
+`p` has a `.then()`, so it is a thenable, so `resolve(p)`  calls `p.then(resolve, reject)`. Now, we saw our program crash, so  `Promise.prototype.then` must somehow eventually be accessing  `p.constructor[Symbol.species]`, right? But why on earth would  `.then()` care about a `Symbol.species` getter?
+
+It cares because `.then()` returns a *new* promise, which is what lets you chain `.then().then()`. If you subclass `Promise`, you'd expect  `.then()` to return an instance of your subclass, not a plain  `Promise`:
 
 ```
-$ cargo update
-    Updating crates.io index
-     Locking 2 packages to highest compatible version as of min-publish-age
-      Adding cc v1.11.0 (available: v1.18.0, published 3 hours ago)
-      Adding clap 4.6.7 (available: 4.6.9, published 2 days ago)
+class MyPromise extends Promise {}
+MyPromise.resolve(1).then(x => x) instanceof MyPromise; // true
 ```
 
-When a new version is needed right away, you can override the check for a single update:
+So before a real promise's `then` does anything with its arguments, it works out which constructor to build the *new* promise with. It does this by first reading  `this.constructor` and then by reading `constructor[Symbol.species]`  (the spec calls this step  [`SpeciesConstructor`](https://tc39.es/ecma262/#sec-speciesconstructor)). Both are ordinary property reads and, as we found out, property reads can run getters, and getters can throw!
+
+This is precisely what our original program at the beginning does! We made  `p.constructor` have a `Symbol.species` getter that throws, so  `p.then(resolve, reject)` throws during the species lookup, before it has stored `resolve` and `reject` as callbacks. Recall that Step C of  `NewPromiseResolveThenableJob` makes the engine reject the promise if calling  `.then()` throws - this is the spec-correct behaviour we saw in V8/Node.js.
+
+So why do Safari and Bun hang instead of rejecting the promise?
+
+JavaScriptCore had a fast path for the most-common case where the thenable is a real, normal promise, and that fast path did the species lookup *first*, only creating the resolve/reject functions afterwards. When the lookup threw (like how our program does), the resolving functions didn't exist yet, so there was nothing to reject with. The exception escaped the job entirely (that's the red `Error: boom` in the inspector) and our promise stayed pending forever.
+
+Here's that as a railway:
+
+Our train had effectively derailed! We didn't even get the chance to finish our journey on either track and so the original program hung because the train never even arrived at the station!
+
+Luckily, the fix is simple, and might already be obvious to you! We must create our resolve/reject functions before calling `.then()`, so that we actually have the ability to reject the promise if calling `.then()` throws. Creating the resolving functions is just an allocation and allocations can't throw, and once the functions exist, the existing error handling rejects the promise just like any other failure would.
+
+With the two steps in the right order, Bun 1.4 and Safari 27 now behave like the spec, and like Node:
+
+Bug fixed! But it left me with a question. Earlier I drew promises as railways, with a fulfilled track and a rejected track. However, we just watched the engine put an error on the rejected track that no line of our code ever passed to `reject()`. So does that mean we can't actually ever know what's on that track?
+
+## So is a promise a railway?
+
+In TypeScript, the `Promise<T>` interface has only one type parameter and offers no way for a developer to express ways in which the promise might reject:
 
 ```
-$ CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update clap --precise 4.6.9
-    Updating crates.io index
-    Updating clap 4.6.7 -> clap 4.6.9 (published 2 days ago, minimum age 3 days)
+declare const p: Promise<number>;
 ```
 
-The newer version will be recorded in `Cargo.lock` and kept from then on until a later `cargo update` re-resolves it.
+TypeScript users have asked for a `Promise<T, E>` to exist since 2015 - see this issue:  [microsoft/TypeScript#6283](https://github.com/microsoft/TypeScript/issues/6283)! Ron Buckton, who used to work on TypeScript at Microsoft, closed this issue, stating:
 
-A few things to keep in mind:
+> we cannot guarantee the correct type of the exception at design time.
 
-- This depends on the registry recording when each version was published. Versions without a `pubtime` field in the index are never held back.
-- `cargo install` ignores the minimum publish age, for both the installed crate and its dependencies. Pin a version with `cargo install foo@1.2.3` if needed.
-- Cooldowns reduce the risk from some supply chain attacks but are not a complete defense on their own. Please keep reviewing dependency updates as you otherwise would.
+Which we have now learnt is true! Earlier, we saw the runtime reject a promise with  `boom`: `p.then()` read a `Symbol.species` getter that threw the error, and Step C of the job rejected the promise with it, very far away from any userland `reject()` call! If the spec itself can put values on the reject track, then even code that only ever calls `reject()` with one type cannot be given an `E`. The failure track has to be `any` (okay, yes, it could technically be `unknown`, but adoption and backwards compatibility are also important things for a project of TypeScript's scope and size to care about!).
 
-Further work to protect the ecosystem is planned under the [crates.io supply chain hardening project goal](https://goals.rust-lang.org/2026/crates-io-supply-chain-hardening.html), including quarantine support and automated detection of suspicious releases.
+Here's that represented as a railway:
 
-### Stabilized APIs
+Look - we have no control over that failure track! This means we *can* draw promises as railways but it's a bit less useful than a real result type, like Rust's.
 
-### Other changes
+## What did we learn?
 
-Check out everything that changed in [Rust](https://github.com/rust-lang/rust/releases/tag/1.100.0), [Cargo](https://doc.rust-lang.org/nightly/cargo/CHANGELOG.html#cargo-1100-2026-11-12), and [Clippy](https://github.com/rust-lang/rust-clippy/blob/master/CHANGELOG.md#rust-1100).
+Let's summarise!
 
-## Contributors to 1.100.0
+- resolve(value) does not immediately fulfil a promise. It reads value.then first, and if that is a function the promise follows value instead.
+- "Resolved" is not a state because a resolved promise can still be pending.
+- Reading value.then, and reading constructor[Symbol.species] inside Promise.prototype.then, are ordinary property reads. Getters can throw, and the spec puts whatever they throw on the rejected track.
+- JavaScriptCore did the species read before creating the resolving functions, so when it threw there was nothing to reject with. The fix (WebKit/WebKit#68749) was to create the functions first and call them when the getter throws.
+- A promise has the shape of a railway, but its failure track can't be labelled, because the engine shares it with you. That is why TypeScript's Promise<T> has no E.
 
-Many people came together to create Rust 1.100.0. We couldn't have done it without all of you. [Thanks!](https://thanks.rust-lang.org/rust/1.100.0/)
-
-1. it has deliberately been chosen not to be a method to avoid name collisions with the `DerefMut`-enabled method resolution on the inner type. [↩](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/#fr-not_a_method-1)
+If you read all the way to the end, then I am glad you are as excited about promises as I am. Thank you very much for reading!

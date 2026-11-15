@@ -1,139 +1,48 @@
-I started running decoded.legal - a small English law firm, focussing
-on Internet, telecoms, and tech law - on Free software, both client and
-server side, around five years ago. I have used Free software in my
-personal life for a lot longer than that.
+I was googling the name of my website, as one does occasionally, and was surprised to see a link to one of my blog posts on `mataroa.site`. At first I figured it was just an alternate domain name for [mataroa.blog](https://mataroa.blog), but no, when you type `mataroa.site` into your browser, it shows you *my blog*. It's the only thing that's hosted there.
 
-Back in 2022, [I
-wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
+My next thought was that someone bought me a URL, but that can't be the case either: using a custom domain on mataroa requires a premium account, which I don't have. For anything but a plain redirect, I would have needed to set up the A record my end.
 
-I wrote [an
-update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
+I then realized that the version of my blog on that site doesn't have [the latest post](https://mattbee.mataroa.blog/p/morning-shower-hack-new-website-where-ive-been). The most recent update on the homepage is [my Aug 21 entry](https://mattbee.mataroa.blog/p/well-actually). When you scroll down and start clicking some of the older links, you get 404 pages. You also get a 404 if you try to post a comment, load the RSS feed or view standalone pages like the [AI statement](https://mattbee.mataroa.blog/ai).
 
-Someone asked me recently what I am doing now, and, while it is
-mostly the same, some bits have changed. So here is the 2026 update.
+Someone scraped my blog and created a website to impersonate me. They're also impersonating [mataroa](https://mataroa.blog), since using the name implies some sort of official connection.
 
-## Client-side stuff
+They're re-hosting the stolen images on their own server, and they all have a watermark. Bizarrely, the watermark is `mattbee.mataroa.blog`, my *real* URL. I assume this is to somehow make it seem legitimate, like it's an officially-sanctioned mirror, but I don't know who they think is going to care. It's not like they're stealing from a site with name recognition.
 
-I am still using Debian, with GNOME, and it works well for me.
+When you view the source of a blog post, it's identical to the rendered HTML except that there are two Cloudflare scripts at the bottom, one to obfuscate the `mailto:` link in the footer (which doesn't work<sup>[1](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#fn:1)</sup>) and one for analytics.
 
-I’m using it [on
-a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
-version, I rather like being able to fold the screen back and write on
-it to mark up documents. ([Here
-are my thoughts on the different “Active Pens” available for
-it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
+When you view the source of the index, there's a hidden link at the bottom to a Chinese `github.io` page for a website cloning tool.
 
-However, the machine itself seems to have a hardware problem with the
-Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
-I might need to replace it. And I have *no* idea what laptop I
-might get.
+I have no idea why I was targeted for impersonation. It should be obvious this isn't a high-value website.<sup>[2](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#fn:2)</sup> It's a personal blog where I write what's relevant to me, and that rarely overlaps with anything other people care about. If the subject matter didn't tip them off, it should be clear from the 0 comments on most posts that this is not an enterprise ripe for monetization.
 
-- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
-  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
-  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
-- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
-- Presentations: **reveal.js**
-  - I absolutely love this.
-  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
-  - Blogpost about reveal.js
-  - Here are some presentations I’ve given, using reveal.js
-- File manager: **Nautilus**
-  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
-- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
-- Text expansion: **espanso**
-  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
-- Browser: **Firefox** or **links**
-  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
-  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
-- Local wiki / knowledge management: **vimwiki**
-  - because I use vim so much, vimwiki was quite an obvious choice.
-  - I use this for keeping track of my professional development, and for various notes
-- Disk encryption: **LUKS**
-- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
-- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
-  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
-- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
-- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
-- Scanning: **paperless-ngx**
-- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
+If they just wanted a fake blog to scam adsense, surely a large language model would happily spew out more SEO-friendly slop than anything I have to offer. If their goal was to leech off the popularity of mataroa, why not impersonate one of the blogs with multiple front-page appearances on the orange website? Surely they have more SEO juice than me. Nothing about this makes any sense.
 
-Why so many terminal-based tools? The simple answer is that I am very
-comfortable in a terminal, and I like them. They have fewer distractions
-and, when compared with most GUI software, are just - IMHO - easier to
-use, especially when I don’t need to move my hands away from the
-keyboard. So, while I don’t use them exclusively, I use
-`mutt`, `vim`, `ikhal`,
-`ncmpcpp`, `newsboat`, `toot`,
-`links`, and various other TUIs, frequently.
+Anyway, the URL is registered with Namecheap, so I [sent them an abuse report](https://www.namecheap.com/support/knowledgebase/article.aspx/9196/5/how-and-where-can-i-file-abuse-complaints/). I have no idea if they'll act on it. They don't seem to have a good track record of giving a shit unless the content is actually hosted with them.
 
-## Server-side stuff
+It's hosted with Cloudflare, and the abuse reporting form they insist you use [straight-up doesn't work](https://www.cloudflare.com/trust-hub/reporting-abuse/). Click "Submit an abuse report" and it'll take you to a completely blank page. Very encouraging.
 
-Everything here - other than Signal - is self-hosted, and I’m mostly
-using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
-than I did.
+I'd have to dox myself to do a DMCA takedown, and I don't have the legal resources to do anything when it gets ignored. So if neither evil corporation cares to do anything, I guess I can just get fucked. I figure the best thing I can do to protect myself is document everything here. If you see a link to `mataroa.site`, it's not affiliated with me or mataroa. It seems like it isn't set up to scam people or distribute malware at the moment, but it probably will in the future. Be careful.
 
-(Again, this doesn’t list everything; just the main
-applications.)
+## Edit
 
-- Email (MTA): **postfix / dovecot**
-  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
-- File synchronisation: **Syncthing**
-  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
-- Video conferencing: **Signal**
-  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
-- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
-- Time tracking: **Kimai**
-  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
-- “Case management” / “Matter management”: **EspoCRM**
-- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
-- Vulnerability scanning: **greenbone/OpenVAS**
-- Monitoring: **Uptime Kuma**
-  - I implemented this not long after the last update. It … just works?
-- Forge / hosted git repository: **Forgejo**
-  - I use this for version tracking the website, and for a couple of template projects
-  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
-- SIEM: **Wazuh**
-- Password manager: **vaultwarden**
-- Website: it is a static site built via **mkdocs**, hosted on **apache2**
-  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
-  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
-- Blog: **BSSG**
-  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
-  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
-  - I tend to use my personal blog for posts about the more technical bits and pieces
-  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
-- Fediverse: I am using the *glitch-soc Mastodon** fork
-  - Switching from normal Mastodon to glitch-soc Mastodon was easy
-  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
-  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
-- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
-- DNS: **unbound**, with **Pi-Hole** in front of it
-  - I used to run a doh server, but I’ve stopped doing that.
-- Backups: **restic** and **rsync**
-  - Notes on restic
-- Forms: **LiberaForms**
-  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
-  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
-- Collaborative document editing: I don’t.
-  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
+The index page also has a meta tag with a verification code for `mitgo.com`, a fake-looking website with some word salad identifying it as some kind of ad/SEO scamming platform or service. Will try to investigate this further.
 
-## AI tools
+## Update Nov 14, 2026: Welp
 
-## Mobile device
+![You have been blocked from accessing abuse.cloudflare.com](https://mattbee.mataroa.blog/images/78d2a528.jpeg)
 
-I’m using a Pixel running GrapheneOS for my mobile device.
+Sorry for... checking to see if your website started working? Too many times? I guess??? 🤷‍♀️
 
-I use F-Droid as the main app store.
-
-Using Android doesn’t thrill me, especially given Google’s direction
-of travel, but at the moment - despite trying quite a lot of different
-OSs and devices, including postmarketOS and Ubuntu Touch, as well as
-SailfishOS previously - I have not found something that does what I need
-better than GrapheneOS.
-
-## Working with others
-(who don’t use FOSS tools)
-
-No change here: zero problems.
-
-Many of my clients use Microsoft’s software, or Apple’s software.
+1. Virgil — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34971): This happened to my companies website in October. The web host is who it should be reported to, if it's behind Cloudflare they will report the issue to the web host. For privacy they won't give you the IP Address but they will report it to the Host giving the Host a reference number. Contact the Host and let them know about the copyright infringement and impersonation. It doesn't matter that your site gets very little traffic, they are stealing from you! You'll need proof of this, just have Claude or ChatGPT gather this info for you. Go to this page https://www.cloudflare.com/trust-hub/abuse-approach/ and Click here to submit an abuse report button and you'll be good to go once Cloudflare informs the Host.
+2. **mattbee** — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34972): @Virgil: I don't know if you got a slop bot to write this comment for you, but if you had read the post you're responding to, you'd know that I clicked that button [and it doesn't go anywhere](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#:~:text=completely blank page).
+3. Jay — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34973): Own a small web agency and this regularly happens to us. Small client sites are scraped and mimicked for what look like temporary SEO rankings. We have not been able to figure out what the specific overarching goal is, but pretty sure it has to do with scamming/phishing, and relying on the temporary authority they get granted. Really sucks, and yes, hard to take down, because often they go down by themselves after a few days.
+4. Muhammad — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34974): why not impersonate one of the blogs with multiple front-page appearances on the orange website? You did get on the orange site by the way, that's how i found this blog today!
+5. **mattbee** — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34975): @Muhammad lol, life has a funny sense of humor. Thanks for reading!
+6. Anonymous — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34976): The cloudflare abuse reporting form does work, you probably just forgot to enable javascript again.
+7. **mattbee** — [Nov 13, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34977): @6: nope, I enabled JS on my phone and tried to load it on my work computer, freshly updated copy of Chrome and everything. Nothing. I'll try again on Firefox when I get home 🤷‍♀️
+8. Anonymous — [Nov 14, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34978): For what it's worth, NameCheap used to be pretty good about taking down malicious or fraudulent websites. I used to do cyber security as a hobby and all I would have to do to take down a malicious website hosted by namecheap was to tag them in a (pre Elon) Twitter post about the fraudulent activity and they would remove the site(s) within a few hours. It seemed that NaneCheap had turned over a new leaf and didn't like the negative attention they were getting about hosting malicious sites. Do a follow up on your blog if nanecheap does take down the imposter site.
+9. Anonymous — [Nov 14, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34979): I can't say I fully understand the motive for cloning a website, I guess eventually they the content will "fork" then they will start using it to distort facts slightly for consumption by AI. In any case, .site and other cheap domain extensions have pretty low reputation with search engines which I am guessing also extends to AI scrapers. Whoever is doing this is probably wasting their time.
+10. M — [Nov 14, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34985): You are not being targeted. I had this happen to two of my blogs which receive very little traffic. This seems to be a larger effort to clone the Web, probably for use in AI and data harvesting. They are able to somehow get around the bot protections which I had set up on one of my sites. I have considered moving to a password-protected blog to avoid future cloning :(
+11. tachalorah — [Nov 14, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34986): I smell some MMO schemes. Those people make money outta anything. There can be more to come.
+12. Anonymous — [Nov 15, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34988): So it was JS disabled that blanked the abuse page, which most of us knew it was. You could have the integrity to apologize to @Virgil for being clueless and a dick. Or not, I guess.
+13. **mattbee** — [Nov 15, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34989): @12: See comment #7. The only place I disable Javascript is my phone browser. I also tried to bring up the form on my work computer in a totally normal Chrome browser and the same thing happened. I also tried to bring it up in Firefox when I got home and the same thing happened. Only now, a day and a half later, is it finally working enough to use. The stylesheet is broken and all the SVG icons are gigantic, but it works enough to submit a report. Who the form was and wasn't working for when is irrelevant, though. The point is that Virgil suggested I do something that I said I did in the article, which demonstrates that he didn't read the article. If he did, he would've known he didn't need to suggest that.
+14. **mattbee** — [Nov 15, 2026](https://mattbee.mataroa.blog/p/someones-impersonating-this-blog/#comment-34990): @13: Actually, it still isn't. When I select an abuse type to report, it goes to another blank page. lmao

@@ -1,191 +1,139 @@
-I got a part time job writing a Lisp compiler, so I’m going to talk about that.
-
-This post might be hard to understand if you do not program. Or if you do. There’s a fair amount of background required.
-
-## There are Lisp compilers?
-
-You might be familiar with Lisp in the form of a Scheme interpreter you used for a few semesters in college. You might think things about it like “it’s so elegant, but it’s kind of impractical for day-to-day use”. You might think of it as “an interpreted language” and so don’t understand what I mean by Lisp compiler. If you don’t think these things you can probably skip to the next section.
-
-In Lisp, in contrast with some languages, the semantics are essentially built around interpretation. When you give a Lisp interpreter some code it goes through it step by step and executes it. This invites careful execution. It’s natural, for example, to expect that a program like
-
-```
-(defun foo (x) (+ x 237))
-(foo "hello world")
-```
-
-that defines an addition function and then calls it on a string, will do something nice like pop you into a debugger, rather than return garbage data.
-
-But it’s also generally slow. The interpreter has to do something on all possible input. It can’t, for instance, very well optimize FOO to accept only one numerical argument in a register, because later FOO might be called with a string.
-
-So you add a compiler. The compiler is an optimization. It takes code and returns an optimized version that tries to preserve these semantics as much as possible while being much faster. The optimized version is faster partly because it’s probably composed of machine code or JVM bytecode or something else interpretable very quickly, and partly because of higher level optimizations. For example
-
-```
-(defun foo (x) (+ x 237))
-(+ (foo 16) 93)
-(mapcar (eval) '(3 898 38))
-```
-
-here the compiler might note that FOO can only accept numbers, and when it sees a straightforward call to FOO like in the second line that gives it only numbers, it generates code that skips the “is this a number? No? Debugger time” check. An “interpreter stub” retains the whole safest behavior, and can be used in the third line if `eval` returns FOO.
-
-This strikes a good balance, for me, between speed and freedom. The optimized code isn’t any less safe, so I can still write things with abandon and watch them fail in the debugger.
-
-The downside is that the compiler has to be pretty smart to be very effective. Luckily several Lisp implementations with pretty good compilers already exist, like SBCL and CCL. Both can generate fast<sup>[1](https://bike.github.io/posts/kildall.html#fn:fast)</sup> code without too much trouble.
-
-## So what is it you’re doing
-
-I work on a new Lisp compiler called Cleavir. Cleavir is the compiler part of Dr. Robert Strandh’s project, [SICL](https://github.com/robert-strandh/SICL). SICL is intended to provide modular, reusable, clean, and more positive adjectives code to other implementations, as well as being an implementation in itself.
-
-SICL isn’t yet an implementation on its own, but Cleavir is used in another new Lisp implementation, [clasp](https://github.com/drmeister/clasp), which is Dr. Christian Schafmeister’s project.
-
-As far as I know the initial thoughts for Clasp went something like this:
-
-> <drmeister> My lab has this new system for designing artificial protein-oids. They’re made of *bis*-amino acids, which we also invented.
-
-> <DoD, etc. shadowy masters> Frikkin’ sweet.
-
-> <DoD, etc.> Sure great. Here’s an award for being a literal nanotechnologist, named after that physicist everyone likes.
-
-> <drmeister> OK so the thing is that this stuff we’re doing involves [a lot of computer work](http://dl.acm.org/citation.cfm?id=3005738).
-
-> <DoD, etc.> Because it’s the future.
-
-> <drmeister> Right, and we mostly do that in C++. But I like Lisp.
-
-> <DoD, etc.> Great. Use it. It’s got an ANSI standard. God bless America.
-
-> <drmeister> But we don’t want to lose the C++ code. Lisp can use C functions but C++ doesn’t really have any interoperability.
-
-> <DoD, etc.> So?
-
-> <drmeister> So I was thinking I’d spend several years making a new Lisp implementation that’s tight with C++ from the ground up.
-
-> <DoD, etc.> That sounds hard, and you’re a chemist.
-
-> <drmeister> So that’s a no, or…
-
-> <DoD, etc.> Here is a zillion dollars. Snap to it.
-
-It must be nice being a respectable scientist, is what I’m saying.
-
-Clasp ended up being based on Embeddable Common Lisp (ECL), so called because it’s written in C and designed to be called from C programs. ECL provides a lot of the runtime. For compilation, however, Cleavir compiles Lisp programs into its “Mid-level Intermediate Representation”, or MIR; Clasp then compiles this into LLVM-IR, which LLVM than compiles to machine code.
-
-This is pretty convoluted and presents some problems (LLVM doesn’t really seem to make itself a good target for something with an online compiler and mostly heap allocation, for one). Luckily they are not usually mine, because I mostly limit myself to Cleavir, but it’s nice to know the nature of the gnashing maw you hang over.
-
-## HIR
-
-Cleavir’s MIR, and also HIR (“High-level”), are mostly what I work with. Consider this (silly) function:
-
-```
-(defun example (x)
-  (flet ((getx () x)
-         (setx (y) (setf x y)))
-    (setx 19)
-    (print (getx))
-    (+ (getx) 331)))
-```
-
-`flet` establishes local closures, and `setf` assigns. `(example anything)` will print 19 and then return 350.
-
-In HIR, after a few transformations, the code looks like [this](https://bike.github.io/getx_setx.png). Here are the basics: white rectangles are “instructions”, and represent basic operations. Ovals and the orange rectangles are “data”. The solid black arrows indicate control flow. Red dashed arrows indicate inputs to instructions, and blue dashed arrows outputs. Functions begin with the instructions called “enter”.
-
-A few instruction explanations:
-
-- enter is the beginning of a function.
-- Create cell, Write cell, Fetch, and Read cell have to do with shared variables for closures - more on that below.
-- enclose allocates a closure. The regular inputs are (cells for) closed-over variables, while the input with the dashed pink line is the actual function code.
-- funcall calls a function, the 1 input, with the other inputs as arguments.
-- ret returns values from a function.
-
-It’s not really much different from any assembly-type language in form, other than having closures and explicitly separating input and output, but it’s more convenient to represent control flow graphically than with labels.
-
-## The algorithm
-
-A graph of operation nodes is pretty common as an intermediate representation, because it maps closely with the conception of computers as state machines. As such, some optimization techniques are well-trodden.
-
-In 1973, G. A. Kildall published his paper [“A Unified Approach to Global Program Optimization”](https://drona.csa.iisc.ernet.in/~deepakd/pav/kildall-popl73.pdf)<sup>[3](https://bike.github.io/posts/kildall.html#fn:ACM)</sup>. The title is a bit grandiose but actually pretty accurate. Kildall laid out a very general algorithm for associating optimization information of any kind with nodes in an instruction graph of this form. A few weeks ago I implemented it for Cleavir.
-
-It works like this. First, you establish some domain of optimization information. This domain can be anything you want, as long as it forms a bounded [meet-semilattice](https://en.wikipedia.org/wiki/Semilattice)<sup>[4](https://bike.github.io/posts/kildall.html#fn:English)</sup>. Elements of the domain are called “pools”. Next, you define an “optimization function” which, given an instruction node and its pool, returns another pool.
-
-The algorithm has a “work set” consisting of instructions paired with pools. The initial contents of the work set are dependent on what you’re doing, but contain at least one instruction. The algorithm returns what I’ve been calling a “dictionary”, which is an association of instructions to pools that is distinct from the work set. Initially the dictionary is empty, i.e. there are no associations.
-
-The algorithm proceeds by choosing and removing some (instruction, pool) pair from the work set. If the instruction removed has not yet been associated with a pool in the dictionary, or if the associated pool is less than or equal to (an operation established by the definition of meet) the pool from the work set, the instruction becomes associated with a new pool that is the meet of the old association and the pool from the work set. Additionally, the optimization function is called with the instruction and this new pool; the result pool is paired with all instructions immediate succeeding (or preceding, depending on what you’re doing) the instruction in the work set.
-
-But the paper describes that better. Intuitively, what happens is that if the pool in the work set for an instruction is “better” than the one for that instruction already in the dictionary, in some domain-specific sense, the instruction is reassociated with a “better” pool, and the nearby instructions are put in the work set with new information based on this instruction.
-
-## Examples
-
-Nothing makes sense when it’s put that abstractly, right? It’s not just me? I don’t know how mathematicians survive.
-
-I implemented this algorithm in a general way. The function, `kildall`, takes an argument called a “specialization” that includes all the domain-specific information for the algorithm. I have a few of these specializations.
-
-The one I just put into a usable state was escape analysis. Check out the program with `getx` and `setx` again. An interpreter, upon seeing the `flet`, would allocate closures for both functions on the heap, i.e. dynamically, with cleanup being handled by the garbage collector. But if we look at the program, we can see that the closures cannot possibly be returned from this function or otherwise appear outside a strictly delimited context - they do not “escape”. In other words, these closures could be allocated with stack discipline. This is cheaper. An interpreter isn’t smart enough to see this but a compiler ought to be able to.
-
-To analyze this with Kildall, we can have it track *uses* of values. A use causes an escape or does not; e.g. returning a value is an escape, but adding it is not. We define a pool as a map from variables to escape indicators. An indicator is *true* if the variable escapes, and *false* if it does not. Meet is a union of maps; if a variable appears in both maps, the new map’s indicator for that variable is the logical OR of the two indicators.<sup>[5](https://bike.github.io/posts/kildall.html#fn:pessimism)</sup> The bound is a map where all variables are known to escape.
-
-The optimization function does different things depending on the type of instruction. We can do a completely correct, if overly conservative, analysis with the following rules:
-
-- Inputs to a RETURN instruction escape.
-- The first input to a FUNCALL instruction - the function called - does not escape.[6](https://bike.github.io/posts/kildall.html#fn:funcall) The other arguments are assumed to escape, because we don’t know what the function does.
-- All inputs to all other instructions escape.
-
-The algorithm can then proceed in the reverse direction of control flow. [Here’s the HIR again.](https://bike.github.io/getx_setx.png) We start at the bottom return instruction, with an initial pool of the empty map. The return is not yet associated with any pool, so it takes that one, and passes on a pool up where its input, the “V”, escapes.
-
-It proceeds upwards in that way and then reaches the funcall to which GETX is input. It’s the first input, i.e. the function called, and we have not seen GETX before, so we put (GETX, false) in the next pool up. The same occurs for the other funcall with GETX, and so once we reach the top instruction, we have that GETX does not escape, and can be stack allocated.
-
-The beautiful thing here is that all we actually need to have in the code are the definition of the semilattice and the optimization function rules, and the algorithm handles all the control flow. The analysis automatically works just as well around branches and loops. The whole thing is maybe fifty lines.
-
-## Extending the analysis
-
-Stack allocating closures is nice, but what about those “cell” things? A cell is just a wrapper around a value, with a set and a get, like an ML “reference”. Closures in a language with assignment, like Lisp, have to have something like this; if `setx` just closed over the value, the assignment to x would not take in the outer function. These cells are implicit in the source code but still have to be allocated.
-
-Determining that a cell can be stack allocated is more complicated. Naïvely, you might expect that a cell doesn’t escape if every closure it’s put in doesn’t escape. This is basically true, but there’s a nesting problem. Consider:
-
-```
-(lambda (x) ((lambda () (lambda () x))))
-```
-
-This is a function of one argument, which calls a function of zero arguments, which returns a function of no arguments that returns the first function’s argument. So for example if you call this function with x=4, you get back a function that returns 4.
-
-The HIR looks [like so](https://bike.github.io/nested.png). The outer function allocates a cell for x and a closure for the middle function using it, then calls that function. The middle function fetches the same, identical cell, puts it in a new closure for the innermost function, and then returns it.
-
-If we use the Kildall specialization described above in the outer function, it will determine, correctly, that the middle closure can be stack-allocated; if used on the middle function it will determine, also correctly, that the inner closure cannot.
-
-Were we to say that a cell doesn’t escape if everything it’s closed into, the outer function analysis would find, incorrectly, that the cell can be stack allocated - because it doesn’t know anything about the inner functions.
-
-## Extending Kildall
-
-To determine whether cells can be stack allocated, we need to extend the algorithm to be aware of nested functions, which Kildall did not consider.
-
-The obvious thing to do is, when the algorithm hits an `enclose` instruction, it calls for a recursive analysis on the inner function. This analysis can determine that the fetched cell is enclosed in a closure which escapes. Another step converts this analysis into a simplified “info” structure with only the information we need, i.e. whether the cells can escape the inner function. The optimization function for the outer `enclose` then uses this information to determine that the cell escapes.
-
-On the `getx` example, it can determine in this way that the cell for `x` does *not* escape, as the functions don’t return their cells or any closures. So the `x` cell can be stack allocated there.
-
-That’s as far as I’ve actually implemented.
-
-## Future
-
-Earlier, I mentioned that arguments to a `funcall` instruction other than the function called are assumed to escape. This is because the analysis does not know anything about the function called, and so cannot assume anything. However, as long as we’re analyzing inner functions, we have a representation for the information we need, the “info” structure. Particularly, we can track whether arguments are returned from functions (which does not inhibit them being stack-allocated in the calling function), or escape more generally. Then in the funcall we can use this information to provide a better analysis.
-
-The problem is that this information effectively has to be propagated *forward* from the `enclose` to the `funcall`, i.e. in the opposite direction as this analysis. This propagation is not trivial. We could have code like
-
-```
-(lambda ()
-  (flet ((foo (x) x)
-         (bar (y) y)
-         (baz ...))
-    (funcall (if (some-condition) #'foo #'bar) #'baz)
-    nil))
-```
-
-`baz` can be stack-allocated, but knowing this requires knowing that both possibly called functions do not let their argument escape.
-
-It would be possible to tie in another Kildall specialization, type inference, to do this. Type inference propagates forward, and finds for each variable a set of values that it always contains. In the above, the implicit called-function variable always contains a function that does not let its argument escape.
-
-This implies that type inference would have to be aware of the escape analysis, and escape analysis of type inference. A principled way to compose different specializations of Kildall’s algorithm together would do it.
-
-1. Which “languages” are “faster” is an argument I don’t want to get into. But if I spend comparable amounts of effort writing a program with clang, SBCL, and CPython, the SBCL program will probably be two to ten times as slow as clang’s, and a hundred to a thousand times as fast as CPython’s. [↩](https://bike.github.io/posts/kildall.html#fnref:fast)
-2. Check out this incredible title: [“Spiroligozymes for Transesterifications: Design and Relationship of Structure to Activity”](http://pubs.acs.org/doi/abs/10.1021/ja3069648) [↩](https://bike.github.io/posts/kildall.html#fnref:spiro)
-3. [On the ACM digital library](http://dl.acm.org/citation.cfm?id=512945) [↩](https://bike.github.io/posts/kildall.html#fnref:ACM)
-4. You have a set. You have a binary operation on that set, “meet”, which takes two objects in the set as arguments and returns a third object in the set. The order of arguments to meet is not important (commutativity), and you can also rearrange groupings freely (associativity). If the two objects are the same, their meet is that same object (idempotency). There are examples later. [↩](https://bike.github.io/posts/kildall.html#fnref:English)
-5. The algorithm generally proceeds from an incorrectly optimistic initial state down to harder-to-optimize reality. [↩](https://bike.github.io/posts/kildall.html#fnref:pessimism)
-6. This is not actually true in general: We can define a function like `(labels ((foo () #'foo)) ...)` that returns itself, or worse. But in HIR, recursive functions are currently implemented by putting the function in a cell (keep reading this post for more on those) which is over by the function. Since the analysis considers being written into a cell an escape, any function that returns itself will be marked as escaping for other reasons. [↩](https://bike.github.io/posts/kildall.html#fnref:funcall)
+I started running decoded.legal - a small English law firm, focussing
+on Internet, telecoms, and tech law - on Free software, both client and
+server side, around five years ago. I have used Free software in my
+personal life for a lot longer than that.
+
+Back in 2022, [I
+wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
+
+I wrote [an
+update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
+
+Someone asked me recently what I am doing now, and, while it is
+mostly the same, some bits have changed. So here is the 2026 update.
+
+## Client-side stuff
+
+I am still using Debian, with GNOME, and it works well for me.
+
+I’m using it [on
+a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
+version, I rather like being able to fold the screen back and write on
+it to mark up documents. ([Here
+are my thoughts on the different “Active Pens” available for
+it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
+
+However, the machine itself seems to have a hardware problem with the
+Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
+I might need to replace it. And I have *no* idea what laptop I
+might get.
+
+- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
+  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
+  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
+- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
+- Presentations: **reveal.js**
+  - I absolutely love this.
+  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
+  - Blogpost about reveal.js
+  - Here are some presentations I’ve given, using reveal.js
+- File manager: **Nautilus**
+  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
+- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
+- Text expansion: **espanso**
+  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
+- Browser: **Firefox** or **links**
+  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
+  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
+- Local wiki / knowledge management: **vimwiki**
+  - because I use vim so much, vimwiki was quite an obvious choice.
+  - I use this for keeping track of my professional development, and for various notes
+- Disk encryption: **LUKS**
+- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
+- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
+  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
+- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
+- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
+- Scanning: **paperless-ngx**
+- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
+
+Why so many terminal-based tools? The simple answer is that I am very
+comfortable in a terminal, and I like them. They have fewer distractions
+and, when compared with most GUI software, are just - IMHO - easier to
+use, especially when I don’t need to move my hands away from the
+keyboard. So, while I don’t use them exclusively, I use
+`mutt`, `vim`, `ikhal`,
+`ncmpcpp`, `newsboat`, `toot`,
+`links`, and various other TUIs, frequently.
+
+## Server-side stuff
+
+Everything here - other than Signal - is self-hosted, and I’m mostly
+using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
+than I did.
+
+(Again, this doesn’t list everything; just the main
+applications.)
+
+- Email (MTA): **postfix / dovecot**
+  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
+- File synchronisation: **Syncthing**
+  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
+- Video conferencing: **Signal**
+  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
+- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
+- Time tracking: **Kimai**
+  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
+- “Case management” / “Matter management”: **EspoCRM**
+- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
+- Vulnerability scanning: **greenbone/OpenVAS**
+- Monitoring: **Uptime Kuma**
+  - I implemented this not long after the last update. It … just works?
+- Forge / hosted git repository: **Forgejo**
+  - I use this for version tracking the website, and for a couple of template projects
+  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
+- SIEM: **Wazuh**
+- Password manager: **vaultwarden**
+- Website: it is a static site built via **mkdocs**, hosted on **apache2**
+  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
+  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
+- Blog: **BSSG**
+  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
+  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
+  - I tend to use my personal blog for posts about the more technical bits and pieces
+  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
+- Fediverse: I am using the *glitch-soc Mastodon** fork
+  - Switching from normal Mastodon to glitch-soc Mastodon was easy
+  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
+  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
+- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
+- DNS: **unbound**, with **Pi-Hole** in front of it
+  - I used to run a doh server, but I’ve stopped doing that.
+- Backups: **restic** and **rsync**
+  - Notes on restic
+- Forms: **LiberaForms**
+  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
+  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
+- Collaborative document editing: I don’t.
+  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
+
+## AI tools
+
+## Mobile device
+
+I’m using a Pixel running GrapheneOS for my mobile device.
+
+I use F-Droid as the main app store.
+
+Using Android doesn’t thrill me, especially given Google’s direction
+of travel, but at the moment - despite trying quite a lot of different
+OSs and devices, including postmarketOS and Ubuntu Touch, as well as
+SailfishOS previously - I have not found something that does what I need
+better than GrapheneOS.
+
+## Working with others
+(who don’t use FOSS tools)
+
+No change here: zero problems.
+
+Many of my clients use Microsoft’s software, or Apple’s software.

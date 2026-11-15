@@ -1,602 +1,591 @@
-I think everyone can agree code needs to be modular.
-Modularity lets us reason locally about our code no matter how big it grows.
-However, no one seems to agree on *how* code should be modular.
-There are a bunch of different approaches and each new language seems to bring their own spin on it.
+Probabilistic data structures give you approximate answers to questions about the data they handle. Does the set contain a certain item? How many unique items are in the collection? Which items appear most often? Unlike deterministic structures like sets and frequency tables, the answers might not be exact, but in return, you can drastically reduce memory usage.
 
-Today we’re going to talk about a pretty old spin: ML Modules.
-ML here stands for Meta Language, as seen in SML and OCaml (and not machine learning).
-Despite SML first appearing in 1983, ML Modules have not caught on.
-OCaml is the sole production language you’ll find with an ML module system, and at the height of its popularity it’s niche.
+In this post, we'll talk about what probabilistic structures are, how they work, and what kinds of guarantees they provide. I'll also introduce [**unsure**](https://github.com/nalgeon/unsure) — a package that implements these structures in Go. It's simple (the core logic for each data structure is 100–300 LOC), fast (usually several times faster than other implementations), and has no dependencies except for the standard library.
 
-This is a shame because ML modules have a lot to offer.
-We’re going to talk about what ML modules are and then touch a little on why ML modules are.
-Who better after all to explain modules, than the guy who doesn’t know [what’s in a module
-**](https://thunderseethe.dev/posts/whats-in-a-module/)?  
-…On second thought, don’t answer that.  
-…I already wrote the blog post.
+[Bloom filter](https://antonz.org/probabilistic-data-structures/#bloom-filter) •
+[Count-min sketch](https://antonz.org/probabilistic-data-structures/#count-min-sketch) •
+[HyperLogLog](https://antonz.org/probabilistic-data-structures/#hyperloglog) •
+[T-digest](https://antonz.org/probabilistic-data-structures/#t-digest) •
+[Top-k](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
 
-Modules exist to make our code modular, duh, but what does that mean in practice?
-I think most programmers have some intuitive sense of modularity:
+## [#](https://antonz.org/probabilistic-data-structures/#bloom-filter)
+Bloom filter
 
-- Bundle up related logic as one “thing”
-- Encapsulate invariants
-- Decouple from dependencies
+A Bloom filter is a set that trades certainty for space. It can tell you that an item is *definitely not* in the set, or that it *probably is* (which might be a false positive). The filter doesn't actually store the items, so it's much more compact than a regular set.
 
-Most languages have a way to do this, and if they don’t, one gets created for them (looking at you JavaScript).
+For example, a regular set with 1,000,000 distinct 8-byte strings takes about 64 MB. A Bloom filter for the same strings, with a 1% false positive rate, uses only 1.24 MB (about 10 bits per item) — that's 50 times smaller. The size of the filter doesn't depend on the item size, so the difference gets even bigger with longer strings.
 
-## Modules Bundle Functions
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-bundle-functions)
+A Bloom filter often resides in memory and helps minimize expensive I/O operations such as disk reads or network calls. You check if an item is in the filter, and if the answer is "no", you skip the costly lookup. If the answer is "yes", you still have to perform the lookup because it might be a false positive.
 
-ML modules achieves this with, you guessed it, the Module.
-ML modules, however, are a little different from the modules we know and love.
-To explain their differences, we’ll lean on a made-up Rust-inspired syntax.
-It will start off looking a little weird and gradually, as we introduce concepts, end up looking really weird (but hopefully more familiar than SML syntax).
-We’ll start by defining a module with just functions:
+```go
+// A filter for 1000 items with a 1% false positive rate.
+filter := bloom.New(1000, 0.01)
 
-```rust
-mod AModule {
-  fn add(a: i32, b: i32) -> i32 {
-    a + b
-  }
+filter.Add([]byte("alice"))
+filter.Add([]byte("bob"))
 
-  fn sub(a: i32, b: i32) -> i32 {
-    a - b
-  }
-
-  // mult, div, etc...
-}
+filter.Contains([]byte("alice")) // true
+filter.Contains([]byte("carol")) // false (or, rarely, true)
 ```
 
-`AModule` bundles together related arithmetic functions as one thing we can reason about.
-Each function can see every other function in the module.
-This is useful, but any language with namespaces offers this.
+The filter is sized for the given number of items with a given false positive rate. You can add more, but the false positive rate will go up.
 
-## Modules (also) Bundle Types
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-also-bundle-types)
+You can add an item to a Bloom filter and check if an item is in the filter, but you cannot delete an item, count the number of items, or iterate over them.
 
-A little more unique is that ML modules will let us put not only function definitions in modules, but also type definitions:
+### How it works
 
-```rust
-mod Set {
-  type Set = Vec<i32>;
+**Bloom filter**<sup>[1](https://antonz.org/probabilistic-data-structures/#fn:1)</sup> is a large array of *m* bits, all set to zero at first. To add an item, you compute *k* hash values for it and set the k bits at those positions:
 
-  fn new() -> Set {
-    vec![]
-  }
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hk ──►│ mod m │──► i1, i2, ..., ik
+        └──────┘                       └───────┘
 
-  fn index_of(this: &Set, ele: &i32) -> Result<usize, usize> {
-    this.binary_search(ele)
-  }
-
-  fn insert(this: Set, ele: i32) -> Set {
-    match index_of(&ele) {
-      Ok(_) => {} // we're done the element is already present
-      Err(indx) => {
-        this.insert(indx, ele);
-      }
-    }
-    this
-  }
-
-  fn contains(this: &Set, ele: &i32) -> bool {
-    index_of(this, ele).is_ok()
-  }
-
-  fn remove(this: Set, ele: &i32) -> Set {
-    match index_of(this, ele) {
-      Err(_) => {}, // we're done the element is already removed
-      Ok(indx) => {
-        this.remove(indx)
-      }
-    }
-    this
-  }
-}
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  m-1
 ```
 
-Here we have a `Set` module with a `Set` type, which is a sorted `Vec<i32>`.
-Our module’s functions can refer to the type definitions much the same way they can refer to their module’s function definitions.
-Okay but that’s not that crazy, still well within the realm of Rust modules.
+To check if an item is in the filter, you compute the same k hashes and check if all k bits are set:
 
-## The Type of a Module is a Signature
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#the-type-of-a-module-is-a-signature)
+- If any of the bits is not set, the item definitely was never added.
+- If all the bits are set, the item was probably added, but it's not guaranteed (the bits could have been set by other items).
 
-Not only can modules contain type definitions.
-Modules themselves have types.
-A module type is called a signature (so we don’t get it confused with “normal” types).
-The signature of our `Set` module is:
+```text
+          i1          i2                  ik
+┌───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 1 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  all 1 → probably in the set
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-```rust
-sig FullSetSig {
-  type Set = Vec<i32>;
-
-  fn new() -> Set;
-  fn index_of(&Set, &i32) -> Result<usize, usize>;
-  fn insert(Set, i32) -> Set;
-  fn contains(&Set, &i32) -> bool;
-  fn remove(&Set, &i32) -> Set
-}
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ 1 │ 0 │ 1 │ 0 │ 0 │ 0 │ 1 │ 0 │ 1 │ 0 │ 1 │ 0 │  any 0 → definitely not
+└───┴───┴───┴───┴───┴─▲─┴───┴───┴───┴───┴───┴───┘          in the set
+                     (!)
 ```
 
-A module signature declares every definition of a module alongside its type.
-This might look similar to the way we define a trait in Rust.
-That’s because much like traits act as interfaces in Rust, signatures act as interfaces in ML Modules.
-Modules having signatures is the single most important thing to understand about ML Modules.
-All the complexity and expressiveness of modules results from them having signatures and the wonderful wacky things that enables.
+The k bits are randomly distributed throughout the entire array. When the filter is larger than the CPU cache, each bit access could result in a cache miss, so a lookup may wait on memory k times.
 
-# Signatures Support Encapsulation
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#signatures-support-encapsulation)
+**Unsure** uses a blocked Bloom filter<sup>[2](https://antonz.org/probabilistic-data-structures/#fn:2)</sup>. The bit array is divided into 512-bit blocks, each matching the size of a CPU cache line. When you add or check an item, it is hashed once: part of the hash selects a block, and the rest selects k bits within that block. Each add or check only accesses one cache line, so the filter stays fast even when it's very large.
 
-Signatures resemble the way a C/C++ implementation file conforms to its header.
-Modules, unlike `.cc` files, aren’t in a 1:1 relationship with signatures.
-Our `Set` module can conform to *any* signature that it matches.
-A module matches a signature when it defines every declaration in the signature and they agree on type.
+```text
+        ┌──────┐         ┌──► high 32 bits ──► block
+item ──►│ hash │──► h ───┤                   ┌─────────┐
+        └──────┘         └──► low 32 bits ──►│ × salts │──► i1, i2, ..., ik
+                                             └─────────┘
 
-Matching a signature provides [Encapsulation
-**](https://en.wikipedia.org/wiki/Encapsulation_%28computer_programming%29), hiding internal details of our module from our public API.
-Take a look at `FullSetSig`.
-Do callers of `Set` really need to know about `index_of`?
-Encapsulation advocates shout a resounding no: `index_of` is an implementation detail of `Set.Set` being a `Vec<i32>` and not integral to our `Set` API.
-
-We can encapsulate `index_of` by matching our `Set` module to a new signature:
-
-```rust
-sig SetSig {
-  type Set = Vec<i32>;
-
-  fn new() -> Set;
-  // index_of is missing.
-  fn insert(Set, i32) -> Set;
-  fn contains(&Set, &i32) -> bool;
-  fn remove(&Set, &i32) -> Set
-}
+          block
+┌───────┬───▼───┬───────┬───────┬───────┬───────┐
+│   0   │   1   │   2   │   3   │  ...  │  n-1  │
+└───────┴───────┴───────┴───────┴───────┴───────┘
+        │       │
+┌───────┘       └───────────────────────────────┐
+│         i1          i2                  ik    │
+├───┬───┬─▼─┬───┬───┬─▼─┬───┬───┬───┬───┬─▼─┬───┤
+│ 0 │ 0 │ 1 │ 0 │ 0 │ 1 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  0   1   2                                  511
 ```
 
-`SetSig` removes `index_of`, hiding the implementation detail.
-We can then ascribe our signature to our `Set` module:
+In a blocked Bloom filter, some blocks end up with more items than others, which increases the false positive rate. To make up for this, the filter needs to be a bit larger. Compared to a standard Bloom filter, it uses about 3% more memory at a 1% false positive rate, 8% more at 0.1%, and 15% more at 0.01%.
 
-```rust
-mod Set : SetSig {
-    // Our module implementation stays unchanged...
-}
+The filter uses the local *wyhash*<sup>[3](https://antonz.org/probabilistic-data-structures/#fn:3)</sup> implementation for hashing. It performs roughly the same as *xxh3*<sup>[4](https://antonz.org/probabilistic-data-structures/#fn:4)</sup> but has a much simpler implementation, without SIMD or assembly.
+
+### Benchmarks
+
+| Operation | Items | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- | --- |
+| Add | 10K | **9** | 37 | 17 |
+|  | 1M | **10** | 36 | 19 |
+|  | 50M | **38** | 170 | 63 |
+| Contains, hit | 10K | **8** | 32 | 16 |
+|  | 1M | **9** | 32 | 18 |
+|  | 50M | **34** | 129 | 60 |
+| Contains, miss | 10K | **8** | 41 | 27 |
+|  | 1M | **9** | 48 | 33 |
+|  | 50M | **34** | 113 | 60 |
+
+Memory, bits per item at 10M items (lower is better):
+
+| False positive rate | unsure | bits-and-blooms | gloom |
+| --- | --- | --- | --- |
+| 10% | 4.84 | **4.80** | 5.39 |
+| 1% | 9.90 | **9.59** | 10.79 |
+| 0.1% | 15.49 | **14.38** | 16.18 |
+
+*Unsure* is about 4× faster than *bits-and-blooms* and 2× faster than *gloom*, using 1–8% more memory than *bits-and-blooms* and 4–10% less than *gloom*.
+
+## [#](https://antonz.org/probabilistic-data-structures/#count-min-sketch)
+Count-min sketch
+
+A count-min sketch is a frequency table that trades accuracy for space. It tells you approximately how many times each item has appeared. The estimate is *never less* than the actual count, but it can be *higher*. The sketch doesn't actually store the items, so it's much more compact than a regular map of per-item counts.
+
+For example, a regular map counting 1,000,000 distinct 8-byte strings takes about 64 MB. A count-min sketch for the same strings, with estimates within 0.01% of the total count (with 99% probability), uses only 0.55 MB — that's 116 times smaller. The size of the sketch doesn't depend on the number of distinct items or their size, only on the accuracy you choose. So the difference gets even bigger with more or longer strings.
+
+A count-min sketch is useful when you want to track how many times an item shows up in a large stream of events. It's often used to check if something has happened a certain number of times, like rate-limiting an IP after X requests or sending an alert after an error happens Y times. A sketch can also help decide if a key is worth keeping in the cache given how often it was requested.
+
+```go
+// Estimates within 0.1% of the total count, with 99% probability.
+sketch := countmin.New(0.001, 0.01)
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.AddN([]byte("alice"), 2)
+
+sketch.Count([]byte("alice")) // 3 (or, rarely, more)
+sketch.Count([]byte("bob"))   // 1 (or, rarely, more)
+sketch.Count([]byte("carol")) // 0 (or, rarely, more)
+sketch.Total()                // 4
 ```
 
-Now the rest of our code sees `Set` as `SetSig` without `index_of`.
-Importantly, our `Set` module hasn’t changed.
-`index_of` is still available inside the module.
-Ascribing the signature only changes the public view of the module, similar to a private function in Rust.
+The sketch uses two settings: epsilon *ε* and delta *δ*. If the actual count for any given item is X and the total of all counts is N, then the estimated count for this item will usually be between X and X+ε·N. However, rarely (with a probability of δ) the estimate could be even higher.
 
-A module’s definition isn’t the only place we can ascribe a signature.
-We can also make a “new” module by matching an old module to a new signature.
-Let’s say we want an `InsertOnlySet` (never you mind why I need that):
+For example, if ε is 0.001, δ is 0.01, and N is 1 million, then the estimate could be off by up to 1,000 (ε·N) with at least 99% probability (1−δ), and by more than 1,000 with at most 1% probability (δ).
 
-```rust
-sig InsertOnlySetSig {
-  type Set = Vec<i32>;
+The counting error in a sketch depends on the total of all counts, not on each individual item. Therefore, frequent items are estimated more or less accurately relative to their count, but rare items are not — the absolute error is too high for them.
 
-  fn new() -> Set;
-  fn insert(Set, i32) -> Set;
-}
+You can increase the per-item counter in a sketch and get the estimated count for an item, but you cannot decrease a counter or iterate over the items.
+
+### How it works
+
+**Count-min sketch**<sup>[8](https://antonz.org/probabilistic-data-structures/#fn:8)</sup> is a table of counters with *d* rows and *w* columns, all starting at zero. Each row uses its own hash function that maps an item to one of the w counters. To add an item, you increment its counter in each row:
+
+```text
+        ┌──────┐                       ┌───────┐
+item ──►│ hash │──► h1, h2, ..., hd ──►│ mod w │──► i1, i2, ..., id
+        └──────┘                       └───────┘
+
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 5
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 6
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+                 i1              i2      id
 ```
 
-We can create that from our `Set` module purely by matching the signature:
+To estimate an item's count, you take the smallest value from its d counters:
 
-```rust
-mod InsertOnlySet: InsertOnlySetSig = Set;
+- Other items might hash to the same counter, so each counter value is ≥ true count.
+- The smallest counter is the one with the fewest collisions, so it's the best estimate.
+
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5   min = 3
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-Now `InsertOnlySet` is effectively a whole new module, despite the underlying implementation being shared with `Set`.
-This is what’s cool about modules.
-We can repurpose modules “for free” simply by giving them a different signature.
-If we want to do this in an OO language, we’d have to add a new interface in our class definitiion.
-But we can slap one of these bad boys anywhere in our codebase.
+With w = e/ε columns, each counter's error is at most ε·N, with probability at least 1 − 1/e. If you use d = ln(1/δ) rows, the chance that all d of the item's counters exceed its true count by more than ε·N is ≤ δ.
 
-## Sealed Types Seal Encapsulation
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#sealed-types-seal-encapsulation)
+**Unsure** uses a *conservative update*. When you add n to an item, it first finds the current estimate E (the smallest counter), then increases only the counters that are below E+n, leaving the larger ones unchanged. This keeps the same accuracy guarantee, but the actual error is about 2× lower. The tradeoff is that counts can't be decreased.
 
-Ascribing a signature to a module lets us hide implementation details, but there’s a bit of a glaring hole here.
-Sure we’ve hidden away `index_of`, but our module broadcasts to the world that `type Set` is a `Vec<i32>`!
-Set relies on our vector being kept in sorted order, but anybody is free to write a function:
-
-```rust
-fn whoops() {
-    let mut set = Set::new();
-    // teehee
-    set.extend([3, 2, 1]);
-    // 💥
-    let uh_oh = Set::insert(set, 1);
-    // Now our set is [1, 3, 2, 1]
-}
+```text
+       ┌───┬───┬─▼─┬───┬───┬───┬───┬───┬───┬───┐
+row 1  │ 0 │ 2 │ 4 │ 0 │ 1 │ 0 │ 0 │ 3 │ 0 │ 1 │  4 → 4
+       ├───┼───┼───┼───┼───┼───┼─▼─┼───┼───┼───┤
+row 2  │ 1 │ 0 │ 0 │ 0 │ 2 │ 0 │ 3 │ 0 │ 1 │ 0 │  3 → 4
+       ├───┼───┼───┼───┼───┼───┼───┼───┼─▼─┼───┤
+row d  │ 0 │ 1 │ 0 │ 2 │ 0 │ 0 │ 1 │ 0 │ 5 │ 0 │  5 → 5
+       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-Nothing but a small flesh wound in our encapsulation.
-Fortunately, ML modules foresaw this problem and provided a solution using signatures.
+Counters are 32-bit instead of the usual 64-bit, so the sketch uses 2× less memory. The item is hashed once, and each row gets its own position from that hash by salting it (multiplying by a random per-row constant).
 
-Much the same way a signature lets us hide functions, it also lets us hide types.
-ML Modules call this an abstract type.
-If we update `SetSig` to be:
-
-```rust
-sig SetSig {
-  type Set;
-
-  fn new() -> Set;
-  fn insert(Set, i32) -> Set;
-  fn contains(&Set, &i32) -> bool;
-  fn remove(&Set, &i32) -> Set
-}
+```text
+        ┌──────┐         ┌─────────┐
+item ──►│ hash │──► h ──►│ × salts │──► i1, i2, ..., id
+        └──────┘         └─────────┘
 ```
 
-Our signature no longer broadcasts that `type Set` is `Vec<i32>`.
-Within the `Set` module we’re free to use `type Set` as `Vec<i32>`, but everywhere outside the module `type Set` is now some unknown type.
-Because callers know nothing about our newly abstract `Set` type, all they can do is pass it to and from the methods provided by the `Set` module.
-As long as we keep our underlying `Vec<i32>` sorted within `Set`, we know no one else is able to mess with it.
-They simply don’t know enough about the type!
+The sketch uses *wyhash* for hashing.
 
-## Module’s Version of Generics
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-version-of-generics)
+### Benchmarks
 
-Our Set module is nearing perfection, but it still leaves a little to be desired: it only works for `i32`.
-Now we could of course write a new module `SetU64`, `SetString`, on and on everytime we need one, but c’mon there’s gotta be a better way.
-This isn’t Go.
+Here's an excerpt from the full benchmarks<sup>[9](https://antonz.org/probabilistic-data-structures/#fn:9)</sup>, comparing *unsure* to *BoomFilters*<sup>[10](https://antonz.org/probabilistic-data-structures/#fn:10)</sup> (a classic count-min sketch with 64-bit counters) (ns/op, lower is better):
 
-Generics is the go-to solution for this problem.
-Heck we’ve even used it ourselves with `Vec<i32>`.
-ML Modules, however, have a more *modular* solution.
-You can parameterize a module by another a module.
+| Operation | ε | Size (unsure) | unsure | BoomFilters |
+| --- | --- | --- | --- | --- |
+| Add | 0.001 | 55 KB | **13** | 19 |
+|  | 0.00001 | 5.4 MB | **17** | 32 |
+|  | 0.000001 | 54 MB | **81** | 98 |
+| Count | 0.001 | 55 KB | **9** | 51 |
+|  | 0.00001 | 5.4 MB | **14** | 64 |
+|  | 0.000001 | 54 MB | **52** | 139 |
 
-Think of a parameterized module as a function that takes a module and returns another module.
-To make our `Set` accept any type and not just `i32`, we parameterize it by a module that provides the type of our Set’s elements:
+Accuracy at ε=0.0001, N=10M additions over 1M distinct items, mean overestimate (lower is better):
 
-```rust
-mod Set: SetSig (sig Elem {
-  type T
-}) {
-  type Set = Vec<Elem.T>;
+| Distribution | unsure | BoomFilters |
+| --- | --- | --- |
+| Uniform | **139** | 302 |
+| Zipf, s = 1.1 | **23** | 44 |
+| Zipf, s = 1.5 | **0.3** | 0.8 |
+| Size | **536 KB** | 1080 KB |
 
-  fn new() -> Set {
-    vec![]
-  }
+*Unsure* is about 1.5× faster for Add and 4× faster for Count, using 2× less memory with 2–2.7× lower error.
 
-  fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
-    // ...
-  }
+## [#](https://antonz.org/probabilistic-data-structures/#hyperloglog)
+HyperLogLog
 
-  fn insert(this: Set, ele: &Elem.T) -> Set {
-    // ...
-  }
+HyperLogLog is a unique items counter that trades accuracy for space. It tells you approximately how many *distinct items* it has seen, no matter how many times each one appeared. HyperLogLog (also called a *sketch* from here on) doesn't actually store the items, so it's much more compact than a regular set.
 
-  fn contains(this: &Set, ele: &Elem.T) -> bool {
-    index_of(this, ele).is_ok()
-  }
+For example, a regular set of 1,000,000 distinct 8-byte strings takes about 64 MB. A HyperLogLog sketch counting the same strings with about 0.8% error uses only 16 KB — that's almost 4,000 times smaller. The size of the sketch doesn't depend on the number of items or their size, only on the accuracy you choose. A 16 KB sketch counts a billion items as accurately as a thousand.
 
-  fn remove(this: Set, ele: &Elem.T) -> Set {
-    // ...
-  }
-}
+HyperLogLog is useful when you need to count unique things in a large stream: unique visitors to a website, unique search queries per day, or distinct values in a database column.
+
+```go
+// Standard error about 0.8% of the true count.
+sketch := hll.New()
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("carol"))
+
+sketch.Count() // 3 (approximately)
 ```
 
-Our newly parameterized `Set` accepts any module that conforms to `Elem`.
-Any module can match `Elem` as long as it has at least a `T` definition.
+You can merge sketches to gather data from multiple machines or segments (like by hour, page, or region). When you merge two sketches, you get the total number of unique items from both, without counting shared items twice.
 
-## A Teensy Problem
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#a-teensy-problem)
-
-With that our `Set` module supports any type.
-Except for one teensy detail.
-I’ve deceived you with some tactical `// ...`s.
-If we actually try to implement `index_of`, we quickly encounter a problem:
-
-```rust
-fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
-  this.binary_search_by(|a| ele ??? a)
-}
+```go
+home := hll.New() // visitors to the home page
+docs := hll.New() // visitors to the docs
+// ...
+home.Merge(docs)
+home.Count() // visitors to either page
 ```
 
-We don’t know how to compare `T`’s.
-Rust’s `Ord` would solve this, of course, but ML modules have modules not traits.
-`Set` doesn’t take in just a type, however, it takes in a full module.
-If we need to know how to compare `T`’s, we can just ask our `Elem` module:
+The sketch has one setting: the precision *p*, which gives a relative standard error (stdErr) of 1.04/√(2^p). A common default is p=14, which gives 0.81% error.
 
-```rust
-mod Set: SetSig (sig Elem {
-  type T;
-  fn cmp(&T, &T) -> Ordering;
-}) {
-  // ...
-}
+With p=14 and 1 million distinct items:
+
+- 68% of the time the estimate is within 0.81% (8,100) of the true count,
+- 95% within 1.6% (2·stdErr),
+- 99.7% within 2.4% (3·stdErr).
+
+The error is relative to the count, so the standard error is the same 0.81% for a thousand items or a billion.
+
+You can add items to a sketch, get the estimated count, and merge sketches. You cannot check if a specific item was added, remove items, or list them.
+
+### How it works
+
+**HyperLogLog**<sup>[11](https://antonz.org/probabilistic-data-structures/#fn:11)</sup> is based on a simple observation. If you hash items to random bit strings, about half of them start with 1, a quarter with 01, an eighth with 001, and so on. Seeing a hash with *k* leading zeros suggests there were about 2^(k+1) distinct items. Duplicates hash to the same value, so they don't affect the result.
+
+A single observation is unreliable, so the sketch divides the items into m = 2^p groups, where *p* is the selected precision. The first p bits of the hash pick a group (a *register*), and the register keeps the highest *rank* (leading zeros plus one) it has seen in the rest of the hash:
+
+```text
+        ┌──────┐   ┌──────────┬────────────────────────┐
+item ──►│ hash │──►│ 01101001 │ 0001101...             │
+        └──────┘   └────┬─────┴───────────┬────────────┘
+                        │ register i      └ rank = 3 zeros + 1 = 4
+          ┌───┬───┬───┬─▼─┬───┬───┬───┬───┬───┬───┐
+registers │ 3 │ 0 │ 5 │ 2 │ 1 │ 0 │ 4 │ 2 │ 0 │ 1 │  2 → 4
+          └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-Now it’s clear how to implement `index_of`:
+The count is estimated from all the registers together, using a harmonic mean of 2^register. The standard error is about 1.04/√m. Merging two sketches is just taking the maximum value from each pair of registers.
 
-```rust
-fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
-  this.binary_search_by(|a| Elem::cmp(ele, a))
-}
+The original estimator is biased when dealing with small counts (up to a few times m), so in these cases it uses a different formula called *linear counting*. This switch creates a sudden change in error, and some implementations (like HyperLogLog++<sup>[12](https://antonz.org/probabilistic-data-structures/#fn:12)</sup>) address it by using large tables of bias corrections based on real data.
+
+**Unsure** uses the improved estimator by Otmar Ertl<sup>[13](https://antonz.org/probabilistic-data-structures/#fn:13)</sup>. Instead of a harmonic mean of the registers, it works from a *histogram*: how many registers have value 0, value 1, and so on. A formula applied to the histogram gives an accurate estimate for any number of items, from zero to billions, so there's no need for a separate formula for small counts or for correction tables.
+
+The sketch updates the histogram whenever registers change. Most adds don't change any registers, so this is almost free. Counting always takes the same amount of time, no matter how big the sketch is. Other implementations scan all the registers on every count, which takes from microseconds to milliseconds.
+
+Registers are one byte each, and the histogram has 64 four-byte counters (256 bytes). The item is hashed once with *wyhash*, and the 64-bit hash is split into the register index and the rank.
+
+### Benchmarks
+
+Here's an excerpt from the full benchmarks<sup>[14](https://antonz.org/probabilistic-data-structures/#fn:14)</sup>, comparing *unsure* to *axiom*<sup>[15](https://antonz.org/probabilistic-data-structures/#fn:15)</sup> (HyperLogLog with LogLog-Beta estimator and sparse mode) (ns/op, lower is better):
+
+| Operation | p | Size | unsure | axiom |
+| --- | --- | --- | --- | --- |
+| Add | 10 | 1 KB | **5.5** | 7.6 |
+|  | 14 | 16 KB | **5.6** | 7.6 |
+|  | 18 | 256 KB | 8.1 | **7.9** |
+| Count | 10 | 1 KB | **68** | 18,300 |
+|  | 14 | 16 KB | **62** | 350,000 |
+|  | 18 | 256 KB | **57** | 4,710,000 |
+| Merge | 10 | 1 KB | **730** | 1,710 |
+|  | 14 | 16 KB | **20,100** | 58,600 |
+|  | 18 | 256 KB | **341,000** | 951,000 |
+
+Accuracy at p=14 (0.81% standard error), relative RMSE over 100 sketches (lower is better):
+
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 1,000 | 0.63% | **0.02%** |
+| 40,000 | **0.64%** | 0.71% |
+| 1,000,000 | **0.79%** | 0.89% |
+
+Memory at p=14 after adding the given number of distinct items (lower is better):
+
+| Distinct items | unsure | axiom |
+| --- | --- | --- |
+| 100 | 16 KB | **1.2 KB** |
+| 1,000 | 16 KB | **4.2 KB** |
+| 10,000 | 16 KB | 16 KB |
+| 1,000,000 | 16 KB | 16 KB |
+
+*Unsure* adds about as fast as *axiom*, counts 270–83,000× faster, and merges 2.3–2.9× faster, with the same accuracy and memory for counts above the number of registers. When there are fewer items than registers, *axiom*'s sparse mode makes it more accurate and compact.
+
+## [#](https://antonz.org/probabilistic-data-structures/#t-digest)
+T-digest
+
+A t-digest is a summary of a stream of numbers that trades accuracy for space. It can give you an approximate median, 99th percentile, or any other *quantile* of the data. It can also estimate what fraction of the numbers are below a certain value (the CDF). The digest doesn't actually store the numbers, so it's much more compact than a sorted list.
+
+For example, to find the exact 99th percentile of 1,000,000 numbers, you'd have to keep all of them. With 64-bit floats, that takes 8 MB. A t-digest estimates the same percentile within about 0.03% of the rank (between the 98.97th and the 99.03rd percentile) using only 8 KB — 1,000 times smaller. The size of the digest doesn't depend on the number of values, only on the accuracy you choose. An 8 KB digest summarizes a billion values as well as a million.
+
+A t-digest is useful when you need quantiles over a large stream: latency percentiles for a service, the distribution of request sizes or prices, or the outlier thresholds in sensor data.
+
+```go
+// Response times in milliseconds.
+digest := tdigest.New()
+
+digest.Add(12.5)
+digest.Add(8.1)
+digest.Add(130.0)
+// ...
+
+digest.Quantile(0.5)  // median
+digest.Quantile(0.99) // 99th percentile
+digest.CDF(100)       // fraction of responses faster than 100 ms
 ```
 
-With our parameterized module implemented, we can create new `Set` modules by applying them to new argument modules:
+You can merge digests to gather data from multiple machines or segments (like by hour, endpoint, or region). A merged digest estimates the percentiles of all values, but with less accuracy than individual digests do.
 
-```rust
-mod SetU32 = Set(mod U32 {
-  type T = u32;
-  fn cmp(a: &T, b: &T) { a < b }
-});
+```go
+east := tdigest.New() // latencies on one server
+west := tdigest.New() // latencies on another
+// ...
+east.Merge(west)
+east.Quantile(0.99) // 99th percentile across both servers
 ```
 
-`SetU32.Set` is a `Vec<u32>` and provides an interface that takes and returns `u32` instead of `i32`.
-We can do it again as easy as:
+The digest has one setting: the compression *δ*, which limits the number of centroids (see *How it works* below) to δ+2. A common default is δ=100, which takes 8 KB. Increasing δ uses more memory but reduces estimation error.
 
-```rust
-mod SetString = Set(mod String {
-  type T = String;
-  fn cmp(a: &T, b: &T) { /* lexographic ordering probably... */ }
-});
+The error is measured in ranks: a rank error of 0.03% at quantile q=0.99 means the value returned by `Quantile(0.99)` is somewhere between the 98.97th and the 99.03rd percentile of the actual values. Tail estimates, such as q=0.99 or q=0.999, are more accurate than the median (q=0.5).
+
+You can add numbers to a digest, estimate quantiles and the CDF, and merge digests. You cannot remove numbers or list them.
+
+### How it works
+
+**T-digest**<sup>[16](https://antonz.org/probabilistic-data-structures/#fn:16)</sup> summarizes the numbers as a sorted list of *centroids*. Each centroid has a mean and a weight — the number of values it represents. To estimate a quantile, the digest finds the centroids around the requested rank and interpolates between their means.
+
+The trick is in how big the centroids are allowed to grow. A *scale function* k(q) maps a quantile *q* to a number from -δ/4 to δ/4, and each centroid may only span 1 unit of k: if a centroid covers the quantiles from q₁ to q₂, then k(q₂) − k(q₁) ≤ 1.
+
+The arcsine scale function, k(q) = δ/(2π)·asin(2q-1), is steep near q=0 and q=1 and flat near the median. This means the centroids it produces are larger in the center and smaller at the ends:
+
+```text
+weight
+  │                ┌──┐
+  │             ┌──┤  ├──┐
+  │          ┌──┤  │  │  ├──┐
+  │       ┌──┤  │  │  │  │  ├──┐
+  │  ┌─┬──┤  │  │  │  │  │  │  ├──┬─┐
+  └──┴─┴──┴──┴──┴──┴──┴──┴──┴──┴──┴─┴──► value
+    min      q=0.25   median  q=0.75     max
 ```
 
-Just like that, a whole new module.
-This time a set of Strings.
-I could do this all day.
+With 1M values and δ=100, the centroids around the median hold about 27,000 values each, those around the 99th percentile about 5,000, and the outermost ones about 500. This keeps the error near the tails small.
 
-Because we accept a module, we can request anything a module can hold (even a whole other submodule or parameterized module!).
-The downside is that we have to specify the whole module every time.
-We *have* to specify `cmp` every time we apply our `Set` module.
-Rust traits let us write `Ord` for a type once and use it everywhere implicitly.
+**Unsure** is the merging t-digest from the Dunning and Ertl paper. New values go to a buffer of 5·δ numbers. When the buffer is full, the digest sorts it and merges it with the centroids (already sorted) in a single pass, building new centroids from left to right as long as each one fits within its span of k. Every other pass goes right to left, so that neither tail ends up with fuller centroids. `Quantile`, `CDF` and `Merge` flush the buffer first.
 
-## Include Keeps Modules Small
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#include-keeps-modules-small)
+The centroids are kept in two fixed arrays of δ+2 entries (the current list and the next one being built), along with the cumulative weights for a binary search in `Quantile` and `CDF`. With δ=100, that's 16·102·2 + 8·103 bytes for the centroids, and 8·500 bytes for the buffer, about 8 KB in total.
 
-In practice, we don’t actually repeat how to order our type every time we want a `Set`.
-Recall that a signature will match *any* module that provides what it needs.
-If we make a big module called `U64`:
+Centroids with weight 1 are treated as exact values rather than spread around their mean, and the exact minimum and maximum are used at the ends. So digests with few values give exact results, and `Quantile(0)` and `Quantile(1)` are always exact.
 
-```rust
-mod U64 {
-  type T = u64;
+### Benchmarks
 
-  fn cmp(a: &u64, b: &u64) { a < b }
+Here's an excerpt from the full benchmarks<sup>[17](https://antonz.org/probabilistic-data-structures/#fn:17)</sup>, comparing *unsure* to *influxdata*<sup>[18](https://antonz.org/probabilistic-data-structures/#fn:18)</sup> (merging t-digest with the same scale function) (ns/op, lower is better):
 
-  fn add(a: u64, b: u64) -> u64 { a + b }
-  fn sub(a: u64, b: u64) -> u64 { a - b }
-  // ...
-}
+| Operation | δ | unsure | influx |
+| --- | --- | --- | --- |
+| Add | 50 | **44** | 78 |
+|  | 100 | **49** | 86 |
+|  | 500 | **59** | 105 |
+| Quantile | 50 | 11 | 13 |
+|  | 100 | 13 | 13 |
+|  | 500 | 15 | 16 |
+| Merge | 50 | **296** | 2,060 |
+|  | 100 | **630** | 4,330 |
+|  | 500 | **2,720** | 23,950 |
+
+Accuracy at δ=100, mean rank error over 1M normal values (lower is better):
+
+| Digest | Quantile | unsure | influx |
+| --- | --- | --- | --- |
+| Single | 0.5 | 0.007% | 0.015% |
+|  | 0.99 | 0.018% | 0.016% |
+|  | 0.999 | 0.011% | 0.009% |
+| Merged | 0.5 | 0.055% | 0.037% |
+|  | 0.99 | 0.023% | 0.021% |
+|  | 0.999 | 0.006% | 0.016% |
+
+Memory at δ=100 (lower is better): *unsure* 8.5 KB, *influxdata* 14.4 KB.
+
+*Unsure* adds values about 1.8× faster than *influxdata*, queries at the same speed, merges 7–9× faster, and uses 40% less memory at about the same accuracy.
+
+## [#](https://antonz.org/probabilistic-data-structures/#top-k-sketch)
+Top-k sketch
+
+A Top-k sketch finds the *k most frequent* items in a stream (the "heavy hitters"), along with their approximate counts. It uses a fixed amount of memory based only on k, no matter how many different items are in the stream.
+
+To find the exact top items, you'd have to count every unique item, for example with a map of per-item counts. With millions of distinct items, that takes tens or hundreds of megabytes. A Top-k sketch for the top 1000 items takes about 360 KB, and it usually finds all of them.
+
+A Top-k sketch is useful when you want to identify the "hottest" data: the most requested URLs, the most active users, or the most common search queries. Unlike a count-min sketch, it keeps the actual items, so it can list them.
+
+```go
+// Track the 2 most frequent items.
+sketch := topk.New(2)
+
+sketch.Add([]byte("alice"))
+sketch.Add([]byte("bob"))
+sketch.Add([]byte("carol"))
+sketch.AddN([]byte("alice"), 4)
+sketch.AddN([]byte("carol"), 2)
+
+sketch.Top()                  // [{alice 5} {carol 3}]
+sketch.Count([]byte("alice")) // 5
+sketch.Count([]byte("bob"))   // 0 (not in the top 2)
+sketch.Total()                // 9
 ```
 
-Then we can use that as our argument to Set:
+`Top` returns up to k items, from the most frequent to the least frequent. Counts are estimates: they're usually exact for the most frequent items, but may be slightly lower than the actual count for less common items.
 
-```rust
-mod SetU64 = Set(U64);
+The sketch works best when the stream is skewed, meaning a few items appear much more often than the others. This is common in real situations. If all items are about equally frequent, there is no clear top k, and the results become less accurate.
+
+You can add items to the sketch and get the top items with their counts, but you can't decrease counts or check items that aren't in the top k.
+
+### How it works
+
+**HeavyKeeper**<sup>[19](https://antonz.org/probabilistic-data-structures/#fn:19)</sup> is a table of buckets that estimates item counts. It has *d* rows and *w* columns, and each item maps to one bucket in each row. Each bucket holds a fingerprint of the item and a count. To add an item, you update its bucket in each row:
+
+- If the bucket is empty or owned by the item, increase its count.
+- If the bucket is owned by another item, decay it: decrease its count by 1 with probability b^count (b < 1). When the count reaches 0, the new item takes over the bucket with a count of 1.
+
+```text
+          ┌──────┐
+add x ──► │ hash │──► h ──► high 32 bits ──► fingerprint = 7
+          └──────┘    │
+                      │ map to buckets
+                   ┌──┴────────────┐
+       ┌───────┬───▼───┬───────┬───│───┬───────┐
+row 1  │       │ fp=7  │ fp=3  │   │   │ fp=5  │  column 2 is owned by x:
+       │       │  41   │   2   │   │   │  980  │  41 → 42
+       ├───────┼───────┼───────┼───▼───┼───────┤
+row 2  │ fp=9  │       │       │ fp=2  │ fp=4  │  column 4 is owned by another:
+       │  17   │       │       │   3   │   1   │  3 → 2 with probability b^3
+       └───────┴───────┴───────┴───────┴───────┘
+         col 1   col 2   col 3   col 4   col 5
 ```
 
-But hang on, we got into this whole Module business to break up our code.
-Now we’ve got to dump everything into one module just in case we need it later?
-That’s not very cash modular of us.
+The item's estimated count is the largest count among its buckets. Frequent items quickly reach counts that make decay very unlikely, so they keep their buckets. Rare items keep replacing each other without affecting the frequent ones. An item that becomes frequent later in the stream can still outnumber a less frequent owner and take over its bucket.
 
-ML modules have a final feature to get us the best of both worlds: `include`.
-`include` expands a module inline within another module.
-We’re free to split up our `U64` module into various submodules: `U64Order`, `U64Arithmetic`, etc.
-Our final `U64` module only has to include these submodules:
+Next to the table, the sketch keeps a min-heap with the k items that have the largest estimates so far. After an item's buckets are updated, if its estimate is larger than the smallest count in the heap, the item is added to the heap, and the smallest item is removed. If the item is already in the heap, its count is increased.
 
-```rust
-mod U64 {
-  type T = u64;
-
-  include U64Order;
-  include U64Arithmetic;
-  // ...
-}
+```text
+                   ┌───────────┐
+add x (15) ───────►│ bob    12 │  the root has the smallest count
+                   └─────┬─────┘
+              ┌──────────┴────────┐
+        ┌─────┴─────┐       ┌─────┴─────┐
+        │ alice  30 │       │ dave   14 │  15 > 12: x replaces bob at the root
+        └─────┬─────┘       └───────────┘  15 > 14: x moves down, dave moves up
+      ┌───────┴──────┐
+┌─────┴─────┐  ┌─────┴─────┐
+│ eve   980 │  │ fay    41 │
+└───────────┘  └───────────┘
 ```
 
-Modules can be organized into logical components and then combined later to provide convenience (wow!).
-We’re free to cut up and reassemble modules at the whims’ of the wind.
-We can even apply a module and include it inline:
+**Unsure** uses d = 2 rows of max(16k, 256) buckets, and a decay base of b = 0.8. The probabilities b^count are precomputed as 64-bit thresholds, so decay is cheap: the count *c* decreases if a random number is below the c-th threshold.
 
-```rust
-mod ABunchOfSetForSomeReason {
-  mod SetU64 = Set(U64);
-  include SetU64;
+The original HeavyKeeper uses b = 1.08⁻¹ ≈ 0.93, and more rows. A smaller b lets frequent items lock their buckets faster, which makes the sketch more precise on flat streams. However, if b is too small (like 0.5), the first items to claim buckets keep them permanently, so items that become frequent later are never counted, even if they end up being the most frequent. Using b = 0.8 keeps most of the precision and still catches most late-arriving frequent items. As for the rows, two are enough to protect frequent items from collisions in a single row, and adding more rows only makes the sketch slower.
 
-  mod SetString = Set(String);
-  include SetString;
-}
+The item is hashed once. The hash is mapped to a position in each row by salting it (multiplying by a random per-row constant). The fingerprint is the top 32 bits of the hash. The heap uses the 64-bit hash to identify items, so it doesn't compare the actual item bytes.
+
+Each bucket is 8 bytes (a 32-bit fingerprint and a 32-bit count), so the table takes 256·k bytes. The heap takes about 100 bytes per item plus the item itself.
+
+The sketch uses *wyhash* for hashing and *wyrand* for random numbers.
+
+### Benchmarks
+
+| Operation | k | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| Add | 10 | **24 ns** | 64 ns | 59 ns |
+|  | 100 | **25 ns** | 84 ns | 70 ns |
+|  | 1000 | **33 ns** | 130 ns | 73 ns |
+| Top | 10 | **0.34 µs** | 0.64 µs | 0.77 µs |
+|  | 100 | **3.7 µs** | 13 µs | 14 µs |
+|  | 1000 | **75 µs** | 270 µs | 292 µs |
+
+Precision is the fraction of the reported top k that is in the true top k (higher is better):
+
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **0.90** | 0.38 | 0.19 |
+|  | 0.8 | **1.00** | 0.78 | 0.85 |
+|  | 1.0 | 0.99 | **1.00** | **1.00** |
+|  | Size | 39 KB | **27 KB** | 39 KB |
+| 1000 | 0.6 | **0.97** | 0.70 | 0.52 |
+|  | 0.8 | **1.00** | 0.98 | **1.00** |
+|  | 1.0 | **1.00** | **1.00** | **1.00** |
+|  | Size | **364 KB** | 414 KB | 453 KB |
+
+Count error is the mean of |estimate − true| / true over the reported items (lower is better):
+
+| k | Zipf s | unsure | keiler | dgryski |
+| --- | --- | --- | --- | --- |
+| 100 | 0.6 | **14%** | 94% | 428× |
+|  | 0.8 | **0.10%** | 46% | 230% |
+|  | 1.0 | 0.01% | 0.12% | **0.0%** |
+| 1000 | 0.6 | **2.4%** | 62% | 18× |
+|  | 0.8 | **0.23%** | 1.9% | 0.31% |
+|  | 1.0 | 0.05% | 0.24% | **0.02%** |
+
+*Unsure* is 2–4× faster than the others for Add and 1.8–4× faster for Top. On flat streams (s=0.6), it finds the true top k with 90–97% precision, while *keiler* drops to 38–70% precision with a count error of 62–94%, and *dgryski* to 19–52% with counts 18× or more too high. On skewed streams (s=1.0), all three are about equally accurate.
+
+## [#](https://antonz.org/probabilistic-data-structures/#wrapping-up)
+Wrapping up
+
+As engineers, we usually want exact answers from our data. But sometimes, allowing a bit of uncertainty can cut memory usage by tens, hundreds, or even thousands of times. That's where probabilistic data structures come in:
+
+- Bloom filter checks if an item might be in a set.
+- Count-min sketch estimates how many times each item has occurred.
+- HyperLogLog estimates the number of distinct items.
+- T-digest estimates quantiles of a stream of numbers.
+- Top-k sketch identifies the most frequent items in a stream.
+
+To use them in Go, try the ** [nalgeon/unsure](https://github.com/nalgeon/unsure) package:
+
+```text
+go get github.com/nalgeon/unsure
 ```
 
-Why do you need one module that’s a bunch of overlapping Sets?
-I don’t know!
-I’m not your supervisor.
-Either way, modules will happily let you do it.
-
-## Putting It All Together
-[**
-Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#putting-it-all-together)
-
-We’ve covered the basics of modules.
-Let’s take a look at a more involved examples to get a sense of what modules can offer.
-We’re gonna use modules to assemble a little build executor.
-Out build step will be a parameterized module:
-
-```rust
-mod BuildStep(sig Env {
-  mod Cache: CacheSig;
-  mod Runner: RunnerSig;
-}) {
-  // ...
-}
-```
-
-Where `CacheSig` represents a cache of build steps and `RunnerSig` represents running some command:
-
-```rust
-sig CacheSig {
-  fn is_cached(inputs: &[String], output: &Path) -> bool;
-  fn store(inputes: &[String], output: &Path);
-}
-
-sig RunnerSig {
-  fn run(inputs: &[String], output: &Path);
-}
-```
-
-For brevity we’ll keep these pretty simple, but hopefully you can imagine how these might expand.
-We can then implement `BuildSet` in terms of our input modules:
-
-```rust
-mod BuildSet(...) {
-  fn run_cached(inputs: &[String], output: &Path) {
-    if !Env::Cache::is_cached(inputs, output) {
-      Env::Runner::run(inputs, output);
-      Env::Cache::store(inputs, output);
-    }
-  }
-
-  fn compile(src: String) -> String {
-    let obj = PathBuf::from(format!("{src}.o"));
-    run_cached(&[src], &obj);
-    obj.display().to_string()
-  }
-
-  fn build(srcs: &[String], output: &Path) {
-    let objs: Vec<String> = srcs.iter().map(compile).collect();
-    run_cached(objs, output)
-  }
-}
-```
-
-Our `build` functions takes a list of source files, compiles them, and then links the object files into a final binary.
-How does `run` tell when it’s compiling and when it’s linking?
-Don’t worry about it!
-Now that we’ve set that up we can toggle the functionality of our build by controlling what modules we pass to `BuildStep`.
-For a real build, we’ll want something like an in-memory cache:
-
-```rust
-mod MemCache {
-  // Pretend this works without locking for multithreading
-  static ENTRIES: Vec<(Vec<String>, PathBuf)> = vec![];
-
-  fn is_cached(inputs: &[String], output: &Path) {
-    ENTRIES.iter().any(|(cached_inputs, cached_outputs)| {
-      inputs == cached_inputs && output == cached_outputs
-    })
-  }
-
-  fn store(inputs: &[String], output: &Path) {
-    ENTRIES.push((inputs.to_vec(), PathBuf::from(output)))
-  }
-}
-```
-
-Next we’ll want something that runs our commands:
-
-```rust
-mod ShellRunner {
-  fn run(inputs: &[String], output: &Path) {
-    let cmd = // magically pick between `cc` and `lld`;
-    let output = format!("-o {}", output.display());
-    Command::new(cmd)
-      .args(inputs)
-      .args(output)
-      .output()
-      .expect("All our commands work first try");
-  }
-}
-```
-
-We can then assemble our build system via:
-
-```rust
-mod CachedBuild = BuildStep(mod Env {
-  mod Cache = MemCache;
-  mod Runner = ShellRunner;
-});
-```
-
-But maybe we don’t always want caching.
-Maybe we want a build that always reruns actions for local testing.
-We simply swap out our cache module:
-
-```rust
-mod NoCache {
-  fn is_cached(inputs: &[String], outputs: &Path) -> bool {
-    false
-  }
-
-  fn store(inputs: &[String], outputs: &Path) {
-    // nothing to do here
-  }
-}
-
-mod LocalBuild = BuildStep(mod Env {
-  mod Cache = NoCache;
-  mod Runner = ShellRunner;
-});
-```
-
-Our build system works first try.
-We wouldn’t write the code bad, of course, but just in case we might want to test it.
-A `FakeRunner` will let us do just that:
-
-```rust
-mod FakeRunner() {
-  static COMMANDS: Vec<(Vec<String>, PathBuf)> = vec![];
-
-  fn run(inputs: &[String], output: &Path) {
-    COMMANDS.push((inputs.to_vec(), PathBuf::from(output)));
-  }
-
-  // A test only helper.
-  fn contains_command(inputs: &[String], output: &Path) -> bool {
-    // ...
-  }
-}
-```
-
-Because `FakeRunner` is a parameterize module, we can create a new module (and a new empty `COMMANDS`) every time we apply it:
-
-```rust
-mod Tests {
-  mod TestRunner = FakeRunner();
-  mod TestBuild = BuildStep(mod Env {
-    mod Cache = MemCache;
-    mod Runner = TestRunner
-  });
-
-  // Write tests against TestBuild using `TestRunner::contains_command`...
-}
-```
-
-If we want to check that caching works we can extend our tests with a new fake runner and compare their commands:
-
-```rust
-mod Tests {
-  // TestBuild setup...
-
-  mod UncachedTestRunner = FakeRunner();
-  mod UncachedTestBuild = BuildStep(mod Env {
-    mod Cache = NoCache;
-    mod Runner = UncachedTestRunner;
-  })
-
-  // Compare the results of `TestRunner::contains_command` and `UncachedTestRunner::contains_command`...
-}
-```
-
-This isn’t earth shattering stuff.
-If we wanted to replicate this setup in an OO language, however, we would need runtime objects or, heaven forbid, a DI framework.
-Here we can do it all by wiring up modules statically.
-
-Hopefully this has helped you see what’s cool about modules.
-Module’s power lies in their signatures.
-What would require a newtype wrapper or a visibility change in other languages can be accomplished by simply changing the signature a module is viewed at.
-
-With abstract types, this allows for constructing webs of encapsulation where each piece knows precisely what it needs to about its neighbor and no more.
-Signatures act as this encapsulation boundary, freeing us to reason about our code modularly.
-As long as our module conforms to the expected signature we can contort and refactor it to our wildest whims and trust that it will continue to integrate into our system as expected.
-ML Modules are neat and I think they deserve more love and exploration in programming languages.
+1. [Space/time trade-offs in hash coding with allowable errors](https://doi.org/10.1145/362686.362692) by Burton H. Bloom, 1970. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:1)
+2. [Cache-, hash-, and space-efficient Bloom filters](https://doi.org/10.1145/1498698.1594230) by Felix Putze et al., 2009. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:2)
+3. [Reference wyhash implementation](https://github.com/wangyi-fudan/wyhash) by Wang Yi. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:3)
+4. [Reference xxHash implementation](https://github.com/Cyan4973/xxHash) by Yann Collet. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:4)
+5. [Bloom filter benchmarks](https://github.com/nalgeon/unsure/tree/main/bloom#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:5)
+6. [bits-and-blooms/bloom](https://github.com/bits-and-blooms/bloom) by Daniel Lemire. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:6)
+7. [jcalabro/gloom](https://github.com/jcalabro/gloom) by Jim Calabro. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:7)
+8. [An improved data stream summary: the count-min sketch and its applications](https://doi.org/10.1016/j.jalgor.2003.12.001) by Graham Cormode and S. Muthukrishnan, 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:8)
+9. [Count-min sketch benchmarks](https://github.com/nalgeon/unsure/tree/main/countmin#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:9)
+10. [tylertreat/BoomFilters](https://github.com/tylertreat/BoomFilters) by Tyler Treat. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:10)
+11. [HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm](https://doi.org/10.46298/dmtcs.3545) by Philippe Flajolet et al., 2007. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:11)
+12. [HyperLogLog in practice](https://doi.org/10.1145/2452376.2452456) by Stefan Heuleet et al., 2013. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:12)
+13. [New cardinality estimation algorithms for HyperLogLog sketches](https://arxiv.org/abs/1702.01284) by Otmar Ertl, 2017. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:13)
+14. [HyperLogLog benchmarks](https://github.com/nalgeon/unsure/tree/main/hll#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:14)
+15. [axiomhq/hyperloglog](https://github.com/axiomhq/hyperloglog) by Axiom. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:15)
+16. [Computing extremely accurate quantiles using t-digests](https://arxiv.org/abs/1902.04023) by Ted Dunning and Otmar Ertl, 2019. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:16)
+17. [T-digest benchmarks](https://github.com/nalgeon/unsure/tree/main/tdigest#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:17)
+18. [influxdata/tdigest](https://github.com/influxdata/tdigest) by InfluxData. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:18)
+19. [HeavyKeeper: An Accurate Algorithm for Finding Top-k Elephant Flows](https://www.usenix.org/conference/atc18/presentation/gong) by Junzhi Gong et al., 2018. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:19)
+20. [Top-k benchmarks](https://github.com/nalgeon/unsure/tree/main/topk#benchmarks). [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:20)
+21. [keilerkonzept/topk](https://github.com/keilerkonzept/topk) by KEILERKONZEPT. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:21)
+22. [dgryski/go-topk](https://github.com/dgryski/go-topk) by Damian Gryski. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:22)
+23. [Efficient Computation of Frequent and Top-k Elements in Data Streams](https://doi.org/10.1007/978-3-540-30570-5_27) by Ahmed Metwally et al., 2005. [↩︎](https://antonz.org/probabilistic-data-structures/#fnref:23)

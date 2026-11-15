@@ -1,265 +1,801 @@
-*This post (and the code behind it) was written with a lot of help from AI. I'm not going to
-apologize for that. If that bothers you, feel free to close the tab.*
+Three ways to parse the nested lists from Advent of Code 2022 day 13 in BQN.
 
-I maintain [Ratatui](https://ratatui.rs), so I see a lot of the TUIs people build. Many of them end up looking fairly
-same-ish: plain boxes on a boring background, missing a bunch of the things that good design in
-other mediums brings us.
-
-Borders are part of the problem. They have to take up space, so they become part of the panels
-people want to build. One option is to drop them and just use color, but borders are really nice
-for delineating and surrounding things. There are lots of ways to sort of get borders in a
-terminal, but none that are 100% good. I've drawn enough `┌──┐` by hand to have opinions about
-this.
-
-The usual way is the Unicode Box Drawing block, which has 128 characters for lines, corners and
-joins. Somehow that's still not enough:
-
-[![The Unicode Box Drawing block, U+2500 to U+257F, rendered in Ghostty](https://www.joshka.net/cell-borders/box-drawing-block.png)](https://www.joshka.net/cell-borders/box-drawing-block.png)
-
-So I've been working on a terminal protocol that draws thin lines on the edges of cells instead.
-I've got it working as [a patch to Ghostty](https://github.com/joshka/ghostty/tree/joshka/cell-borders) (and [an earlier version in
-Rio](https://github.com/raphamorim/rio/pull/1947) before that), and
-I've built demo apps for it with Ratatui. I'd like feedback from
-terminal and TUI authors.
-
-[![A tiling window manager demo built with Ratatui, using cell borders for panes, tabs, form fields and buttons](https://www.joshka.net/cell-borders/panes.png)](https://www.joshka.net/cell-borders/panes.png)
-
-Every line in that screenshot is a cell border. None of them use up a row or column. The tab
-labels sit on the top edge of each pane, the text fields are underlined right under the text, and
-the buttons are one row tall and rounded.
-
-Here's the same app in a terminal without cell borders, falling back to box-drawing characters:
-
-[![The same demo drawn with box-drawing characters](https://www.joshka.net/cell-borders/panes-box.png)](https://www.joshka.net/cell-borders/panes-box.png)
-
-Each pane loses a row and a column on every side, so the log pane shows two fewer lines and the
-notes wrap differently. The tab labels move inside the frame. The text fields use the underline
-attribute instead, and the checkbox and buttons turn into brackets.
-
-- Borders, obviously. Panes and panels that don't eat a row and column on every side.
-- Menus and popups that sit on top of other content and still look like they're on top.
-- Panel style apps, where the layout is a set of regions that each want an edge.
-- Widgets like text fields, buttons and checkboxes, which want a line right up against their text.
-- Making things look neater in general. A border on the outer edge of a panel's background looks a lot cleaner, and text can run right up to it.
-
-The settings form, with cell borders and then with the box-drawing fallback:
-
-[![A form with underlined text fields, a checkbox and rounded buttons drawn with cell borders](https://www.joshka.net/cell-borders/zoom-form.png)](https://www.joshka.net/cell-borders/zoom-form.png)
-
-[![The same form with the underline attribute and bracketed buttons](https://www.joshka.net/cell-borders/zoom-form-box.png)](https://www.joshka.net/cell-borders/zoom-form-box.png)
-
-The tabs are the same story. With cell borders they sit on the pane's top edge. With box
-characters they need their own row inside the frame:
-
-[![Pane tabs drawn on the top edge of the pane with cell borders](https://www.joshka.net/cell-borders/zoom-tabs.png)](https://www.joshka.net/cell-borders/zoom-tabs.png)
-
-[![The same tabs inside a box-drawing frame](https://www.joshka.net/cell-borders/zoom-tabs-box.png)](https://www.joshka.net/cell-borders/zoom-tabs-box.png)
-
-### [Charts](https://www.joshka.net/cell-borders/#charts)
-
-Lines between cells also work for charts. btop-style braille graphs fill every cell with dots, so
-there's nowhere to put a gridline or an average line without giving up a row. With cell borders
-they sit on the cell edges between the dots. Here's a monitor in that style, built with Ratatui:
-
-[![A braille CPU graph with gridlines and an average line drawn on the cell edges](https://www.joshka.net/cell-borders/chart.png)](https://www.joshka.net/cell-borders/chart.png)
-
-And the fallback, which has to drop the gridlines:
-
-[![The same braille graph without gridlines](https://www.joshka.net/cell-borders/chart-box.png)](https://www.joshka.net/cell-borders/chart-box.png)
-
-Here's the tiling panes demo moving panes around, opening menus and the about dialog:
-
-[![An animation of panes being dragged, split and retiled, with a menu and dialog](https://www.joshka.net/cell-borders/tour.webp)](https://www.joshka.net/cell-borders/tour.webp)
-
-Partway through, it turns on a checkerboard of the cells, which shows how everything lines up
-with the grid. Toggle it here:
-
-The root of it is that box-drawing characters are text. Each line is a glyph that takes up a whole
-cell, and pretty much everything annoying about them falls out of that.
-
-Space is the obvious one. On my 16" laptop with a font I can actually read, the terminal is
-something like 200x50 (your prefs will move that around a bit). Columns are mostly fine at that
-size. Rows aren't. A layout with a couple of levels of nested panels can easily spend 6 or 8 of
-those 50 rows on nothing but lines. That's a lot of screen to give up for decoration.
-
-You also can't put a line between two cells that both have something in them. So there's no way to
-underline a text field right under its text, or to outline a button, without adding padding around
-it. Rounded corners sort of work, except the corner glyph has one background color, and when the
-panel's background is different from what's around it you get a little square of the wrong color
-in each corner. And the line itself is whatever the font decides it is, weight and position
-included.
-
-Then there's copy and paste. Select some text inside a box and you get the box too. Everyone who's
-pasted from a TUI into Slack knows the little `│` cleanup dance. Sometimes you do want the box
-(pasting a table into a chat, say), but mostly it's junk. Cell borders aren't text, so they never
-get copied, which cuts both ways.
-
-A cell border is a cell attribute, like a background color. Each cell can carry up to twelve line
-segments: the two halves of each of its four edges, and four arms from its center. Each segment
-has its own color, width, placement and style, and the terminal draws them over the cell grid.
-Borders are stored in the cells, so they scroll, erase, insert and reflow with the text. What
-happens on erase or scroll already has an answer, the same one as for colors.
-
-The edges are split into halves so borders line up with quadrant block characters (`▖▗▘▝` and
-friends). That makes it easy to draw a shape that's a half cell in from the grid and still put a
-neat border around it. Yes, that still uses a character for the fill, and there might be a better
-way to do that part. One problem at a time.
-
-The same idea could stretch to sextants and octants, or to quarter and eighth widths, if designs
-need them.
-
-[![The gallery script showing solid, double, dashed and dotted lines, rounded corners, forks and junctions](https://www.joshka.net/cell-borders/styles.png)](https://www.joshka.net/cell-borders/styles.png)
-
-[![Rounded panels with and without an outside fill color. The first has square patches of background at its corners](https://www.joshka.net/cell-borders/zoom-outside.png)](https://www.joshka.net/cell-borders/zoom-outside.png)
-
-Lines can be solid, double, dashed or dotted. Each corner and center of a cell can be square or
-rounded, with a configurable radius and anti-aliased arcs. A rounded corner can name an outside
-color, so the area outside the arc is painted correctly when the panel's background differs from
-what's behind it.
-
-When two neighboring cells both put a line on their shared edge, they merge into one line. The
-stroke with the higher `priority` wins, then the wider one, then the one to the right or below.
-That way a focused pane can raise its priority and keep its whole outline, whatever order its
-neighbors were drawn in. My first try was "right/bottom always wins", which lasted until the
-focused pane lost half its outline to its neighbor.
-
-Everything is one DCS string with a namespace:
+[Advent of Code 2022 day 13](https://adventofcode.com/2022/day/13) requires you to parse nested lists like
 
 ```
-ESC P 1 + b cell-border ; OP ; FIELDS... ESC \
+
+   [1,[2,[3,[4,[5,6,7]]]],8,9]
 ```
 
-The common path is a pen, held in the cursor like the current background color. Set it, print
-some text, and the printed cells get the borders:
+This post covers three different ways to handle the problem:  
+
+1. "Cheating" by using `•BQN` to do the heavy lifting  
+
+2. Writing a conventional recursive descent parser  
+
+3. Writing an array-style parser
+
+We'll also do some simple benchmarking to compare the three approaches.
+
+## The Data
+
+We'll be using my advent of code input file to test the different approaches on.
+Here's the first six lines:
 
 ```
-ESC P 1 + b cell-border;pen;48;32;7aa2f7;0;0 ESC \     bottom edge, blue: an underline
-hello
-ESC [ 0 m                                              SGR 0 clears the pen
+
+   •Show¨ 6 ↑ input ← •FLines "13.txt"
+"[[[[8,7,8,5,4],6,[4,6]]],[6,[[]]],[]]"
+"[[[[8,0,0,7,1],[1],8]]]"
+⟨⟩
+"[[[5,8,[4,9,2],7,[8,0]],[9,5,[5,5]],[9,[3,3,8,4,8],[0,6]],5,3],[8,10,[[8,7,6,1,8],5,0,6,[5,1]],[7,[1],6],[6,2,1,[],[1,0,6,5]]],[1,1,[[2]]],[]]"
+"[[10,4,[],7,[[10,1]]],[[4,2]],[[[5],[],[],[]],[4,5,[2,4,9]]],[[8,[],[1,3,9,7]],4,7]]"
+⟨⟩
 ```
 
-There are also rectangle commands that set or clear borders on existing cells without touching
-the pen, and a capability query. An app sends the query followed by DA1. If the DA1 reply arrives
-without a `cell-border` reply first, the terminal doesn't support it, so the app falls back to box
-characters and reserves the space they need. Terminals that don't understand the DCS ignore it,
-the same as any unknown DCS.
-
-The minimum a terminal needs is the pen, the rectangle commands and solid strokes. I've tried to
-keep that first cut small, because there's always one more "... and this" to add, and that's a
-slippery slope.
-
-Line styles, rounded joints, priority and outside colors are extension fields listed in the
-capability reply, and unknown fields are ignored, so they can be added later. I'd rather the
-early decisions be two way doors where possible.
-
-The spec calls itself version 1 (it's the `1` in `DCS 1 + b`). That's v1 in the old sense, before
-we all got bogged down in semver. It doesn't mean done or stable, it means it's the first one I was willing to write
-down. Read it as v0.1, or a draft, or whatever you prefer.
-
-## [Prior art](https://www.joshka.net/cell-borders/#prior-art)
-
-Parts of this have been done before:
-
-- DEC ruled lines in DECterm (extension 43 in the DA1 reply) draw lines around rectangles. They scroll with the text, but they're a separate layer: clearing the screen leaves them behind, and they're always one pixel wide in the normal text color.
-- SGR 51 to 65: framed, encircled, overline and the ideogram side lines. Some terminals draw borders with them, but they're on/off attributes with no color, width or joins, and there's no attribute for the bottom edge.
-- The Win32 console has per-cell grid flags for the top, left and right edges. PDCurses and X/Open curses (WA_TOP, WA_LEFT and friends) have similar attributes. These are the closest to this protocol, but they have no bottom edge (Win32), color, width or halves.
-- IBM 3270 terminals can outline whole input fields.
-
-What none of these give you is a line with its own color and width on each edge. The
-[rationale document](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) covers the prior art in more detail and explains each choice in
-the protocol.
-
-My own first prototype was in Rio ([raphamorim/rio#1947](https://github.com/raphamorim/rio/pull/1947)), with an earlier
-version of the spec that used APC instead of DCS. Feedback pointed out that APC isn't safe to
-reuse: Kermit 95 has run APC payloads as Kermit commands since the 90s. DCS is where structured
-terminal commands already live, and terminals ignore DCS strings they don't recognize, so I
-switched to that.
-
-When I first showed this around, most of the questions were about these. The spec goes into all
-of them properly, but here's roughly where I landed.
-
-Multiplexers were the first thing people asked about. tmux and friends redraw panes from their own
-idea of the cell grid, so passing these sequences through would just put borders in the wrong
-place. A multiplexer that doesn't know about the protocol should drop them and answer DA1 itself,
-and then apps running inside it fall back to box characters like they would anywhere else. One
-that does know about it can store borders like any other attribute and redraw them.
-
-Conflicting lines on a shared edge are settled when the terminal renders, using the priority rule
-above, so it doesn't matter what order the app wrote the cells in.
-
-Erase, insert and delete all work the way they do for background colors. Erased cells pick up the
-current pen, and lines that get inserted or deleted take their borders along. Scrollback, the
-alternate screen and reflow mostly come for free, because the border lives in the cell.
-
-On cost: the Ghostty change is about 1,650 lines, and a fair chunk of that is tests. Each cell gets
-a 16-bit border ID, which fits in padding that was already there, so cells don't get any bigger
-and a screen with no borders costs nothing extra. The IDs point into a table of distinct border
-sets (about 100 bytes each) that's shared by the whole terminal. A typical TUI only uses a
-handful of distinct sets, but the table is never freed, so in the worst case (all 65,535 IDs in
-use) it's somewhere around 10-15 MB.
-
-Rendering only does extra work for cells that have borders. Each one looks at its four neighbors to
-resolve shared edges, so changing a row also rebuilds the rows either side of it. Straight lines
-are a few solid quads per cell. Rounded corners cost more, because the anti-aliased arc is drawn as
-rows of small quads, roughly one per edge pixel. I haven't benchmarked any of this properly yet,
-and it's the part I'd most like another set of eyes on.
-
-The [spec](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-protocol.md) and [rationale](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) are on my Ghostty fork. The [Ghostty
-branch](https://github.com/joshka/ghostty/tree/joshka/cell-borders) implements all of version 1. I've only built and run it on macOS so far, so the
-GTK and OpenGL builds are untested. To build and run it (you'll need Zig 0.17 and Xcode):
+The lists come in pairs, with each pair separated by a blank line.
+Since the problem requires you to compare pairs of lists,
+a suitable format for working with the data is to parse it all into one list of pairs of lists.
+Thus we can turn the problem into parsing one giant list.
 
 ```
-git clone -b joshka/cell-borders https://github.com/joshka/ghostty.git
-cd ghostty
-zig build -Doptimize=ReleaseFast -Dxcframework-target=native
-open zig-out/Ghostty.app
+
+   data ← ']'∾˜ '['∾ ¯1↓∾(3|↕≠input) {0𝕊𝕩: ∾'['‿𝕩‿','; 1𝕊𝕩: 𝕩∾"],"; 2𝕊𝕩: 𝕩}¨ input
 ```
 
-Inside that Ghostty, the gallery script on the same branch draws the style gallery above. It
-detects support first, so it's also a quick check for another terminal's implementation:
+The lines come in groups of three: the first list, the second list, and then a blank line.
+The first line of each group needs an opening bracket added to the beginning (to open the pair) and a comma added to the end (to separate the two lists in the pair).
+The second line of each group needs a closing bracket at the end (to close the pair) and a comma after (to separate it from the next pair).
+The blank lines are fine as is.
+Then we join all the lines together and drop the final trailing comma.
+Finally, we need to wrap the whole thing in one more set of brackets, to make it all one big list.
+
+## Using `•BQN`
+
+This approach is undoubtedly the easiest, and it's what I used to solve the problem in December.
+The idea is that the notation is almost valid BQN; we just need to replace the square brackets with angle brackets.
+Then we can use the system function `•BQN` to "eval" the string into a BQN list.
 
 ```
-python3 scripts/cell-borders.py            # the default view
-python3 scripts/cell-borders.py --styles   # line styles, joints and outside fill
+
+   a ← "[1,2,[],[3,4]]"
+   a + ('⟨'-'[') × '['=a
+"⟨1,2,⟨],⟨3,4]]"
+   "[⟨" (⊢ + -˜´∘⊣ × ⊏⊸=) a
+"⟨1,2,⟨],⟨3,4]]"
 ```
 
-Once it's running you can flip between views with keys: `p` placement, `c` colors, `h` blocks, `j`
-junctions, `e` halves, `s` styles and `l` live. `w` cycles the stroke width, `b` turns borders off
-so you can compare, and `q` quits. Each view also has a matching flag (`--placement`, `--styles`
-and so on) if you want to start on it.
+Here's the idea behind replacing a character with another character using a small example.
+I've written both an explicit expression and a tacit function.
+We take the difference between the new character and the old character,
+since adding this to the old character changes it into the new one.
+Then we use a mask of old character locations to make sure the addition happens only at those locations.
 
-The tiling panes demo is on the [Ratatui branch](https://github.com/joshka/ratatui/tree/joshka/cell-borders). It falls back to box-drawing
-characters when the terminal doesn't support cell borders, which is how I made the comparison
-shots above:
-
-```
-git clone -b joshka/cell-borders https://github.com/joshka/ratatui.git
-cd ratatui
-cargo run -p tiling-panes
-```
-
-Drag panes around with the mouse to retile them. `n` and `v` split, `x` closes, and right click
-opens a pane menu. Press `b` to switch between cell borders and box drawing, or `g` to shade
-alternate cells and see where the edges are.
-
-The btop-style monitor from the chart screenshots is in the same branch. Given how much of it an AI
-wrote, I did briefly consider calling it bslop:
-
-[![The full btop-style monitor drawn with cell borders. The hostname is blurred](https://www.joshka.net/cell-borders/bslop.png)](https://www.joshka.net/cell-borders/bslop.png)
-
-To run it:
+Now to write our parser, we just replace both kinds of square brackets with the respective angle brackets and call `•BQN`.
 
 ```
-cargo run -p cell-border-top
+
+   R ← ⊢ + -˜´∘⊣ × ⊏⊸=
+   Parser1 ← •BQN "]⟩" R "[⟨" R ⊢
 ```
 
-It's a real system monitor (it reads your actual CPU, memory, network and processes), so it's a
-better test of how this looks on a busy screen than the panes demo. `1` to `4` show and hide the
-boxes, `b` and `g` work the same as in the panes demo, and `h` or `?` lists the rest of the keys.
-It needs a newer Rust (1.95) than the rest of Ratatui because of the `sysinfo` dependency.
+Let's try it out.
 
-I'm not attached to this being the exact solution, but I think it's a problem worth solving, and
-I'd like it to be more than one terminal's feature (and more than one weekend's worth of yak
-shaving). If you work on a terminal, would you implement this, and which parts look expensive? If you work on a TUI library or app, which of your widgets
-would use it, and what would they need that isn't here? Comments are welcome on the
-[Ghostty discussion](https://github.com/ghostty-org/ghostty/discussions/14324).
+```
+
+   Parser1 data
+Segmentation fault (core dumped)
+```
+
+Uh oh! Well, here's a strike against this approach.
+
+I'm not sure what's going on to be honest.
+When I solved the problem in Decemeber I didn't do the "turn it all into one giant list" approach,
+and instead parsed the individual lines.
+So let's do that here.
+
+```
+
+   data2 ← (<¯1⊸↓)˘∘‿3⥊input∾<""
+```
+
+This complicated-looking line just works the data into a list of pairs of strings.
+First we append a blank line to the end, to complete the last group of 3 lines.
+Then we use a computed reshape to make an array with 3 columns.
+Finally, on each row of the array we drop the the blank line and enclose the two remaining lines.
+
+Now we just have to parse each string to get the final result.
+
+```
+
+   bqn ← Parser1¨¨ data2
+   ⊑bqn
+┌─
+· ┌─                                                  ┌─
+  · ┌─                              ┌─           ⟨⟩   · ┌─
+    · ⟨ ⟨ 8 7 8 5 4 ⟩ 6 ⟨ 4 6 ⟩ ⟩   · 6 ⟨ ⟨⟩ ⟩          · ⟨ ⟨ 8 0 0 7 1 ⟩ ⟨ 1 ⟩ 8 ⟩
+                                  ┘            ┘                                    ┘
+                                                    ┘                                 ┘
+                                                                                        ┘
+    2↑input
+⟨ "[[[[8,7,8,5,4],6,[4,6]]],[6,[[]]],[]]" "[[[[8,0,0,7,1],[1],8]]]" ⟩
+```
+
+Looks alright!
+Let's do a quick benchmark.
+
+```
+
+   100 Parser1¨¨•_timed data2
+0.074279465
+```
+
+Around 3/4 of a second for each run. So slow!
+
+## Recursive descent
+
+This is not meant to be an introductory tutorial on recursive descent parsing.
+Rather, I want to show that "normal" algorithms are applicable in BQN.
+In fact, [Singeli](https://github.com/mlochbaum/Singeli) uses a [recursive descent parser](https://github.com/mlochbaum/Singeli/blob/master/singeli.bqn#L147).
+
+We assume that the input is error-free and proceed in a classic two-stage tokenize-then-parse fashion.
+
+The token types are opening brackets, closing brackets, and numbers.
+We get rid of the commas, after we've used them to delimit the numbers.
+The tokenizer is actually array-style, I guess, since we just use `⊔` to split the string up.
+
+Behold!
+
+```
+
+   T ← (1-˜≠⟜','×·+`∊⟜"[]"∨·(»⊸<)∊⟜('0'+↕10))⊸⊔
+   a ← "[999,2,[],[31,4167]]"
+   T a
+⟨ "[" "999" "2" "[" "]" "[" "31" "4167" "]" "]" ⟩
+```
+
+Okay, okay, springing that tacit tokenizer on you is a joke.
+Let's break it down.
+The overall strategy is to create a mask of token starting points.
+Then we're pretty much a sum scan and a group away from success.
+
+Each opening bracket and closing bracket starts a new group.
+However, a digit starts a new group iff it is not preceded by a digit.
+
+```
+
+   d ← '0'+↕10
+"0123456789"
+   a∊d
+⟨ 0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0 0 ⟩
+```
+
+We start by finding a mask of digits in the string.
+
+```
+
+   (»a∊d)≍a∊d
+┌─
+╵ 0 0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0
+  0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0 0
+                                          ┘
+   (»a∊d)<a∊d
+⟨ 0 1 0 0 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 ⟩
+   »⊸<a∊d
+⟨ 0 1 0 0 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 ⟩
+   a≍»⊸<a∊d
+┌─
+╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
+  0   1   0   0   0   1   0   0   0   0   0   1   0   0   1   0   0   0   0   0
+                                                                                  ┘
+```
+
+Comparing with the shifted mask lets us check if the preceding character was also a digit.
+The use of `<` is a little BQN trick.
+For booleans `p` and `q`, `p<q` is true iff `p` is 0 and `q` is 1.
+So now we have the start points of the number tokens.
+
+```
+
+   (a∊"[]")∨»⊸<a∊d
+⟨ 1 1 0 0 0 1 0 1 1 0 1 1 0 0 1 0 0 0 1 1 ⟩
+   a≍(a∊"[]")∨»⊸<a∊d
+┌─
+╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
+  1   1   0   0   0   1   0   1   1   0   1   1   0   0   1   0   0   0   1   1
+                                                                                  ┘
+```
+
+To get the rest of the token start points, we just `∨` in all the bracket locations.
+
+```
+
+   +`(a∊"[]")∨»⊸<a∊d
+⟨ 1 2 2 2 2 3 3 4 5 5 6 7 7 7 8 8 8 8 9 10 ⟩
+   a≍+`(a∊"[]")∨»⊸<a∊d
+┌─
+╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
+  1   2   2   2   2   3   3   4   5   5   6   7   7   7   8   8   8   8   9   10
+                                                                                  ┘
+```
+
+Taking a sum scan gives us a different number for each token, but each comma gets lumped in with the previous token.
+
+```
+
+   (','≠a)×+`(a∊"[]")∨»⊸<a∊d
+⟨ 1 2 2 2 0 3 0 4 5 0 6 7 7 0 8 8 8 8 9 10 ⟩
+   a≍(','≠a)×+`(a∊"[]")∨»⊸<a∊d
+┌─
+╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
+  1   2   2   2   0   3   0   4   5   0   6   7   7   0   8   8   8   8   9   10
+                                                                                  ┘
+```
+
+Multiplying by a mask of non-commas zeros out the commas.
+
+```
+
+   1-˜(','≠a)×+`(a∊"[]")∨»⊸<a∊d
+⟨ 0 1 1 1 ¯1 2 ¯1 3 4 ¯1 5 6 6 ¯1 7 7 7 7 8 9 ⟩
+   (1-˜(','≠a)×+`(a∊"[]")∨»⊸<a∊d)⊔a
+⟨ "[" "999" "2" "[" "]" "[" "31" "4167" "]" "]" ⟩
+```
+
+We subtract 1 to drop the commas when we group and give the first group index 0.
+Finally, we group and voila!
+
+Getting from here to my definition of `T` is just standard tacit refactoring stuff.
+And to be honest `T` is hard for me to read, so I probably wouldn't write it that way.
+But we already have it, so let's continue to parsing.
+
+### Parsing
+
+Now it's just standard recursive descent stuff.
+Here's a sketch of the grammar.
+
+```
+
+Value → List | Number
+List  → "[" Value* "]"
+```
+
+We write one function each for parsing values, lists, and numbers.
+
+```
+
+   ParseVal ← {"["≡⊑𝕩 ? ParseLst 𝕩; ParseNum 𝕩}
+   ParseNum ← {⟨10⊸×⊸+˜´⌽'0'-˜⊑𝕩, 1↓𝕩⟩}
+   ParseLst ← {
+    rslt←⟨⟩
+    val‿rest ← ⟨@,1↓𝕩⟩
+    {𝕤⋄val‿rest↩ParseVal rest ⋄ rslt∾↩<val}•_while_{𝕤⋄"]"≢⊑rest}@
+    ⟨rslt, 1↓rest⟩
+   }
+```
+
+The basic idea is that a value is a list if it starts with "[", otherwise it's a number.
+To parse a number, we just do a standard string-to-number-left-fold thing on the first element,
+and we return that number along with the rest of the tokens.
+To parse a list, we build up a list `rslt` by repeatedly parsing a value off the front of the list
+until we hit a "]".
+Then we return `rslt` and the rest of the tokens.
+Gotta be careful to drop the brackets in the right spots and to enclose the value before appending to `rslt`!
+
+To parse a list, we tokenize, parse the list, and then take the value from the `⟨value, tokens⟩` pair the parser returns.
+
+```
+
+   Parser2 ← ⊑∘ParseLst∘T
+   Parser2 "[999,2,[],[31,4167]]"
+⟨ 999 2 ⟨⟩ ⟨ 31 4167 ⟩ ⟩
+```
+
+It works!
+
+```
+
+   bqn ≡ Parser2¨¨ data2
+1
+```
+
+It agrees with the parsing we did earlier using `•BQN`,
+
+```
+
+   bqn ≡ Parser2 data
+1
+```
+
+and works on the "one giant string" approach.
+
+```
+
+   100 Parser2•_timed data
+0.007146561
+   100 Parser2¨¨•_timed data2
+0.006849455
+```
+
+Not to mention it's around 10x as fast as using `•BQN`.
+
+Using array techniques, we can achieve even faster parsing.
+Both the [self-hosted compiler](https://github.com/mlochbaum/BQN/blob/master/src/c.bqn) and the [bqn-libs json parser](https://github.com/mlochbaum/bqn-libs/blob/master/json.bqn) use an array style.
+The following ideas come from studying the json parser.
+(I haven't looked at the compiler in any depth.)
+
+The fundamental idea for handling nesting is to reorder the tokens by depth.
+Once we've done that, there's a sense in which we've already mostly parsed the tokens!
+(At least for a simple case like these nested lists.)
+
+Here's our running example:
+
+```
+
+   tok ← T "[1,2,[3,4,[5,6]],7,8,[9,10]]"
+⟨ "[" "1" "2" "[" "3" "4" "[" "5" "6" "]" "]" "7" "8" "[" "9" "10" "]" "]" ⟩
+```
+
+Let's find the depth.
+
+```
+
+   o ← "["⊸≡¨tok
+   c ← "]"⊸≡¨tok
+   tok≍+`o-c
+┌─
+╵ "[" "1" "2" "[" "3" "4" "[" "5" "6" "]" "]" "7" "8" "[" "9" "10" "]" "]"
+  1   1   1   2   2   2   3   3   3   2   1   1   1   2   2   2    1   0
+                                                                           ┘
+```
+
+Opening brackets increase depth by 1 at the bracket, and closing brackets decrease depth by 1 at the bracket.
+
+We can use `⍋` to reorder the tokens according to their depths.
+
+```
+
+   (⍋+`o-c)⊏tok
+⟨ "]" "[" "1" "2" "]" "7" "8" "]" "[" "3" "4" "]" "[" "9" "10" "[" "5" "6" ⟩
+```
+
+This is really weird-looking at first, but once you learn how to read it, it's nicer to work with than the original order.
+
+Each closing bracket is like a nested list waiting to be filled, or an arrow pointing to a sublist.
+Each opening bracket signals the start of a new sublist.
+The list being pointed to by a closing bracket is the next unused sublist.
+
+If we replace each closing bracket with a `↓` and each opening bracket with a `∘`, just for pictorial purposes,
+we can arrange the list into the follow diagram.
+
+```
+
+0 ↓
+1 ∘  1  2  ↓  7  8  ↓
+2          ∘ 3 4 ↓  ∘ 9 10
+3                ∘ 5 6
+```
+
+The downward arrows represent sublists, and the circles represent list starting points.
+The numbers in the first column are the depths.
+The first closing bracket is the only token with depth zero, and it points at the whole list.
+The element between 2 and 7 and the last element are each sublists, the first of which has its own sublist.
+
+We almost have an algorithm that goes something like this:
+for each closing bracket, find the next unused sublist and replace the closing bracket with the sublist.
+
+For example, we might build the list this way:
+
+```
+
+] → 1 2 ] 7 8 ] → 1 2 ⟨3 4 ]⟩ 7 8 ⟨9 10⟩ → 1 2 ⟨3 4 ⟨5 6⟩⟩ 7 8 ⟨9 10⟩
+```
+
+How can we turn this into code?
+
+Instead of ordering by depth, we can go further and split by depth.
+
+```
+
+   (+`o-c)⊔tok
+⟨ ⟨ "]" ⟩ ⟨ "[" "1" "2" "]" "7" "8" "]" ⟩ ⟨ "[" "3" "4" "]" "[" "9" "10" ⟩ ⟨ "[" "5" "6" ⟩ ⟩
+```
+
+And then perhaps we can use some kind of fold to fill in the "gaps" in each list with the lists from the next element.
+Going left to right would build the list "top down" like the example above.
+One snag with this approach is that at each step we have to search at a different depth for the closing brackets.
+Sure, we know exactly what depth to search at, but we can eliminate this complication entirely by going right to left.
+This builds the list bottom up, so at every step we are plugging sublists into a list at the outermost depth.
+
+This would look something like:
+
+```
+
+5 6 → ⟨3 4 ⟨5 6⟩⟩ ⟨9 10⟩ → 1 2 ⟨3 4 ⟨5 6⟩⟩ 7 8 ⟨9 10⟩
+```
+
+Here is the complete idea. We're going to perform a right fold. 
+At each step, the operand to the fold splits up the right argument at the opening brackets
+and then plugs the resulting lists into the closing brackets of the left argument.
+
+Thus we need two functions: one to split up the right argument on opening brackets and one to plug the lists into the closing brackets.
+
+Now we can write some code.
+
+```
+
+   # split up based on [
+   Split ← {m←"["⊸≡¨𝕩 ⋄ 1⊸↓¨(1-˜+`m)⊔𝕩}
+   Split "["‿"3"‿"4"‿"]"‿"["‿"9"‿"10"
+⟨ ⟨ "3" "4" "]" ⟩ ⟨ "9" "10" ⟩ ⟩
+
+   # replace "]" in 𝕩 with 𝕨
+   Replace ← {m←"]"⊸≡¨𝕩 ⋄ 𝕨⌾(m⊸/)𝕩}
+   ⟨"3"‿"4"‿"]", "9"‿"10"⟩ Replace "["‿"1"‿"2"‿"]"‿"7"‿"8"‿"]"
+⟨ "[" "1" "2" ⟨ "3" "4" "]" ⟩ "7" "8" ⟨ "9" "10" ⟩ ⟩
+
+   {(Split 𝕩) Replace 𝕨}´ (+`o-c)⊔tok
+┌─
+· ┌─
+  · "1" "2" ⟨ "3" "4" ⟨ "5" "6" ⟩ ⟩ "7" "8" ⟨ "9" "10" ⟩
+                                                         ┘
+                                                           ┘
+
+   Replace˜⟜Split´(+`o-c)⊔tok
+┌─
+· ┌─
+  · "1" "2" ⟨ "3" "4" ⟨ "5" "6" ⟩ ⟩ "7" "8" ⟨ "9" "10" ⟩
+                                                         ┘
+                                                           ┘
+```
+
+It works!
+The whole thing is inside a singleton list because of that left-most closing bracket,
+so we'll need to apply `⊑` at the end.
+Also, we've still got to turn strings into numbers at the end.
+We can write a string to number function and apply it at depth 1,
+but there's one small catch that's not apparent from our example so far:
+if we parse an empty list, then applying our string to number function at depth 1 will apply it to that empty list.
+So we need to check for empty input to the string to number function.
+
+Other than that, we just need to package this together into a parser.
+
+```
+
+   ToNum ← {⟨⟩≡𝕩 ? ⟨⟩ ; 10⊸×⊸+˜´⌽𝕩-'0'}
+   Parser3 ← {ToNum⚇1 ⊑ Replace˜⟜Split´ (+`("["⊸≡¨𝕩)-"]"⊸≡¨𝕩)⊔𝕩}∘T
+   Parser3 "[1,2,[3,4,[5,6]],7,8,[9,10]]"
+┌─
+· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
+                                   ┘
+   bqn ≡ Parser3 data
+1
+   bqn ≡ Parser3¨¨ data2
+1
+```
+
+Looking good.
+Let's see how fast it is.
+
+```
+
+   •Show 100 Parser3•_timed data
+0.015287862
+   •Show 100 Parser3¨¨•_timed data2
+0.014943577
+```
+
+Oof! It's twice as slow as the conventional parser!
+
+That's okay because this was really just a warm-up to get us in the array mood.
+Even though what we have now is slow, the concepts we used will help us write a fast parser.
+And isn't it kind of amazing how we parsed a recursive data structure with just some arithmetic and primitives like `⊔` and folding?
+I think it's cool.
+
+Anyway, we can make significant improvements.
+First of all, have you been feeling the nagging pain of using lists of strings instead of just a string?
+It's so annoying writing `"["⊸≡¨tok` instead of just `'['=tok`, and it's probably slower too.
+Let's try to keep our representations "flatter".
+
+So the new idea is that the tokenizer will just output a string, meaning that each token is now a single character.
+This leaves no room for the values of the tokens (the numbers themselves), just the token types,
+so actually the tokenizer will output a string and a list of numbers.
+
+```
+
+   a ← "[1,2,[3,4,[5,6]],7,8,[9,10]]" # example string
+   a≍n ← a∊'0'+↕10 # numbers
+┌─
+╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
+  0   1   0   1   0   0   1   0   1   0   0   1   0   1   0   0   0   1   0   1   0   0   1   0   1   1   0   0
+                                                                                                                  ┘
+   a≍ns ← »⊸<n # number starts
+┌─
+╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
+  0   1   0   1   0   0   1   0   1   0   0   1   0   1   0   0   0   1   0   1   0   0   1   0   1   0   0   0
+                                                                                                                  ┘
+   (1-˜n×+`ns)⊔a # numbers as strings
+⟨ "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" ⟩
+   num ← 10⊸×⊸+˜´∘⌽¨ '0'-˜(1-˜n×+`ns)⊔a # numbers
+⟨ 1 2 3 4 5 6 7 8 9 10 ⟩
+```
+
+This is the idea behind the part of the tokenizer that extracts the numbers into one flat list.
+
+```
+
+   a≍f ← ns∨a∊"[]" # first characters of tokens as mask
+┌─
+╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
+  1   1   0   1   0   1   1   0   1   0   1   1   0   1   1   1   0   1   0   1   0   1   1   0   1   0   1   1
+                                                                                                                  ┘
+   f/a # first character of each token as string
+"[12[34[56]]78[91]]"
+   tok ← '0'¨⌾((f/n)⊸/)f/a # replace numbers with 0
+"[00[00[00]]00[00]]"
+```
+
+Here is the second part of the tokenizer.
+We get the first characters of each token by adding in the brackets to the number starts.
+Then we replace all the numbers with 0.
+The idea is that this string now represents the token types with the brackets standing for themselves
+and the 0s standing for a number type token.
+The numbers themselves are separated out as we showed previously.
+Any character would do to represent the numbers,
+but I chose 0 because it's what the json parser does and it reminds me of a number.
+
+Putting it all together:
+
+```
+
+   Tokenize ← {
+     n ← 𝕩∊'0'+↕10
+     ns ← »⊸<n
+     num ← 10⊸×⊸+˜´∘⌽¨ '0'-˜(1-˜n×+`ns)⊔𝕩
+     f ← ns∨𝕩∊"[]"
+     tok ← '0'¨⌾((f/n)⊸/)f/𝕩
+     tok‿num
+   }
+   Tokenize "[1,2,[3,4,[5,6]],7,8,[9,10]]"
+⟨ "[00[00[00]]00[00]]" ⟨ 1 2 3 4 5 6 7 8 9 10 ⟩ ⟩
+```
+
+Now for parsing we're going to build the list from the bottom up again, using the same depth ordering ideas.
+We obviously can't operate only on the token types (the string the tokenizer produces);
+we need to incorporate the token values (the numbers) at some point.
+The way we'll do that is operating on the token types to produce indices that we use to select from a list of values.
+
+So if we were trying to produce the final result list, which in a depth-based token-types-only representation would look like `00]00]`,
+we need to somehow say that the first 0 stands for 1, the second 0 for 2, the first closed bracket for the whole list `⟨3,4,⟨5,6⟩⟩`,
+the third 0 for 7, the fourth 0 for 8, and the final closed bracket for the whole list `⟨9,10⟩`.
+Then we could just grab all the values we mentioned and put them together as `⟨1,2,⟨3,4,⟨5,6⟩⟩,7,8,⟨9,10⟩⟩`.
+
+The way we'll be able to reference a whole sublist like `⟨3,4,⟨5,6⟩⟩` is by building from the bottom up, as previously mentioned,
+so that by the time we need to use a value, we've already built it.
+At the beginning, the values we have are just the numbers themselves.
+We start with the deepest list `⟨5,6⟩`, which we can build by indexing into the list of values (which again at this point is just numbers).
+Then we append this to the list of values.
+Now in a future step where we need to build `⟨3,4,⟨5,6⟩⟩`, all three elements of this list already reside in our list of values,
+and all we need to do is index into the list of values to assemble them into a new value that gets appended to the end.
+
+So let's start by trying to organize the tokens so we can build the values in the correct order.
+
+```
+
+   o ← '['=tok
+   c ← ']'=tok
+   tok≍+`o-c # depth
+┌─
+╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
+  1   1   1   2   2   2   3   3   3   2   1   1   1   2   2   2   1   0
+                                                                          ┘
+   g ← ⍋+`('['=tok)-']'=tok # depth ordering indices
+⟨ 17 0 1 2 10 11 12 16 3 4 5 9 13 14 15 6 7 8 ⟩
+   u ← g⊏tok # tokens reordered by depth
+"][00]00][00][00[00"
+```
+
+Here's that same reorder by depth trick we've already discussed,
+but this time it's a little less painful to write since we just have a string instead of a list of strings.
+
+Here's the next big idea.
+
+```
+
+   u≍r ← +`'['=u # sublists in depth ordering
+┌─
+╵ ']' '[' '0' '0' ']' '0' '0' ']' '[' '0' '0' ']' '[' '0' '0' '[' '0' '0'
+  0   1   1   1   1   1   1   1   2   2   2   2   3   3   3   4   4   4
+                                                                          ┘
+```
+
+By taking a sum scan of a mask of opening bracket locations in the depth ordering we can give a number to each sublist of the list.
+This is the order we have to construct values in, with higher numbers going first.
+It's reminiscent of how we split the on opening brackets in our earlier approach.
+
+Now what we need are indices that tell us where to pull the values from. 
+For example, we start with list 4 (the `[00` at the end), so we need to know that those 0s are associated with indices 4 and 5,
+since `4‿5 ⊏ num` is the `5‿6` we want.
+Then later when constructing list 2, which looks like `[00]`, we need to know that the 0s are associated with indices 2 and 3,
+and the closing bracket is associated with index 10, since (after appending `5‿6` to a list of values `vals` at index 10) we have `2‿3‿10 ⊏ vals` giving `⟨3,4,⟨5,6⟩⟩`.
+
+Here we go.
+
+```
+
+   tok≍f ← tok∊"0]" # mask of "values": numbers and sublists
+┌─
+╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
+  0   1   1   0   1   1   0   1   1   1   1   1   1   0   1   1   1   1
+                                                                          ┘
+   (f/tok)≍(f/'0'=tok)+2×f/']'=tok # gives numbers 1 and sublists 2
+┌─
+╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
+  1   1   1   1   1   1   2   2   1   1   1   1   2   2
+                                                          ┘
+   vi ← ⍋⍋(f/'0'=tok)+2×f/']'=tok # value indices
+⟨ 0 1 2 3 4 5 10 11 6 7 8 9 12 13 ⟩
+   (f/tok)≍vi
+┌─
+╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
+  0   1   2   3   4   5   10  11  6   7   8   9   12  13
+                                                          ┘
+```
+
+Here we filter away the opening brackets, keeping only those tokens that represent values: 0 for numbers and ] for sublists.
+Then we assign each value a number working left to right, but with numbers always coming before sublists.
+That `⍋⍋` is the ordinals pattern, which shows which index the element would end up at if sorted.
+(You can read about that [here](https://mlochbaum.github.io/BQN/doc/order.html#ordinals).)
+
+This is close to what we want.
+The 0s each have been associated with the proper index.
+However, the closing brackets (representing sublists) have not.
+
+We need to bring in our previous work `r` where we numbered the lists.
+But `r` is in depth ordering and `vi` is in the original ordering, so we put `r` back into original ordering and call it `l`.
+
+```
+
+   tok≍l ← (⍋g)⊏r # sublist index
+┌─
+╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
+  1   1   1   2   2   2   4   4   4   2   1   1   1   3   3   3   1   0
+                                                                          ┘
+```
+
+We invert the permutation `g` with `⍋` to translate from the depth ordering back to the original ordering.
+We call the resulting numbers the "sublist index" here.
+(It's really a pain to name a new idea. I don't wanna name things! That's why I'm a BQN programmer.)
+
+We can use `l` to fix `vi` by finding the sublist index associated with each closing bracket.
+If we just take the sublist index at a closing bracket, we get the sublist index associated with the list containing it.
+So we need the sublist index at the token before the closing bracket to get the index of the sublist itself.
+
+```
+
+   c/l
+⟨ 2 1 1 0 ⟩
+   c/»l
+⟨ 4 2 3 1 ⟩
+```
+
+Here we show `c/l` and `c/»l`. The first element of `c/l` is 2, indicating that the first closing bracket (which closes `⟨5,6⟩`) represents a sublist contained in the sublist with index 2 (i.e. `⟨3,4,⟨5,6⟩⟩`).
+The first element of `c/»l`, however, is 4, indicating that the sublist `⟨5,6⟩` is itself sublist number 4.
+That's the number we want.
+
+```
+
+   (≠num)+≠⊸-c/»l
+⟨ 10 12 11 13 ⟩
+```
+
+Sublist number 4 is the first sublist to be constructed, and after being constructed and appended to the value list it has index 10.
+The arithmetic above adjusts the sublist indices to become indices into the value list.
+We subtract each sublist index from the number of sublists to invert the order, and then add the result to the number of numbers,
+to offset the indices correctly.
+
+```
+
+   nv ← ≠num
+   i ← vi ⊏ (↕nv) ∾ nv+≠⊸-c/»l # Adjust for sublist ordering
+⟨ 0 1 2 3 4 5 10 12 6 7 8 9 11 13 ⟩
+   (f/tok)≍i
+┌─
+╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
+  0   1   2   3   4   5   10  12  6   7   8   9   11  13
+                                                          ┘
+```
+
+From here, it's not hard to complete the value indices list.
+We append the value indices just calculated for the sublists to the list `↕≠num`, which are the value indices for the numbers.
+Since both `vi` and `c»l` reference the closing brackets in the original left to right order, indexing into this list with `vi` pulls everything out in the correct order.
+
+```
+
+   ⌽(1-˜f/l)⊔i
+⟨ ⟨ 4 5 ⟩ ⟨ 8 9 ⟩ ⟨ 2 3 10 ⟩ ⟨ 0 1 12 6 7 11 ⟩ ⟩
+```
+
+We group these value indices `i` using the sublist indices from `l` and reverse the result to finally complete the task of arranging the value indices.
+We use `1-˜f/l` instead of just `l` because we need to remove the opening brackets and drop the final closing bracket.
+Now we can see the first element contains indices 4 and 5, which correspond to the values 5 and 6.
+The third element contains the indices 2, 3, and 10, which correspond to values 3, 4, and `⟨5,6⟩`.
+Etc.
+
+All that's left to do is the indexing and appending described earlier.
+
+```
+
+   vals ← num
+   {vals∾↩<𝕩⊏vals⋄@}¨ ⌽(1-˜f/l)⊔i
+   ¯1⊑vals
+┌─
+· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
+                                   ┘
+```
+
+It works!
+The list of values `vals` starts off as just the numbers `num`.
+With each application of the block function we index into `vals` and append the result to `vals`.
+The `⋄@` is at the end of the block both to signal that we are using the block for side-effects only
+and to not waste time and space building a list of results.
+
+We're not quite done yet!
+There is one final wrinkle that our example so far hasn't made clear.
+We need to ensure that the result of `(1-˜f/l)⊔i` always has as many elements as there are closing brackets
+(even if some or all of them are empty) in order to accomodate empty lists.
+This is roughly because each closing bracket represents a sublist value,
+so we always need to build at least that many values.
+
+Thus we change `1-˜f/l` to `(+´c)∾˜1-˜f/l` to append the number of closing brackets to the end.
+Group has the option of using a left argument with an extra last element relative to right argument,
+and this last element sets the minimum number of elements of the result.
+
+Let's put it all together.
+
+```
+
+   Parser4 ← {
+     tok‿num ← Tokenize 𝕩
+     g ← ⍋+`('['=tok)-(c←']'=tok) # depth ordering indices
+     r ← +`'['=g⊏tok # sublists in depth ordering
+     l ← (⍋g)⊏r # sublist index
+     f ← tok∊"0]" # mask of "values": numbers and sublists
+     vi ← ⍋⍋(f/'0'=tok)+2×f/c # value indices
+     nv ← ≠num
+     i ← vi ⊏ (↕nv) ∾ nv+≠⊸-c/»l # Adjust for sublist ordering
+     vals ← num
+     {vals∾↩<𝕩⊏vals⋄@}¨ ⌽((+´c)∾˜1-˜f/l)⊔i
+     ¯1⊑vals
+   }
+   •Show Parser4 "[1,2,[3,4,[5,6]],7,8,[9,10]]"
+┌─
+· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
+                                   ┘
+
+   •Show bqn ≡ Parser4 data
+1
+   •Show bqn ≡ Parser4¨¨ data2
+1
+
+   •Show 100 Parser4•_timed data
+0.004316795
+   •Show 100 Parser4¨¨•_timed data2
+0.005003989
+```
+
+It works, and it's really fast! It's also the only parser that's faster on the one big string approach.
+
+Using `•BQN` is definitely the easiest, but it is slow and has problems parsing large lists, at least on my machine.
+
+For a little more effort (at least if you're already familiar with recursive descent) we can get a much more performant parser.
+Probably should be your method of choice if `•BQN` is too slow.
+
+A well-written array style parser is the fastest (and coolest obviously), but wow is it confusing to implement!
+For this Advent of Code problem it's certainly not worth the trouble.
+I mean, even just using `•BQN` works fine honestly.
+If we had to parse way more data, or reuse this parser many times, the array method would start to make sense.
+Also if the lists had very very deep nesting, the recursive parser would hit the maximum recursion limit and fail.
+
+Here's a little table recapping the time in seconds it took each method to parse my input file.
+Each time is the average of 100 runs.
