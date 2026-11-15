@@ -1,257 +1,483 @@
-*This post (and the code behind it) was written with a lot of help from AI. I'm not going to
-apologize for that. If that bothers you, feel free to close the tab.*
-
-I maintain [Ratatui](https://ratatui.rs), so I see a lot of the TUIs people build. Many of them end up looking fairly
-same-ish: plain boxes on a boring background, missing a bunch of the things that good design in
-other mediums brings us.
-
-Borders are part of the problem. They have to take up space, so they become part of the panels
-people want to build. One option is to drop them and just use color, but borders are really nice
-for delineating and surrounding things. There are lots of ways to sort of get borders in a
-terminal, but none that are 100% good. I've drawn enough `┌──┐` by hand to have opinions about
-this.
-
-The usual way is the Unicode Box Drawing block, which has 128 characters for lines, corners and
-joins. Somehow that's still not enough:
-
-[![The Unicode Box Drawing block, U+2500 to U+257F, in a 16 by 8 grid with hex row and column labels](https://www.joshka.net/cell-borders/box-drawing-block.png)](https://www.joshka.net/cell-borders/box-drawing-block.png)
-
-So I've been working on a terminal protocol that draws thin lines on the edges of cells instead.
-I've got it working as [a patch to Ghostty](https://github.com/joshka/ghostty/tree/joshka/cell-borders) (and [an earlier version in
-Rio](https://github.com/raphamorim/rio/pull/1947) before that), and
-I've built demo apps for it with Ratatui. I'd like feedback from
-terminal and TUI authors.
-
-[![A tiling window manager demo built with Ratatui, using cell borders for panes, tabs, form fields and buttons](https://www.joshka.net/cell-borders/panes.png)](https://www.joshka.net/cell-borders/panes.png)
-
-Every line in that screenshot is a cell border. None of them use up a row or column. The tab
-labels sit on the top edge of each pane, the text fields are underlined right under the text, and
-the buttons are one row tall and rounded.
-
-Here's the same app in a terminal without cell borders, falling back to box-drawing characters:
-
-[![The same demo drawn with box-drawing characters](https://www.joshka.net/cell-borders/panes-box.png)](https://www.joshka.net/cell-borders/panes-box.png)
-
-Each pane loses a row and a column on every side, so the log pane shows two fewer lines and the
-notes wrap differently. The tab labels move inside the frame. The text fields use the underline
-attribute instead, and the checkbox and buttons turn into brackets.
-
-- Borders, obviously. Panes and panels that don't eat a row and column on every side.
-- Menus and popups that sit on top of other content and still look like they're on top.
-- Panel style apps, where the layout is a set of regions that each want an edge.
-- Widgets like text fields, buttons and checkboxes, which want a line right up against their text.
-- Making things look neater in general. A border on the outer edge of a panel's background looks a lot cleaner, and text can run right up to it.
-
-The settings form, with cell borders and then with the box-drawing fallback:
-
-The tabs are the same story. With cell borders they sit on the pane's top edge. With box
-characters they need their own row inside the frame:
-
-### [Charts](https://www.joshka.net/cell-borders/#charts)
-
-Lines between cells also work for charts. btop-style braille graphs fill every cell with dots, so
-there's nowhere to put a gridline or an average line without giving up a row. With cell borders
-they sit on the cell edges between the dots. Here's a monitor in that style, built with Ratatui:
-
-[![A braille CPU graph with gridlines and an average line drawn on the cell edges](https://www.joshka.net/cell-borders/chart.png)](https://www.joshka.net/cell-borders/chart.png)
-
-And the fallback, which has to drop the gridlines:
-
-[![The same braille graph without gridlines](https://www.joshka.net/cell-borders/chart-box.png)](https://www.joshka.net/cell-borders/chart-box.png)
-
-Here's the tiling panes demo moving panes around, opening menus and the about dialog:
-
-[![An animation of panes being dragged, split and retiled, with a menu and dialog](https://www.joshka.net/cell-borders/tour.webp)](https://www.joshka.net/cell-borders/tour.webp)
-
-Partway through, it turns on a checkerboard of the cells, which shows how everything lines up
-with the grid. Toggle it here:
-
-The root of it is that box-drawing characters are text. Each line is a glyph that takes up a whole
-cell, and pretty much everything annoying about them falls out of that.
-
-Space is the obvious one. On my 16" laptop with a font I can actually read, the terminal is
-something like 200x50 (your prefs will move that around a bit). Columns are mostly fine at that
-size. Rows aren't. A layout with a couple of levels of nested panels can easily spend 6 or 8 of
-those 50 rows on nothing but lines. That's a lot of screen to give up for decoration.
-
-You also can't put a line between two cells that both have something in them. So there's no way to
-underline a text field right under its text, or to outline a button, without adding padding around
-it. Rounded corners sort of work, except the corner glyph has one background color, and when the
-panel's background is different from what's around it you get a little square of the wrong color
-in each corner. And the line itself is whatever the font decides it is, weight and position
-included.
-
-Then there's copy and paste. Select some text inside a box and you get the box too. Everyone who's
-pasted from a TUI into Slack knows the little `│` cleanup dance. Sometimes you do want the box
-(pasting a table into a chat, say), but mostly it's junk. Cell borders aren't text, so they never
-get copied, which cuts both ways.
-
-A cell border is a cell attribute, like a background color. Each cell can carry up to twelve line
-segments: the two halves of each of its four edges, and four arms from its center. Each segment
-has its own color, width, placement and style, and the terminal draws them over the cell grid.
-Borders are stored in the cells, so they scroll, erase, insert and reflow with the text. What
-happens on erase or scroll already has an answer, the same one as for colors.
-
-The edges are split into halves so borders line up with quadrant block characters (`▖▗▘▝` and
-friends). That makes it easy to draw a shape that's a half cell in from the grid and still put a
-neat border around it. Yes, that still uses a character for the fill, and there might be a better
-way to do that part. One problem at a time.
-
-The same idea could stretch to sextants and octants, or to quarter and eighth widths, if designs
-need them.
-
-[![The gallery script showing solid, double, dashed and dotted lines, rounded corners, forks and junctions](https://www.joshka.net/cell-borders/styles.png)](https://www.joshka.net/cell-borders/styles.png)
-
-[![Rounded panels with and without an outside fill color. The first has square patches of background at its corners](https://www.joshka.net/cell-borders/zoom-outside.png)](https://www.joshka.net/cell-borders/zoom-outside.png)
-
-Lines can be solid, double, dashed or dotted. Each corner and center of a cell can be square or
-rounded, with a configurable radius and anti-aliased arcs. A rounded corner can name an outside
-color, so the area outside the arc is painted correctly when the panel's background differs from
-what's behind it.
-
-When two neighboring cells both put a line on their shared edge, they merge into one line. The
-stroke with the higher `priority` wins, then the wider one, then the one to the right or below.
-That way a focused pane can raise its priority and keep its whole outline, whatever order its
-neighbors were drawn in. My first try was "right/bottom always wins", which lasted until the
-focused pane lost half its outline to its neighbor.
-
-Everything is one DCS string with a namespace:
-
-```
-ESC P 1 + b cell-border ; OP ; FIELDS... ESC \
-```
-
-The common path is a pen, held in the cursor like the current background color. Set it, print
-some text, and the printed cells get the borders:
-
-```
-ESC P 1 + b cell-border;pen;48;32;7aa2f7;0;0 ESC \     bottom edge, blue: an underline
-hello
-ESC [ 0 m                                              SGR 0 clears the pen
-```
-
-There are also rectangle commands that set or clear borders on existing cells without touching
-the pen, and a capability query. An app sends the query followed by DA1. If the DA1 reply arrives
-without a `cell-border` reply first, the terminal doesn't support it, so the app falls back to box
-characters and reserves the space they need. Terminals that don't understand the DCS ignore it,
-the same as any unknown DCS.
-
-The minimum a terminal needs is the pen, the rectangle commands and solid strokes. I've tried to
-keep that first cut small, because there's always one more "... and this" to add, and that's a
-slippery slope.
-
-Line styles, rounded joints, priority and outside colors are extension fields listed in the
-capability reply, and unknown fields are ignored, so they can be added later. I'd rather the
-early decisions be two way doors where possible.
-
-The spec calls itself version 1 (it's the `1` in `DCS 1 + b`). That's v1 in the old sense, before
-we all got bogged down in semver. It doesn't mean done or stable, it means it's the first one I was willing to write
-down. Read it as v0.1, or a draft, or whatever you prefer.
-
-## [Prior art](https://www.joshka.net/cell-borders/#prior-art)
-
-Parts of this have been done before:
-
-- DEC ruled lines in DECterm (extension 43 in the DA1 reply) draw lines around rectangles. They scroll with the text, but they're a separate layer: clearing the screen leaves them behind, and they're always one pixel wide in the normal text color.
-- SGR 51 to 65: framed, encircled, overline and the ideogram side lines. Some terminals draw borders with them, but they're on/off attributes with no color, width or joins, and there's no attribute for the bottom edge.
-- The Win32 console has per-cell grid flags for the top, left and right edges. PDCurses and X/Open curses (WA_TOP, WA_LEFT and friends) have similar attributes. These are the closest to this protocol, but they have no bottom edge (Win32), color, width or halves.
-- IBM 3270 terminals can outline whole input fields.
-
-What none of these give you is a line with its own color and width on each edge. The
-[rationale document](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) covers the prior art in more detail and explains each choice in
-the protocol.
-
-My own first prototype was in Rio ([raphamorim/rio#1947](https://github.com/raphamorim/rio/pull/1947)), with an earlier
-version of the spec that used APC instead of DCS. Feedback pointed out that APC isn't safe to
-reuse: Kermit 95 has run APC payloads as Kermit commands since the 90s. DCS is where structured
-terminal commands already live, and terminals ignore DCS strings they don't recognize, so I
-switched to that.
-
-When I first showed this around, most of the questions were about these. The spec goes into all
-of them properly, but here's roughly where I landed.
-
-Multiplexers were the first thing people asked about. tmux and friends redraw panes from their own
-idea of the cell grid, so passing these sequences through would just put borders in the wrong
-place. A multiplexer that doesn't know about the protocol should drop them and answer DA1 itself,
-and then apps running inside it fall back to box characters like they would anywhere else. One
-that does know about it can store borders like any other attribute and redraw them.
-
-Conflicting lines on a shared edge are settled when the terminal renders, using the priority rule
-above, so it doesn't matter what order the app wrote the cells in.
-
-Erase, insert and delete all work the way they do for background colors. Erased cells pick up the
-current pen, and lines that get inserted or deleted take their borders along. Scrollback, the
-alternate screen and reflow mostly come for free, because the border lives in the cell.
-
-On cost: the Ghostty change is about 1,650 lines, and a fair chunk of that is tests. Each cell gets
-a 16-bit border ID, which fits in padding that was already there, so cells don't get any bigger
-and a screen with no borders costs nothing extra. The IDs point into a table of distinct border
-sets (about 100 bytes each) that's shared by the whole terminal. A typical TUI only uses a
-handful of distinct sets, but the table is never freed, so in the worst case (all 65,535 IDs in
-use) it's somewhere around 10-15 MB.
-
-Rendering only does extra work for cells that have borders. Each one looks at its four neighbors to
-resolve shared edges, so changing a row also rebuilds the rows either side of it. Straight lines
-are a few solid quads per cell. Rounded corners cost more, because the anti-aliased arc is drawn as
-rows of small quads, roughly one per edge pixel. I haven't benchmarked any of this properly yet,
-and it's the part I'd most like another set of eyes on.
-
-The [spec](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-protocol.md) and [rationale](https://github.com/joshka/ghostty/blob/joshka/cell-borders/specs/cell-border-rationale.md) are on my Ghostty fork. The [Ghostty
-branch](https://github.com/joshka/ghostty/tree/joshka/cell-borders) implements all of version 1. I've only built and run it on macOS so far, so the
-GTK and OpenGL builds are untested. To build and run it (you'll need Zig 0.17 and Xcode):
-
-```
-git clone -b joshka/cell-borders https://github.com/joshka/ghostty.git
-cd ghostty
-zig build -Doptimize=ReleaseFast -Dxcframework-target=native
-open zig-out/Ghostty.app
-```
-
-Inside that Ghostty, the gallery script on the same branch draws the style gallery above. It
-detects support first, so it's also a quick check for another terminal's implementation:
-
-```
-python3 scripts/cell-borders.py            # the default view
-python3 scripts/cell-borders.py --styles   # line styles, joints and outside fill
-```
-
-Once it's running you can flip between views with keys: `p` placement, `c` colors, `h` blocks, `j`
-junctions, `e` halves, `s` styles and `l` live. `w` cycles the stroke width, `b` turns borders off
-so you can compare, and `q` quits. Each view also has a matching flag (`--placement`, `--styles`
-and so on) if you want to start on it.
-
-The tiling panes demo is on the [Ratatui branch](https://github.com/joshka/ratatui/tree/joshka/cell-borders). It falls back to box-drawing
-characters when the terminal doesn't support cell borders, which is how I made the comparison
-shots above:
-
-```
-git clone -b joshka/cell-borders https://github.com/joshka/ratatui.git
-cd ratatui
-cargo run -p tiling-panes
-```
-
-Drag panes around with the mouse to retile them. `n` and `v` split, `x` closes, and right click
-opens a pane menu. Press `b` to switch between cell borders and box drawing, or `g` to shade
-alternate cells and see where the edges are.
-
-The btop-style monitor from the chart screenshots is in the same branch. Given how much of it an AI
-wrote, I did briefly consider calling it bslop:
-
-[![The full btop-style monitor drawn with cell borders. The hostname is blurred](https://www.joshka.net/cell-borders/bslop.png)](https://www.joshka.net/cell-borders/bslop.png)
-
-To run it:
-
-```
-cargo run -p cell-border-top
-```
-
-It's a real system monitor (it reads your actual CPU, memory, network and processes), so it's a
-better test of how this looks on a busy screen than the panes demo. `1` to `4` show and hide the
-boxes, `b` and `g` work the same as in the panes demo, and `h` or `?` lists the rest of the keys.
-It needs a newer Rust (1.95) than the rest of Ratatui because of the `sysinfo` dependency.
-
-I'm not attached to this being the exact solution, but I think it's a problem worth solving, and
-I'd like it to be more than one terminal's feature (and more than one weekend's worth of yak
-shaving). If you work on a terminal, would you implement this, and which parts look expensive? If you work on a TUI library or app, which of your widgets
-would use it, and what would they need that isn't here? Comments are welcome on the
-[Ghostty discussion](https://github.com/ghostty-org/ghostty/discussions/14324), or on [Hacker News](https://news.ycombinator.com/item?id=50491423) and [Lobsters](https://lobste.rs/s/akdy9z/terminal_borders_don_t_cost_cell).
+In our [previous article](https://sigseis.dev/articles/2026/10/06), we covered what declarative macros are, and how to define and use them.In this article, we will focus on how to integrate them into your crate. That means we’ll cover macro scoping, organization, and exporting. We’ll also take a look at some common use-cases with examples.Hopefully, after reading these two articles, you’ll feel ready to start experimenting with declarative macros in your own crates!This article is tested under the 2024 edition of Rust.For older code you may see some older patterns, like using a lot of `#[macro_use]` statements, but this article is going to focus on more modern practices. If something doesn’t compile for you, check your Rust version and edition.
+
+## How To Integrate Declarative Macros Into Your Crate
+
+Broadly speaking, I like to differentiate declarative macros based on access level.**crate-exported**: Intended to be exported from your crate and used by your dependents**crate-local**: Intended to be used privately within your crate**You should prefer to keep macros crate-local if possible.**Macros can be useful even if you don’t intend on exporting them. Actually, that’s most commonly how I make use of macros!The main way to differentiate between the two is whether a macro is marked with the `#[macro_export]` attribute. If not, then it’s a **crate-local** macro.
+
+For historic reasons, macros have two different ways they scope into the surrounding code.**Textual Scoping**: The macro scope is based on *where in the file it’s defined***Path-Based Scoping**: The macro becomes an item in the module tree (acting more similarly to a standard Rust item)Where possible, you should prefer *path-based scoping*, but textual scoping can come in handy in some cases. Additionally, you’re very likely to run into heavy usage of the original textual scoping rules. So it’s worth understanding them regardless.
+
+#### Textual Scoping Rules
+
+**By default, declarative macros take on a textual scope.**Textual scoped declarative macros have some counter-intuitive visibility and access rules.The macro may be used ONLY *after* its definition within a module, function, or logical scope.The macro may be used by any submodules after the macro definition, *even without importing it explicitly*.So unlike other parts of the Rust language, **order actually matters for textual scoped declarative macros**.The most narrow visibility is within a logical scope (for example a function). Sometimes, though admittedly rarely, this can be useful for functions that have a lot of internal repetition.`fn example() {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    helper_macro!();
+}
+
+// You cannot access this macro outside of the function.
+`If the macro is going to be used in multiple items within the same module, you can simply define it in the module itself. This is more visible than within a single function, but it’s still constrained to only the current module and its submodules.`// You cannot use it here, because it's not defined yet.
+
+macro_rules! helper_macro {
+    () => {};
+}
+
+// Now it can be invoked and used.
+helper_macro!();
+
+// It can be used within functions, as one might expect.
+fn within_functions() {
+    helper_macro!();
+}
+
+// Works within submodules of any depth as well,
+// which might feel counter-intuitive.
+mod even_within_submodules {
+    helper_macro!();
+}
+`Sometimes it can be beneficial to use a macro from the *parent* module the containing module is defined under.**Modern Rust syntax allows for this better with path-based scoping**, which we’ll learn about in the next section.That said, you may still run into this syntax, so we should cover it.To hoist macros defined in a submodule into the parent’s textual scope, you can attach the `#[macro_use]` attribute on the containing module.`// We still cannot use `helper_macro!` here, it isn't defined yet.
+
+// After the module definition completes,
+// it's now defined in the parent's textual scope.
+#[macro_use]
+mod submodule {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    helper_macro!();
+}
+
+// See? Now we can access and use it here even without an import.
+// It acts as-if we had defined textually after `submodule`.
+helper_macro!();
+
+// Works within submodules of any depth as well,
+// since it's a part of the textual scope.
+mod sibling_submodule {
+    helper_macro!();
+}
+`But note that `#[macro_use]` will not automatically propagate further up the module tree.If you want your macro to continue to be defined all the way up the module tree, you’ll have to continue to attach the `#[macro_use]` attribute on all the parent modules.`#[macro_use] // <- Necessary if you need it...
+mod outer_file {
+    #[macro_use]
+    mod other_file {
+        macro_rules! helper_macro {
+            () => {};
+        }
+        helper_macro!();
+    }
+    helper_macro!();
+}
+helper_macro!(); // <- ... at this location onwards.
+`Historically, `#[macro_use]` was also used to import external macros from other crates into your textual scope.You should not be doing this anymore for macros imported from other crates, however.
+
+Path-based scoping for declarative macros allows us to work with macros in a way which feels more idiomatic.The macro works a lot like any other item, and can be invoked before the definition.In order to be used, it needs to be manually imported or resolved from the module tree.This can be accomplished with a small bit of code right after the macro definition:`macro_rules! helper_macro {
+    () => {};
+}
+
+// Re-export as an item in the module tree.
+pub(crate) use helper_macro;
+`When you do this, since the macro is now a part of the module tree, order no longer matters.`// Can call here, even if the macro isn't defined yet.
+helper_macro!();
+
+macro_rules! helper_macro {
+    () => {};
+}
+pub(crate) use helper_macro;
+
+// Can obviously still call here.
+helper_macro!();
+`Even though you can refer to macros out of order when they use path-based scoping, you’ll probably still want to define them before they’re used within the same file. Not because it’s necessary, but because it’s readable!The real benefit of this is that other modules can import and use the macro like they would any other item.`mod submodule {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    pub(crate) use helper_macro;
+}
+
+mod another_submodule {
+    // You can use it like a normal item!
+    use crate::submodule::helper_macro;
+    helper_macro!();
+
+    // Or you can refer to it by a path!
+    crate::submodule::helper_macro!();
+}
+`It’s most common to see this used with `pub(crate)`, but you can really use all item visibilities here (`pub(super)`, `pub(in some::path)`, *empty for private*). `pub` has some strange properties, however - we’ll cover that in the next section.
+
+If you want a declarative macro to be usable from outside your crate, you have to attach the `#[macro_export]` attribute to it.**Be careful when deciding to export a macro!**After you export a macro, users may grow to depend on it, and it may become difficult to change or maintain. This is why I usually err towards *not* exporting a macro, until I’m *sure* it’s warranted.Still, if you’re sure it’s the right thing to do, you can accomplish it like so:`#[macro_export]
+macro_rules! exported_macro {
+    () => {};
+}
+
+mod submodule {
+    use crate::exported_macro;
+    exported_macro!();
+}
+`The observable effects of this attribute are:The root of your crate will publicly export the macro for dependents to use (`use your_crate::exported_macro`).You can privately import the macro using normal path-based scoping (`use crate::exported_macro`).It doesn’t matter whether the macro is in a submodule or not, it will *always* export at the root.`exported_macro!(); // <- Works because of `#[macro_export]`
+mod module {
+    use crate::exported_macro;
+
+    exported_macro!(); // <- Works because of the `use` statement
+    mod submodule {
+        #[macro_export]
+        macro_rules! exported_macro {
+            () => {};
+        }
+    }
+    exported_macro!(); // <- Works because of the `use` statement
+}
+exported_macro!(); // <- Works because of `#[macro_export]`
+`The `#[macro_use]` attribute still has an effect privately within your crate, as one would expect for textual scoping rules. Though, I don’t recommend using it on modules containing exported macros, instead just go through the exported path.`exported_macro!(); // <- Works because of `#[macro_export]`
+mod module {
+    // <- Would not be usable here without a `use` statement
+
+    #[macro_use]
+    mod submodule {
+        #[macro_export]
+        macro_rules! exported_macro {
+            () => {};
+        }
+    }
+    exported_macro!(); // <- Works because of `#[macro_use]`
+}
+exported_macro!(); // <- Works because of `#[macro_export]`
+`If you want to export a macro somewhere *other* than the crate root, there’s a way to allow for that.It would be nice if you could just not use `#[macro_export]`, and instead `pub use exported_macro`, but as for now this doesn’t work. If you try it, you will be met with a compile error that the macro is “only public within the crate, and cannot be re-exported”.So, you *MUST* use `#[macro_export]` on exported macros. Then, you can bind that exported macro to a specific location in the module tree with `pub use exported_macro`.That’s annoying since it’ll publish a macro in the root (which you probably don’t intend), so the general pattern for this is:Hide the publicly exported macro (so folks can’t see it’s actually at the root).Create a public path binding in the module where you want the macro to be accessed from.So, for instance:`pub mod submodule {
+    // Since this is `#[macro_export]`,
+    // it will still wind up at the crate root.
+    //
+    // Because of that, we name this in a way that deters usage.
+    // We'll also hide it, so that it doesn't appear in docs.
+    #[doc(hidden)]
+    #[macro_export]
+    macro_rules! __exported_macro {
+        () => {};
+    }
+
+    /// The actual documentation will go here!
+    #[doc(inline)]
+    pub use __exported_macro as exported_macro;
+}
+
+// Technically this does export the following macro...
+crate::__exported_macro!();
+
+// However, documentation will only list this version.
+// And, this version will be public for dependents to use.
+crate::submodule::exported_macro!();
+`In future versions of Rust, this cruft around visibility and module tree exporting may get cleaned up.It’s hard to make changes like this to the Rust language that won’t break existing code. So this has remained one of those weird parts of the language which - if you’re not careful - can work in odd, non-idiomatic ways.There’s a pretty in-depth thread about this [here](https://internals.rust-lang.org/t/pub-on-macro-rules/19358) on the Rust internals forum.
+
+Recall from our prior article, when we talked about [macro hygiene](https://sigseis.dev/articles/2026/10/06#what-s-this-macro-hygiene-thing), that Rust uses what’s known as “mixed-site hygiene”.Most items - other than local variables - are resolved from where the macro is invoked (functions, types, traits, etc.). For crate-local macros, you can be a little looser with this and require that the invoking code imports some items as needed to compile. But for crate-exported macros, it’s not a good idea to force the user to do this.Because of that, you should keep the following things in mind:You usually want to avoid using the `crate` keyword directly, because it may not refer to *your* crate.Since you’re in less control over the surrounding code for crate-exported macros, you should not assume anything about what has been imported at the invocation site.For declarative macros, there’s a special, always-present meta-variable called `$crate`, which resolves to the crate that your declarative macro is defined in. So it’s usually prudent to use that as a common reference point for any items needed by your macro’s expansion.`// Example type - pretend we have a full type definition.
+pub struct MyCustomHashMap<K, V> {
+    /*...*/
+}
+
+/// A declarative macro that produces a hash map.
+///
+/// Note: Actually, the standard is attempting to add this!
+///       See: https://doc.rust-lang.org/stable/std/macro.hash_map.html
+#[macro_export]
+macro_rules! hash_map {
+    ( $( $key:expr => $value:expr ),* $(,)? ) => {{
+        // Use our hashmap implementation from our crate.
+        let mut map = $crate::MyCustomHashMap::new();
+        $( map.insert($key, $value); )*
+        map
+    }}
+}
+
+#[test]
+fn example() {
+    let map = hash_map! {
+        "key" => "value",
+    };
+    assert_eq!(map.get("key"), Some(&"value"));
+}
+`In the above example we demonstrate this with a `MyCustomHashMap` which our crate *also* exports. Other standing functions, or other required traits, would also need to be resolved via `$crate`.If your macro depends on items from other crates, it’s often wise to re-export those dependencies in a public module hidden within your crate. We usually name this something like `__private` and mark it `#[doc(hidden)]` to deter usage.`#[doc(hidden)]
+pub mod __private {
+    // Publicly re-export things that your macro uses here.
+}
+`The [`serde`](https://crates.io/crates/serde) crate does this with its own [`__private`](https://docs.rs/serde/1.0.229/src/serde/core/crate_root.rs.html#158-163) module. Though, their instance of it may be more for their procedural macros (`Serialize` and `Deserialize`). After all, this isn’t a problem specific to declarative macros.
+
+Macros very often don’t have a specific type they’re bound to, usually they’re general convenience macros.That being the case, I recommend the following organization strategy:For macros which are constrained to a single module or function, **just define them where they’re needed**.For macros which are shared across multiple modules, **define them in a common parent module**.Tip: For smaller crates, this can often be easiest to target the top-most module (`lib.rs`).I don’t like to carelessly slap macros into some parent module (or I have several of them, which becomes unwieldy). So I put them in separate files for each macro that I define, and then re-export them into some organizational parent module.Crate-exported macros fit into this pretty well. In those cases, I just don’t re-export into the parent if the intended way to access the macro is by from the crate root.This harkens back to my [module organization article](https://sigseis.dev/articles/2026/06/26), where I detail methods of using “organizational modules”, and defining types in their own separate files.Please take a look at that if you are having trouble understanding my organization strategy.**mod.rs:** *(organizational module; often `lib.rs`)*`mod macros;
+mod type_a;
+mod type_b;
+mod type_c;
+// etc...
+`**macros/mod.rs:** *(organizational module)*`// Modules:
+mod exported_macro;
+mod helper_macro_a;
+mod helper_macro_b;
+mod helper_macro_c;
+// etc...
+
+// Re-Exports:
+pub(crate) use helper_macro_a::*;
+pub(crate) use helper_macro_b::*;
+pub(crate) use helper_macro_c::*;
+// etc...
+`**macros/exported_macro.rs:**`// In this case, I'm happy to bind it to the root.
+#[macro_export]
+macro_rules! exported_macro {
+    () => {};
+}
+`**macros/helper_macro_a.rs:**`macro_rules! helper_macro_a {
+    () => {};
+}
+pub(crate) use helper_macro_a;
+`**Elsewhere in the crate:**`// Either pull them in for usage:
+use crate::macros::{helper_macro_a, helper_macro_b};
+helper_macro_a!();
+helper_macro_b!();
+
+// Or refer to them via absolute paths:
+crate::macros::helper_macro_c!();
+`I know this *seems* like overkill, but the nice thing about this is I can always very easily find a macro. Either the macro is defined near its usage (so it’s within the same file), *or* the file is named the same thing as the macro so it’s easy to open via a command.If a macro is very closely related to another macro, and they’re only split up for ease of maintenance, I usually put them in the same file. But I only do that if they are meant to be implementation details of the main macro intended to be invoked.And, you don’t always need an organizing `macros` module - you could just re-export the macros right into the main organizational module. That’s for each person and project to decide on.
+
+## Use Cases for Declarative Macros
+
+Now that we know how to integrate declarative macros into our project, let’s look at some use cases for them.At the risk of sounding like a broken record - I would like to remind you to try as hard as possible ***NOT*** to export the macro.A crate-local macro, as stated, is really nice because users only depend on the side effects of it. You control the syntax and the places it’s invoked completely. There’s less to worry about with respects to breaking changes, or dependencies on unintended usage of the macro.Only export a macro if you’re *sure* it’s a wise decision.
+
+While developing a crate, you may author types that have some nearly-identically-implemented functions or traits.If the types are semantically closely related, we can reduce duplication using a helper macro. The helper macro will implement the common traits or function, with some information provided to it.Some specific examples of when this is beneficial include:If you need to author several types which are mostly simple wrappers of other types (something like a newtype).If you want to ensure several types have an identical subset of an API (functions and traits).Be careful not to reach for declarative macros at the smallest sign of duplication, though. Instead, you should consider it when things appear to be very cut-and-paste. If you over-generalize, that could make maintenance *more* of a burden, not less.For implementation macros like these, I like to follow a `key = value` pattern.`macro_rules! impl_example {
+    (
+        input_1 = $input_1:literal,
+        input_2 = ($($input_2:tt)*),
+        input_3 = {
+            grouped_input_1 = $grouped_input_1:literal,
+            grouped_input_2 = $grouped_input_2:ident,
+            grouped_input_3 = $grouped_input_3:expr,
+        },
+        input_4 = [$($input_4:expr),* $(,)?],
+    ) => { /*Expansion Here*/ };
+}
+
+impl_example! {
+    input_1 = 123,
+    input_2 = (complex; grouped, input),
+    input_3 = {
+        grouped_input_1 = "sample",
+        grouped_input_2 = Sample,
+        grouped_input_3 = concat!("..."),
+        // ...
+    },
+    input_4 = [
+        array_value_1,
+        array_value_2,
+        array_value_3,
+        // ...
+    ],
+    // ... etc ...
+}
+`My reason for preferring this syntax is:You cannot accidentally map a fragment to the wrong input without it being visible at the call site.It uses a different binding syntax from struct initialization to distance itself from appearing to initialize an object.Despite the binding syntax being different, it feels familiar enough to be immediately understood.Though, I’ll admit the last two points aren’t that important. If you feel more comfortable you could use a more “struct field initialization” style format (`key: value`). That’s up to you!**Don’t over-generalize these**, accept them in *one* order - we’re only using these internally after all.I sometimes like to order them alphanumerically by key name, so that the order is at least consistent.**Examples**An example of this in the wild are the integer types in the Rust language itself. Integer types (like [`u8`](https://doc.rust-lang.org/1.99.1/src/core/num/mod.rs.html#586-614)) use a crate-local [`int_impl`](https://doc.rust-lang.org/1.99.1/src/core/num/int_macros.rs.html) macro to implement common functions and traits.It’s also common to use declarative macros to assist in implementing a trait across tuples of different arities. Commonly useful in cases where your trait will just call the same trait on all tuple elements. You can see an example of this in the [`serde`](https://crates.io/crates/serde) crate with the crate-local [`tuple_impls!`](https://docs.rs/serde/1.0.229/src/serde/core/ser/impls.rs.html#404-420) macro.If you’d like a toy example - here’s one using some strongly typed time values. The macro helps us ensure the conversion implementations are consistent between the different types.`#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct OverflowError;
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Hours(u32);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Minutes(u32);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Seconds(u32);
+
+macro_rules! impl_time_functionality {
+    (
+        from = [$($from:ty),* $(,)?],
+        seconds_per = $seconds_per:expr,
+        try_from = [$($try_from:ty),* $(,)?],
+        type = $type:ty,
+    ) => {
+        // Ensure that we have common functions that we expect all of these time types to have.
+        //
+        // Reminder that you can open multiple impl blocks for a single type, so if there are
+        // functions that don't make sense to be commonly implemented here, then just write them
+        // in a separate impl block for the intended type outside of this macro.
+        impl $type {
+            // Helper constant to facilitate conversion impls.
+            // We don't want to export it publicly from this case.
+            pub(crate) const SECONDS_PER: u32 = $seconds_per;
+
+            pub fn to_u32(self) -> u32 {
+                self.0
+            }
+        }
+
+        $(
+            impl TryFrom<$try_from> for $type {
+                type Error = OverflowError;
+                fn try_from(value: $try_from) -> Result<Self, Self::Error> {
+                    // This const assert ensures we haven't used the helper macro improperly.
+                    const _: () = assert!(
+                        <$try_from>::SECONDS_PER > $seconds_per,
+                        concat!(stringify!($try_from), " must contain more seconds than ", stringify!($type)),
+                    );
+                    Ok(Self(value.to_u32()
+                        .checked_mul(<$try_from>::SECONDS_PER / Self::SECONDS_PER)
+                        .ok_or(OverflowError)?))
+                }
+            }
+        )*
+
+        $(
+            impl From<$from> for $type {
+                fn from(value: $from) -> Self {
+                    // This const assert ensures we haven't used the helper macro improperly.
+                    const _: () = assert!(
+                        <$from>::SECONDS_PER < $seconds_per,
+                        concat!(stringify!($from), " must contain fewer seconds than ", stringify!($type)),
+                    );
+                    Self(value.to_u32() / (Self::SECONDS_PER / <$from>::SECONDS_PER))
+                }
+            }
+        )*
+    };
+}
+
+impl_time_functionality! {
+    from = [],
+    seconds_per = 1,
+    try_from = [ Minutes, Hours ],
+    type = Seconds,
+}
+
+impl_time_functionality! {
+    from = [ Seconds ],
+    seconds_per = 60,
+    try_from = [ Hours ],
+    type = Minutes,
+}
+
+impl_time_functionality! {
+    from = [ Seconds, Minutes ],
+    seconds_per = 60 * 60,
+    try_from = [],
+    type = Hours,
+}
+
+#[test]
+fn test() {
+    assert_eq!(Hours::from(Seconds(60 * 60)), Hours(1));
+    assert_eq!(Minutes::from(Seconds(60 * 60)), Minutes(60));
+    assert_eq!(Seconds::from(Seconds(60 * 60)), Seconds(60 * 60));
+    assert_eq!(Hours::from(Minutes(60)), Hours(1));
+    assert_eq!(Minutes::from(Minutes(60)), Minutes(60));
+    assert_eq!(Seconds::try_from(Minutes(60)), Ok(Seconds(60 * 60)));
+    assert_eq!(Hours::from(Hours(1)), Hours(1));
+    assert_eq!(Minutes::try_from(Hours(1)), Ok(Minutes(60)));
+    assert_eq!(Seconds::try_from(Hours(1)), Ok(Seconds(60 * 60)));
+}
+`Sometimes the deduplication is not worth the obfuscation that it creates, but that’s a case-by-case thing. For simple types like this (and the integer types from the standard library), the benefit is clear, as it produces the obvious intended end result and ensures the APIs are all implemented uniformly.If you find yourself adding a lot of special-casing and splitting your macro into many separate macros, that might be a sign that you’ve attempted to use this pattern in a place where it’s not helpful.In those cases, it’s probably best to just write out all your traits and impls by-hand, even if it results in some duplication.
+
+A really popular reason for declarative macros is to match the [`format!`](https://doc.rust-lang.org/stable/std/macro.format.html) syntax from the standard library.You don’t always need to provide such a macro, sometimes you can just take `impl Into<String>` and let the user format as they please. But it can make things more readable in cases where the user will *always* be formatting a string, or if you want formatting to be conditionally compiled-out when disabling `alloc` support.**Examples**To point at the standard library again, we can look at the [`todo!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#884-891) macro. It’s simple enough that it’s just implemented right there as a declarative macro instead of being a built-in like many other macros (similar to [`assert_eq!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#43-70), [`matches!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#431-439), and a few others).It’s a bit of a low-hanging fruit, but the [`log`](https://crates.io/crates/log) crate has some pretty obvious examples; [`info!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#252-273), [`warn!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#204-225), and [`error!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#165-186). In general, anything with a `format!`-like operation benefits from a declarative macro.`assert!`-like macros are another example of this kind of macro. You may not think too much about it, but it can be nice to provide added details about a failure for unit tests. The `assert!` macros all accept format arguments at the end, and you can too if you need some adapter `assert!` macro.`macro_rules! assert_in_range {
+    ($input:expr, $low:expr, $high:expr, $($msg:tt)*) => {{
+        let input = $input;
+        let low = $low;
+        let high = $high;
+        assert!(
+            input >= $low,
+            "{}: range check failed: {input} >= {low}",
+            format_args!($($msg)*),
+        );
+        assert!(
+            input <= $high,
+            "{}: range check failed: {input} <= {high}",
+            format_args!($($msg)*),
+        );
+    }};
+}
+
+#[test]
+fn example() {
+    let number = 5;
+    assert_in_range!(number, 50, 100, "formatted example (input={})", number);
+}
+`The failure here looks like this:`thread 'example' (50) panicked at src/lib.rs:22:5:
+formatted example (input=5): range check failed: 5 >= 50
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+`
+
+For many types, you can get away with either the struct initialization format, or using the builder pattern.`#[derive(Default)]
+struct Example {
+    foo: u8,
+    bar: String,
+    baz: bool,
+}
+
+// Some initialization patterns:
+fn struct_initialization() {
+    let object = Example {
+        foo: 0,
+        bar: format!("example formatted string"),
+        baz: false,
+    };
+}
+
+fn struct_initialization_partial() {
+    let object = Example {
+        bar: format!("example formatted string"),
+        ..Example::default()
+    };
+}
+
+fn builder_pattern() {
+    // `ExampleBuilder` type not shown for brevity.
+    let object = ExampleBuilder::default()
+        .with_foo(123)
+        .with_bar(format!("example formatted string"))
+        .finish();
+}
+`But sometimes we want a different syntax than this, for readability reasons.Often custom syntaxes are only beneficial if there’s some common, well-accepted, pre-existing format (e.g. an existing data markup language, like JSON). But occasionally a purely custom syntax can be helpful.Containers are a great example of custom initialization syntax that everyone should have some experience with.It’s true you can (and should) implement [`FromIterator`](https://doc.rust-lang.org/stable/std/iter/trait.FromIterator.html) to initialize from some sequence of elements. But this syntax can be awkward for explicit initialization that isn’t coming from some already constructed values. So for developer convenience we often create small helper macros to improve readability.Like with many things relating to macros, only add them when you’re sure they’re useful. Think about whether the pre-existing methods for initializing objects is good enough.**Examples**It should go without saying, but the [`vec!`](https://doc.rust-lang.org/stable/std/macro.vec.html) macro is a really popular example of this. And soon we will have yet another version of this, with the [`hash_map!`](https://doc.rust-lang.org/stable/std/macro.hash_map.html) macro.The best example of this I can think of for object initialization is the [`json!`](https://docs.rs/serde_json/latest/serde_json/macro.json.html) macro from the `serde_json` crate.This is actually a good example of using declarative macros to do something non-trivial. Specifically, note that they hide the implementation details of the macro by splitting it into multiple macros, [`json!`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#54-59) is the main one you call, and it redirects to another exported macro which is hidden from documentation called [`json_internal`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#68-281).Though, I will admit, `json!` is one of those declarative macros I think is teetering on the edge of “should have been a procedural macro”. Though, it might be hard to safely change it over at this point.
+
+Sometimes you find yourself writing many similar lines of code within a small set of functions.In most cases, it’s best to just change these into helper functions and let the compiler optimize things. But sometimes you’ll run into situations where you can’t do that.You need to generate a distinct *type* per functional configuration (e.g. not just logic or impls).You’re using it to provide the body of a function that the macro is implementing, and you can’t generalize this function body over any trait bounds.When your macro influences the surrounding control flow (`break`, `continue`, `return`).For optimization reasons (which you have surely bench tested).**Be careful when altering control flow.**It can have some utility for really simple, localized helper macros. But I tend to consider it to be an anti-pattern to *export* such macros. However, used very sparingly, in unique cases to assist in implementing something, it can be helpful.Honestly, I even lean away from it for crate-local macros as well. Obfuscating the control flow negatively impacts readability in my experience.**Examples**One example where this pattern being used for optimization reasons is within the Rust standard library. The `str` type specializes based on string lengths for optimization reasons ([`specialize_for_lengths`](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#81-109); used [here](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#200)).The [`bytes`](https://crates.io/crates/bytes) crate actually uses some macros to reduce code duplication. See the crate-local [`buf_get_impl`](https://docs.rs/bytes/1.12.1/src/bytes/buf/buf_impl.rs.html#72-85) macro. This is a good example of the macro providing a common implementation for a set functions. The functions that are being implemented simply invoke the macro to expand this common implementation.An example of a crate-exported macro used to produce new types can be found in the [`bitflags`](https://crates.io/crates/bitflags) crate. In this case, it uses some custom syntax that looks kind of like regular Rust code, so it’s a good reference for how to use some different fragment specifiers (like `meta` or `vis`).Finally, probably one of the most popular control-flow-impacting macros, is anyhow’s [`bail!`](https://docs.rs/anyhow/latest/anyhow/macro.bail.html) macro. As mentioned, I’m not a fan of these kinds of macros (including this one). But I want to mention it anyway, since it fits within this set of example use-cases, and likely has some popularity. (Another potential example of this is the standard library’s [`ready!`](https://doc.rust-lang.org/nightly/core/task/macro.ready.html) macro for polling futures.)A really simple example of this is constructing a newtype that redirects to the underlying implementation. We may want to ensure that the types are actually distinct from one another, but we may not want to re-implement the functionality the type provides ([`impl_displayable_type`](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/macros/impl_displayable_type.rs.html) - example usage [here](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/bounded/as_lower_camel.rs.html#15-54) - is an example of this from one of my own crates, [`typed-ident`](https://crates.io/crates/typed-ident)).`// A simplified form of `impl_displayable_type` to use as an example.
+macro_rules! impl_displayable_type {
+    (
+        name=$name:ident,
+        over=$over:ident,
+        docs=$docs:expr,
+    ) => {
+        #[doc = $docs]
+        pub struct $name($over);
+
+        impl core::fmt::Display for $name {
+            #[inline]
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+    };
+}
+
+// We have some displayable types that we don't want to conflate.
+
+impl_displayable_type! {
+    name = ObjectId,
+    over = u64,
+    docs = "Example documentation here",
+}
+
+impl_displayable_type! {
+    name = GroupId,
+    over = u64,
+    docs = concat!(
+        "`docs` is an expression so you can do things like this.\n",
+        "\n",
+        "Multi-line documentation, for better readability!",
+    ),
+}
+
+// So now, if we have an API like this...
+struct Object;
+impl Object {
+    pub fn object_id(&self) -> ObjectId {
+        todo!()
+    }
+    pub fn group_id(&self) -> GroupId {
+        todo!()
+    }
+}
+
+// ... You can't accidentally do something like this.
+fn example_bad_usage_that_no_longer_compiles(object: Object) {
+    let group_id: GroupId = object.object_id(); // Fails to compile!
+}
+`It can be tempting to use declarative macros in places where a `#[derive(...)]` procedural macro would make more sense. Try to avoid creating such macros unless necessary.A common toy example for declarative macros is to create a function on enums so you can get static strings of the enum variant names. But this can be accomplished through a derive macro, and that feels more idiomatic to me (like [`IntoStaticStr`](https://docs.rs/strum/latest/strum/derive.IntoStaticStr.html) from the [`strum`](https://crates.io/crates/strum) crate, or - maybe better - having a custom trait to represent this).**Do what you believe the end-user would find most natural.** If what your macro is doing is implementing a trait - you probably ought to make it a derive macro unless you have good reason not to.We’ll talk more about derive macros when we cover procedural macros in a later article, though.
+
+**Thanks for reading!**Macros are a really complex topic, so thanks for sticking with me through these articles as I try to explain them.If you were able to learn something new, and want to show your gratitude, please consider [**sending a donation on Ko-Fi**](https://ko-fi.com/sigseis)!I’d love to be able to work with the community full-time, and support like that will allow me to continue writing articles like these.In this article, we:Learned about macro scoping, and how to export declarative macros.Learned a method for organizing declarative macros for ease of maintenance.Explored a small selection of use cases for declarative macros.Saw some examples of declarative macro usage (some real-world, and other toy examples).I still have a little more to say about declarative macros…The original draft of this article was 7500 words, and that’s too long. The next article will focus on best practices, and common pain points with declarative macros. Please look forward to it!I promise we’ll get to procedural macros eventually. :)

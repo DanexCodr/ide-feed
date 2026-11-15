@@ -289,5 +289,3 @@ Finally, we need to add a line to `/etc/rc.conf` to tell it to mount the encrypt
 After this process, the NetBSD installer is not aware of the encrypted partition existing during upgrades. Online upgrades must be used, rather than offline upgrades where the installer is booted from removable media. This may be done with a tool like `sysupgrade`.
 
 This guide was 100% written by one human and might contain human errors.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50504277)
