@@ -1,801 +1,169 @@
-Three ways to parse the nested lists from Advent of Code 2022 day 13 in BQN.
+I recently retired from mentoring my [*FIRST* Robotics Competition](https://www.firstinspires.org/programs/frc/) (FRC) team. I started as a student in 2010, and went straight into mentoring upon graduation, so in total I have been writing FRC programs for about 17 years.
 
-[Advent of Code 2022 day 13](https://adventofcode.com/2022/day/13) requires you to parse nested lists like
+Over time though I've become more and more dismayed with how FRC programs are typically written. For decades, I feel that *FIRST* and [WPILib](https://docs.wpilib.org/en/stable/docs/software/what-is-wpilib.html) have encouraged students to severely overengineer their robot programs. As time has gone on, I have become more and more frustrated with the state of FRC programming, and our team's code style has drifted further and further away from the norm.
 
-```
-
-   [1,[2,[3,[4,[5,6,7]]]],8,9]
-```
-
-This post covers three different ways to handle the problem:  
-
-1. "Cheating" by using `•BQN` to do the heavy lifting  
-
-2. Writing a conventional recursive descent parser  
-
-3. Writing an array-style parser
-
-We'll also do some simple benchmarking to compare the three approaches.
-
-## The Data
-
-We'll be using my advent of code input file to test the different approaches on.
-Here's the first six lines:
-
-```
-
-   •Show¨ 6 ↑ input ← •FLines "13.txt"
-"[[[[8,7,8,5,4],6,[4,6]]],[6,[[]]],[]]"
-"[[[[8,0,0,7,1],[1],8]]]"
-⟨⟩
-"[[[5,8,[4,9,2],7,[8,0]],[9,5,[5,5]],[9,[3,3,8,4,8],[0,6]],5,3],[8,10,[[8,7,6,1,8],5,0,6,[5,1]],[7,[1],6],[6,2,1,[],[1,0,6,5]]],[1,1,[[2]]],[]]"
-"[[10,4,[],7,[[10,1]]],[[4,2]],[[[5],[],[],[]],[4,5,[2,4,9]]],[[8,[],[1,3,9,7]],4,7]]"
-⟨⟩
-```
-
-The lists come in pairs, with each pair separated by a blank line.
-Since the problem requires you to compare pairs of lists,
-a suitable format for working with the data is to parse it all into one list of pairs of lists.
-Thus we can turn the problem into parsing one giant list.
-
-```
-
-   data ← ']'∾˜ '['∾ ¯1↓∾(3|↕≠input) {0𝕊𝕩: ∾'['‿𝕩‿','; 1𝕊𝕩: 𝕩∾"],"; 2𝕊𝕩: 𝕩}¨ input
-```
-
-The lines come in groups of three: the first list, the second list, and then a blank line.
-The first line of each group needs an opening bracket added to the beginning (to open the pair) and a comma added to the end (to separate the two lists in the pair).
-The second line of each group needs a closing bracket at the end (to close the pair) and a comma after (to separate it from the next pair).
-The blank lines are fine as is.
-Then we join all the lines together and drop the final trailing comma.
-Finally, we need to wrap the whole thing in one more set of brackets, to make it all one big list.
-
-## Using `•BQN`
-
-This approach is undoubtedly the easiest, and it's what I used to solve the problem in December.
-The idea is that the notation is almost valid BQN; we just need to replace the square brackets with angle brackets.
-Then we can use the system function `•BQN` to "eval" the string into a BQN list.
-
-```
-
-   a ← "[1,2,[],[3,4]]"
-   a + ('⟨'-'[') × '['=a
-"⟨1,2,⟨],⟨3,4]]"
-   "[⟨" (⊢ + -˜´∘⊣ × ⊏⊸=) a
-"⟨1,2,⟨],⟨3,4]]"
-```
-
-Here's the idea behind replacing a character with another character using a small example.
-I've written both an explicit expression and a tacit function.
-We take the difference between the new character and the old character,
-since adding this to the old character changes it into the new one.
-Then we use a mask of old character locations to make sure the addition happens only at those locations.
-
-Now to write our parser, we just replace both kinds of square brackets with the respective angle brackets and call `•BQN`.
-
-```
-
-   R ← ⊢ + -˜´∘⊣ × ⊏⊸=
-   Parser1 ← •BQN "]⟩" R "[⟨" R ⊢
-```
-
-Let's try it out.
-
-```
-
-   Parser1 data
-Segmentation fault (core dumped)
-```
-
-Uh oh! Well, here's a strike against this approach.
-
-I'm not sure what's going on to be honest.
-When I solved the problem in Decemeber I didn't do the "turn it all into one giant list" approach,
-and instead parsed the individual lines.
-So let's do that here.
-
-```
-
-   data2 ← (<¯1⊸↓)˘∘‿3⥊input∾<""
-```
-
-This complicated-looking line just works the data into a list of pairs of strings.
-First we append a blank line to the end, to complete the last group of 3 lines.
-Then we use a computed reshape to make an array with 3 columns.
-Finally, on each row of the array we drop the the blank line and enclose the two remaining lines.
-
-Now we just have to parse each string to get the final result.
-
-```
-
-   bqn ← Parser1¨¨ data2
-   ⊑bqn
-┌─
-· ┌─                                                  ┌─
-  · ┌─                              ┌─           ⟨⟩   · ┌─
-    · ⟨ ⟨ 8 7 8 5 4 ⟩ 6 ⟨ 4 6 ⟩ ⟩   · 6 ⟨ ⟨⟩ ⟩          · ⟨ ⟨ 8 0 0 7 1 ⟩ ⟨ 1 ⟩ 8 ⟩
-                                  ┘            ┘                                    ┘
-                                                    ┘                                 ┘
-                                                                                        ┘
-    2↑input
-⟨ "[[[[8,7,8,5,4],6,[4,6]]],[6,[[]]],[]]" "[[[[8,0,0,7,1],[1],8]]]" ⟩
-```
-
-Looks alright!
-Let's do a quick benchmark.
-
-```
-
-   100 Parser1¨¨•_timed data2
-0.074279465
-```
-
-Around 3/4 of a second for each run. So slow!
-
-## Recursive descent
-
-This is not meant to be an introductory tutorial on recursive descent parsing.
-Rather, I want to show that "normal" algorithms are applicable in BQN.
-In fact, [Singeli](https://github.com/mlochbaum/Singeli) uses a [recursive descent parser](https://github.com/mlochbaum/Singeli/blob/master/singeli.bqn#L147).
-
-We assume that the input is error-free and proceed in a classic two-stage tokenize-then-parse fashion.
-
-The token types are opening brackets, closing brackets, and numbers.
-We get rid of the commas, after we've used them to delimit the numbers.
-The tokenizer is actually array-style, I guess, since we just use `⊔` to split the string up.
-
-Behold!
-
-```
-
-   T ← (1-˜≠⟜','×·+`∊⟜"[]"∨·(»⊸<)∊⟜('0'+↕10))⊸⊔
-   a ← "[999,2,[],[31,4167]]"
-   T a
-⟨ "[" "999" "2" "[" "]" "[" "31" "4167" "]" "]" ⟩
-```
-
-Okay, okay, springing that tacit tokenizer on you is a joke.
-Let's break it down.
-The overall strategy is to create a mask of token starting points.
-Then we're pretty much a sum scan and a group away from success.
-
-Each opening bracket and closing bracket starts a new group.
-However, a digit starts a new group iff it is not preceded by a digit.
-
-```
-
-   d ← '0'+↕10
-"0123456789"
-   a∊d
-⟨ 0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0 0 ⟩
-```
-
-We start by finding a mask of digits in the string.
-
-```
-
-   (»a∊d)≍a∊d
-┌─
-╵ 0 0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0
-  0 1 1 1 0 1 0 0 0 0 0 1 1 0 1 1 1 1 0 0
-                                          ┘
-   (»a∊d)<a∊d
-⟨ 0 1 0 0 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 ⟩
-   »⊸<a∊d
-⟨ 0 1 0 0 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 ⟩
-   a≍»⊸<a∊d
-┌─
-╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
-  0   1   0   0   0   1   0   0   0   0   0   1   0   0   1   0   0   0   0   0
-                                                                                  ┘
-```
-
-Comparing with the shifted mask lets us check if the preceding character was also a digit.
-The use of `<` is a little BQN trick.
-For booleans `p` and `q`, `p<q` is true iff `p` is 0 and `q` is 1.
-So now we have the start points of the number tokens.
-
-```
-
-   (a∊"[]")∨»⊸<a∊d
-⟨ 1 1 0 0 0 1 0 1 1 0 1 1 0 0 1 0 0 0 1 1 ⟩
-   a≍(a∊"[]")∨»⊸<a∊d
-┌─
-╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
-  1   1   0   0   0   1   0   1   1   0   1   1   0   0   1   0   0   0   1   1
-                                                                                  ┘
-```
-
-To get the rest of the token start points, we just `∨` in all the bracket locations.
-
-```
-
-   +`(a∊"[]")∨»⊸<a∊d
-⟨ 1 2 2 2 2 3 3 4 5 5 6 7 7 7 8 8 8 8 9 10 ⟩
-   a≍+`(a∊"[]")∨»⊸<a∊d
-┌─
-╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
-  1   2   2   2   2   3   3   4   5   5   6   7   7   7   8   8   8   8   9   10
-                                                                                  ┘
-```
-
-Taking a sum scan gives us a different number for each token, but each comma gets lumped in with the previous token.
-
-```
-
-   (','≠a)×+`(a∊"[]")∨»⊸<a∊d
-⟨ 1 2 2 2 0 3 0 4 5 0 6 7 7 0 8 8 8 8 9 10 ⟩
-   a≍(','≠a)×+`(a∊"[]")∨»⊸<a∊d
-┌─
-╵ '[' '9' '9' '9' ',' '2' ',' '[' ']' ',' '[' '3' '1' ',' '4' '1' '6' '7' ']' ']'
-  1   2   2   2   0   3   0   4   5   0   6   7   7   0   8   8   8   8   9   10
-                                                                                  ┘
-```
-
-Multiplying by a mask of non-commas zeros out the commas.
-
-```
-
-   1-˜(','≠a)×+`(a∊"[]")∨»⊸<a∊d
-⟨ 0 1 1 1 ¯1 2 ¯1 3 4 ¯1 5 6 6 ¯1 7 7 7 7 8 9 ⟩
-   (1-˜(','≠a)×+`(a∊"[]")∨»⊸<a∊d)⊔a
-⟨ "[" "999" "2" "[" "]" "[" "31" "4167" "]" "]" ⟩
-```
-
-We subtract 1 to drop the commas when we group and give the first group index 0.
-Finally, we group and voila!
-
-Getting from here to my definition of `T` is just standard tacit refactoring stuff.
-And to be honest `T` is hard for me to read, so I probably wouldn't write it that way.
-But we already have it, so let's continue to parsing.
-
-### Parsing
-
-Now it's just standard recursive descent stuff.
-Here's a sketch of the grammar.
-
-```
-
-Value → List | Number
-List  → "[" Value* "]"
-```
-
-We write one function each for parsing values, lists, and numbers.
-
-```
-
-   ParseVal ← {"["≡⊑𝕩 ? ParseLst 𝕩; ParseNum 𝕩}
-   ParseNum ← {⟨10⊸×⊸+˜´⌽'0'-˜⊑𝕩, 1↓𝕩⟩}
-   ParseLst ← {
-    rslt←⟨⟩
-    val‿rest ← ⟨@,1↓𝕩⟩
-    {𝕤⋄val‿rest↩ParseVal rest ⋄ rslt∾↩<val}•_while_{𝕤⋄"]"≢⊑rest}@
-    ⟨rslt, 1↓rest⟩
-   }
-```
-
-The basic idea is that a value is a list if it starts with "[", otherwise it's a number.
-To parse a number, we just do a standard string-to-number-left-fold thing on the first element,
-and we return that number along with the rest of the tokens.
-To parse a list, we build up a list `rslt` by repeatedly parsing a value off the front of the list
-until we hit a "]".
-Then we return `rslt` and the rest of the tokens.
-Gotta be careful to drop the brackets in the right spots and to enclose the value before appending to `rslt`!
-
-To parse a list, we tokenize, parse the list, and then take the value from the `⟨value, tokens⟩` pair the parser returns.
-
-```
-
-   Parser2 ← ⊑∘ParseLst∘T
-   Parser2 "[999,2,[],[31,4167]]"
-⟨ 999 2 ⟨⟩ ⟨ 31 4167 ⟩ ⟩
-```
-
-It works!
-
-```
-
-   bqn ≡ Parser2¨¨ data2
-1
-```
-
-It agrees with the parsing we did earlier using `•BQN`,
-
-```
-
-   bqn ≡ Parser2 data
-1
-```
-
-and works on the "one giant string" approach.
-
-```
-
-   100 Parser2•_timed data
-0.007146561
-   100 Parser2¨¨•_timed data2
-0.006849455
-```
-
-Not to mention it's around 10x as fast as using `•BQN`.
-
-Using array techniques, we can achieve even faster parsing.
-Both the [self-hosted compiler](https://github.com/mlochbaum/BQN/blob/master/src/c.bqn) and the [bqn-libs json parser](https://github.com/mlochbaum/bqn-libs/blob/master/json.bqn) use an array style.
-The following ideas come from studying the json parser.
-(I haven't looked at the compiler in any depth.)
-
-The fundamental idea for handling nesting is to reorder the tokens by depth.
-Once we've done that, there's a sense in which we've already mostly parsed the tokens!
-(At least for a simple case like these nested lists.)
-
-Here's our running example:
-
-```
-
-   tok ← T "[1,2,[3,4,[5,6]],7,8,[9,10]]"
-⟨ "[" "1" "2" "[" "3" "4" "[" "5" "6" "]" "]" "7" "8" "[" "9" "10" "]" "]" ⟩
-```
-
-Let's find the depth.
-
-```
-
-   o ← "["⊸≡¨tok
-   c ← "]"⊸≡¨tok
-   tok≍+`o-c
-┌─
-╵ "[" "1" "2" "[" "3" "4" "[" "5" "6" "]" "]" "7" "8" "[" "9" "10" "]" "]"
-  1   1   1   2   2   2   3   3   3   2   1   1   1   2   2   2    1   0
-                                                                           ┘
-```
-
-Opening brackets increase depth by 1 at the bracket, and closing brackets decrease depth by 1 at the bracket.
-
-We can use `⍋` to reorder the tokens according to their depths.
-
-```
-
-   (⍋+`o-c)⊏tok
-⟨ "]" "[" "1" "2" "]" "7" "8" "]" "[" "3" "4" "]" "[" "9" "10" "[" "5" "6" ⟩
-```
-
-This is really weird-looking at first, but once you learn how to read it, it's nicer to work with than the original order.
-
-Each closing bracket is like a nested list waiting to be filled, or an arrow pointing to a sublist.
-Each opening bracket signals the start of a new sublist.
-The list being pointed to by a closing bracket is the next unused sublist.
-
-If we replace each closing bracket with a `↓` and each opening bracket with a `∘`, just for pictorial purposes,
-we can arrange the list into the follow diagram.
-
-```
-
-0 ↓
-1 ∘  1  2  ↓  7  8  ↓
-2          ∘ 3 4 ↓  ∘ 9 10
-3                ∘ 5 6
-```
-
-The downward arrows represent sublists, and the circles represent list starting points.
-The numbers in the first column are the depths.
-The first closing bracket is the only token with depth zero, and it points at the whole list.
-The element between 2 and 7 and the last element are each sublists, the first of which has its own sublist.
-
-We almost have an algorithm that goes something like this:
-for each closing bracket, find the next unused sublist and replace the closing bracket with the sublist.
-
-For example, we might build the list this way:
-
-```
-
-] → 1 2 ] 7 8 ] → 1 2 ⟨3 4 ]⟩ 7 8 ⟨9 10⟩ → 1 2 ⟨3 4 ⟨5 6⟩⟩ 7 8 ⟨9 10⟩
-```
-
-How can we turn this into code?
-
-Instead of ordering by depth, we can go further and split by depth.
-
-```
-
-   (+`o-c)⊔tok
-⟨ ⟨ "]" ⟩ ⟨ "[" "1" "2" "]" "7" "8" "]" ⟩ ⟨ "[" "3" "4" "]" "[" "9" "10" ⟩ ⟨ "[" "5" "6" ⟩ ⟩
-```
-
-And then perhaps we can use some kind of fold to fill in the "gaps" in each list with the lists from the next element.
-Going left to right would build the list "top down" like the example above.
-One snag with this approach is that at each step we have to search at a different depth for the closing brackets.
-Sure, we know exactly what depth to search at, but we can eliminate this complication entirely by going right to left.
-This builds the list bottom up, so at every step we are plugging sublists into a list at the outermost depth.
-
-This would look something like:
-
-```
-
-5 6 → ⟨3 4 ⟨5 6⟩⟩ ⟨9 10⟩ → 1 2 ⟨3 4 ⟨5 6⟩⟩ 7 8 ⟨9 10⟩
-```
+To be clear, I have the utmost respect for the time and effort that *FIRST* and the WPILib maintainers put in every year, and it is thanks to their efforts that FRC teams have reliable and complete libraries every year. But I think the accepted programming practices in FRC are leading students astray and ought to be corrected.
 
-Here is the complete idea. We're going to perform a right fold. 
-At each step, the operand to the fold splits up the right argument at the opening brackets
-and then plugs the resulting lists into the closing brackets of the left argument.
+So as I step away from *FIRST*, I decided I should write down my philosophy of robot programming in FRC, which I have decided to give the pithy name of **Periodic-Oriented Programming**.
 
-Thus we need two functions: one to split up the right argument on opening brackets and one to plug the lists into the closing brackets.
+## What is Periodic-Oriented Programming?
 
-Now we can write some code.
+Periodic-Oriented Programming is very simple: Do as much as possible in your `periodic` function. Uses very few abstractions, and write most of your logic in one big function, top to bottom. This is so simple and beginner-like that it seems like it shouldn't work for serious programs. But it does, as long as you carefully establish a few simple boundaries and practices.
 
-```
-
-   # split up based on [
-   Split ← {m←"["⊸≡¨𝕩 ⋄ 1⊸↓¨(1-˜+`m)⊔𝕩}
-   Split "["‿"3"‿"4"‿"]"‿"["‿"9"‿"10"
-⟨ ⟨ "3" "4" "]" ⟩ ⟨ "9" "10" ⟩ ⟩
-
-   # replace "]" in 𝕩 with 𝕨
-   Replace ← {m←"]"⊸≡¨𝕩 ⋄ 𝕨⌾(m⊸/)𝕩}
-   ⟨"3"‿"4"‿"]", "9"‿"10"⟩ Replace "["‿"1"‿"2"‿"]"‿"7"‿"8"‿"]"
-⟨ "[" "1" "2" ⟨ "3" "4" "]" ⟩ "7" "8" ⟨ "9" "10" ⟩ ⟩
-
-   {(Split 𝕩) Replace 𝕨}´ (+`o-c)⊔tok
-┌─
-· ┌─
-  · "1" "2" ⟨ "3" "4" ⟨ "5" "6" ⟩ ⟩ "7" "8" ⟨ "9" "10" ⟩
-                                                         ┘
-                                                           ┘
-
-   Replace˜⟜Split´(+`o-c)⊔tok
-┌─
-· ┌─
-  · "1" "2" ⟨ "3" "4" ⟨ "5" "6" ⟩ ⟩ "7" "8" ⟨ "9" "10" ⟩
-                                                         ┘
-                                                           ┘
-```
-
-It works!
-The whole thing is inside a singleton list because of that left-most closing bracket,
-so we'll need to apply `⊑` at the end.
-Also, we've still got to turn strings into numbers at the end.
-We can write a string to number function and apply it at depth 1,
-but there's one small catch that's not apparent from our example so far:
-if we parse an empty list, then applying our string to number function at depth 1 will apply it to that empty list.
-So we need to check for empty input to the string to number function.
-
-Other than that, we just need to package this together into a parser.
-
-```
+For context, the essential structure of an FRC program is typically to use the `TimedRobot` framework provided by WPILib. To use it, you simply implement `periodic` functions and the robot framework calls them 50 times per second. For example, here's a complete "tank drive" robot program in Python:
 
-   ToNum ← {⟨⟩≡𝕩 ? ⟨⟩ ; 10⊸×⊸+˜´⌽𝕩-'0'}
-   Parser3 ← {ToNum⚇1 ⊑ Replace˜⟜Split´ (+`("["⊸≡¨𝕩)-"]"⊸≡¨𝕩)⊔𝕩}∘T
-   Parser3 "[1,2,[3,4,[5,6]],7,8,[9,10]]"
-┌─
-· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
-                                   ┘
-   bqn ≡ Parser3 data
-1
-   bqn ≡ Parser3¨¨ data2
-1
 ```
+import wpilib
+import rev
 
-Looking good.
-Let's see how fast it is.
+class MyRobot(wpilib.TimedRobot):
+  def robotInit(self):
+    self.gamepad = wpilib.XboxController(0)
+    self.leftMotor = rev.SparkMax(10, rev.SparkLowLevel.MotorType.kBrushless)
+    self.rightMotor = rev.SparkMax(11, rev.SparkLowLevel.MotorType.kBrushless)
 
+  def teleopPeriodic(self):
+    self.leftMotor.set(self.gamepad.getLeftY())
+    self.rightMotor.set(self.gamepad.getRightY())
 ```
 
-   •Show 100 Parser3•_timed data
-0.015287862
-   •Show 100 Parser3¨¨•_timed data2
-0.014943577
-```
-
-Oof! It's twice as slow as the conventional parser!
-
-That's okay because this was really just a warm-up to get us in the array mood.
-Even though what we have now is slow, the concepts we used will help us write a fast parser.
-And isn't it kind of amazing how we parsed a recursive data structure with just some arithmetic and primitives like `⊔` and folding?
-I think it's cool.
+50 times per second, the left and right motor speeds will be updated to use the left and right gamepad axes. The robot framework and hardware abstraction layers do the rest.
 
-Anyway, we can make significant improvements.
-First of all, have you been feeling the nagging pain of using lists of strings instead of just a string?
-It's so annoying writing `"["⊸≡¨tok` instead of just `'['=tok`, and it's probably slower too.
-Let's try to keep our representations "flatter".
+In essence, every FRC program does the following work in `periodic`:
 
-So the new idea is that the tokenizer will just output a string, meaning that each token is now a single character.
-This leaves no room for the values of the tokens (the numbers themselves), just the token types,
-so actually the tokenizer will output a string and a list of numbers.
+- Get user inputs (or autonomous state)
+- Compute the desired state of the hardware (motor speeds, actuator positions, etc.)
+- Enforce safety constraints, smooth signals, or otherwise process the outputs
+- Update hardware outputs
 
-```
-
-   a ← "[1,2,[3,4,[5,6]],7,8,[9,10]]" # example string
-   a≍n ← a∊'0'+↕10 # numbers
-┌─
-╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
-  0   1   0   1   0   0   1   0   1   0   0   1   0   1   0   0   0   1   0   1   0   0   1   0   1   1   0   0
-                                                                                                                  ┘
-   a≍ns ← »⊸<n # number starts
-┌─
-╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
-  0   1   0   1   0   0   1   0   1   0   0   1   0   1   0   0   0   1   0   1   0   0   1   0   1   0   0   0
-                                                                                                                  ┘
-   (1-˜n×+`ns)⊔a # numbers as strings
-⟨ "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" ⟩
-   num ← 10⊸×⊸+˜´∘⌽¨ '0'-˜(1-˜n×+`ns)⊔a # numbers
-⟨ 1 2 3 4 5 6 7 8 9 10 ⟩
-```
+In Periodic-Oriented Programming, I basically encourage my students to lean into this pattern. POP code should have few abstractions, and most of the logic should be written top-to-bottom in a single function. And to the greatest extent possible, everything should be run on every `periodic`—no modes, no commands, no state.
 
-This is the idea behind the part of the tokenizer that extracts the numbers into one flat list.
+As programs get larger, more structure is needed, but the core philosophy remains the same. The most important piece of structure is **subsystems**.
 
-```
+## Hardware lives in subsystems
 
-   a≍f ← ns∨a∊"[]" # first characters of tokens as mask
-┌─
-╵ '[' '1' ',' '2' ',' '[' '3' ',' '4' ',' '[' '5' ',' '6' ']' ']' ',' '7' ',' '8' ',' '[' '9' ',' '1' '0' ']' ']'
-  1   1   0   1   0   1   1   0   1   0   1   1   0   1   1   1   0   1   0   1   0   1   1   0   1   0   1   1
-                                                                                                                  ┘
-   f/a # first character of each token as string
-"[12[34[56]]78[91]]"
-   tok ← '0'¨⌾((f/n)⊸/)f/a # replace numbers with 0
-"[00[00[00]]00[00]]"
-```
+The use of "subsystem" classes will be familiar to most FRC teams, but the specifics are what matter here:
 
-Here is the second part of the tokenizer.
-We get the first characters of each token by adding in the brackets to the number starts.
-Then we replace all the numbers with 0.
-The idea is that this string now represents the token types with the brackets standing for themselves
-and the 0s standing for a number type token.
-The numbers themselves are separated out as we showed previously.
-Any character would do to represent the numbers,
-but I chose 0 because it's what the json parser does and it reminds me of a number.
+1. Every subsystem has a `periodic` method. This is called from robotPeriodic so it runs 100% of the time.
+2. Hardware is never accessible outside the subsystem. All access to the hardware must be mediated through subsystem methods.
 
-Putting it all together:
+These rules extend the Periodic-Orientation into the subsystem code. For each subsystem, all of its logic should be centralized in one function and readable top to bottom. In most cases, the subsystem `periodic` is the only place in the entire program that actually touches the hardware. This has many advantages: it ensures by construction that hardware is only touched once per tick, that safety constraints are respected 100% of the time, and that logging and telemetry are run consistently.
 
-```
+Centralizing most logic in `periodic` also provides a nice platform for both autonomous and teleoperated code. The subsystem's API surface can be comprised of very high-level functions like `driveFieldRelative(vx, vy)` or `goToElevatorPreset(coralOrAlgae, level)`, which basically just set instance variables to be read later in `periodic`. These subsystem functions also provide a consistent place to validate inputs (e.g. impossible speeds, angles, or presets), convert units, etc.
 
-   Tokenize ← {
-     n ← 𝕩∊'0'+↕10
-     ns ← »⊸<n
-     num ← 10⊸×⊸+˜´∘⌽¨ '0'-˜(1-˜n×+`ns)⊔𝕩
-     f ← ns∨𝕩∊"[]"
-     tok ← '0'¨⌾((f/n)⊸/)f/𝕩
-     tok‿num
-   }
-   Tokenize "[1,2,[3,4,[5,6]],7,8,[9,10]]"
-⟨ "[00[00[00]]00[00]]" ⟨ 1 2 3 4 5 6 7 8 9 10 ⟩ ⟩
-```
+By the way, don't be afraid to combine two subsystems if their logic is intertwined. For example, in 2025 our robot had an arm on an elevator, and the safe angles for the arm were dependent on the height of the elevator. Therefore, we made a combined `ElevatorAndArm` subsystem. (If you've heard advice that classes should be about "one thing", ignore that advice, it is wrong.<sup>[1]</sup>)
 
-Now for parsing we're going to build the list from the bottom up again, using the same depth ordering ideas.
-We obviously can't operate only on the token types (the string the tokenizer produces);
-we need to incorporate the token values (the numbers) at some point.
-The way we'll do that is operating on the token types to produce indices that we use to select from a list of values.
-
-So if we were trying to produce the final result list, which in a depth-based token-types-only representation would look like `00]00]`,
-we need to somehow say that the first 0 stands for 1, the second 0 for 2, the first closed bracket for the whole list `⟨3,4,⟨5,6⟩⟩`,
-the third 0 for 7, the fourth 0 for 8, and the final closed bracket for the whole list `⟨9,10⟩`.
-Then we could just grab all the values we mentioned and put them together as `⟨1,2,⟨3,4,⟨5,6⟩⟩,7,8,⟨9,10⟩⟩`.
-
-The way we'll be able to reference a whole sublist like `⟨3,4,⟨5,6⟩⟩` is by building from the bottom up, as previously mentioned,
-so that by the time we need to use a value, we've already built it.
-At the beginning, the values we have are just the numbers themselves.
-We start with the deepest list `⟨5,6⟩`, which we can build by indexing into the list of values (which again at this point is just numbers).
-Then we append this to the list of values.
-Now in a future step where we need to build `⟨3,4,⟨5,6⟩⟩`, all three elements of this list already reside in our list of values,
-and all we need to do is index into the list of values to assemble them into a new value that gets appended to the end.
-
-So let's start by trying to organize the tokens so we can build the values in the correct order.
+## Chase the desired state
 
-```
+As I described earlier, every FRC program computes the desired state of the hardware, then updates the outputs to move in that direction. This is most obviously true of closed-loop control (PID, typically), where you simply set a target value (e.g. "elevator at 6 feet") and then compute outputs that will move the hardware toward that target.
 
-   o ← '['=tok
-   c ← ']'=tok
-   tok≍+`o-c # depth
-┌─
-╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
-  1   1   1   2   2   2   3   3   3   2   1   1   1   2   2   2   1   0
-                                                                          ┘
-   g ← ⍋+`('['=tok)-']'=tok # depth ordering indices
-⟨ 17 0 1 2 10 11 12 16 3 4 5 9 13 14 15 6 7 8 ⟩
-   u ← g⊏tok # tokens reordered by depth
-"][00]00][00][00[00"
-```
+Successful Periodic-Oriented programs apply this philosophy to the entire robot program. **What hardware state do I want, and how do I get there?** This way of thinking applies at the actuator level (e.g. motor speeds), the mechanism level (e.g. arm angles), and the whole-robot level (e.g. safety constraints like "arm can only go out when elevator is down"). It is universal to all robot control.
 
-Here's that same reorder by depth trick we've already discussed,
-but this time it's a little less painful to write since we just have a string instead of a list of strings.
+The question of "What hardware state do I want?" falls naturally into `teleopPeriodic` and `autonomousPeriodic`. They naturally define answers to questions like: Where on the field? What velocity? What elevator position? What arm angle? What shooter RPM?
 
-Here's the next big idea.
+The question of "How do I get there?" then falls naturally into a subsystem `periodic`. Often it is as simple as `elevatorMotor.setReference(elevatorHeight)`, deferring the actual closed-loop behavior to your motor controllers. But extra behaviors can easily be layered in here too; for example, the whole-robot constraint described earlier can be as simple as:
 
 ```
-
-   u≍r ← +`'['=u # sublists in depth ordering
-┌─
-╵ ']' '[' '0' '0' ']' '0' '0' ']' '[' '0' '0' ']' '[' '0' '0' '[' '0' '0'
-  0   1   1   1   1   1   1   1   2   2   2   2   3   3   3   4   4   4
-                                                                          ┘
+def periodic(self):
+  newArmAngle = self.desiredArmAngle
+  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
+    newArmAngle = 0 # pull arm in if elevator is up
+  self.armMotor.setReference(newArmAngle)
 ```
 
-By taking a sum scan of a mask of opening bracket locations in the depth ordering we can give a number to each sublist of the list.
-This is the order we have to construct values in, with higher numbers going first.
-It's reminiscent of how we split the on opening brackets in our earlier approach.
+Or you could do a "state machine" approach, where attempting to put the arm out will actually drop the elevator to a safe position first:
 
-Now what we need are indices that tell us where to pull the values from. 
-For example, we start with list 4 (the `[00` at the end), so we need to know that those 0s are associated with indices 4 and 5,
-since `4‿5 ⊏ num` is the `5‿6` we want.
-Then later when constructing list 2, which looks like `[00]`, we need to know that the 0s are associated with indices 2 and 3,
-and the closing bracket is associated with index 10, since (after appending `5‿6` to a list of values `vals` at index 10) we have `2‿3‿10 ⊏ vals` giving `⟨3,4,⟨5,6⟩⟩`.
-
-Here we go.
-
 ```
-
-   tok≍f ← tok∊"0]" # mask of "values": numbers and sublists
-┌─
-╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
-  0   1   1   0   1   1   0   1   1   1   1   1   1   0   1   1   1   1
-                                                                          ┘
-   (f/tok)≍(f/'0'=tok)+2×f/']'=tok # gives numbers 1 and sublists 2
-┌─
-╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
-  1   1   1   1   1   1   2   2   1   1   1   1   2   2
-                                                          ┘
-   vi ← ⍋⍋(f/'0'=tok)+2×f/']'=tok # value indices
-⟨ 0 1 2 3 4 5 10 11 6 7 8 9 12 13 ⟩
-   (f/tok)≍vi
-┌─
-╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
-  0   1   2   3   4   5   10  11  6   7   8   9   12  13
-                                                          ┘
+def periodic(self):
+  newArmAngle = self.desiredArmAngle
+  newElevatorHeight = self.desiredElevatorHeight
+  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
+    newArmAngle = 0 # pull arm in if elevator is up
+  if self.desiredArmAngle > 0:
+    newElevatorHeight = 0 # move elevator down if arm wants to be out
+  self.armMotor.setReference(newArmAngle)
+  self.elevatorMotor.setReference(newElevatorHeight)
 ```
 
-Here we filter away the opening brackets, keeping only those tokens that represent values: 0 for numbers and ] for sublists.
-Then we assign each value a number working left to right, but with numbers always coming before sublists.
-That `⍋⍋` is the ordinals pattern, which shows which index the element would end up at if sorted.
-(You can read about that [here](https://mlochbaum.github.io/BQN/doc/order.html#ordinals).)
+In a Periodic-Oriented program, complex behaviors like this are easy to debug, robustly uphold safety constraints, never produce conflicting outputs to hardware, and often require less state than other approaches. Speaking of:
 
-This is close to what we want.
-The 0s each have been associated with the proper index.
-However, the closing brackets (representing sublists) have not.
+## Minimize state
 
-We need to bring in our previous work `r` where we numbered the lists.
-But `r` is in depth ordering and `vi` is in the original ordering, so we put `r` back into original ordering and call it `l`.
-
-```
-
-   tok≍l ← (⍋g)⊏r # sublist index
-┌─
-╵ '[' '0' '0' '[' '0' '0' '[' '0' '0' ']' ']' '0' '0' '[' '0' '0' ']' ']'
-  1   1   1   2   2   2   4   4   4   2   1   1   1   3   3   3   1   0
-                                                                          ┘
-```
+Robots have enough state to deal with in the real world. So don't add extra state to your program!
 
-We invert the permutation `g` with `⍋` to translate from the depth ordering back to the original ordering.
-We call the resulting numbers the "sublist index" here.
-(It's really a pain to name a new idea. I don't wanna name things! That's why I'm a BQN programmer.)
+For the beginners in the audience, "state" in programming is data in your program that changes over time. Common sources of state in FRC programs include:
 
-We can use `l` to fix `vi` by finding the sublist index associated with each closing bracket.
-If we just take the sublist index at a closing bracket, we get the sublist index associated with the list containing it.
-So we need the sublist index at the token before the closing bracket to get the index of the sublist itself.
+- Physical robot state (e.g. location on field, velocity, mechanism positions)
+- User inputs (e.g. joystick axis values and button states)
+- Modes (e.g. the ability for operators to toggle between "coral mode" and "algae mode" controls)
+- Timers
+- Signal processing state (e.g. for smoothing sensor data or slewing outputs)
+- Coprocessor state (e.g. data stored on motor controllers or computer vision devices)
 
-```
+Some of these are inherent, such as the physical robot state (which is the entire point). Others are not, such as modes. It is well-known in programming, across [many domains](https://number-none.com/blow/blog/programming/2014/09/26/carmack-on-inlined-code), that more state == more problems, so remove or isolate state wherever you can:
 
-   c/l
-⟨ 2 1 1 0 ⟩
-   c/»l
-⟨ 4 2 3 1 ⟩
-```
+- Avoid modes. They are confusing for both operators and programmers. For example, rather than storing a flag for `armIsExtended` that is toggled by a single button press, consider having an "out" button and an "in" button, or consider extending the arm only while the button is held. This eliminates ambiguity: the operator knows exactly what state the robot should be in based only on the buttons they are currently pressing.
+- Avoid duplicating coprocessor state in your robot code. For example, don't have a variable in your subsystem for `currentArmAngle`; read it directly from your motor controller instead. If they can get out of sync, that is an opportunity for bugs.
+- Avoid timers. They are a frequent source of bugs because the state of the world is often not what you expect when the timer expires. For example, instead of running your shooter for three seconds, consider running it until a sensor detects that the hopper is empty.
+- **Avoid autonomous state.** For most teams, it is very viable to represent all autonomous outputs as a function of time. In the extreme, this might look like: `if 2 <= elapsedTime and elapsedTime <= 5: shooter.shoot() else: shooter.stopShooter()` [TODO: BAD CSS HERE] But while this looks silly, this is more or less what tools like [Choreo](https://choreo.autos/) let you do. A Choreo trajectory is just a list of desired positions, velocities, and actions for the robot over time, and executing a Choreo trajectory is literally as simple as looking up the current desired state and applying it to your drivetrain. (This is also true of PathPlanner, but to a lesser extent due to its dependence on commands.) And it need not be fancy: In 2011, when I was a student, my dad (an industrial automation engineer) advised me to author our autonomous routines in spreadsheets. Each autonomous routine that year was literally a CSV file, with one column per actuator and one row per "step" (with start and end times). At any given time, you could simply look up the current row of the table, and look at each column to see what each motor's output should be. It worked well! I don't know why we never did it again.
 
-Here we show `c/l` and `c/»l`. The first element of `c/l` is 2, indicating that the first closing bracket (which closes `⟨5,6⟩`) represents a sublist contained in the sublist with index 2 (i.e. `⟨3,4,⟨5,6⟩⟩`).
-The first element of `c/»l`, however, is 4, indicating that the sublist `⟨5,6⟩` is itself sublist number 4.
-That's the number we want.
+And there is one final piece of advice that eclipses all others:
 
-```
+## Avoid commands at all costs
 
-   (≠num)+≠⊸-c/»l
-⟨ 10 12 11 13 ⟩
-```
+The WPILib ["command-based"](https://docs.wpilib.org/en/stable/docs/software/commandbased/what-is-command-based.html) programming system is an unmitigated disaster that should never be used under any circumstances.
 
-Sublist number 4 is the first sublist to be constructed, and after being constructed and appended to the value list it has index 10.
-The arithmetic above adjusts the sublist indices to become indices into the value list.
-We subtract each sublist index from the number of sublists to invert the order, and then add the result to the number of numbers,
-to offset the indices correctly.
+Harsh? Yes. But after writing and teaching command-based code for ten years, then trying other approaches for another seven, I have concluded that the command-based approach is almost entirely without merit.
 
-```
+At its heart, the problem with the command-based system is that it is woefully, impossibly stateful. When using commands, you don't know which commands are currently active in the scheduler, you don't know what order they execute in, it's difficult to predict when they start, and it's all but impossible to know when they end.
 
-   nv ← ≠num
-   i ← vi ⊏ (↕nv) ∾ nv+≠⊸-c/»l # Adjust for sublist ordering
-⟨ 0 1 2 3 4 5 10 12 6 7 8 9 11 13 ⟩
-   (f/tok)≍i
-┌─
-╵ '0' '0' '0' '0' '0' '0' ']' ']' '0' '0' '0' '0' ']' ']'
-  0   1   2   3   4   5   10  12  6   7   8   9   11  13
-                                                          ┘
-```
+I have witnessed three generations of students (myself included), across multiple teams, debugging bizarre and entirely artificial problems caused entirely by the command-based system. "Why can't we run autonomous twice? Oh, because you can't always call `initialize` after `end`? Maybe I need to construct a new command instance? But how can I do that if `onTrue` takes a `Command` instead of a `() -> Command`? Why did the robot stop driving? Oh, something canceled the `Drivetrain` subsystem's default command? I guess it shouldn't `require` the subsystem then? Oh, I guess now we're setting the motor speeds twice? Why did that one run before the default command?"
 
-From here, it's not hard to complete the value indices list.
-We append the value indices just calculated for the sublists to the list `↕≠num`, which are the value indices for the numbers.
-Since both `vi` and `c»l` reference the closing brackets in the original left to right order, indexing into this list with `vi` pulls everything out in the correct order.
+I could keep going. "Why did the robot shoot just then? Wait, there was still a command running from earlier in autonomous? Why didn't it get canceled?" Every one of these questions is a stupid waste of time.
 
-```
+The other problem with commands is that they spread once-simple logic across dozens of files. This is purportedly a *benefit* of using commands, but the reality is that neither students nor mentors are good at piecing all the logic together in their head again. When you have a bug at competition and need to make a code change *now*, you need code that is brutally simple, where you can be confident that your change won't have unexpected side effects. Straight-line code is better for this purpose.
 
-   ⌽(1-˜f/l)⊔i
-⟨ ⟨ 4 5 ⟩ ⟨ 8 9 ⟩ ⟨ 2 3 10 ⟩ ⟨ 0 1 12 6 7 11 ⟩ ⟩
-```
+The remaining advantages for the command-based model are that they make it easier to sequence and schedule actions in autonomous, and that in principle they prevent multiple pieces of logic from accessing the hardware simultaneously. But as I've already suggested, a stateless, time-driven approach to autonomous works better in most situations, intra-subsystem state can be handled in `periodic`, and the `periodic` approach avoids the need for the `requirements` system by construction. (And if you want to ensure that a subsystem method is called only once per `periodic`, this can be easily achieved with a flag and a log message in the subsystem method itself.)
 
-We group these value indices `i` using the sublist indices from `l` and reverse the result to finally complete the task of arranging the value indices.
-We use `1-˜f/l` instead of just `l` because we need to remove the opening brackets and drop the final closing bracket.
-Now we can see the first element contains indices 4 and 5, which correspond to the values 5 and 6.
-The third element contains the indices 2, 3, and 10, which correspond to values 3, 4, and `⟨5,6⟩`.
-Etc.
+So, although it might seem crazy, I strongly encourage everyone to avoid command-based programming.
 
-All that's left to do is the indexing and appending described earlier.
+## A final example
 
-```
+Let me conclude with a snippet of real `teleopPeriodic` code from our 2025 codebase:
 
-   vals ← num
-   {vals∾↩<𝕩⊏vals⋄@}¨ ⌽(1-˜f/l)⊔i
-   ¯1⊑vals
-┌─
-· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
-                                   ┘
 ```
-
-It works!
-The list of values `vals` starts off as just the numbers `num`.
-With each application of the block function we index into `vals` and append the result to `vals`.
-The `⋄@` is at the end of the block both to signal that we are using the block for side-effects only
-and to not waste time and space building a list of results.
+def teleopPeriodic(self):
+  # Get raw speeds from joysticks (to be converted to field/robot relative)
+  joystickX = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getX(), 0.1)
+  joystickY = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getY(), 0.1)
 
-We're not quite done yet!
-There is one final wrinkle that our example so far hasn't made clear.
-We need to ensure that the result of `(1-˜f/l)⊔i` always has as many elements as there are closing brackets
-(even if some or all of them are empty) in order to accomodate empty lists.
-This is roughly because each closing bracket represents a sublist value,
-so we always need to build at least that many values.
+  # Turn speed is the same regardless of field/robot relative
+  turnSpeed = wpimath.applyDeadband(-self.rightStick.getX(), 0.1)
 
-Thus we change `1-˜f/l` to `(+´c)∾˜1-˜f/l` to append the number of closing brackets to the end.
-Group has the option of using a left argument with an extra last element relative to right argument,
-and this last element sets the minimum number of elements of the result.
+  # Precision mode
+  if self.leftStick.getRawButton(1) or self.rightStick.getRawButton(1):
+    joystickX *= 0.5
+    joystickY *= 0.5
+    turnSpeed *= 0.5
 
-Let's put it all together.
-
-```
-
-   Parser4 ← {
-     tok‿num ← Tokenize 𝕩
-     g ← ⍋+`('['=tok)-(c←']'=tok) # depth ordering indices
-     r ← +`'['=g⊏tok # sublists in depth ordering
-     l ← (⍋g)⊏r # sublist index
-     f ← tok∊"0]" # mask of "values": numbers and sublists
-     vi ← ⍋⍋(f/'0'=tok)+2×f/c # value indices
-     nv ← ≠num
-     i ← vi ⊏ (↕nv) ∾ nv+≠⊸-c/»l # Adjust for sublist ordering
-     vals ← num
-     {vals∾↩<𝕩⊏vals⋄@}¨ ⌽((+´c)∾˜1-˜f/l)⊔i
-     ¯1⊑vals
-   }
-   •Show Parser4 "[1,2,[3,4,[5,6]],7,8,[9,10]]"
-┌─
-· 1 2 ⟨ 3 4 ⟨ 5 6 ⟩ ⟩ 7 8 ⟨ 9 10 ⟩
-                                   ┘
-
-   •Show bqn ≡ Parser4 data
-1
-   •Show bqn ≡ Parser4¨¨ data2
-1
-
-   •Show 100 Parser4•_timed data
-0.004316795
-   •Show 100 Parser4¨¨•_timed data2
-0.005003989
+  # Drive
+  doRobotRelative = self.leftStick.getRawButton(3) or self.rightStick.getRawButton(3)
+  if doRobotRelative:
+    self.drivetrain.drive_robot_relative(-joystickY, -joystickX, turnSpeed)
+  else:
+    # Flip to red alliance if necessary
+    xSpeed = -joystickY
+    ySpeed = -joystickX
+    if utils.isRedAlliance():
+      xSpeed *= -1
+      ySpeed *= -1
+    self.drivetrain.drive_field_relative(xSpeed, ySpeed, turnSpeed * constants.kMaxTurnSpeed)
 ```
-
-It works, and it's really fast! It's also the only parser that's faster on the one big string approach.
 
-Using `•BQN` is definitely the easiest, but it is slow and has problems parsing large lists, at least on my machine.
+There is no subsystem default command, just a function call. There are no separate commands for field vs. robot relative, just an if statement. There is no separate command or global state for precision controls, just an if statement. There is no binding of commands to buttons, just if statements. Reversed field-relative coordinates for the red alliance? If statement.
 
-For a little more effort (at least if you're already familiar with recursive descent) we can get a much more performant parser.
-Probably should be your method of choice if `•BQN` is too slow.
+Does this feel ugly to you? If so, think of this an acquired taste! This is 25 lines of dead-simple code that completely encapsulates all of our teleop driving logic. The command-based alternative would probably be several classes and 100 to 200 lines of code (when you count all the boilerplate). Here there is no possibility of command cancellation, bad defaults, incorrect execution order, or conflicting writes to the hardware. Instead the code expresses the logic directly and simply.
 
-A well-written array style parser is the fastest (and coolest obviously), but wow is it confusing to implement!
-For this Advent of Code problem it's certainly not worth the trouble.
-I mean, even just using `•BQN` works fine honestly.
-If we had to parse way more data, or reuse this parser many times, the array method would start to make sense.
-Also if the lists had very very deep nesting, the recursive parser would hit the maximum recursion limit and fail.
+I suspect that many readers will think this is *too* simple, like surely this approach will cause problems in practice. But it doesn't! This is our actual 2025 robot code, which supported field-relative and robot-relative swerve drive, odometry and vision, and multiple Choreo-based autonomous routines with different starting points and scoring positions. If you are Orbit and your strategy is 100% autonomous game piece retrieval and placement, then feel free to ignore me. But I believe this approach to FRC programming would be successful for at least 95% of all FRC teams.
 
-Here's a little table recapping the time in seconds it took each method to parse my input file.
-Each time is the average of 100 runs.
+<sup>[1]</sup>The problem with advice like "classes should do one thing, and do it well" is that no one can describe what "one thing" is. This is even acknowledged in books like Clean Code but not clarified in a way I find satisfactory. It is therefore not actionable advice. The decision of where to draw an API boundary should instead be determined by the amount of information that has to cross that boundary. In our `ElevatorAndArm` example, we could indeed have separated the `Elevator` and `Arm` into separate subsystems, but our "coral level 3" preset would then have required calls to two separate subsystems, and both subsystems would have needed references to each other in order to maintain safety constraints. When two classes are deeply aware of each other's internals, you should just combine them.

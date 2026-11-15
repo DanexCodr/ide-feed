@@ -52,5 +52,3 @@ We have already had deeper discussions about these questions in the Sylve Discor
 Compression, zero-page elision, broader device coverage, richer orchestration, and performance tuning can follow once the foundation is sound. If you operate bhyve, work on FreeBSD virtualisation, or are interested in Sylve or BoxyBSD, testing the RFC and contributing design feedback would be especially valuable.
 
 *Status:* WIP RFC for a first working bhyve live-migration implementation on FreeBSD 15.1.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50488835)

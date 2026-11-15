@@ -1,35 +1,139 @@
-I like Gemini. Not the Google Chatbot but the network that existed before Google named its product. If you are enough of a geek, you may want to give it a try.
+I started running decoded.legal - a small English law firm, focussing
+on Internet, telecoms, and tech law - on Free software, both client and
+server side, around five years ago. I have used Free software in my
+personal life for a lot longer than that.
 
-Eoin is counting the number of "capsules" on the Gemini network. A capsule is the equivalent of a "website" on the Web or a "hole" on Gopher. It’s a personal space, a bunch of pages. Blogs become "gemlogs".
+Back in 2022, [I
+wrote about my experiences after the first year or so](https://decoded.legal/blog/2022/10/running-a-law-firm-on-linux-a-year-or-so-in/).
 
-Eoin’s first observation is that the number of active capsules is slowly growing. The network is healthy.
+I wrote [an
+update in 2024](https://decoded.legal/blog/2024/09/running-a-law-firm-on-free-software-2024-edition/).
 
-But his second observation is really interesting: there’s absolutely no correlation between the number of new capsules in a given month and articles about the Gemini protocol being promoted on the first page of Hacker News.
+Someone asked me recently what I am doing now, and, while it is
+mostly the same, some bits have changed. So here is the 2026 update.
 
-This is a confirmation of what I’ve been trying to explain for years: your metrics and web statistics are completely useless. The number of visitors, the number of clicks are worthless if you are not a marketer trying to extract money from a big brand. They don’t mean anything.
+## Client-side stuff
 
-By the way: you should really avoid Hacker News these days. The front page is heavily manipulated to promote pro-AI stuff and bury everything that might question wether fascism-capitalism is good.
+I am still using Debian, with GNOME, and it works well for me.
 
-A Mozilla employee is leaving after 15 years and comes to a similar conclusion. Mozilla is awesome because it has always been abnormal. It is mostly used by abnormal people. This means that hiring "normal managers" who try to make it "normal" and chase "normal" metrics is, of course, a recipe for failure.
+I’m using it [on
+a ThinkPad X1 Yoga Gen 6](https://neilzone.co.uk/2024/12/initial-thoughts-on-debian-testing-linux-on-a-lenovo-thinkpad-x1-yoga-gen-6/), as my primary machine, and, being a “Yoga”
+version, I rather like being able to fold the screen back and write on
+it to mark up documents. ([Here
+are my thoughts on the different “Active Pens” available for
+it](https://neilzone.co.uk/2024/04/comparing-lenovos-active-pen-and-active-pen-2-for-writing-on-a-thinkpad-x1-yoga-gen-2-using-debian-linux/).)
 
-I always failed to understand those marketing people who try to be "like others but a bit cheaper". While all the value is being different enough to nurture your own niche.
+However, the machine itself seems to have a hardware problem with the
+Thunderbolt / USB-C ports (fine for power, very flaky for data), and so
+I might need to replace it. And I have *no* idea what laptop I
+might get.
 
-I completely removed statistics from my blog in 2013. At the time, I had a very strong realisation that the blog posts that mattered most, those I was proudest of, and those that prompted people to mail me even years later all had mediocre statistics.
+- Email (MUA): **Thunderbird** and **mutt**, depending on what I am doing
+  - Quick Folder Move and Move Message And Yourself are particularly useful add-ons for Thunderbird, for rapid filing of email with keyboard shortcuts
+  - Thunderbird seems to be having a problem with some recurring calendar invitations, while ikhal is handling them fine. I’ve not dug into it, but it is a nuisance.
+- Document production: **LibreOffice’s Writer** if I want a “Word” document (e.g. I am exchanging documents with other lawyers), and I am [using **`pandoc` and `typst`** to convert Markdown files that I tend to write in **vim**](https://neilzone.co.uk/2025/01/using-pandoc-and-typst-to-convert-markdown-into-custom-formatted-pdfs-with-a-sample-template/) for some other bits. I’d like to explore `tex` at some point, as I have a client who likes diffs to their .tex files, and that looks rather neat.
+- Presentations: **reveal.js**
+  - I absolutely love this.
+  - I have a bash script which sets up a template for a new presentation, and then I just write the presentation using Markdown. I get a nicely-formatted presentation (using a css template) with very little effort, and no distracting GUI
+  - Blogpost about reveal.js
+  - Here are some presentations I’ve given, using reveal.js
+- File manager: **Nautilus**
+  - Mainly because it is GNOME’s default, although, especially when combined with some useful bash scripts, it works well for my needs
+- PDFs: **evince** for most reading; **Xournal++** for marking up PDFs; **PDFarranger** and **pdftk** for interfering with PDFs
+- Text expansion: **espanso**
+  - This is a fantastic shortcut for me, saving me from typing the same thing multiple times. I have loads of shortcuts set up, and I’d be lost without them.
+- Browser: **Firefox** or **links**
+  - I am still using Firefox. It is … fine? I should probably look at LibreWolf or another fork, as I’m not enamoured by Mozilla’s direction of travel but, for now, Firefox it is.
+  - I use Firefox for joining people’s Teams and Zoom etc. meetings, if someone else sets up the meeting, and that works fine
+- Local wiki / knowledge management: **vimwiki**
+  - because I use vim so much, vimwiki was quite an obvious choice.
+  - I use this for keeping track of my professional development, and for various notes
+- Disk encryption: **LUKS**
+- Client-side encryption of files before syncing them with **Syncthing**: **Cryptomator**
+- Fediverse: I tend to use the **Mastodon** advanced web UI or, when I want fewer images, the TUI **toot**.
+  - I schedule toots - for example, about blogposts, using a simple bash script and a cron job; it has moved on a bit since I wrote that post, but it is the same principle
+- Password manager: **Bitwarden**, using the `vaultwarden` server, with YubiKeys for managing more sensitive credentials
+- Markdown editor (for blogposts; I do presentations in vim or gedit): **Apostrophe**
+- Scanning: **paperless-ngx**
+- Label printing: there’s a [great FOSS web UI for Brother (and perhaps other) label printers](https://neilzone.co.uk/2023/11/a-web-ui-for-label-creation-and-printing-on-a-brother-ql-710w-on-linux/). I don’t print many labels, as we aim to be paperless, but it’s convenient when I need to do so
 
-On the contrary, most of my hit, my "buzz", were quickly forgotten. But, being addicted to statistics, I was unconsciously adapting my writing style to improve those numbers. I was scrolling through social media posts that were highly popular while trying to create some myself.
+Why so many terminal-based tools? The simple answer is that I am very
+comfortable in a terminal, and I like them. They have fewer distractions
+and, when compared with most GUI software, are just - IMHO - easier to
+use, especially when I don’t need to move my hands away from the
+keyboard. So, while I don’t use them exclusively, I use
+`mutt`, `vim`, `ikhal`,
+`ncmpcpp`, `newsboat`, `toot`,
+`links`, and various other TUIs, frequently.
 
-Closing my social media accounts and, instead, procrastinating on Gemini had the opposite effect: making me read other ideas without caring about reactions, about popularity. Jsreed5 made the same observation while he was trying the Nostr protocol. While Nostr’s technicalities may be interesting by themselves, the content on it is similar to the one found of mainstream social networks. And our smolnet Gemini-formatted brains cannot take it anymore!
+## Server-side stuff
 
-We really need a simple Gemini hosting provider that would also provide a Web version, to welcome less technical-minded people who still may want to access a quieter, non-commercial, out-of-time virtual space.
+Everything here - other than Signal - is self-hosted, and I’m mostly
+using Intel NUCs now. I still have some Raspberry Pi devices, but fewer
+than I did.
 
-Lot of people are trying Gemini and find that there’s no content on it, that they can’t have their news and dopamine hit on it. Well, that’s exactly the point.
+(Again, this doesn’t list everything; just the main
+applications.)
 
-The fact that only a niche minority want to use it is also part of the point. Gemini might not be for you. That’s fine. The modern Web and even the real world (where every device is actively working against me and every human interaction seems to be about AI) is increasingly not for me. So let me have my strange niche space.
+- Email (MTA): **postfix / dovecot**
+  - I need to move our mail infrastructure at some point, and I want to look at Stalwart.
+- File synchronisation: **Syncthing**
+  - One of the bigger changes since last time was moving away from Nextcloud. I just was not getting on with it, and it was causing me more problems than it solved. So I switched to Syncthing for file sync, and radicale for CalDAV / CardDAV. I’ve been more than happy with this combination.
+- Video conferencing: **Signal**
+  - I ran jitsi for years, but stopped using it a few months back. Jitsi is great, and I remain a fan, but most of the time I am joining other people’s Teams or Zoom meetings, so I was running the Jitsi server for very little usage. I turned it off, and instead offer Signal. I have had no grumbles.
+- Invoicing and tracking payments: **InvoicePlane**, just for generating PDF invoices. Clients don’t interact with it
+- Time tracking: **Kimai**
+  - v2 of Kimai is excellent, and I had a very pleasant exchange with the developer, which is always nice.
+- “Case management” / “Matter management”: **EspoCRM**
+- VPN: **WireGuard**, using trailofbit’s **algo** ansible scripts on one machine, and **PiVPN** on another (albeit not on a Pi)
+- Vulnerability scanning: **greenbone/OpenVAS**
+- Monitoring: **Uptime Kuma**
+  - I implemented this not long after the last update. It … just works?
+- Forge / hosted git repository: **Forgejo**
+  - I use this for version tracking the website, and for a couple of template projects
+  - I do not host anything particularly important on it - for that, I have a git process running on another machine, which is not accessible over the Internet, and I just push to that
+- SIEM: **Wazuh**
+- Password manager: **vaultwarden**
+- Website: it is a static site built via **mkdocs**, hosted on **apache2**
+  - It got even simpler and even faster to load. Yes, it’s basic, but I like it!
+  - We still have an .onion version. If you visit decoded.legal in Tor Browser, it should re-direct your automatically
+- Blog: **BSSG**
+  - After a couple of annoyances with hugo, I moved to BSSG - a bash static site generator. The developer, Stefano, is amazing, and it is working incredibly well. I’ve gone for a very basic, easy to read, theme - which should be very similar to what was there before - and there’s still an RSS feed for it, of course
+  - I blog quite frequently, and, rather than keep private / internal “knowhow” files, I tend to just blog things and share the learnings
+  - I tend to use my personal blog for posts about the more technical bits and pieces
+  - I have automated the most common actions - templates, and publishing - using bash scripts, so that I can focus on writing (in Markdown); getting it online is the easiest bit
+- Fediverse: I am using the *glitch-soc Mastodon** fork
+  - Switching from normal Mastodon to glitch-soc Mastodon was easy
+  - I stopped using Markdown in toots, even though I like the rendered output (i.e. as html not as markdown), but this is not supported consistently well across clients, so I stopped using it.
+  - I turned off decoded.legal’s own fedi instance. I had been on the fence as to whether this is worthwhile or not for a while, and decided that, really, it was not.
+- Knowledge management, and managing our law firm’s (numerous) policies and procedures: **dokuwiki** with the Markdown plugin
+- DNS: **unbound**, with **Pi-Hole** in front of it
+  - I used to run a doh server, but I’ve stopped doing that.
+- Backups: **restic** and **rsync**
+  - Notes on restic
+- Forms: **LiberaForms**
+  - I have been really happy with LiberaForms, for easy-to-create and easy-to-use forms, especially since they implemented encryption, so that the form responses are stored encrypted on the server. I still delete them as soon as I can, but knowing that they are encrypted in the database is welcome.
+  - I use LiberaForms for our “Know Your Client” pre-engagement questionnaire, and for various other bits
+- Collaborative document editing: I don’t.
+  - I used to run CryptPad, but it just didn’t get much use, so I turned it off.
 
-UPDATE: Those Gemini hosting providers exist:
+## AI tools
 
-### About the author
+## Mobile device
 
-I’m [Ploum](https://fr.wikipedia.org/wiki/Ploum), a writer and an engineer. I like to explore how technology impacts society. You can subscribe [by email](https://listes.ploum.net/mailman3/lists/en.listes.ploum.net/) or [by rss](https://ploum.net/atom_en.xml). I value privacy and never share your adress.
+I’m using a Pixel running GrapheneOS for my mobile device.
 
-I write [science-fiction novels in French](https://pvh-editions.com/ploum). For [Bikepunk](https://bikepunk.fr), my new post-apocalyptic-cyclist book, my publisher is looking for contacts in other countries to distribute it in languages other than French. If you can help, [contact me](https://ploum.net/about.html)!
+I use F-Droid as the main app store.
+
+Using Android doesn’t thrill me, especially given Google’s direction
+of travel, but at the moment - despite trying quite a lot of different
+OSs and devices, including postmarketOS and Ubuntu Touch, as well as
+SailfishOS previously - I have not found something that does what I need
+better than GrapheneOS.
+
+## Working with others
+(who don’t use FOSS tools)
+
+No change here: zero problems.
+
+Many of my clients use Microsoft’s software, or Apple’s software.

@@ -1,299 +1,602 @@
-I’ve been exploring Rust, and one topic that got me intrigued is pointer
-provenance, particularly because it’s not easy to visualize.
+I think everyone can agree code needs to be modular.
+Modularity lets us reason locally about our code no matter how big it grows.
+However, no one seems to agree on *how* code should be modular.
+There are a bunch of different approaches and each new language seems to bring their own spin on it.
 
-To get a feel for
-[vtables](https://sofiabelen.github.io/projects/visualizing-rusts-vtables-how-dyn-trait-works-in-memory/),
-what I wanted was to look at the actual memory, to see what it really looked
-like and prove that I could in fact call these functions through their
-respective function pointers. With provenance, I wanted to take it apart the
-same way, but it turns out it’s not so straightforward. This only got me more
-intrigued, so let’s see what we can find!
+Today we’re going to talk about a pretty old spin: ML Modules.
+ML here stands for Meta Language, as seen in SML and OCaml (and not machine learning).
+Despite SML first appearing in 1983, ML Modules have not caught on.
+OCaml is the sole production language you’ll find with an ML module system, and at the height of its popularity it’s niche.
 
-My first time hearing about provenance, I wondered, why hadn’t I heard about it
-before? It seems so crucial, yet a bit of an obscure concept.
+This is a shame because ML modules have a lot to offer.
+We’re going to talk about what ML modules are and then touch a little on why ML modules are.
+Who better after all to explain modules, than the guy who doesn’t know [what’s in a module
+**](https://thunderseethe.dev/posts/whats-in-a-module/)?  
+…On second thought, don’t answer that.  
+…I already wrote the blog post.
 
-## What is Provenance: Pointers Are Not Just Glorified Ints
+Modules exist to make our code modular, duh, but what does that mean in practice?
+I think most programmers have some intuitive sense of modularity:
 
-Let’s start by taking a good look at this snippet. It’s short, but our intuition
-can trick us if it’s our first time coming across this concept. `void opaque(int*)` is forward declared here, so for us it’s a black box. Neither we
-nor the compiler can rule out that this function dereferences `p` and writes to
-memory.
+- Bundle up related logic as one “thing”
+- Encapsulate invariants
+- Decouple from dependencies
 
-```cpp
-void opaque(int*);
+Most languages have a way to do this, and if they don’t, one gets created for them (looking at you JavaScript).
 
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    return x;
+## Modules Bundle Functions
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-bundle-functions)
+
+ML modules achieves this with, you guessed it, the Module.
+ML modules, however, are a little different from the modules we know and love.
+To explain their differences, we’ll lean on a made-up Rust-inspired syntax.
+It will start off looking a little weird and gradually, as we introduce concepts, end up looking really weird (but hopefully more familiar than SML syntax).
+We’ll start by defining a module with just functions:
+
+```rust
+mod AModule {
+  fn add(a: i32, b: i32) -> i32 {
+    a + b
+  }
+
+  fn sub(a: i32, b: i32) -> i32 {
+    a - b
+  }
+
+  // mult, div, etc...
 }
 ```
 
-If we compile this with `-O2`, Clang optimizes this to return 1. Let’s try this
-on Godbolt:
+`AModule` bundles together related arithmetic functions as one thing we can reason about.
+Each function can see every other function in the module.
+This is useful, but any language with namespaces offers this.
 
-The question is, how does it know that `int* p` doesn’t point to the same memory
-address where `x` lives (meaning that `opaque(p)` could end up modifying `x`)?
+## Modules (also) Bundle Types
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-also-bundle-types)
 
-The compiler assumes `p` can’t equal `&x` because `p` wasn’t *derived* from `x`.
+A little more unique is that ML modules will let us put not only function definitions in modules, but also type definitions:
 
-When I first heard about this, I thought it was a bit of a strange concept. What
-does it mean that something is *derived* from something?
+```rust
+mod Set {
+  type Set = Vec<i32>;
 
-I mean, if pointers were just numbers (memory addresses), `p` could
-theoretically happen to hold the same memory address as `x`’s allocation on the
-stack. Good thing they’re not just numbers!
+  fn new() -> Set {
+    vec![]
+  }
 
-Let us follow the white rabbit.
+  fn index_of(this: &Set, ele: &i32) -> Result<usize, usize> {
+    this.binary_search(ele)
+  }
 
-This brings us to the core of provenance. <mark>That “*derived from*” relation
-is **provenance**: for every pointer, the compiler keeps track of which
-allocation it belongs to and may, therefore, touch.</mark>
+  fn insert(this: Set, ele: i32) -> Set {
+    match index_of(&ele) {
+      Ok(_) => {} // we're done the element is already present
+      Err(indx) => {
+        this.insert(indx, ele);
+      }
+    }
+    this
+  }
 
-I tried to find a way to print this mysterious provenance, but it turns out that
-it’s purely a compiler abstraction. It does not exist as an actual data field
-stored alongside the memory address. (There are exceptions though: feel free to
-look up the CHERI architecture to go down another rabbit hole).
+  fn contains(this: &Set, ele: &i32) -> bool {
+    index_of(this, ele).is_ok()
+  }
 
-## Inspecting Provenance: LLVM IR
-
-So what can we do to inspect it? If the compiler knows about it then it must
-exist somewhere. If so, there must be a way to *see* it.
-
-This is how I learned about LLVM IR (intermediate representation), which is
-essentially a low-level programming language that acts as a bridge between
-high-level languages (like Rust, C++, etc) and machine code.
-
-Let’s try it for this code instead, where we also pass `&x` to `opaque` to see
-what happens when the compiler doesn’t optimize that part away:
-
-```c++
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    opaque(p);
-    opaque(&x);
-    return x;
+  fn remove(this: Set, ele: &i32) -> Set {
+    match index_of(this, ele) {
+      Err(_) => {}, // we're done the element is already removed
+      Ok(indx) => {
+        this.remove(indx)
+      }
+    }
+    this
+  }
 }
 ```
 
-We can use the `-emit-llvm` flag on Godbolt to [see the LLVM
-IR](https://godbolt.org/#g:!%28%28g:!%28%28g:!%28%28h:codeEditor,i:%28filename:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,selection:%28endColumn:2,endLineNumber:8,positionColumn:2,positionLineNumber:8,selectionStartColumn:2,selectionStartLineNumber:8,startColumn:2,startLineNumber:8%29,source:%27void+opaque%28int*%29%3B%0A%0Aint+f%28int*+p%29+%7B%0A++++int+x+%3D+1%3B%0A++++opaque%28p%29%3B%0A++++opaque%28%26x%29%3B%0A++++return+x%3B%0A%7D%27%29,l:%275%27,n:%270%27,o:%27C%2B%2B+source+%231%27,t:%270%27%29%29,k:44.33887569279493,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29,%28g:!%28%28h:compiler,i:%28compiler:clang2310,filters:%28b:%270%27,binary:%271%27,binaryObject:%271%27,commentOnly:%270%27,debugCalls:%271%27,demangle:%270%27,directives:%270%27,execute:%271%27,intel:%270%27,libraryCode:%270%27,trim:%271%27,verboseDemangling:%270%27%29,flagsViewOpen:%271%27,fontScale:14,fontUsePx:%270%27,j:1,lang:c%2B%2B,libs:!%28%29,options:%27-O2++-emit-llvm%27,overrides:!%28%29,selection:%28endColumn:29,endLineNumber:24,positionColumn:1,positionLineNumber:1,selectionStartColumn:29,selectionStartLineNumber:24,startColumn:1,startLineNumber:1%29,source:1%29,l:%275%27,n:%270%27,o:%27+x86-64+clang+23.1.0+%28Editor+%231%29%27,t:%270%27%29%29,k:55.66112430720507,l:%274%27,n:%270%27,o:%27%27,s:0,t:%270%27%29%29,l:%272%27,n:%270%27,o:%27%27,t:%270%27%29%29,version:4):
+Here we have a `Set` module with a `Set` type, which is a sorted `Vec<i32>`.
+Our module’s functions can refer to the type definitions much the same way they can refer to their module’s function definitions.
+Okay but that’s not that crazy, still well within the realm of Rust modules.
 
-```
+## The Type of a Module is a Signature
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#the-type-of-a-module-is-a-signature)
 
-define dso_local noundef i32 @f(int*)(ptr noundef %0) local_unnamed_addr #0 !dbg !14 {
-  %2 = alloca i32, align 4 // --> root of %2 allocation (x)
-    #dbg_assign(i1 poison, !22, !DIExpression(), !23, ptr %2, !DIExpression(), !24)
-    #dbg_value(ptr %0, !21, !DIExpression(), !24)
-  call void @llvm.lifetime.start.p0(ptr nonnull %2) #3, !dbg !25
-  store i32 1, ptr %2, align 4, !dbg !26
-    #dbg_assign(i32 1, !22, !DIExpression(), !28, ptr %2, !DIExpression(), !24)
-  tail call void @opaque(int*)(ptr noundef %0), !dbg !29
-  call void @opaque(int*)(ptr noundef nonnull %2), !dbg !30
-  %3 = load i32, ptr %2, align 4, !dbg !31
-  call void @llvm.lifetime.end.p0(ptr nonnull %2) #3, !dbg !32
-  ret i32 %3, !dbg !33
-}
+Not only can modules contain type definitions.
+Modules themselves have types.
+A module type is called a signature (so we don’t get it confused with “normal” types).
+The signature of our `Set` module is:
 
-declare void @llvm.lifetime.start.p0(ptr captures(none)) #1
+```rust
+sig FullSetSig {
+  type Set = Vec<i32>;
 
-declare !dbg !34 void @opaque(int*)(ptr noundef) local_unnamed_addr #2
-
-declare void @llvm.lifetime.end.p0(ptr captures(none)) #1
-
-attributes #0 = { mustprogress uwtable "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #1 = { mustprogress nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
-attributes #2 = { "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
-attributes #3 = { nounwind }
-```
-
-What the compiler does is to conceptually construct a DAG (directed acyclic
-graph), to answer the question of where a pointer comes from and whether two
-pointers can touch the same memory.
-
-If the root origins don’t match, LLVM can guarantee that writing through `%0`
-will never alter the value stored at `%2`.
-
-There is so much more to explore here that it’s hard not to get carried away
-because it’s truly fascinating. However, my original goal was to compare how C++
-and Rust handle this, so let’s continue.
-
-## C++: What Happens If We Cast to an Integer?
-
-If we were to cast `&x` to an integer, then LLVM must assume that anyone could
-rebuild a pointer to `x` from that integer.
-
-```cpp
-#include <cstdint>
-
-void g(std::uintptr_t);
-void opaque(int*);
-
-int f(int* p) {
-    int x = 1;
-    g(reinterpret_cast<std::uintptr_t>(&x)); // address of x is now 'exposed'
-    opaque(p);
-    return x;
+  fn new() -> Set;
+  fn index_of(&Set, &i32) -> Result<usize, usize>;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
 }
 ```
 
-The result is that the compiler gives up the optimization:
+A module signature declares every definition of a module alongside its type.
+This might look similar to the way we define a trait in Rust.
+That’s because much like traits act as interfaces in Rust, signatures act as interfaces in ML Modules.
+Modules having signatures is the single most important thing to understand about ML Modules.
+All the complexity and expressiveness of modules results from them having signatures and the wonderful wacky things that enables.
 
-That’s a pity if we only wanted to read the address and never intended to cast
-it back to a pointer. Wouldn’t it be nice if we could communicate this intent to
-the compiler?
+# Signatures Support Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#signatures-support-encapsulation)
 
-## Rust: Making Your Intent Explicit
+Signatures resemble the way a C/C++ implementation file conforms to its header.
+Modules, unlike `.cc` files, aren’t in a 1:1 relationship with signatures.
+Our `Set` module can conform to *any* signature that it matches.
+A module matches a signature when it defines every declaration in the signature and they agree on type.
 
-This is exactly what Rust provides with its powerful provenance APIs.
+Matching a signature provides [Encapsulation
+**](https://en.wikipedia.org/wiki/Encapsulation_%28computer_programming%29), hiding internal details of our module from our public API.
+Take a look at `FullSetSig`.
+Do callers of `Set` really need to know about `index_of`?
+Encapsulation advocates shout a resounding no: `index_of` is an implementation detail of `Set.Set` being a `Vec<i32>` and not integral to our `Set` API.
 
-### Inspecting Without Exposing
-
-```rust
-let p: *const u32 = &x;
-let a: usize = p.addr();
-```
-
-`p.addr()` extracts the raw memory address integer while telling Rust’s abstract
-machine:
-
-> I am reading this numeric address for inspection, but I guarantee I WILL NOT
-> cast it back to a valid pointer.
-
-Provenance is therefore not exposed.
-
-To mirror our previous experiments, we can try to see if the optimization was
-avoided or not:
-
-What we see is that `mov eax, dword ptr [rsp + 12]` reloads `x` after
-`opaque(p)`, meaning that, at least for now, the optimization is given up. Same
-as in the C++ case.
-
-Still, we can benefit from using the more expressive API, and not relying on
-exposure semantics. It gives the compiler room to optimize in the future, and,
-by telling Miri explicitly what we mean, it can better help us catch bugs.
-
-### Preserving Provenance
-
-In lock-free data structures, we sometimes need to store status flags in the
-lower unused bits of a pointer. It’s a very cool trick, which left me with my
-eyes wide open for a minute when I first read about it. I talk more about it in
-[this
-post](https://sofiabelen.github.io/projects/visualizing-crossbeam-epoch-based-reclamation/#q2-dissecting-crossbeamepochshared).
-Essentially, due to alignment, the lower bits of pointers are “wasted” (always
-0), so we can use them to store flags.
-
-What we can do is work with an intermediate pointer value, which will have the
-flag bit set BUT that also inherits provenance from the original pointer. This
-is exactly the functionality that `with_addr` provides us. After we’re done, we
-can recreate our valid initial pointer.
-
-The tagged value is stays a pointer rather than ‘usize’ because an integer is
-just a number and can’t carry provenance.
+We can encapsulate `index_of` by matching our `Set` module to a new signature:
 
 ```rust
-let tagged: *const u32 = p.with_addr(p.addr() | 1);
-// ...
-let revived_ptr: *const u32 = tagged.with_addr(tagged.addr() & !1);
+sig SetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  // index_of is missing.
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
 ```
 
-Keep in mind that `tagged` isn’t dereferenceable, given that `p.addr() | 1` is
-misaligned for `u32`. Dereferencing it would be UB.
-
-In short:
-
-- `addr()` reads the address without exposing provenance.
-- `with_addr()` builds a new pointer with a new address but the *same* provenance as the original.
-
-### Legacy Rust, Similar To C++
-
-In legacy code, we’d have to do something like this:
+`SetSig` removes `index_of`, hiding the implementation detail.
+We can then ascribe our signature to our `Set` module:
 
 ```rust
-let addr = p as usize;
-let tagged_addr = addr | 1;
-let revived_ptr = (tagged_addr & !1) as *const u32;
-println!("*revived_ptr: {}", unsafe { *revived_ptr});
+mod Set : SetSig {
+    // Our module implementation stays unchanged...
+}
 ```
 
-This code will run, but if we run it with Miri, it emits a warning:
+Now the rest of our code sees `Set` as `SetSig` without `index_of`.
+Importantly, our `Set` module hasn’t changed.
+`index_of` is still available inside the module.
+Ascribing the signature only changes the public view of the module, similar to a private function in Rust.
 
-```mysql
-warning: integer-to-pointer cast
- --> src/main.rs:6:22
-  |
-6 |     let revived_ptr = (tagged_addr & !1) as *const u32;
-  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ integer-to-pointer cast
-  |
-  = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
-  = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
-  = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
-  = help: you can then set `MIRIFLAGS=-Zmiri-strict-provenance` to ensure you are not relying on `with_exposed_provenance` semantics
-  = help: alternatively, `MIRIFLAGS=-Zmiri-permissive-provenance` disables this warning
-
-*revived_ptr: 1
-warning: 1 warning emitted
-```
-
-Actually, the reason that it runs is also interesting. What happens is similar
-to the C++ example. `p as usize` exposes the provenance of `p`, and since the
-reconstructed pointer points to the same allocation, provenance is recovered.
-
-Provenance would be lost if we did some pointer arithmetic and landed in a
-different allocation.
-
-### Casting Without Exposing Provenance
-
-To see what happens when provenance is **not** exposed, we can use
-`ptr::without_provenance`, which creates a bare address with no allocation
-behind it. (It’s useful for dangling or sentinel pointers, but it can’t be
-dereferenced).
+A module’s definition isn’t the only place we can ascribe a signature.
+We can also make a “new” module by matching an old module to a new signature.
+Let’s say we want an `InsertOnlySet` (never you mind why I need that):
 
 ```rust
-let bare_ptr = std::ptr::without_provenance::<u32>(p.addr());
-println!("*tagged_ptr: {}", unsafe { *bare_ptr});
+sig InsertOnlySetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+}
 ```
 
-As expected, Miri complains about a <mark>*dangling pointer*</mark> and tells us explicitly that <mark>it has no provenance.</mark>
+We can create that from our `Set` module purely by matching the signature:
 
+```rust
+mod InsertOnlySet: InsertOnlySetSig = Set;
 ```
 
-error: Undefined Behavior: memory access failed: attempting to access 4 bytes, but got 0x20b28[noalloc] which is a dangling pointer (it has no provenance)
-  --> src/main.rs:11:42
-   |
-11 |     println!("*tagged_ptr: {}", unsafe { *bare_ptr});
-   |                                          ^^^^^^^^^ Undefined Behavior occurred here
-   |
-   = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
-   = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
+Now `InsertOnlySet` is effectively a whole new module, despite the underlying implementation being shared with `Set`.
+This is what’s cool about modules.
+We can repurpose modules “for free” simply by giving them a different signature.
+If we want to do this in an OO language, we’d have to add a new interface in our class definitiion.
+But we can slap one of these bad boys anywhere in our codebase.
 
-note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
+## Sealed Types Seal Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#sealed-types-seal-encapsulation)
 
-error: aborting due to 1 previous error
+Ascribing a signature to a module lets us hide implementation details, but there’s a bit of a glaring hole here.
+Sure we’ve hidden away `index_of`, but our module broadcasts to the world that `type Set` is a `Vec<i32>`!
+Set relies on our vector being kept in sorted order, but anybody is free to write a function:
+
+```rust
+fn whoops() {
+    let mut set = Set::new();
+    // teehee
+    set.extend([3, 2, 1]);
+    // 💥
+    let uh_oh = Set::insert(set, 1);
+    // Now our set is [1, 3, 2, 1]
+}
 ```
 
-## Recap
+Nothing but a small flesh wound in our encapsulation.
+Fortunately, ML modules foresaw this problem and provided a solution using signatures.
 
-Provenance, in short, is a hidden piece of information tracking “which
-allocation” a pointer originates from, which LLVM uses for optimizations.
+Much the same way a signature lets us hide functions, it also lets us hide types.
+ML Modules call this an abstract type.
+If we update `SetSig` to be:
 
-In C++, `uintptr_t` casts force the optimizer to prepare for the worst case by
-disabling some optimizations.
+```rust
+sig SetSig {
+  type Set;
 
-In Rust, `addr()`, `with_addr()` and `without_provenance()` let you state your
-intent explicitly: you only want the number, or you are deriving a new pointer
-from an existing one. In principle, that gives the compiler room to optimize
-more aggressively. In our experiment, however, the Rust version is unoptimized
-too: `x` was still reloaded from the stack. Using more expressive
-APIs is still valuable though, as Miri can enforce the rules and catch bugs that
-stem from unintended usage.
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
 
-I had planned to compare what Miri and ASan can catch, but I’ll save that for
-another post. It was enough new info as it is and it takes some time to fully
-wrap my head around it.
+Our signature no longer broadcasts that `type Set` is `Vec<i32>`.
+Within the `Set` module we’re free to use `type Set` as `Vec<i32>`, but everywhere outside the module `type Set` is now some unknown type.
+Because callers know nothing about our newly abstract `Set` type, all they can do is pass it to and from the methods provided by the `Set` module.
+As long as we keep our underlying `Vec<i32>` sorted within `Set`, we know no one else is able to mess with it.
+They simply don’t know enough about the type!
 
-I’m currently between jobs and looking for a Rust role, so writing these posts
-keeps me motivated and has helped me find a sense of community. Thank you for
-reading, and I hope you enjoyed it!
+## Module’s Version of Generics
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-version-of-generics)
+
+Our Set module is nearing perfection, but it still leaves a little to be desired: it only works for `i32`.
+Now we could of course write a new module `SetU64`, `SetString`, on and on everytime we need one, but c’mon there’s gotta be a better way.
+This isn’t Go.
+
+Generics is the go-to solution for this problem.
+Heck we’ve even used it ourselves with `Vec<i32>`.
+ML Modules, however, have a more *modular* solution.
+You can parameterize a module by another a module.
+
+Think of a parameterized module as a function that takes a module and returns another module.
+To make our `Set` accept any type and not just `i32`, we parameterize it by a module that provides the type of our Set’s elements:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T
+}) {
+  type Set = Vec<Elem.T>;
+
+  fn new() -> Set {
+    vec![]
+  }
+
+  fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+    // ...
+  }
+
+  fn insert(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+
+  fn contains(this: &Set, ele: &Elem.T) -> bool {
+    index_of(this, ele).is_ok()
+  }
+
+  fn remove(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+}
+```
+
+Our newly parameterized `Set` accepts any module that conforms to `Elem`.
+Any module can match `Elem` as long as it has at least a `T` definition.
+
+## A Teensy Problem
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#a-teensy-problem)
+
+With that our `Set` module supports any type.
+Except for one teensy detail.
+I’ve deceived you with some tactical `// ...`s.
+If we actually try to implement `index_of`, we quickly encounter a problem:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| ele ??? a)
+}
+```
+
+We don’t know how to compare `T`’s.
+Rust’s `Ord` would solve this, of course, but ML modules have modules not traits.
+`Set` doesn’t take in just a type, however, it takes in a full module.
+If we need to know how to compare `T`’s, we can just ask our `Elem` module:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T;
+  fn cmp(&T, &T) -> Ordering;
+}) {
+  // ...
+}
+```
+
+Now it’s clear how to implement `index_of`:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| Elem::cmp(ele, a))
+}
+```
+
+With our parameterized module implemented, we can create new `Set` modules by applying them to new argument modules:
+
+```rust
+mod SetU32 = Set(mod U32 {
+  type T = u32;
+  fn cmp(a: &T, b: &T) { a < b }
+});
+```
+
+`SetU32.Set` is a `Vec<u32>` and provides an interface that takes and returns `u32` instead of `i32`.
+We can do it again as easy as:
+
+```rust
+mod SetString = Set(mod String {
+  type T = String;
+  fn cmp(a: &T, b: &T) { /* lexographic ordering probably... */ }
+});
+```
+
+Just like that, a whole new module.
+This time a set of Strings.
+I could do this all day.
+
+Because we accept a module, we can request anything a module can hold (even a whole other submodule or parameterized module!).
+The downside is that we have to specify the whole module every time.
+We *have* to specify `cmp` every time we apply our `Set` module.
+Rust traits let us write `Ord` for a type once and use it everywhere implicitly.
+
+## Include Keeps Modules Small
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#include-keeps-modules-small)
+
+In practice, we don’t actually repeat how to order our type every time we want a `Set`.
+Recall that a signature will match *any* module that provides what it needs.
+If we make a big module called `U64`:
+
+```rust
+mod U64 {
+  type T = u64;
+
+  fn cmp(a: &u64, b: &u64) { a < b }
+
+  fn add(a: u64, b: u64) -> u64 { a + b }
+  fn sub(a: u64, b: u64) -> u64 { a - b }
+  // ...
+}
+```
+
+Then we can use that as our argument to Set:
+
+```rust
+mod SetU64 = Set(U64);
+```
+
+But hang on, we got into this whole Module business to break up our code.
+Now we’ve got to dump everything into one module just in case we need it later?
+That’s not very cash modular of us.
+
+ML modules have a final feature to get us the best of both worlds: `include`.
+`include` expands a module inline within another module.
+We’re free to split up our `U64` module into various submodules: `U64Order`, `U64Arithmetic`, etc.
+Our final `U64` module only has to include these submodules:
+
+```rust
+mod U64 {
+  type T = u64;
+
+  include U64Order;
+  include U64Arithmetic;
+  // ...
+}
+```
+
+Modules can be organized into logical components and then combined later to provide convenience (wow!).
+We’re free to cut up and reassemble modules at the whims’ of the wind.
+We can even apply a module and include it inline:
+
+```rust
+mod ABunchOfSetForSomeReason {
+  mod SetU64 = Set(U64);
+  include SetU64;
+
+  mod SetString = Set(String);
+  include SetString;
+}
+```
+
+Why do you need one module that’s a bunch of overlapping Sets?
+I don’t know!
+I’m not your supervisor.
+Either way, modules will happily let you do it.
+
+## Putting It All Together
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#putting-it-all-together)
+
+We’ve covered the basics of modules.
+Let’s take a look at a more involved examples to get a sense of what modules can offer.
+We’re gonna use modules to assemble a little build executor.
+Out build step will be a parameterized module:
+
+```rust
+mod BuildStep(sig Env {
+  mod Cache: CacheSig;
+  mod Runner: RunnerSig;
+}) {
+  // ...
+}
+```
+
+Where `CacheSig` represents a cache of build steps and `RunnerSig` represents running some command:
+
+```rust
+sig CacheSig {
+  fn is_cached(inputs: &[String], output: &Path) -> bool;
+  fn store(inputes: &[String], output: &Path);
+}
+
+sig RunnerSig {
+  fn run(inputs: &[String], output: &Path);
+}
+```
+
+For brevity we’ll keep these pretty simple, but hopefully you can imagine how these might expand.
+We can then implement `BuildSet` in terms of our input modules:
+
+```rust
+mod BuildSet(...) {
+  fn run_cached(inputs: &[String], output: &Path) {
+    if !Env::Cache::is_cached(inputs, output) {
+      Env::Runner::run(inputs, output);
+      Env::Cache::store(inputs, output);
+    }
+  }
+
+  fn compile(src: String) -> String {
+    let obj = PathBuf::from(format!("{src}.o"));
+    run_cached(&[src], &obj);
+    obj.display().to_string()
+  }
+
+  fn build(srcs: &[String], output: &Path) {
+    let objs: Vec<String> = srcs.iter().map(compile).collect();
+    run_cached(objs, output)
+  }
+}
+```
+
+Our `build` functions takes a list of source files, compiles them, and then links the object files into a final binary.
+How does `run` tell when it’s compiling and when it’s linking?
+Don’t worry about it!
+Now that we’ve set that up we can toggle the functionality of our build by controlling what modules we pass to `BuildStep`.
+For a real build, we’ll want something like an in-memory cache:
+
+```rust
+mod MemCache {
+  // Pretend this works without locking for multithreading
+  static ENTRIES: Vec<(Vec<String>, PathBuf)> = vec![];
+
+  fn is_cached(inputs: &[String], output: &Path) {
+    ENTRIES.iter().any(|(cached_inputs, cached_outputs)| {
+      inputs == cached_inputs && output == cached_outputs
+    })
+  }
+
+  fn store(inputs: &[String], output: &Path) {
+    ENTRIES.push((inputs.to_vec(), PathBuf::from(output)))
+  }
+}
+```
+
+Next we’ll want something that runs our commands:
+
+```rust
+mod ShellRunner {
+  fn run(inputs: &[String], output: &Path) {
+    let cmd = // magically pick between `cc` and `lld`;
+    let output = format!("-o {}", output.display());
+    Command::new(cmd)
+      .args(inputs)
+      .args(output)
+      .output()
+      .expect("All our commands work first try");
+  }
+}
+```
+
+We can then assemble our build system via:
+
+```rust
+mod CachedBuild = BuildStep(mod Env {
+  mod Cache = MemCache;
+  mod Runner = ShellRunner;
+});
+```
+
+But maybe we don’t always want caching.
+Maybe we want a build that always reruns actions for local testing.
+We simply swap out our cache module:
+
+```rust
+mod NoCache {
+  fn is_cached(inputs: &[String], outputs: &Path) -> bool {
+    false
+  }
+
+  fn store(inputs: &[String], outputs: &Path) {
+    // nothing to do here
+  }
+}
+
+mod LocalBuild = BuildStep(mod Env {
+  mod Cache = NoCache;
+  mod Runner = ShellRunner;
+});
+```
+
+Our build system works first try.
+We wouldn’t write the code bad, of course, but just in case we might want to test it.
+A `FakeRunner` will let us do just that:
+
+```rust
+mod FakeRunner() {
+  static COMMANDS: Vec<(Vec<String>, PathBuf)> = vec![];
+
+  fn run(inputs: &[String], output: &Path) {
+    COMMANDS.push((inputs.to_vec(), PathBuf::from(output)));
+  }
+
+  // A test only helper.
+  fn contains_command(inputs: &[String], output: &Path) -> bool {
+    // ...
+  }
+}
+```
+
+Because `FakeRunner` is a parameterize module, we can create a new module (and a new empty `COMMANDS`) every time we apply it:
+
+```rust
+mod Tests {
+  mod TestRunner = FakeRunner();
+  mod TestBuild = BuildStep(mod Env {
+    mod Cache = MemCache;
+    mod Runner = TestRunner
+  });
+
+  // Write tests against TestBuild using `TestRunner::contains_command`...
+}
+```
+
+If we want to check that caching works we can extend our tests with a new fake runner and compare their commands:
+
+```rust
+mod Tests {
+  // TestBuild setup...
+
+  mod UncachedTestRunner = FakeRunner();
+  mod UncachedTestBuild = BuildStep(mod Env {
+    mod Cache = NoCache;
+    mod Runner = UncachedTestRunner;
+  })
+
+  // Compare the results of `TestRunner::contains_command` and `UncachedTestRunner::contains_command`...
+}
+```
+
+This isn’t earth shattering stuff.
+If we wanted to replicate this setup in an OO language, however, we would need runtime objects or, heaven forbid, a DI framework.
+Here we can do it all by wiring up modules statically.
+
+Hopefully this has helped you see what’s cool about modules.
+Module’s power lies in their signatures.
+What would require a newtype wrapper or a visibility change in other languages can be accomplished by simply changing the signature a module is viewed at.
+
+With abstract types, this allows for constructing webs of encapsulation where each piece knows precisely what it needs to about its neighbor and no more.
+Signatures act as this encapsulation boundary, freeing us to reason about our code modularly.
+As long as our module conforms to the expected signature we can contort and refactor it to our wildest whims and trust that it will continue to integrate into our system as expected.
+ML Modules are neat and I think they deserve more love and exploration in programming languages.
