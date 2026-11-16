@@ -1,229 +1,95 @@
-I’ve just released [hegel-clj](https://github.com/aphyr/hegel-clj), a Clojure interface for the [Hegel](https://hegel.dev) generative testing library. You can jump right to [the docs](https://cljdoc.org/d/com.aphyr/hegel-clj/0.1.1/doc/readme), but I thought it might be interesting to explain why I want another testing library.
+[clice](https://github.com/clice-io/clice) recently hit 1,000 commits, a special milestone for the project. Since July 19, 2026, clice has been shipping nightly builds and going through roughly four months of alpha testing, with a huge number of bugs fixed thanks to real-world feedback from early users. Over the same stretch, I built a rigorous testing system for clice and ran extensive tests across many real open-source projects, tracking down and fixing the issues they uncovered. What does that mean? Every core feature is now stable, and you rarely run into problems in day-to-day use. So I think the time is right to ship the first stable release. The project looks very different today from where it stood two years ago in [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), and this is probably the first time I’m promoting it widely, so please let me introduce it to you once again! This is the project I have poured the past **two and a half years** into, the work I am proudest of, the one that has excited me the most and left me sad and anxious more times than I can count, and the most ambitious thing I have taken on in my short life.
 
-I do a lot of generative testing in Clojure with the excellent [test.check](https://github.com/clojure/test.check). However, using test.check can be frustrating! In particular, complex generators can get stuck during shrinking, leaving me trying to prune down a complex data structure by hand. The culprit is usually `bind`. If you’re not familiar with test.check, Quickcheck, or other libraries in this family, `bind` is a generator which draws some random value, then uses that to construct a *new* generator, which in turn is used to draw some other value.
+## What is clice?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-is-clice)
 
-```
-(require '[clojure.test.check :as tc]
-         '[clojure.test.check.generators :as tcg]
-         '[clojure.test.check.properties :as tcp])
-(tcg/bind ; Take a number from `nat`, a generator of small positive
-          ; integers.
-          tcg/nat
-          ; Now with that number, construct a generator of vectors, each
-          ; with that many elements.
-          (fn [size]
-            (tcg/vector tcg/large-integer size)))
-```
+In short, clice is a C/C++ language server written in **modern C++**, but it’s **more than** just a language server. It is still built on LLVM/Clang, but unlike clangd and ccls, which are also Clang-based, clice was redesigned from the ground up to fix architectural problems that have gone unsolved in those servers for years. It is written entirely in C++23 and serves as an example of modern C++ best practices in its own right, with all the major modern C++ features coming together remarkably well:
 
-We can also write this using test.check’s `let` macro, which expands to a series of nested `bind`s under the hood.
+- Written entirely with C++20 coroutines, using our own libuv-based structured-concurrency async library for intricate asynchronous logic. It is a complex concurrent program running an event loop on the main thread while coordinating both multiple processes (IPC) and multiple threads.
+- Written entirely with C++20 named modules and C++23 import std, and fully self-hosted: module wrappers for third-party libraries are generated automatically by clice modularize, and clice runs smoothly on its own codebase to provide module-aware language services.
+- Uses static reflection built on templates and C++20 concepts for all serialization and deserialization across formats, including TOML, JSON, bincode, blob, and command-line arguments, with Rust-macro-like declarative annotations and zero boilerplate.
+- Data-oriented code design throughout, with almost no virtual functions outside the callback interfaces Clang requires. Makes heavy use of modern C++ APIs like std::format, std::expected, std::ranges, and std::views, steering clear of outdated legacy C++98/11 APIs.
+- A completely hermetic, reproducible build powered by Bazel, compiled with the unified xclang toolchain for a consistent cross-platform cross-compilation workflow. Compiled binaries are heavily optimized (PGO + LTO), and build artifacts depend on nothing beyond system libraries.
 
-```
-(tcg/let [size tcg/nat]
-  (tcg/vector tcg/large-integer size))
-```
+> People are always debating whether modern C++ features like modules are actually ready for real work. clice’s answer is: yes, of course, completely usable! They hold up for complex software like clice, with hundreds of thousands of lines of code. Maybe this is what the modern C++ we have been hoping for looks like. That said, the surrounding ecosystem really is inconvenient enough right now that getting this whole workflow running end to end took a huge amount of effort on my part to track issues and adapt everything.
 
-This leads to the [canonical example](https://github.com/clojure/test.check/blob/master/doc/growth-and-shrinking.md#gotchas-1) of poor shrinking in test.check. Let’s try to find a vector containing `42`:
+### Language Server[#](https://www.ykiko.me/en/articles/2105384023094834022/#language-server)
 
-```
-(-> (tc/quick-check 1000
-      (tcp/for-all [xs (tcg/let [size tcg/nat]
-                         (tcg/vector tcg/large-integer size))]
-                   (not-any? #{42} xs))
-      {:seed 1777986545686})
-  :shrunk :smallest first)
+Here is an overview of clice’s main features:
 
-[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
-```
+- Multi-process compilation: clice compiles code in a process pool modeled after modern web browsers, whereas clangd uses multithreading. Why multiple processes? Because C++ is simply **too complex**, and on certain [corner cases](https://github.com/clice-io/clice/issues/1057) the compiler can easily crash or leak memory. That is especially true for **incomplete** code in the middle of editing: a huge downstream user base tests compilers on complete code, while very few people test them on half-written code, where the compiler mostly falls back on best-effort heuristics. In clangd, a compiler crash takes down the whole server and forces a restart. In clice, compilation happens in isolated child processes: losing one worker does not affect the rest of the server, so go-to-definition, highlighting, and other services keep working. It also makes it much easier to manage memory usage and schedule compilation priorities, cutting down on unnecessary resource consumption. ![Left: clangd 23.1.0 with default settings; right: clice. Requesting completion at the same spot crashes Clang every time. After clangd’s entire process crashes 5 times, the extension stops restarting it and hover disappears too; clice only loses a single worker, warns about the crash on the file, and keeps everything else working normally](https://pic2.zhimg.com/v2-bb2148a7f481c6a765369447b3ffaf5d_r.gif)
+- Modules and shared caching: clice has full support for C++20 named modules. All you need is a `compile_commands.json` containing all module files, and clice scans dependencies on its own and lazily builds required modules on demand, regardless of your build system or compiler, with full support for module completion, highlighting, go-to-definition, hover, and more. Built PCHs and PCMs are also cached on local disk for reuse across sessions. By comparison, clangd offers only very limited module support and no persistent cache. ![Left: clangd 23.1.0 with default settings; right: clice. Completing a module name, hovering on it to see its doc comment, Ctrl+clicking into math.cppm, then completing and hovering on an exported function](https://pic1.zhimg.com/v2-54bef9288e8bdc73f0626f0595762304_r.gif)
+- Compilation context: clice has full support for non-self-contained files, and more generally for the concept of a compilation context. You can explicitly pick the active context of a file: a specific compile command for a source file, or a specific inclusion site for a header. When you open a non-self-contained file, clice detects its context automatically, so it works out of the box. More broadly, it also supports grouping compile commands into build configurations, letting you switch between, say, debug and release. ![Left: clangd 23.1.0 with default settings; right: clice. Opening the non-self-contained real.hpp from precise.cpp triggers 3 errors in clangd while clice handles it cleanly; switching the context from fast.cpp to precise.cpp updates the inactive regions and the type of Real accordingly](https://pic4.zhimg.com/v2-27fb6b3b6914125776c38490f6b49c47_r.gif)
+- Better template support: clice implements a DFS pseudo instantiator that infers what many dependent names resolve to without needing concrete template arguments for a full instantiation. When a template has been instantiated once, clice also draws on that instantiation to power language features, such as completing on `auto` parameters of a lambda passed to a `ranges` call. On top of that, clice treats a template as a duck-typed interface and each instantiation as one of its implementations, much like a virtual function and its overrides: Go to Implementation on a dependent call inside a template lists the functions it actually calls across every instantiation, and Find References and Call Hierarchy work the same way. ![Completing the dependent name grid[0\]. inside a template, along with the auto parameter of a lambda passed to ranges::for_each](https://pic1.zhimg.com/v2-531baf573d9a4a9ff3280aa38638c75a_r.gif) ![Go to Implementation on the dependent call shape.draw(), listing Circle::draw and Square::draw](https://pic2.zhimg.com/v2-a2a20f8ee9a6869e3f8026ad3e5ae499_r.gif)
+- Out-of-the-box experience: Most projects need nothing more than a `compile_commands.json`. clice ships with built-in environment probing for 50+ toolchains, covering nvcc, MSYS2, Cygwin, zigcc, and more, automatically handling mismatches between your actual compiler and Clang. You don’t have to manually add piles of compiler flags to a config file the way you do with clangd.
 
-That *does* contain 42, but this vector is *enormous*. Why are there all these zeroes? Once test.check found this vector, surely it could have shrunk it to just `[42]`, right?
+Beyond these main features, clice also fixes a long list of smaller clangd issues that have gone untouched for years across semantic highlighting, folding, hover, and more. If you’re interested, give it a try and see what surprises you find. Overall, clice surpasses clangd in ease of use, feature support, and performance. You can install the clice extension in VS Code and other editors and start using it right now.
 
-The answer has to do with shrink trees. Test.check generators don’t actually return values like `64`. Instead they return a lazily evaluated tree of values: the root might be `64`, and its children might be `[32 48 ... 63]`, and each of *those* children has further children: `32` has children `[16, 24, ... 31]`, and so on. Simplifying a bit, here’s how the tree for large integers [is defined](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L228-L237):
+### Command Line[#](https://www.ykiko.me/en/articles/2105384023094834022/#command-line)
 
-```
-(defn- shrink-long
-  "Given a number x, returns a coll of (x-x, x-x/2, x-x/4, x-x/8, ..., x-1)"
-  [^long x]
-  (core/let [size (- 64 (Long/numberOfLeadingZeros (Math/abs x)))
-             ^longs vals (long-array size)]
-    (loop [i 0 n x]
-      (if (zero? n)
-        vals
-        (do
-          (aset vals i (- x n))
-          (recur (inc i) (quot n 2))))))))
-```
+Besides running as a language server, clice can also be used from the CLI to access its language features directly. Currently supported subcommands include:
 
-So, if test.check finds that `64` violates some property we’re testing, it tries the first child of `64`, `32`. Let’s say that passes the test, so test.check tries the next child of `64`: `48`. If `48` fails, test.check tries its first child `24`, and so on. By performing this depth-first search of the tree, and choosing the branches cleverly, test.check can often quickly shrink an integer to a smaller one that still fails the test.
+- clice index: Builds a persistent index for the entire project ahead of time and supports resuming interrupted runs, so your editor starts warm as soon as you open the project.
+- clice lint: Built-in clang-tidy runner that checks translation units concurrently across a process pool and merges duplicate diagnostics from headers; pass --index to reuse the same parse pass to build the index along the way.
+- clice format: A wrapper around clang-format that automatically finds files to format from your config file or CDB and formats them efficiently in parallel.
+- clice command: Shows the effective compile command for a file after rule rewrites and toolchain probing, or converts compile_commands.json into resolved -cc1 commands for other Clang tools.
+- clice query: Reads the on-disk index directly without starting a server and outputs symbol definitions, references, call graphs, inheritance hierarchies, and file dependencies as JSON.
+- clice refactor: Rewrites source files directly from the persistent index without recompiling, supporting project-wide symbol and macro renaming as well as batch renames in one pass via --spec.
+- clice analyze: Outputs project-structure JSON from the index to guide refactoring; for example, analyze modules analyzes module dependencies and cycles across directories and lists code patterns that stand in the way of modularization.
+- clice modularize: Automatically wraps third-party libraries used by a project as C++20 modules without modifying any source files; following the split analyze proposes, it can also rewrite the project’s own code into module units, turning headers into partitions and #include into import. clice used it to modularize itself.
 
-A similar strategy applies to fixed-size vectors. The tree for a vector like `[2 2]` has children like `[1 2]` and `[2 1]`, based on the trees for each individual element of the vector. This explains why test.check produced a vector like `[0 0 0 ... 42 0]`: it found something like `[91 23 1034543 ... 42 15]`, then shrank the first element to zero, then the second, and so on. The only element it couldn’t shrink was the one that caused our property to fail: `42`. Because our generator `(tcg/vector tcg/large-integer size)` always used a fixed `size`, the tree for that vector always contained `size` elements—in this case, 39.
+## The story behind it[#](https://www.ykiko.me/en/articles/2105384023094834022/#the-story-behind-it)
 
-Hang on! We didn’t just generate fixed-size vectors. We used `bind` to draw a size, then built a vector of that size:
+That wraps up the feature tour. Next, I want to talk about the story behind the project, some of its design decisions, and my own thoughts and struggles along the way, especially now, in the age of AI.
 
-```
-(tcg/bind tcg/nat
-          (fn [size]
-            (tcg/vector tcg/large-integer size)))
-```
+### Why not improve clangd?[#](https://www.ykiko.me/en/articles/2105384023094834022/#why-not-improve-clangd)
 
-What kind of trees does `bind` produce? The [code](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L125-L142) involves some gnarly higher-order functions, but in essence `bind`’s trees can shrink in two ways. They can shrink the outer value (the `size` returned by `tcg/nat`), or they can shrink the inner value (the vector returned by `(tcg/vector ...)`.
+First, why start a new project instead of improving clangd? That is the question I get asked most often. There are several reasons. I discussed some of them in my earliest [post](https://www.ykiko.me/en/articles/13394352064), and today those problems are even easier to see firsthand:
 
-Now imagine `bind` draws a size of `100`, then generates a vector of a hundred elements like `[15 32 42 ...]`. This contains `42`, so test.check begins hunting through the shrink tree. One of the branches it can take shrinks the `size` parameter, starting with `[50, 75, ... 99]`. But if `bind` picks any of those sizes, the vector `[15 32 42 ...]` is useless—it’s the wrong size! So `bind` calls our function with `50` to construct a generator of 50-element vectors, and generates a single vector from that generator. This vector will have *different* random elements, like `[69, 45, 1, ...]`.
+- Maintenance and staffing: At root, clangd has been **effectively unmaintained** since around 2024. That sounds surprising. How could a tool used by hundreds of thousands of developers have no one maintaining it? I stumbled onto this fact in 2024 when I was getting ready to submit a [PR](https://github.com/clangd/clangd/issues/443#issuecomment-2254535078) to clangd for better code completion inside templates. From what I understand, it ties back to a shift in Google’s C++ strategy. Before that, clangd was maintained mainly by several Google engineers, and around 2024 Google started scaling back its investment in C++ (Clang); clangd was deemed good enough for Google’s internal needs, and those engineers were reassigned elsewhere. Since then, clangd has lacked any real long-term maintainers. Only [Nathan Ridge](https://github.com/HighCommander4) has been answering questions unpaid in his spare time, purely out of passion, and one person only has so much bandwidth, making it nearly impossible to handle large PRs. That is why clangd’s C++20 modules [PR](https://github.com/llvm/llvm-project/pull/66462) dragged on for nearly a year, and even today it still isn’t really usable on large projects, with plenty of flaws and nobody working on them. Earlier this year, in 2026, Clang’s lead maintainer Aaron Ballman recognized the problem and posted a [call for help](https://discourse.llvm.org/t/help-needed-with-clangd-maintenance/89820) on the community forum, saying clangd is very close to unmaintained, with a heavy backlog of PRs and issues, and hoping to find new community maintainers; otherwise clangd **could** eventually be removed from the LLVM project.
+- Scale of the code changes: As mentioned at the start, clice introduces many new architectural ideas, such as multi-process compilation. Implementing those inside clangd would come close to **rewriting** clangd. Nobody is going to review and accept changes of that size. Self-hosting with modules would also require sweeping changes to LLVM’s build system, which I will go into in detail when I introduce xclang later.
+- LLVM repository constraints: clice relies on a lot of third-party libraries for better performance and user experience, such as `libuv`, `simdjson`, and `tomlplusplus`. To keep builds simple, LLVM requires the repository to remain self-contained, so pulling in that many third-party libraries is out of the question. You would either have to rewrite and port them into LLVM or put up with worse ergonomics and lower performance. On top of that, a language server is not a **standalone** project: it also includes extensions and adapters for different editors. Keeping them in the same repo as the server makes maintenance much easier, and LLVM would be just as unlikely to accept that editor code (spanning Rust, Lua, TypeScript, and so on). For long-term maintainability and our core goals, a separate repository was unavoidable.
 
-If there’s no `42` in the vector of 50 elements, then test.check abandons that branch and moves on to size `75`. It draws a new vector of 75 elements like `[8 7 42 ...]`, and since that contains `42`, it can continue shrinking. But since `42` is an uncommon integer, and test.check draws new elements for each `size`, it is very likely that most sizes will not produce a vector with `42`, and test.check will get stuck with, say, 39 elements. From there it can shrink each element, producing the comically oversized…
+So in mid-2024, I started looking into how to design and write a new language server. At the end of 2024, I published [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), setting out clice’s core goals and kicking off development in earnest.
 
-```
-[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
-```
+### How did we get here?[#](https://www.ykiko.me/en/articles/2105384023094834022/#how-did-we-get-here)
 
-For this vector it’s fairly obvious what’s wrong. But for [nontrivial test.check generators](https://github.com/jepsen-io/particledb/blob/4e911c2d6ebf5ed97becba08c12d754cbbd4da53/src/jepsen/particledb/gen/tc.clj), there might be a dozen nested levels of `bind` with complex downstream consequences. Every one of them offers a place for test.check to get stuck, and the smallest failing case can be devilishly tricky to understand. Experienced test.check users try to avoid `bind` and `let`—but they’re fundamentally inescapable for many problems.
+Next, let’s talk about how clice was built. How did it get to its current state? Over the past two and a half years, at a rough guess, I have put nearly 3,000 hours into this project. Even that number doesn’t really tell the story, because clice became part of my life. It was always on my mind, like eating or sleeping: there wasn’t a moment when I wasn’t turning over some problem related to it. Development broke down into roughly four stages:
 
-Over in the Python world, the [Hypothesis](https://hypothesis.works/) team took a very different approach to shrinking. Test.check is fundamentally a two-phase system: first it asks a generator to produce a shrink tree. Then, if the root of that tree looks “bad”, it explores the rest of that tree. Instead, Hypothesis generators produce a single value, and if that value looks bad, they re-run the generator and [ask it to produce something similar, but smaller](https://drmaciver.github.io/papers/reduction-via-generation-preview.pdf). This approach, called *internal test-case-reduction*, is the foundation of [Hegel](https://hegel.dev/).
+Mid-2024 to early 2025: I spent this period studying Clang and clangd’s codebase and internals. Anyone who has looked through my older blog posts will know I am a longtime template metaprogramming enthusiast, familiar with C++ and its implementation details down to language-lawyer territory. During this phase I settled on clice’s core goals and overall design, and put together an initial demo. I was a third-year undergrad at the time: I would wake up and start coding right away, skip lunch, walk out to the McDonald’s outside the campus gate when I got hungry, and put in 8 to 10 hours a day.
 
-## [Hegel-clj](https://aphyr.com/posts/428-announcing-hegel-clj#hegel-clj)
+Early 2025 to early 2026: I originally expected to ship a usable version of clice fairly quickly during this stage. Instead, progress went much slower than I expected, and it remained a long way from production-ready. Looking back, there were a few main reasons:
 
-Hegel is a new cross-platform library for generative testing. It provides deterministic generators which draw random values from an imperative, structured RNG, as well as a rich family of special values and shrinking tactics. Writing these generators and shrinkers is hard. The idea is that Hegel’s core library will do this hard work once, and simpler wrapper libraries will extend the benefits of that hard work across many languages.
+1. Above all, time. I had assumed I would keep putting in 8 to 10 hours a day like before. My undergraduate major was chemistry, though, and everything I knew about programming was self-taught. Even though I had plenty of C++ experience and had participated in GSoC, I lacked specific “domain knowledge.” To find a job, I spent most of 2025 interning and picking up a new field (unrelated to C++ frontends), while also dealing with university chores and everything involved in graduating. The hours I had left for clice shrank drastically compared to my earlier assumptions, so progress naturally slowed down.
+2. Getting the project genuinely production-ready also took far more than the core architecture. It meant working through countless corner cases of C++ syntax alongside subtle cross-platform differences: URI parsing, file paths and file uniqueness, OS-level quirks, and so on. The workload turned out to be much bigger than I had imagined. I also have a bit of an obsessive streak and dislike band-aid solutions that barely get by, so to build things the way I wanted I ended up reinventing quite a few wheels, covering serialization, IPC/LSP, async, and more. Had I chosen Rust at the start, development might have taken considerably less time, since those pieces already existed in the Rust ecosystem and had been thoroughly proven in other language servers. Still, writing a C++ language server in Rust felt odd, and it would have ruled out self-hosting, so I didn’t go that route.
+3. Lack of experience scheduling and managing complex software. Even with so much work on the table, several early contributors were already interested in the project and willing to put real time into helping write code. Unfortunately, I had very little teamwork experience back then (being completely self-taught and only three years into programming altogether), so I failed to turn that interest into effective contributions. That sank in much deeper once I started working in industry: 3 or 4 of my coworkers can split up responsibilities, stand up a project from scratch in 2 to 3 months, and ship it to production, whereas I had poor instincts for project planning and mostly just wrote whatever was on my mind at the moment. Open-source volunteer bandwidth can’t be compared to a full-time job, of course, yet the truth is I didn’t do a great job of building a community or pushing the project forward.
 
-I’ve been working for a few months on [hegel-clj](https://github.com/aphyr/hegel-clj), which offers Clojure bindings for Hegel, and I think it’s ready for the folks to try it out. To test something, you call `hegel-clj/test!`, draw some values from generators, and throw an exception if the test fails. Hegel searches for values that make that body throw, then shrinks them.
+Early 2026 to July 2026: The turning point came when coding agents led by Claude Opus 4.6 started catching on. I began using agents to help with the mountain of tedious detail work and painful cross-platform debugging, and found they were remarkably good at it. During this stretch I did a sweeping cleanup of the existing codebase and established the prototype of clice as it stands today. As agents grew stronger, I handed them increasingly complex tasks and kept moving the project forward rapidly. It was an exciting period: I could finally stop burning hours on tedious details and focus on architecture and feature work. At the same time, it hit me that coding agents were only going to keep getting stronger. If humans stop writing code altogether in the future, what point does a language server even have? That pushed me to start designing and building clice’s CLI features.
 
-```
-(require '[hegel-clj [core :as h] [generator :as g]])
-(h/test! {:seed 4}
-  (assert (even? (h/draw! (g/integer)))))
+July 2026 to present: By July I felt the timing was right to put out early test builds and iterate based on real user feedback. Core language server features were already in place and fully usable day to day, though still short of everything I had originally envisioned, so I threw myself into building out the rest of that vision, tuning performance, and fixing bugs. In October, I started planning clice’s modular self-hosting. That was a remarkably complicated undertaking, because C++ module support today is a long, painful story:
 
-{:passed? false
- :status :failed
- :statistics {:total 34
-              :valid 5
-              :invalid 0
-              :overrun 18
-              :interesting 11}
- :health-check-failed? false
- :failures ({:draws {"draw_1" 1}
-             :exception
-             #error {:cause "Assert failed: (even? (h/draw! (g/integer)))"
-                     ...}})
- :reproduce-blob "AAEAAAAACgEAAAAB", :caveat nil}
-```
+- CMake supports modules, yet if implementation units importing a module use different compile flags, CMake forks a separate compilation of the module even when those flags don’t affect PCM compatibility. CMake also has no built-in compilation cache, which matters a lot for CI; normally we reach for ccache to solve that, except ccache doesn’t support modules.
+- clice has a demanding platform matrix: six combinations across Windows/Linux/macOS × ARM64/x64, plus ASan builds, prebuilt LLVM/Clang binaries to speed up CI, C++23 import std, and build artifacts that depend only on system libraries rather than extra shared libraries so everything works out of the box for users.
 
-The smallest case Hegel found involved a single draw of the number `1`, which caused the assertion `(even? 1)` to throw.
+I surveyed the options extensively, and the answer was that an out-of-the-box setup for this **simply did not exist** in open source, and most open-source C++ module projects don’t have build requirements nearly this involved. After thinking it through carefully, I built [xclang](https://github.com/clice-io/xclang), inspired by zigcc, to give every target platform a unified cross-compilation experience, and paired it with Bazel (which includes built-in build caching) to solve the build problem for good. Going one step further, I wrote `clice modularize` to automatically generate module wrappers for every third-party library we depend on, completing clice’s self-hosted modularization! That probably makes clice one of the most complex open-source C++ projects using modules today.
 
-Generators are pure, composable structures, just like in test.check. Here’s a vector of booleans:
+Alongside all of this, I ran extensive fuzz testing across many open-source projects and fixed a huge number of bugs, bringing clice to genuine production readiness!
 
-```
-(h/sample 5 (g/boolean))
+### What about agents?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-about-agents)
 
-[false false true true false]
-```
+As I mentioned earlier, I designed a CLI interface for clice so that it would still hold some value in the agent era. An obvious idea is replacing `grep` with `clice query`: it is more accurate and uses fewer tokens. That is true, except exact symbol lookup requires indexing the whole project first, which takes a very long time. `grep` is imprecise, sure, yet 2 or 3 `grep` calls are usually enough to find the target, and the extra text `grep` pulls back isn’t necessarily a bad thing for helping an agent understand the codebase. Put plainly, most of this CLI isn’t actually all that useful. The part that really earns its keep is probably `clice modularize`: if you ask an agent to modularize a project on its own, it spins up a swarm of subagents and writes custom scripts to pull off the migration, which is both slow and expensive. Giving the agent `clice modularize` to assist the migration works much better. LLMs are trained first and foremost for generality, and what they do best is writing and combining scripts to generalize across problems. As things stand, only highly specialized tools still carry real value; otherwise you are usually better off letting the LLM compose its own scripts.
 
-Or a map representing a person, with a name generated by a regular expression and an integer age:
+As agents keep getting stronger, especially with models led by Claude Opus 5.5 and Fable 5.2, the cost of building complex software keeps falling, and 10x or even 100x the productivity of the past is well within reach. Over on X, you can see plenty of people asking Claude in a single sentence to rewrite the TypeScript compiler in another programming language and getting better performance out of it. Surprising at first glance, yet completely reasonable when you think about it. Software written in the past was bounded by human time, cost, and skill, so codebases inevitably accumulated lots of suboptimal code paths. When humans optimize performance, we go after the main bottlenecks, whereas an agent can tirelessly optimize every path until the small wins add up. Refactoring also often produces a better architecture than existing code; rewriting or refactoring software was just too expensive to justify before. In the foreseeable future, then, most code may be written entirely by agents, humans may stop writing code and even reading it (which is already happening now), and language servers may have no reason to exist at all. Agents might even invent programming languages better suited to themselves: compilation and interpretation themselves have often become the bottleneck in the agent loop, and agents already have the ability to optimize that underlying infrastructure; they just haven’t started yet. Ideally, every stage of the agent loop should be something the agent itself can improve and speed up, compilers and toolchains included.
 
-```
-(h/sample 5 (g/hmap {:name (g/regex-str #"[A-Z][a-z]+")
-                     :age  (g/integer 0 101)}))
+## To be continued[#](https://www.ykiko.me/en/articles/2105384023094834022/#to-be-continued)
 
-[{:name "Aa", :age 0}
- {:name "Iyjdklppzxhqdnwmd", :age 89}
- {:name "Kslvqorm", :age 64}
- {:name "Fvyybe", :age 45}
- {:name "Puwppxqag", :age 4}]
-```
+That is a sad reality, and in an era like this it means the effort I poured into clice over the past two and a half years is unlikely to have the lasting meaning I first imagined. Every time I dwell on it, I slip into a dark mood, bordering on nihilism. I can’t help asking myself: thousands of hours and a lot of money, and what was it all for?
 
-The higher-order combinators are all there too. You can transform generated values with `fmap`:
+Because I taught myself programming off the beaten path without a CS degree, I got used early on to the cycle of finding my own goals, defining problems, solving them, and then looking for the next goal. Interest alone only sustains me for a little while; sticking with something for the long haul takes some deeper “meaning” or “vision” behind it, ideally one I defined for myself. And now that meaning is fading away. So over the past few months, I started pushing myself relentlessly. The more those thoughts crept in, the harder I used agents to drive the project forward, trying to finish it before it lost its meaning altogether.
 
-```
-(h/sample 5 (g/fmap keyword (g/string)))
+Imagine an alternate timeline where coding agents never took off. clice wouldn’t be nearly as complete as it is today, of course, yet I would have slowly gained experience, learned how to collaborate and plan work, built a community around it, and watched clice move forward slowly and steadily. Except the SOTA models have already been trained. Models like Opus 5.5 and Fable 5.2 are real, and whether AI is a bubble or not, they aren’t going away. Software becoming cheap is already an undeniable fact.
 
-[: :R :👍🏻 :True :çç¦ç¦򜝉ÏÏ򜝉¦¦Ï¦¦ç򜝉Ï¦ç򜝉çÏ򜝉çç¦]
-```
+We have to face reality, so what mindset should we bring to all of this? My thinking has shifted again recently, though honestly neither my mental state nor my daily life is in a great place right now. Pouring yourself too deeply into one thing naturally takes a heavy toll when it doesn’t turn out the way you hoped. Still, if you zoom out over a longer stretch of time, what does it really amount to? Even if I had done nothing at all for these two and a half years, so what? There is plenty of life ahead. I know that in principle, yet letting go is hard, especially when this project has been part of my life for over two years. As I mentioned in an earlier post, graduating from college never really felt real to me, because the rhythm of my life barely changed afterward: apart from my job, it was just this project. Something has to change eventually, though. I can treat clice as my graduation project: my real graduation project, not one from the chemistry major I never really liked. And that’s enough. I don’t need to force a grander meaning onto it. This graduation project has met **every single goal** I set two years ago, and exceeded them by a wide margin. It stands on its own as the best illustration of modern C++, neatly bringing together everything I studied about C++ in college. If on top of that it can be helpful to people just learning to program or curious about modern C++, that is plenty.
 
-Or build one generator out of another using `bind`:
+So this post is a kind of ritual for me. I need to step out of my old life and look for other things worth doing, maybe things outside code. I will keep maintaining clice, just not at the intensity I used to; practically everything worth building is already built anyway, so from here on it will mostly be incremental optimizations and bug fixes based on user feedback. In times like these, it is hard to say what the right path is, or what you ought to be doing. Nobody knows what will happen next week, let alone next year, or how far AI will actually go. I think it is time to rest for a while so I don’t burn out, and have the energy to face whatever problems come next. I still have a strong drive to keep creating good work. It just might not be about programming anymore, and figuring that out is what I need to learn and think through in this next stage.
 
-```
-(h/sample 2 (g/bind (fn [size]
-                      (g/tuple (g/vector size (g/integer))
-                               (g/vector size (g/boolean))))
-                    (g/integer 0 3)))
-
-[[[] []]
- [[144229 531621 -364 -1569883 8194954 -913 16 -745]
- [false true false true]]]
-```
-
-Like test.check, we offer a `let` macro which lets you bind both regular values or generators to variables; if the right-hand side is a generator, it draws a random value from it. And unlike test.check, these generators shrink well. Instead of thirty-nine elements, Hegel can find the much-shorter “bad” vector, `[42]`.
-
-```
-(-> (h/test! {:test-cases 1000
-              :seed       1777986545686}
-      (h/let [size (g/integer {:min 0, :max 128})
-              xs   (g/vector {:size size} (g/integer))]
-        (assert (not-any? #{42} xs))))
-    :failures first :draws (get "xs"))
-
-[42]
-```
-
-With `test.check`, if you want to thread multiple values through `bind` or `fmap`, you have to build and destructure maps or tuples. Hegel-clj lets you lift arbitrary code into a generator using `composite`, which makes it easier to build complex generators:
-
-```
-(h/sample 2
-  (g/composite
-    (h/let [name      (g/string)
-            cat-count (g/integer 0 2)
-            cats      (g/vector {:size cat-count, :unique? true} (g/string))]
-      {:name name     
-       :cats cats})))
-
-[{:name "",
-  :cats []}
- {:name "𝐓𝐡𝐞 𝐪𝐮𝐢𝐜𝐤 𝐛𝐫𝐨𝐰𝐧 𝐟𝐨𝐱 𝐣𝐮𝐦𝐩𝐬 𝐨𝐯𝐞𝐫 𝐭𝐡𝐞 𝐥𝐚𝐳𝐲 𝐝𝐨𝐠",
-  :cats ["🇺🇸" "👍🏻"]}]
-```
-
-You can build recursive generators with a promise-style API. The `deferred` generator provides a blank space for a generator, which can be filled in later:
-
-```
-(let [leaf (g/integer 0 9)
-      tree (g/deferred)]
-  (g/set-deferred! tree (g/one-of [leaf (g/vector tree)]))
-  (mapv prn (h/sample 5 tree)))
-
-0
-[[1] 8 [2 []] 5 [] [[4 6 []]]]
-[[1] 2]
-3
-0
-```
-
-And best of all, `hegel-clj` ships with easy-to-use integration for clojure.test, making generative tests as easy as example-based ones:
-
-```
-(require '[clojure.test :refer :all] '[hegel-clj.clojure-test :refer [with]])
-
-(defn bad-add
-  "Adds two integers via floating-point"
-  [x y]
-  (long (+ (float x) (float y))))
-
-(deftest bad-add-test
-  (with {:test-cases 100}
-        [x (g/integer)
-         y (g/integer)]
-    (h/fprn :x x, :y y)
-    (is (= (+ x y) (bad-add x y)))))
-
-(bad-add-test)
-
-:x 0 :y 16777217
-
-FAIL in (bad-add-test) (form-init7301103820420620476.clj:6)
-expected: (= (+ x y) (bad-add x y))
-  actual: (not (= 16777217 16777216))
-```
-
-It’s hard to log debugging output with test.check—you’ll have to sift through thousands of test runs with complex inputs, and many of those runs won’t actually trigger the bug you’re searching for. Hegel has the notion of a “final” test case: after it’s found a counterexample, and shrunk it to a smaller version, it comes back and re-runs that case as a part of the final phase. We can use `(when (h/final?) ...)` to execute some debugging code only during these final cases, or `fprn` and `finfo`, which wrap `clojure.core/prn` and `clojure.tools.logging/info` respectively. I think there’s a [bug in Hegel](https://github.com/hegeldev/hegel-java/issues/32) that causes it to run more final cases than it should, but it’s still a big step up.
-
-Finally, test.check has been around for a while, and like many Clojure projects it has an exceptionally stable API. That’s great for compatibility, but it means some early choices are now fossilized. It’s `(fmap gen f)`, but `(bind f gen)`. If you want an integer you have to remember the difference between `nat`, `int`, `pos-int`, `s-pos-int`, `small-integer`, `large-integer`, `large-integer*`, etc. Common generators require keyword arguments, like `(large-integer* {:min 0, :max 10})`. Some generators like `hash-map` are only callable with varargs, which makes composition tricky. The [properties API](https://clojure.github.io/test.check/clojure.test.check.properties.html) feels a tad fussy. And many of the ergonomic features you want, like generating strings from a regular expression, or integration with clojure.test, require an extra library like [test.chuck](https://github.com/gfredericks/test.chuck). Test.check is *really good*, but with the benefit of hindsight and a fresh canvas, I’ve tried to design a more streamlined, consistent, and approachable API.
-
-I’ve used test.check for over a decade now and it’s one of my favorite things about Clojure. I want to thank Reid Draper, Gary Fredericks, Alex Miller, and everyone else who’s contributed to the library. I’m also indebted to David MacIver, Liam DeVoe, and Esau Rodriguez from the Hegel team at [Antithesis](https://antithesis.com/). They took time to talk me through Hegel’s design, answered endless questions about the protocol, and helped fix a whole slew of issues that we found. Y’all rock.
-
-I’m pleased to announce [hegel-clj 0.1.1](https://github.com/aphyr/hegel-clj), and I’m starting to use it to test my own projects. I hope it will be useful for you too. ❤️
+That’s all for this post. Thanks for reading. I hope you’ll give clice a try, and feel free to report any problems!

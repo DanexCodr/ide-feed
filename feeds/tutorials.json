@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-16T05:22:03Z",
+  "updated": "2026-11-16T15:08:39Z",
   "items": [
     {
       "id": "devto-4985077",
@@ -74,27 +74,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4941092",
-      "title": "gp-grid: A Free, Open-Source TypeScript Data Grid for React, Vue, and Angular (No Paywalled Features)",
-      "desc": "By Hadil Ben Abdallah | 15 min read",
-      "tag": "tutorial",
-      "published": "2026-11-02T09:05:46Z",
-      "order": 7,
-      "url": "https://dev.to/hadil/gp-grid-a-free-open-source-typescript-data-grid-for-react-vue-and-angular-no-paywalled-5heb",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffhh705ti5amsemyc79e9.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHPYuhCyP/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAAAxIP/aAAgBAQAGPwJE1//EABgQAQEBAQEAAAAAAAAAAAAAAAABEWFB/9oACAEBAAE/IepeG8LPWpVrX//aAAwDAQACAAMAAAAQEZ//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8QjI//xAAbEAEAAgIDAAAAAAAAAAAAAAABABExQSGB8f/aAAgBAQABPxAKC08WLOTDsiI5kwqKEVOqiqrU/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4982721",
       "title": "Plan Stamping, for Software",
       "desc": "By Ken W Alger | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T14:54:25Z",
-      "order": 8,
+      "order": 7,
       "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4992435",
+      "title": "Building RailPulse AI: Deploying an Open-Source Railway Dispatch Agent with Gemma and Google Cloud Run",
+      "desc": "By Robina Mirbahar | 5 min read",
+      "tag": "tutorial",
+      "published": "2026-11-07T07:35:33Z",
+      "order": 8,
+      "url": "https://dev.to/gde/building-railpulse-ai-deploying-an-open-source-railway-dispatch-agent-with-gemma-and-google-cloud-2b9g",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fraw.githubusercontent.com%2FRobinaMirbahar%2Frailpulse-gemma-cloudrun%2Fmain%2Fassets%2Frailpulse_banner_v2.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAdMtmi1Bj//EABoQAAMAAwEAAAAAAAAAAAAAAAECEQADISL/2gAIAQEAAQUCNpsFKrmzgc+NfFXP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGhAAAgMBAQAAAAAAAAAAAAAAAAERITEQEv/aAAgBAQAGPwLTT0mXZIyOf//EABwQAAMAAgMBAAAAAAAAAAAAAAABESExQVFhcf/aAAgBAQABPyGThkd8CVgdMxT2EPmsZDtbMHxTl8P/2gAMAwEAAgADAAAAEBZP/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEB/9oACAEDAQE/EJiP/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8QiP/EABwQAQADAQEBAQEAAAAAAAAAAAEAESExUUFhgf/aAAgBAQABPxA8/tmLksCWmA75OmLGyx+x0PRfh/Z9AAdgBO8HRNuZRU3t6qxb+o//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -170,24 +170,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4962723",
-      "title": "Two Truths and a Lie: Developer Edition.",
-      "desc": "By Elsie Rainee | 2 min read",
-      "tag": "tutorial",
-      "published": "2026-11-02T11:35:22Z",
-      "order": 15,
-      "url": "https://dev.to/elsie-rainee/two-truths-and-a-lie-developer-edition-k8n",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsyugm3scjglnspzm8ays.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4mWmToGv/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQAhEh/9oACAEBAAEFAkjUZiPkZ//EABYRAQEBAAAAAAAAAAAAAAAAAAABQf/aAAgBAwEBPwGsf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAICAwEAAAAAAAAAAAAAAAABESExQZEQ/9oACAEBAAE/IUQLauDSjXBKos8lnmR//9oADAMBAAIAAwAAABBZv//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QXcIJ/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARIVH/2gAIAQIBAT8QVzqHt//EAB0QAAICAgMBAAAAAAAAAAAAAAERACExUUFxsZH/2gAIAQEAAT8QMAJHLWfsQGBjS0YsKEdcwIqJO1ANtFhTgEkapeRsq1ql5DIQFdT/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5004759",
       "title": "Everyone Is Building AI to Replace Developers. Nobody Is Building the Plan for What Comes After.",
       "desc": "By TheBitForge | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-09T13:57:43Z",
-      "order": 16,
+      "order": 15,
       "url": "https://dev.to/thebitforge/everyone-is-building-ai-to-replace-developers-nobody-is-building-the-plan-for-what-comes-after-4a5o",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgznnx050gbzm02crp9o9.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAd4MUTI//8QAFxABAQEBAAAAAAAAAAAAAAAAABEBIv/aAAgBAQABBQLWaqp1Gq//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREQIUFx/9oACAEBAAE/IWKMcY9KbPweMrmj/9oADAMBAAIAAwAAABAYH//EABcRAQADAAAAAAAAAAAAAAAAAAARIUH/2gAIAQMBAT8Q1UP/xAAXEQEAAwAAAAAAAAAAAAAAAAAAESFB/9oACAECAQE/EMXL/8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUExYYH/2gAIAQEAAT8QUciA219mhpyUy+xvevKDhEgvqsjEHZuC/E//2Q==",
@@ -199,7 +187,7 @@
       "desc": "By Hadil Ben Abdallah | 16 min read",
       "tag": "tutorial",
       "published": "2026-11-10T09:04:10Z",
-      "order": 17,
+      "order": 16,
       "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
@@ -211,10 +199,22 @@
       "desc": "By Taqui | 5 min read",
       "tag": "tutorial",
       "published": "2026-11-07T15:18:14Z",
-      "order": 18,
+      "order": 17,
       "url": "https://dev.to/taqui/ubuntu-core-desktop-is-coming-in-2704-and-it-kills-sudo-apt-but-maybe-that-is-the-point-3dp1",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Feu769mdbtq0xlo2cdc7i.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAHCkFulI//EABoQAAIDAQEAAAAAAAAAAAAAAAABERIhAjH/2gAIAQEAAQUC40WjIb4XlqkyWz//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPwFX/8QAGhAAAQUBAAAAAAAAAAAAAAAAEAARITFBcf/aAAgBAQAGPwLFQeB0/wD/xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQWExUYGR/9oACAEBAAE/IZVw0ezNFFEL4OoIo6K+SxOBDDkTPRH/2gAMAwEAAgADAAAAECDv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQBB/9oACAEDAQE/EANkC//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQIBAT8Qd2CpH//EABsQAQEBAQADAQAAAAAAAAAAAAERIQAxQVGR/9oACAEBAAE/EGDiE9a9AZAyhPzt2NyxnICxjApwIhHV5kSzXffKQyad5eeAgHz53//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5048056",
+      "title": "Stratagem #34: Derek Gave Up Acceptance Sign-Off. The AI Still Can't Tell Who Won.",
+      "desc": "By xulingfeng | 16 min read",
+      "tag": "tutorial",
+      "published": "2026-11-16T13:08:10Z",
+      "order": 18,
+      "url": "https://dev.to/xulingfeng/stratagem-34-derek-gave-up-acceptance-sign-off-the-ai-still-cant-tell-who-won-25f8",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fh622imtaoop06jditqgq.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkZyMh4asT9dJf/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGhAAAAcAAAAAAAAAAAAAAAAAAAEQICExQf/aAAgBAQAGPwLUkUbf/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcbH/2gAIAQEAAT8hb4Esom/BpqVC0akgdMfCy10NbhkWH//aAAwDAQACAAMAAAAQqU//xAAWEQEBAQAAAAAAAAAAAAAAAAABADH/2gAIAQMBAT8QQkcv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAECAQE/EAZA2//EAB4QAQEAAgICAwAAAAAAAAAAAAERACFBcTFRYYHR/9oACAEBAAE/EFdjrcktwS90qMYOl0DFm5WIEO8AVyS6T5wggBXJ+ZWAVLO8ULzwnD9Z/9k=",
       "color": "#3B49DF"
     },
     {

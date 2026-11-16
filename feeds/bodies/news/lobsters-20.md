@@ -1,156 +1,57 @@
-[Here's an article](https://eli.thegreenplace.net/2008/09/26/recursive-descent-ll-and-predictive-parsers/) I wrote on the subject a few months ago. It provides a good introduction on how RD parsers are constructed and what grammars they can parse.
+> The CSS Working Group just discussed [css-forms-1] Cursors for base appearance, and agreed to the following:
+>
+> - RESOLVED: Adopt cursor rules in the last comment.
+> - SUMMARY: Pointer = “click this thing”, text cursor says “prepare to enter text”, grabbing hand says “drag this”.
 
-Here I want to focus on a couple of problems with the RD parser developed in that article, and propose solutions.
-
-### Problem #1: operator associativity
-
-If you recall from the [previous article](https://eli.thegreenplace.net/2008/09/26/recursive-descent-ll-and-predictive-parsers/), the expr rule of the parser looks like this (BNF notation):
-
-```
-<expr>    : <term> + <expr>
-          | <term> - <expr>
-          | <term>
-```
-
-It's built this way (expr on the right-hand side of the expression, term on the left-hand side), to avoid *left-recursion* in the grammar, which can crash a RD parser by sending it wheeling in an infinite loop.
-
-But as I hinted in the footnotes (and some readers caught on in the comments), this injects an associativity problem into the grammar. Let's see why.
-
-Wikipedia is much better than me at explaining what [operator associativity](http://en.wikipedia.org/wiki/Operator_associativity) is, so I'll assume you've read and understood it.
-
-In short, however, left associativity of the minus operator means that 5 - 1 - 2 = (5 - 1) - 2 and not 5 - (1 - 2) (which returns a different result).
-
-But if you run 5 - 1 - 2 in the parser with the above BNF for expr, you'll get 6 instead of 2. So what went wrong?
-
-The problem is in the grammar definition (BNF) itself. The way the expr rule is defined makes it inherently right-associative instead of left-associative. The hierarchy of the rules implicitly defines their associativity, because it defines what will be grouped together. To understand it better, perhaps the code implementing the expr rule will help:
+One of the rules from the “last comment” mentioned there is
 
 ```
-def _expr(self):
-    lval = self._term()
-
-    if self.cur_token.type == '+':
-        self._match('+')
-        op = lambda a, b: a + b
-    elif self.cur_token.type == '-':
-        self._match('-')
-        op = lambda a, b: a - b
-    else:
-        print 'returning lval = %s' % lval
-        return lval
-
-    rval = self._expr()
-    print 'lval = %s, rval = %s, res = %s' % (
-        lval, rval, op(lval, rval))
-    return op(lval, rval)
+select, option, input[type=checkbox], input[type=radio],
+button, input[type=button], input[type=submit], input[type=reset], input[type=color], input[type=image], ::file-selector-button {
+	cursor: pointer;
+}
 ```
 
-Note that the first term is parsed, and then the rule recursively calls itself for the next one. So the expression is being built from right to left, and this causes its right-associativity.
-
-As you can see, I've added a couple of printouts to better show what's going on. When run on the expression 5 - 1 - 2, this prints:
+Or, if we were to remove all non-button selectors,
 
 ```
-returning lval = 2
-lval = 1, rval = 2, res = -1
-lval = 5, rval = -1, res = 6
+button {
+	cursor: pointer;
+}
 ```
 
-We clearly see the problem here. The actual returns are done from right to left because of the recursion.
+That is, of course, not a change to the default styles in the browser — this is a rule for elements that will have an `appearance: base-…`.
 
-Note that this grammar evaluates addition, multiplication, subtraction and division in a right-associative way. This causes problems for both subtraction and division, but not for addition and multiplication, because these operations compute the same whether right-to-left or left-to-right [[1]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id3).
+Also note that, this user agent style will be very much overrideable — no `!important`.
 
-### A solution for the associativity problem
+Anyone who does not like `cursor: pointer` on buttons and other similar elements, are free to override it to `default` (or anything else) in their stylesheets.
 
-I suppose the problem can be solved by rewriting the BNF rules in some sophisticated way that makes them both left-associative and not left-recursive [[2]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id4), but I'll pick another way.
+The rest of us can, I guess, celebrate? I was always on the side of this decision. I published my [“Correct Cursor on Active Elements”](https://kizu.dev/cursor-pointer/) article in 2013. In 2017, I opened my first CSSWG issue — [“Change the pointer cursor to indicate any interactive element”](https://github.com/w3c/csswg-drafts/issues/1936), which led to a change in a non-normative part of the spec.
 
-BNF is somewhat limiting, since it doesn't really allow much options when defining rules. All the rules must have a very strict structure, and if you want to customize something you must resort to defining sub-rules and referencing them recursively.
+Since then, I did not see any new arguments in this debate. I will not repeat everything that I argued about, but one of the most common counter-arguments that I read today is “OS does not do it”.
 
-Enter [EBNF](http://en.wikipedia.org/wiki/Ebnf). It was developed to fix some of the deficiencies of plain BNF. One of those is the addition of repetition of sub-rules. For instance, we can write the expr rule in EBNF as follows:
+Did you see that “OS”? When was the last time your OS innovated anything in the UI? Did it become easier to use over years?
 
-```
-<expr>    : <term> {+ <term>}
-          | <term> {- <term>}
-```
+Many of people with this argument ask, thinking that this will be a good question, something like “What next — change the cursor in the OS?!”.
 
-Note the braces { ... }. In EBNF, these mean "repeated 0 or more times". This is still a LL(1) grammar, but now it's expressed a bit more comfortably. Such a representation is very suitable for coding, because the repetition can be expressed naturally with a loop.
+I mean… Yes? I would be happy with that. When I look at like half of the (non-native) apps in my desktop OS, they have `cursor: pointer` on interactive elements.
 
-Here's a re-implementation of the expr rule using this idiom:
+Cinny, Discord, Signal, Slack, Steam, VS Code — some of the apps that I have before me.
 
-```
-def _expr(self):
-    lval = self._term()
+When I use apps that *do not* change the cursor to anything other than `default`, I cringe.
 
-    while ( self.cur_token.type == '+' or
-            self.cur_token.type == '-'):
-        if self.cur_token.type == '+':
-            self._match('+')
-            lval += self._term()
-        elif self.cur_token.type == '-':
-            self._match('-')
-            lval -= self._term()
+Default cursor does not communicate anything. It does one job well — point at a specific pixel. It could do more.
 
-    return lval
-```
+In the issue, many people came with dislikes and their arguments against `cursor: pointer`. I want to aknowledge one argument that I fully agree with — it would be great if buttons and links would have different cursors. And also, regular links should have cursors different from the links that are opened in new tabs.
 
-Note the while loop "eating up" all successive terms in the expression and accumulating the result in the expected left-to-right manner. Now the computation 5 - 1 - 2 will correctly produce 2.
+We need more cursors.
 
-### The code
+But if we were to look at those three things:
 
-This is a good place to refer to the code. In [here](https://github.com/eliben/code-for-blog/tree/main/2009/py_rd_parser_example) you will find the source of both the old (BNF-based) parser and the new (EBNF-based) one, along with the lexer module that implements the tokenizer. Each of the parsers is self contained and can be used separately. Note that they were developed and tested with Python 2.5
+- Blank space on the page.
+- Buttons.
+- Links.
 
-### Right-associative operators
+And then had only two cursors to assign to all of them, I know which ones I will assign to which.
 
-Some operators are inherently right-associative. Exponentiation, for example. 2^3^2 = 2^(3^2) = 512, and not (2^3)^2 (which equals 64).
-
-We can leave these operators defined as before, using a recursive rule that naturally results in right-associativity. Here's the code of the power rule that was added to the EBNF-based parser to support exponentiation:
-
-```
-# <power>   : <factor> ** <power>
-#           | <factor>
-#
-def _power(self):
-    lval = self._factor()
-
-    if self.cur_token.type == '**':
-        self._match('**')
-        lval **= self._power()
-
-    return lval
-```
-
-### Intermission
-
-We now have a correct recursive descent parser that uses EBNF-based rules to parse expressions with the desired associativity for each operator. This parser can be readily employed to parse simple languages - it is production-use ready. The next "problem" I present only has to do with the parser's efficiency, so it is probably of no concern unless performance is crucial.
-
-### Problem #2: efficiency
-
-There's an inherent performance problem with recursive-descent parsers when dealing with expressions. This problem stems from the need to define operator precedence, and in RD parsers the only way to define this precedence is by using recursive sub-rules. For example (from the EBNF-based code):
-
-```
-<expr>    : <term> {+ <term>}
-          | <term> {- <term>}
-<term>    : <power> {* <power>}
-          | <power> {/ <power>}
-```
-
-The nesting of these rules defines the relative precedence of addition and multiplication. It tells the parser: between plus signs, dive into the expression and collect all sub-terms connected by multiply signs. In other words, it tells it to group the expression: 5 + 2 * 2 as 5 + (2 * 2) and not as (5 + 2) * 2.
-
-To see the problem this nesting causes, I've inserted simple printouts into each of the expr, term, power and factor rules to show which functions get called while parsing. Let's see what happens when the trivial expression 42 is parsed:
-
-```
-expr called with NUMBER(42) at 0
-term called with NUMBER(42) at 0
-power called with NUMBER(42) at 0
-factor called with NUMBER(42) at 0
-```
-
-**Yikes!!!** 4 function calls just to parse the single-token input 42! Unfortunately, while this problem may look simple on the surface, it is not. There's simply no other way to express precedence in RD parsers - you have to use nested rules, and this nesting turns out to be inefficient for parsing expressions.
-
-The solution to this problem is to use a hybrid parser instead of a pure RD one. Some algorithms were developed to efficiently parse [infix expressions](http://en.wikipedia.org/wiki/Infix_notation). [This article](http://www.engr.mun.ca/~theo/Misc/exp_parsing.htm) provides a good survey. One such algorithm can be combined with RD to provide a general-purpose parser for both expressions and higher programming language constructs.
-
-In a future article I will discuss an implementation of such a parser.
-
-| [[1]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id1) | To be more precise, addition and multiplication are [associative binary operators](http://en.wikipedia.org/wiki/Associativity) in the mathematical sense. |
-| --- | --- |
-
-| [[2]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id2) | But I'm too lazy to look for such a way at the moment. Let me know if you find it. |
-| --- | --- |
+And I will never understand anyone thinking that buttons have more in common with blank space than with links.

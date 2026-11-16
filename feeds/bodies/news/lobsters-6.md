@@ -1,95 +1,220 @@
-[clice](https://github.com/clice-io/clice) recently hit 1,000 commits, a special milestone for the project. Since July 19, 2026, clice has been shipping nightly builds and going through roughly four months of alpha testing, with a huge number of bugs fixed thanks to real-world feedback from early users. Over the same stretch, I built a rigorous testing system for clice and ran extensive tests across many real open-source projects, tracking down and fixing the issues they uncovered. What does that mean? Every core feature is now stable, and you rarely run into problems in day-to-day use. So I think the time is right to ship the first stable release. The project looks very different today from where it stood two years ago in [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), and this is probably the first time I’m promoting it widely, so please let me introduce it to you once again! This is the project I have poured the past **two and a half years** into, the work I am proudest of, the one that has excited me the most and left me sad and anxious more times than I can count, and the most ambitious thing I have taken on in my short life.
+Have you heard about [dynamic derivations](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application)?
 
-## What is clice?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-is-clice)
+They are an experimental-feature in Nix that lets a derivation produce other derivations as its output. Why ? This lets you dynamically create your build graph, instead of having to know it all at evaluation time. It’s Nix’s answer to try and match the build speed of other build systems like [Bazel](https://bazel.build/) or [buck2](https://buck2.build/).
 
-In short, clice is a C/C++ language server written in **modern C++**, but it’s **more than** just a language server. It is still built on LLVM/Clang, but unlike clangd and ccls, which are also Clang-based, clice was redesigned from the ground up to fix architectural problems that have gone unsolved in those servers for years. It is written entirely in C++23 and serves as an example of modern C++ best practices in its own right, with all the major modern C++ features coming together remarkably well:
+[![So hot right now meme: Mugatu from Zoolander under the caption "Dynamic derivations", above "So hot right now"](https://fzakaria.com/assets/images/derived/dyn_drv_so_hot_meme-748w.webp)](https://fzakaria.com/assets/images/dyn_drv_so_hot_meme.png)
 
-- Written entirely with C++20 coroutines, using our own libuv-based structured-concurrency async library for intricate asynchronous logic. It is a complex concurrent program running an event loop on the main thread while coordinating both multiple processes (IPC) and multiple threads.
-- Written entirely with C++20 named modules and C++23 import std, and fully self-hosted: module wrappers for third-party libraries are generated automatically by clice modularize, and clice runs smoothly on its own codebase to provide module-aware language services.
-- Uses static reflection built on templates and C++20 concepts for all serialization and deserialization across formats, including TOML, JSON, bincode, blob, and command-line arguments, with Rust-macro-like declarative annotations and zero boilerplate.
-- Data-oriented code design throughout, with almost no virtual functions outside the callback interfaces Clang requires. Makes heavy use of modern C++ APIs like std::format, std::expected, std::ranges, and std::views, steering clear of outdated legacy C++98/11 APIs.
-- A completely hermetic, reproducible build powered by Bazel, compiled with the unified xclang toolchain for a consistent cross-platform cross-compilation workflow. Compiled binaries are heavily optimized (PGO + LTO), and build artifacts depend on nothing beyond system libraries.
+There is not much written about dynamic derivations, and the documentation is sparse. I have [written](https://fzakaria.com/2025/03/10/an-early-look-at-nix-dynamic-derivations) [a](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application) [few](https://fzakaria.com/2025/03/12/nix-dynamic-derivations-a-lang2nix-practicum) [posts](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) about them, so I sometimes get questions about them.
 
-> People are always debating whether modern C++ features like modules are actually ready for real work. clice’s answer is: yes, of course, completely usable! They hold up for complex software like clice, with hundreds of thousands of lines of code. Maybe this is what the modern C++ we have been hoping for looks like. That said, the surrounding ecosystem really is inconvenient enough right now that getting this whole workflow running end to end took a huge amount of effort on my part to track issues and adapt everything.
+Recently, I got a DM from [Evan Porter](https://www.linkedin.com/in/evanwp/) over [LinkedIn](https://www.linkedin.com/), the ultimate bug triaging network, about whether it is possible to query the deriver of a dynamic derivation to get the initial derivation.
 
-### Language Server[#](https://www.ykiko.me/en/articles/2105384023094834022/#language-server)
+> For dynamic derivations let’s say I have a .drv.drv file. This file outputs a derivation.
+> Is it usually possible to query deriver the output derivation to obtain the initial derivation?
 
-Here is an overview of clice’s main features:
+They had tried it and got this:
 
-- Multi-process compilation: clice compiles code in a process pool modeled after modern web browsers, whereas clangd uses multithreading. Why multiple processes? Because C++ is simply **too complex**, and on certain [corner cases](https://github.com/clice-io/clice/issues/1057) the compiler can easily crash or leak memory. That is especially true for **incomplete** code in the middle of editing: a huge downstream user base tests compilers on complete code, while very few people test them on half-written code, where the compiler mostly falls back on best-effort heuristics. In clangd, a compiler crash takes down the whole server and forces a restart. In clice, compilation happens in isolated child processes: losing one worker does not affect the rest of the server, so go-to-definition, highlighting, and other services keep working. It also makes it much easier to manage memory usage and schedule compilation priorities, cutting down on unnecessary resource consumption. ![Left: clangd 23.1.0 with default settings; right: clice. Requesting completion at the same spot crashes Clang every time. After clangd’s entire process crashes 5 times, the extension stops restarting it and hover disappears too; clice only loses a single worker, warns about the crash on the file, and keeps everything else working normally](https://pic2.zhimg.com/v2-bb2148a7f481c6a765369447b3ffaf5d_r.gif)
-- Modules and shared caching: clice has full support for C++20 named modules. All you need is a `compile_commands.json` containing all module files, and clice scans dependencies on its own and lazily builds required modules on demand, regardless of your build system or compiler, with full support for module completion, highlighting, go-to-definition, hover, and more. Built PCHs and PCMs are also cached on local disk for reuse across sessions. By comparison, clangd offers only very limited module support and no persistent cache. ![Left: clangd 23.1.0 with default settings; right: clice. Completing a module name, hovering on it to see its doc comment, Ctrl+clicking into math.cppm, then completing and hovering on an exported function](https://pic1.zhimg.com/v2-54bef9288e8bdc73f0626f0595762304_r.gif)
-- Compilation context: clice has full support for non-self-contained files, and more generally for the concept of a compilation context. You can explicitly pick the active context of a file: a specific compile command for a source file, or a specific inclusion site for a header. When you open a non-self-contained file, clice detects its context automatically, so it works out of the box. More broadly, it also supports grouping compile commands into build configurations, letting you switch between, say, debug and release. ![Left: clangd 23.1.0 with default settings; right: clice. Opening the non-self-contained real.hpp from precise.cpp triggers 3 errors in clangd while clice handles it cleanly; switching the context from fast.cpp to precise.cpp updates the inactive regions and the type of Real accordingly](https://pic4.zhimg.com/v2-27fb6b3b6914125776c38490f6b49c47_r.gif)
-- Better template support: clice implements a DFS pseudo instantiator that infers what many dependent names resolve to without needing concrete template arguments for a full instantiation. When a template has been instantiated once, clice also draws on that instantiation to power language features, such as completing on `auto` parameters of a lambda passed to a `ranges` call. On top of that, clice treats a template as a duck-typed interface and each instantiation as one of its implementations, much like a virtual function and its overrides: Go to Implementation on a dependent call inside a template lists the functions it actually calls across every instantiation, and Find References and Call Hierarchy work the same way. ![Completing the dependent name grid[0\]. inside a template, along with the auto parameter of a lambda passed to ranges::for_each](https://pic1.zhimg.com/v2-531baf573d9a4a9ff3280aa38638c75a_r.gif) ![Go to Implementation on the dependent call shape.draw(), listing Circle::draw and Square::draw](https://pic2.zhimg.com/v2-a2a20f8ee9a6869e3f8026ad3e5ae499_r.gif)
-- Out-of-the-box experience: Most projects need nothing more than a `compile_commands.json`. clice ships with built-in environment probing for 50+ toolchains, covering nvcc, MSYS2, Cygwin, zigcc, and more, automatically handling mismatches between your actual compiler and Clang. You don’t have to manually add piles of compiler flags to a config file the way you do with clangd.
+```
+$ nix-store --query --deriver \
+    $(nix-store --query --deriver ./result)
+unknown-deriver
+```
 
-Beyond these main features, clice also fixes a long list of smaller clangd issues that have gone untouched for years across semantic highlighting, folding, hover, and more. If you’re interested, give it a try and see what surprises you find. Overall, clice surpasses clangd in ease of use, feature support, and performance. You can install the clice extension in VS Code and other editors and start using it right now.
+That should work. 🤨 Every path a build registers carries a `deriver`, the `.drv` that produced it, and a `.drv` that came out of a build is still a path a build registered.
 
-### Command Line[#](https://www.ykiko.me/en/articles/2105384023094834022/#command-line)
+When I tried it, it worked. 🤷
 
-Besides running as a language server, clice can also be used from the CLI to access its language features directly. Currently supported subcommands include:
+You will need `extra-experimental-features = dynamic-derivations ca-derivations recursive-nix` in your `nix.conf` to drive the samples in this post.
 
-- clice index: Builds a persistent index for the entire project ahead of time and supports resuming interrupted runs, so your editor starts warm as soon as you open the project.
-- clice lint: Built-in clang-tidy runner that checks translation units concurrently across a process pool and merges duplicate diagnostics from headers; pass --index to reuse the same parse pass to build the index along the way.
-- clice format: A wrapper around clang-format that automatically finds files to format from your config file or CDB and formats them efficiently in parallel.
-- clice command: Shows the effective compile command for a file after rule rewrites and toolchain probing, or converts compile_commands.json into resolved -cc1 commands for other Clang tools.
-- clice query: Reads the on-disk index directly without starting a server and outputs symbol definitions, references, call graphs, inheritance hierarchies, and file dependencies as JSON.
-- clice refactor: Rewrites source files directly from the persistent index without recompiling, supporting project-wide symbol and macro renaming as well as batch renames in one pass via --spec.
-- clice analyze: Outputs project-structure JSON from the index to guide refactoring; for example, analyze modules analyzes module dependencies and cycles across directories and lists code patterns that stand in the way of modularization.
-- clice modularize: Automatically wraps third-party libraries used by a project as C++20 modules without modifying any source files; following the split analyze proposes, it can also rewrite the project’s own code into module units, turning headers into partitions and #include into import. clice used it to modularize itself.
+```
+$ nix build -f default.nix \
+    --print-out-paths
+/nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
 
-## The story behind it[#](https://www.ykiko.me/en/articles/2105384023094834022/#the-story-behind-it)
+$ nix-store --query --deriver \
+    /nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
+/nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
 
-That wraps up the feature tour. Next, I want to talk about the story behind the project, some of its design decisions, and my own thoughts and struggles along the way, especially now, in the age of AI.
+$ nix-store --query --deriver \
+    /nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
+/nix/store/m5x261fv29jkn0rvznqj2fzkaql01xiy-result.drv.drv
+```
 
-### Why not improve clangd?[#](https://www.ykiko.me/en/articles/2105384023094834022/#why-not-improve-clangd)
+Turns out, there is a case where you do get `unknown-deriver` if you set `__contentAddressed = true` on the producer. If the producer is content-addressed, its output path is not known until after the build, and Nix does not fill in the `deriver` of a path that already exists.
+I filed [NixOS/nix#16823](https://github.com/NixOS/nix/issues/16823).
 
-First, why start a new project instead of improving clangd? That is the question I get asked most often. There are several reasons. I discussed some of them in my earliest [post](https://www.ykiko.me/en/articles/13394352064), and today those problems are even easier to see firsthand:
+The question though made me wonder how far back you can walk the chain of dynamic derivations. I had to try it. 😈
 
-- Maintenance and staffing: At root, clangd has been **effectively unmaintained** since around 2024. That sounds surprising. How could a tool used by hundreds of thousands of developers have no one maintaining it? I stumbled onto this fact in 2024 when I was getting ready to submit a [PR](https://github.com/clangd/clangd/issues/443#issuecomment-2254535078) to clangd for better code completion inside templates. From what I understand, it ties back to a shift in Google’s C++ strategy. Before that, clangd was maintained mainly by several Google engineers, and around 2024 Google started scaling back its investment in C++ (Clang); clangd was deemed good enough for Google’s internal needs, and those engineers were reassigned elsewhere. Since then, clangd has lacked any real long-term maintainers. Only [Nathan Ridge](https://github.com/HighCommander4) has been answering questions unpaid in his spare time, purely out of passion, and one person only has so much bandwidth, making it nearly impossible to handle large PRs. That is why clangd’s C++20 modules [PR](https://github.com/llvm/llvm-project/pull/66462) dragged on for nearly a year, and even today it still isn’t really usable on large projects, with plenty of flaws and nobody working on them. Earlier this year, in 2026, Clang’s lead maintainer Aaron Ballman recognized the problem and posted a [call for help](https://discourse.llvm.org/t/help-needed-with-clangd-maintenance/89820) on the community forum, saying clangd is very close to unmaintained, with a heavy backlog of PRs and issues, and hoping to find new community maintainers; otherwise clangd **could** eventually be removed from the LLVM project.
-- Scale of the code changes: As mentioned at the start, clice introduces many new architectural ideas, such as multi-process compilation. Implementing those inside clangd would come close to **rewriting** clangd. Nobody is going to review and accept changes of that size. Self-hosting with modules would also require sweeping changes to LLVM’s build system, which I will go into in detail when I introduce xclang later.
-- LLVM repository constraints: clice relies on a lot of third-party libraries for better performance and user experience, such as `libuv`, `simdjson`, and `tomlplusplus`. To keep builds simple, LLVM requires the repository to remain self-contained, so pulling in that many third-party libraries is out of the question. You would either have to rewrite and port them into LLVM or put up with worse ergonomics and lower performance. On top of that, a language server is not a **standalone** project: it also includes extensions and adapters for different editors. Keeping them in the same repo as the server makes maintenance much easier, and LLVM would be just as unlikely to accept that editor code (spanning Rust, Lua, TypeScript, and so on). For long-term maintainability and our core goals, a separate repository was unavoidable.
+Let’s pick a fun example to see how far we can go. Here is a derivation that imitates the classic song *99 bottles of beer* by producing a chain of derivations, each one outputting the next verse.<sup>1</sup>1The builder writes the next derivation by hand in [ATerm](https://fzakaria.com/2025/03/23/nix-derivations-by-hand), so there is no recursive Nix and no `nix-instantiate` involved.
 
-So in mid-2024, I started looking into how to design and write a new language server. At the end of 2024, I published [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), setting out clice’s core goals and kicking off development in earnest.
+```
+export PATH=$busybox/bin
 
-### How did we get here?[#](https://www.ykiko.me/en/articles/2105384023094834022/#how-did-we-get-here)
+# A content-addressed derivation does not know its output path, so its
+# "out" variable holds this placeholder and Nix swaps in the real path at
+# build time. It is "/" + nix32(sha256("nix-output:out")), the same for
+# every derivation with an output named "out".
+OUT_PLACEHOLDER=/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9
 
-Next, let’s talk about how clice was built. How did it get to its current state? Over the past two and a half years, at a rough guess, I have put nearly 3,000 hours into this project. Even that number doesn’t really tell the story, because clice became part of my life. It was always on my mind, like eating or sleeping: there wasn’t a moment when I wasn’t turning over some problem related to it. Development broke down into roughly four stages:
+bottles() {
+  case $1 in
+    0) echo "no more bottles" ;;
+    1) echo "1 bottle" ;;
+    *) echo "$1 bottles" ;;
+  esac
+}
 
-Mid-2024 to early 2025: I spent this period studying Clang and clangd’s codebase and internals. Anyone who has looked through my older blog posts will know I am a longtime template metaprogramming enthusiast, familiar with C++ and its implementation details down to language-lawyer territory. During this phase I settled on clice’s core goals and overall design, and put together an initial demo. I was a third-year undergrad at the time: I would wake up and start coding right away, skip lunch, walk out to the McDonald’s outside the campus gate when I got hungry, and put in 8 to 10 hours a day.
+# The last derivation in the chain writes the punchline instead of a .drv.
+if [ "$n" -eq 0 ]; then
+  echo "No more bottles of beer on the wall, no more bottles of beer." >&2
+  echo "Go to the store and buy some more." > $out
+  exit 0
+fi
 
-Early 2025 to early 2026: I originally expected to ship a usable version of clice fairly quickly during this stage. Instead, progress went much slower than I expected, and it remained a long way from production-ready. Looking back, there were a few main reasons:
+next=$((n - 1))
+echo "$(bottles $n) of beer on the wall, $(bottles $n) of beer." >&2
+echo "Take one down, pass it around, $(bottles $next) of beer on the wall." >&2
 
-1. Above all, time. I had assumed I would keep putting in 8 to 10 hours a day like before. My undergraduate major was chemistry, though, and everything I knew about programming was self-taught. Even though I had plenty of C++ experience and had participated in GSoC, I lacked specific “domain knowledge.” To find a job, I spent most of 2025 interning and picking up a new field (unrelated to C++ frontends), while also dealing with university chores and everything involved in graduating. The hours I had left for clice shrank drastically compared to my earlier assumptions, so progress naturally slowed down.
-2. Getting the project genuinely production-ready also took far more than the core architecture. It meant working through countless corner cases of C++ syntax alongside subtle cross-platform differences: URI parsing, file paths and file uniqueness, OS-level quirks, and so on. The workload turned out to be much bigger than I had imagined. I also have a bit of an obsessive streak and dislike band-aid solutions that barely get by, so to build things the way I wanted I ended up reinventing quite a few wheels, covering serialization, IPC/LSP, async, and more. Had I chosen Rust at the start, development might have taken considerably less time, since those pieces already existed in the Rust ecosystem and had been thoroughly proven in other language servers. Still, writing a C++ language server in Rust felt odd, and it would have ruled out self-hosting, so I didn’t go that route.
-3. Lack of experience scheduling and managing complex software. Even with so much work on the table, several early contributors were already interested in the project and willing to put real time into helping write code. Unfortunately, I had very little teamwork experience back then (being completely self-taught and only three years into programming altogether), so I failed to turn that interest into effective contributions. That sank in much deeper once I started working in industry: 3 or 4 of my coworkers can split up responsibilities, stand up a project from scratch in 2 to 3 months, and ship it to production, whereas I had poor instincts for project planning and mostly just wrote whatever was on my mind at the moment. Open-source volunteer bandwidth can’t be compared to a full-time job, of course, yet the truth is I didn’t do a great job of building a community or pushing the project forward.
+# Input sources must be sorted.
+srcs=$(printf '"%s"\n' "$busybox" "$script" | sort | paste -sd, -)
 
-Early 2026 to July 2026: The turning point came when coding agents led by Claude Opus 4.6 started catching on. I began using agents to help with the mountain of tedious detail work and painful cross-platform debugging, and found they were remarkably good at it. During this stretch I did a sweeping cleanup of the existing codebase and established the prototype of clice as it stands today. As agents grew stronger, I handed them increasingly complex tasks and kept moving the project forward rapidly. It was an exciting period: I could finally stop burning hours on tedious details and focus on architecture and feature work. At the same time, it hit me that coding agents were only going to keep getting stronger. If humans stop writing code altogether in the future, what point does a language server even have? That pushed me to start designing and building clice’s CLI features.
+# Write the derivation for the next verse. A .drv is a single line of
+# ATerm, so strip the spaces and newlines that are only here for reading.
+# Nix takes a derivation's name from its store path, so the next name is
+# ours minus one ".drv".
+tr -d ' \n' > $out <<EOF
+Derive(
+  [("out", "", "text:sha256", "")],
+  [],
+  [$srcs],
+  "$system",
+  "$busybox/bin/sh",
+  ["$script"],
+  [
+    ("builder", "$busybox/bin/sh"),
+    ("busybox", "$busybox"),
+    ("n", "$next"),
+    ("name", "${name%.drv}"),
+    ("out", "$OUT_PLACEHOLDER"),
+    ("outputHashAlgo", "sha256"),
+    ("outputHashMode", "text"),
+    ("script", "$script"),
+    ("system", "$system")
+  ]
+)
+EOF
+```
 
-July 2026 to present: By July I felt the timing was right to put out early test builds and iterate based on real user feedback. Core language server features were already in place and fully usable day to day, though still short of everything I had originally envisioned, so I threw myself into building out the rest of that vision, tuning performance, and fixing bugs. In October, I started planning clice’s modular self-hosting. That was a remarkably complicated undertaking, because C++ module support today is a long, painful story:
+> **Tip**
+> A derivation whose output is a `.drv` must set `outputHashMode = "text"`.
 
-- CMake supports modules, yet if implementation units importing a module use different compile flags, CMake forks a separate compilation of the module even when those flags don’t affect PCM compatibility. CMake also has no built-in compilation cache, which matters a lot for CI; normally we reach for ccache to solve that, except ccache doesn’t support modules.
-- clice has a demanding platform matrix: six combinations across Windows/Linux/macOS × ARM64/x64, plus ASan builds, prebuilt LLVM/Clang binaries to speed up CI, C++23 import std, and build artifacts that depend only on system libraries rather than extra shared libraries so everything works out of the box for users.
+In our example we are using a content-addressed derivation, but the same idea works with an input-addressed one, but it’s more work to compute the output path in the shell, unless you are using `nix-instantiate` to do it for you with recursive Nix.
 
-I surveyed the options extensively, and the answer was that an out-of-the-box setup for this **simply did not exist** in open source, and most open-source C++ module projects don’t have build requirements nearly this involved. After thinking it through carefully, I built [xclang](https://github.com/clice-io/xclang), inspired by zigcc, to give every target platform a unified cross-compilation experience, and paired it with Bazel (which includes built-in build caching) to solve the build problem for good. Going one step further, I wrote `clice modularize` to automatically generate module wrappers for every third-party library we depend on, completing clice’s self-hosted modularization! That probably makes clice one of the most complex open-source C++ projects using modules today.
+The Nix side builds the first derivation and then follows `builtins.outputOf` once per bottle.
 
-Alongside all of this, I ran extensive fuzz testing across many open-source projects and fixed a huge number of bugs, bringing clice to genuine production readiness!
+```
+let
+  pkgs = import (fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/6dadaf4375be35033e1c84395adbd53ff5fded96.tar.gz";
+  }) { };
+  inherit (pkgs) lib;
 
-### What about agents?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-about-agents)
+  # maximum bottles of beer on the wall,
+  # 50 is the most that fits in a store path!?
+  bottles = 50;
 
-As I mentioned earlier, I designed a CLI interface for clice so that it would still hold some value in the agent era. An obvious idea is replacing `grep` with `clice query`: it is more accurate and uses fewer tokens. That is true, except exact symbol lookup requires indexing the whole project first, which takes a very long time. `grep` is imprecise, sure, yet 2 or 3 `grep` calls are usually enough to find the target, and the extra text `grep` pulls back isn’t necessarily a bad thing for helping an agent understand the codebase. Put plainly, most of this CLI isn’t actually all that useful. The part that really earns its keep is probably `clice modularize`: if you ask an agent to modularize a project on its own, it spins up a swarm of subagents and writes custom scripts to pull off the migration, which is both slow and expensive. Giving the agent `clice modularize` to assist the migration works much better. LLMs are trained first and foremost for generality, and what they do best is writing and combining scripts to generalize across problems. As things stand, only highly specialized tools still carry real value; otherwise you are usually better off letting the LLM compose its own scripts.
+  top = derivation {
+    name = "beer" + lib.concatStrings (lib.replicate bottles ".drv");
+    system = builtins.currentSystem;
+    builder = "${pkgs.busybox}/bin/sh";
+    args = [ ./bottles.sh ];
+    script = ./bottles.sh;
+    busybox = pkgs.busybox;
+    n = bottles;
+    __contentAddressed = true;
+    outputHashMode = "text";
+    outputHashAlgo = "sha256";
+  };
+in
+# Follow the chain of outputs down to the last derivation.
+lib.foldl' (drv: _: builtins.outputOf drv "out") top.outPath (lib.range 1 bottles)
+```
 
-As agents keep getting stronger, especially with models led by Claude Opus 5.5 and Fable 5.2, the cost of building complex software keeps falling, and 10x or even 100x the productivity of the past is well within reach. Over on X, you can see plenty of people asking Claude in a single sentence to rewrite the TypeScript compiler in another programming language and getting better performance out of it. Surprising at first glance, yet completely reasonable when you think about it. Software written in the past was bounded by human time, cost, and skill, so codebases inevitably accumulated lots of suboptimal code paths. When humans optimize performance, we go after the main bottlenecks, whereas an agent can tirelessly optimize every path until the small wins add up. Refactoring also often produces a better architecture than existing code; rewriting or refactoring software was just too expensive to justify before. In the foreseeable future, then, most code may be written entirely by agents, humans may stop writing code and even reading it (which is already happening now), and language servers may have no reason to exist at all. Agents might even invent programming languages better suited to themselves: compilation and interpretation themselves have often become the bottleneck in the agent loop, and agents already have the ability to optimize that underlying infrastructure; they just haven’t started yet. Ideally, every stage of the agent loop should be something the agent itself can improve and speed up, compilers and toolchains included.
+While working through this example, I hit a bug in Nix that made me set `__contentAddressed = true` on the top derivation. That is not necessary for a derivation that outputs a `.drv`, but it works around the bug. I filed [NixOS/nix#16830](https://github.com/NixOS/nix/issues/16830).
 
-## To be continued[#](https://www.ykiko.me/en/articles/2105384023094834022/#to-be-continued)
+You might notice that we limit the number of beers to 50. Why 50 and not 99?
 
-That is a sad reality, and in an era like this it means the effort I poured into clice over the past two and a half years is unlikely to have the lasting meaning I first imagined. Every time I dwell on it, I slip into a dark mood, bordering on nihilism. I can’t help asking myself: thousands of hours and a lot of money, and what was it all for?
+Well, 50 is the most that fits in a store path.
 
-Because I taught myself programming off the beaten path without a CS degree, I got used early on to the cycle of finding my own goals, defining problems, solving them, and then looking for the next goal. Interest alone only sustains me for a little while; sticking with something for the long haul takes some deeper “meaning” or “vision” behind it, ideally one I defined for myself. And now that meaning is fading away. So over the past few months, I started pushing myself relentlessly. The more those thoughts crept in, the harder I used agents to drive the project forward, trying to finish it before it lost its meaning altogether.
+```
+error: path '…-beer.drv.drv.drv…' is not a valid store path:
+  name 'beer.drv.drv.drv…' must be no longer than 211 characters
+```
 
-Imagine an alternate timeline where coding agents never took off. clice wouldn’t be nearly as complete as it is today, of course, yet I would have slowly gained experience, learned how to collaborate and plan work, built a community around it, and watched clice move forward slowly and steadily. Except the SOTA models have already been trained. Models like Opus 5.5 and Fable 5.2 are real, and whether AI is a bubble or not, they aren’t going away. Software becoming cheap is already an undeniable fact.
+The maximum length of a store path is [211 characters](https://github.com/NixOS/nix/blob/7d83031e0c3c4f7e6767ce94ae81ae93b6c04322/src/libstore/include/nix/store/path.hh#L48). A derivation’s store path must include the `.drv` suffix, and every `.drv` in a chain adds four characters. The top derivation is named `beer` and if you add 51 `.drv`s we get 208 characters. No room for any more beer. 🍻
 
-We have to face reality, so what mindset should we bring to all of this? My thinking has shifted again recently, though honestly neither my mental state nor my daily life is in a great place right now. Pouring yourself too deeply into one thing naturally takes a heavy toll when it doesn’t turn out the way you hoped. Still, if you zoom out over a longer stretch of time, what does it really amount to? Even if I had done nothing at all for these two and a half years, so what? There is plenty of life ahead. I know that in principle, yet letting go is hard, especially when this project has been part of my life for over two years. As I mentioned in an earlier post, graduating from college never really felt real to me, because the rhythm of my life barely changed afterward: apart from my job, it was just this project. Something has to change eventually, though. I can treat clice as my graduation project: my real graduation project, not one from the chemistry major I never really liked. And that’s enough. I don’t need to force a grander meaning onto it. This graduation project has met **every single goal** I set two years ago, and exceeded them by a wide margin. It stands on its own as the best illustration of modern C++, neatly bringing together everything I studied about C++ in college. If on top of that it can be helpful to people just learning to program or curious about modern C++, that is plenty.
+Let’s <del>build</del> sing it.
 
-So this post is a kind of ritual for me. I need to step out of my old life and look for other things worth doing, maybe things outside code. I will keep maintaining clice, just not at the intensity I used to; practically everything worth building is already built anyway, so from here on it will mostly be incremental optimizations and bug fixes based on user feedback. In times like these, it is hard to say what the right path is, or what you ought to be doing. Nobody knows what will happen next week, let alone next year, or how far AI will actually go. I think it is time to rest for a while so I don’t burn out, and have the energy to face whatever problems come next. I still have a strong drive to keep creating good work. It just might not be about programming anymore, and figuring that out is what I need to learn and think through in this next stage.
+```
+$ nix build -f beer.nix \
+    --print-out-paths \
+    --print-build-logs
+building '/nix/store/di5x9yrhh6pfn214c41bnpxh1avya51c-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 50 bottles of beer on the wall, 50 bottles of beer.
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 49 bottles of beer on the wall.
+building '/nix/store/zg35ykl6qvh6gasy6q4pc6d4kyqcq0sd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 49 bottles of beer on the wall, 49 bottles of beer.
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 48 bottles of beer on the wall.
+building '/nix/store/g07drgnkmwkbyccwk8vzzibbfdznpqjd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 48 bottles of beer on the wall, 48 bottles of beer.
+beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 47 bottles of beer on the wall.
+...
+building '/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv'...
+beer.drv> 1 bottle of beer on the wall, 1 bottle of beer.
+beer.drv> Take one down, pass it around, no more bottles of beer on the wall.
+building '/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv'...
+beer> No more bottles of beer on the wall, no more bottles of beer.
+/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
 
-That’s all for this post. Thanks for reading. I hope you’ll give clice a try, and feel free to report any problems!
+$ cat result
+Go to the store and buy some more.
+```
+
+Fifty-one builds, one after another<sup>2</sup>2A single trivial build takes about 1.5 seconds on my laptop, so the cost of building 51 derivations is about 75 seconds largely due to substituter lookups. If you disable substituters `--option substituters ''`, the builds take about 1.3 seconds in total. . Evaluation knows about only the first one. Nix discovers each of the other 50 by building the one before it. 🍺
+
+> **Aside**
+> Hey, didn’t an [earlier post](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) have dynamic derivation chains 500 deep?!
+>
+> Yes! The difference is whether a derivation *outputs* the next one or *depends* on it. A derivation whose output is another derivation gets one more `.drv` appended to the name. The dice chain linked each step to the next as a dependency, and a dependency keeps its own name, so no name ever had more than two `.drv`s in it.
+
+Back to the original question: can we query the deriver of the output derivation to get the initial derivation? Yes, we can.
+
+Let’s put `nix-store --query --deriver` in a loop that walks from the result all the way back to the top.
+
+```
+$ p=$(readlink result)
+$ while [ "$p" != unknown-deriver ]; do
+    echo "$p"
+    p=$(nix-store --query --deriver "$p")
+  done > chain.txt
+
+$ wc -l < chain.txt
+52
+
+$ head -4 chain.txt
+/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
+/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv
+/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv
+/nix/store/flj05chf2yyn5bxsjq41if7mihcjjqkp-beer.drv.drv.drv
+```
+
+We have the result plus 51 derivations. 💪
+
+Since every derivation in the chain was built, every one has a build log, and you can ask any of them to sing its verse again.
+
+```
+$ nix log "$(sed -n 26p chain.txt)"
+24 bottles of beer on the wall, 24 bottles of beer.
+Take one down, pass it around, 23 bottles of beer on the wall.
+```
+
+I’m very excited for the future of dynamic derivations. [tomberek](https://github.com/tomberek) is [leading a working-group](https://discourse.nixos.org/t/dynamic-derivations-dynamic-build-graphs-next-steps/79409/) to finalize the feature and are currently meeting weekly. With dynamic derivations, Nix will be able to compete with other build systems in terms of speed and flexibility and *take over the world*.

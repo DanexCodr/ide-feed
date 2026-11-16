@@ -1,169 +1,304 @@
-I recently retired from mentoring my [*FIRST* Robotics Competition](https://www.firstinspires.org/programs/frc/) (FRC) team. I started as a student in 2010, and went straight into mentoring upon graduation, so in total I have been writing FRC programs for about 17 years.
+I return with part two of the replication rants series.  This talk was given at HPTS'26 and fleshes out the argument for quorum-based replication in [Enough With All The Raft](https://transactional.blog/talk/enough-with-all-the-raft.html), and continues to build off of the work that went into writing [Data Replication Design Spectrum](https://transactional.blog/blog/2024-data-replication-design-spectrum.html).
 
-Over time though I've become more and more dismayed with how FRC programs are typically written. For decades, I feel that *FIRST* and [WPILib](https://docs.wpilib.org/en/stable/docs/software/what-is-wpilib.html) have encouraged students to severely overengineer their robot programs. As time has gone on, I have become more and more frustrated with the state of FRC programming, and our team's code style has drifted further and further away from the norm.
+I think we tend to view quorum replication as generally impractical for production use.
 
-To be clear, I have the utmost respect for the time and effort that *FIRST* and the WPILib maintainers put in every year, and it is thanks to their efforts that FRC teams have reliable and complete libraries every year. But I think the accepted programming practices in FRC are leading students astray and ought to be corrected.
+I think that is an outdated view.
 
-So as I step away from *FIRST*, I decided I should write down my philosophy of robot programming in FRC, which I have decided to give the pithy name of **Periodic-Oriented Programming**.
+## Video
 
-## What is Periodic-Oriented Programming?
+If you want the links to papers, find the corresponding slide below.
 
-Periodic-Oriented Programming is very simple: Do as much as possible in your `periodic` function. Uses very few abstractions, and write most of your logic in one big function, top to bottom. This is so simple and beginner-like that it seems like it shouldn't work for serious programs. But it does, as long as you carefully establish a few simple boundaries and practices.
+## Transcript
 
-For context, the essential structure of an FRC program is typically to use the `TimedRobot` framework provided by WPILib. To use it, you simply implement `periodic` functions and the robot framework calls them 50 times per second. For example, here's a complete "tank drive" robot program in Python:
+This is a replication talk that I gave at HPTS 2026.
 
-```
-import wpilib
-import rev
+I once did a survey of what type of replication algorithm databases in production are using, and the result looks like this.
+Raft is the giant pacman, eating the primary-backup and quorum slices.
+The Quorum slice is small enough that we can just fully enumerate it right now.
 
-class MyRobot(wpilib.TimedRobot):
-  def robotInit(self):
-    self.gamepad = wpilib.XboxController(0)
-    self.leftMotor = rev.SparkMax(10, rev.SparkLowLevel.MotorType.kBrushless)
-    self.rightMotor = rev.SparkMax(11, rev.SparkLowLevel.MotorType.kBrushless)
+Upper left are OSS majority quorum databases.  
 
-  def teleopPeriodic(self):
-    self.leftMotor.set(self.gamepad.getLeftY())
-    self.rightMotor.set(self.gamepad.getRightY())
-```
+Upper right are proprietary ones that used or are using it for data replication.  
 
-50 times per second, the left and right motor speeds will be updated to use the left and right gamepad axes. The robot framework and hardware abstraction layers do the rest.
+Bottom left are proprietary ones using consensus for a log.  
 
-In essence, every FRC program does the following work in `periodic`:
+Bottom right are technically true but carry caveats.
 
-- Get user inputs (or autonomous state)
-- Compute the desired state of the hardware (motor speeds, actuator positions, etc.)
-- Enforce safety constraints, smooth signals, or otherwise process the outputs
-- Update hardware outputs
+If we filter that list by how they’re doing now:
 
-In Periodic-Oriented Programming, I basically encourage my students to lean into this pattern. POP code should have few abstractions, and most of the logic should be written top-to-bottom in a single function. And to the greatest extent possible, everything should be run on every `periodic`—no modes, no commands, no state.
+- Riak is long past hedge fund dead.
+- Voldemort is so dead all that all of you forgot it existed until the previous slide.
+- InfluxDB and Grafana Mimir had previous iterations which used quorums, and then they re-architected.
+- Weviate does quorum for data and raft for metadata, and I won’t be shocked if they re-architected too.
+- Google Megastore is basically dead.
+- Tencent PaxosStore is super internal in chinese bigtech, so I have no idea.
+- CouchDB was more meant for eventual consistency but has a clustered mode, and I have no idea who uses it other than cloudant?
+- OG Dynamo, which someone here can tell me about, but I’m assuming is/has been phased out?
 
-As programs get larger, more structure is needed, but the core philosophy remains the same. The most important piece of structure is **subsystems**.
+*Note: the HPTS audience head shaking agreed with my assessment of Dynamo.*
 
-## Hardware lives in subsystems
+Which leaves me with this awkward feeling that if I say implement a quorum database, the only good example I have to point to is Cassandra?!?
 
-The use of "subsystem" classes will be familiar to most FRC teams, but the specifics are what matter here:
+HPTS says submit your spicy takes, so brace yourself:  I think we should be credibly building more than one good example of a quorum database.
 
-1. Every subsystem has a `periodic` method. This is called from robotPeriodic so it runs 100% of the time.
-2. Hardware is never accessible outside the subsystem. All access to the hardware must be mediated through subsystem methods.
+Which we are!  I’m holding out 3 very recent examples on you.
 
-These rules extend the Periodic-Orientation into the subsystem code. For each subsystem, all of its logic should be centralized in one function and readable top to bottom. In most cases, the subsystem `periodic` is the only place in the entire program that actually touches the hardware. This has many advantages: it ensures by construction that hardware is only touched once per tick, that safety constraints are respected 100% of the time, and that logging and telemetry are run consistently.
+But first, for the next 16 minutes I will be CEO and utterly delusional founder of CashDB, because I need a running example for this talk.
+CashDB is a database specialized for whatever your splitting-the-bill-with-friends app that you use.
 
-Centralizing most logic in `periodic` also provides a nice platform for both autonomous and teleoperated code. The subsystem's API surface can be comprised of very high-level functions like `driveFieldRelative(vx, vy)` or `goToElevatorPreset(coralOrAlgae, level)`, which basically just set instance variables to be read later in `periodic`. These subsystem functions also provide a consistent place to validate inputs (e.g. impossible speeds, angles, or presets), convert units, etc.
+It has two major limitations.
 
-By the way, don't be afraid to combine two subsystems if their logic is intertwined. For example, in 2025 our robot had an arm on an elevator, and the safe angles for the arm were dependent on the height of the elevator. Therefore, we made a combined `ElevatorAndArm` subsystem. (If you've heard advice that classes should be about "one thing", ignore that advice, it is wrong.<sup>[1]</sup>)
+First, it only supports a very limited set of operations:
 
-## Chase the desired state
+1. debit account X, add to account(s) Y
+2. Read account value(s)
 
-As I described earlier, every FRC program computes the desired state of the hardware, then updates the outputs to move in that direction. This is most obviously true of closed-loop control (PID, typically), where you simply set a target value (e.g. "elevator at 6 feet") and then compute outputs that will move the hardware toward that target.
+1. Add a receipt to the group log
+2. Read group transaction log
 
-Successful Periodic-Oriented programs apply this philosophy to the entire robot program. **What hardware state do I want, and how do I get there?** This way of thinking applies at the actuator level (e.g. motor speeds), the mechanism level (e.g. arm angles), and the whole-robot level (e.g. safety constraints like "arm can only go out when elevator is down"). It is universal to all robot control.
+The second constraint is that I told a coding agent to make CashDB as reliable as possible and now it has my AWS keys, is rebooting one of my VMs once a minute in the name of chaos testing, and has replicated itself.  I cannot stop it.  We must now design CashDB around this.  I need a replicated CashDB.
 
-The question of "What hardware state do I want?" falls naturally into `teleopPeriodic` and `autonomousPeriodic`. They naturally define answers to questions like: Where on the field? What velocity? What elevator position? What arm angle? What shooter RPM?
+If I use a reconfiguration-based replication protocol that does a view change on every failure, my users are going to see latency spikes every minute and I will have to answer uncomfortable questions.
 
-The question of "How do I get there?" then falls naturally into a subsystem `periodic`. Often it is as simple as `elevatorMotor.setReference(elevatorHeight)`, deferring the actual closed-loop behavior to your motor controllers. But extra behaviors can easily be layered in here too; for example, the whole-robot constraint described earlier can be as simple as:
+If I use raft, then expected value is that they see a latency spike every five minutes when the leader is affected, but the other failures get masked.
 
-```
-def periodic(self):
-  newArmAngle = self.desiredArmAngle
-  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
-    newArmAngle = 0 # pull arm in if elevator is up
-  self.armMotor.setReference(newArmAngle)
-```
+This is perfect.
 
-Or you could do a "state machine" approach, where attempting to put the arm out will actually drop the elevator to a safe position first:
+This is the motivation I’m pitching for being leaderless.  You should get better latency,
 
-```
-def periodic(self):
-  newArmAngle = self.desiredArmAngle
-  newElevatorHeight = self.desiredElevatorHeight
-  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
-    newArmAngle = 0 # pull arm in if elevator is up
-  if self.desiredArmAngle > 0:
-    newElevatorHeight = 0 # move elevator down if arm wants to be out
-  self.armMotor.setReference(newArmAngle)
-  self.elevatorMotor.setReference(newElevatorHeight)
-```
+I’m not saying availability, because availability is just a latency SLO.
 
-In a Periodic-Oriented program, complex behaviors like this are easy to debug, robustly uphold safety constraints, never produce conflicting outputs to hardware, and often require less state than other approaches. Speaking of:
+So, what if we try to build CashDB in the style of our long-established examples?
 
-## Minimize state
+First we have everything that came out of the ABD paper doing standard majority quorums.
 
-Robots have enough state to deal with in the real world. So don't add extra state to your program!
+Think OG cassandra.  We get a nice 1 or 2 RTT writes.  We get 1-2 RTT reads.  Life is great.
 
-For the beginners in the audience, "state" in programming is data in your program that changes over time. Common sources of state in FRC programs include:
+CAN. IT. CASHDB???
 
-- Physical robot state (e.g. location on field, velocity, mechanism positions)
-- User inputs (e.g. joystick axis values and button states)
-- Modes (e.g. the ability for operators to toggle between "coral mode" and "algae mode" controls)
-- Timers
-- Signal processing state (e.g. for smoothing sensor data or slewing outputs)
-- Coprocessor state (e.g. data stored on motor controllers or computer vision devices)
+No.
 
-Some of these are inherent, such as the physical robot state (which is the entire point). Others are not, such as modes. It is well-known in programming, across [many domains](https://number-none.com/blow/blog/programming/2014/09/26/carmack-on-inlined-code), that more state == more problems, so remove or isolate state wherever you can:
+It implements only distributed read/write register, thus the implicit atomic read-modify-write for account debit/credit operations doesn’t work.
+Append to transaction log would also be a struggle.
 
-- Avoid modes. They are confusing for both operators and programmers. For example, rather than storing a flag for `armIsExtended` that is toggled by a single button press, consider having an "out" button and an "in" button, or consider extending the arm only while the button is held. This eliminates ambiguity: the operator knows exactly what state the robot should be in based only on the buttons they are currently pressing.
-- Avoid duplicating coprocessor state in your robot code. For example, don't have a variable in your subsystem for `currentArmAngle`; read it directly from your motor controller instead. If they can get out of sync, that is an opportunity for bugs.
-- Avoid timers. They are a frequent source of bugs because the state of the world is often not what you expect when the timer expires. For example, instead of running your shooter for three seconds, consider running it until a sensor detects that the hopper is empty.
-- **Avoid autonomous state.** For most teams, it is very viable to represent all autonomous outputs as a function of time. In the extreme, this might look like: `if 2 <= elapsedTime and elapsedTime <= 5: shooter.shoot() else: shooter.stopShooter()` [TODO: BAD CSS HERE] But while this looks silly, this is more or less what tools like [Choreo](https://choreo.autos/) let you do. A Choreo trajectory is just a list of desired positions, velocities, and actions for the robot over time, and executing a Choreo trajectory is literally as simple as looking up the current desired state and applying it to your drivetrain. (This is also true of PathPlanner, but to a lesser extent due to its dependence on commands.) And it need not be fancy: In 2011, when I was a student, my dad (an industrial automation engineer) advised me to author our autonomous routines in spreadsheets. Each autonomous routine that year was literally a CSV file, with one column per actuator and one row per "step" (with start and end times). At any given time, you could simply look up the current row of the table, and look at each column to see what each motor's output should be. It worked well! I don't know why we never did it again.
+I think we view majority quorums slightly worse than it deserves because it came from the eventual consistency era read repair + LWW + anti-entropy gives a lot of opportunities to resurrect failed writes.
 
-And there is one final piece of advice that eclipses all others:
+But, unless you very knowingly fit the register model with linearizable-but-sujectively-worse consistency, I do not think majority quorums are the path forward.
 
-## Avoid commands at all costs
+Let us instead consider if building a system like Megastore would work.
 
-The WPILib ["command-based"](https://docs.wpilib.org/en/stable/docs/software/commandbased/what-is-command-based.html) programming system is an unmitigated disaster that should never be used under any circumstances.
+Megastore replicates a log per entity group, and a proposer targets the next available slot in the log with its proposal. This is just multi-paxos without the time-based leader election.
+Consensus gives us State Machine Replication, and thus we can model debits and credits as increments and decrements, and log appends as appends.  That’s great.
 
-Harsh? Yes. But after writing and teaching command-based code for ten years, then trying other approaches for another seven, I have concluded that the command-based approach is almost entirely without merit.
+CAN. IT. CASHDB???
 
-At its heart, the problem with the command-based system is that it is woefully, impossibly stateful. When using commands, you don't know which commands are currently active in the scheduler, you don't know what order they execute in, it's difficult to predict when they start, and it's all but impossible to know when they end.
+Yes, but it will explode in production.
 
-I have witnessed three generations of students (myself included), across multiple teams, debugging bizarre and entirely artificial problems caused entirely by the command-based system. "Why can't we run autonomous twice? Oh, because you can't always call `initialize` after `end`? Maybe I need to construct a new command instance? But how can I do that if `onTrue` takes a `Command` instead of a `() -> Command`? Why did the robot stop driving? Oh, something canceled the `Drivetrain` subsystem's default command? I guess it shouldn't `require` the subsystem then? Oh, I guess now we're setting the motor speeds twice? Why did that one run before the default command?"
+It will fail because of latency. Paxos has a liveness problem: two duelling proposers can easily prevent eachothers' progress.  The log-centric model only helps to funnel proposers into conflict.
 
-I could keep going. "Why did the robot shoot just then? Wait, there was still a command running from earlier in autonomous? Why didn't it get canceled?" Every one of these questions is a stupid waste of time.
+Both systems tried a way to solve this:
 
-The other problem with commands is that they spread once-simple logic across dozens of files. This is purportedly a *benefit* of using commands, but the reality is that neither students nor mentors are good at piecing all the logic together in their head again. When you have a bug at competition and need to make a code change *now*, you need code that is brutally simple, where you can be confident that your change won't have unexpected side effects. Straight-line code is better for this purpose.
+- Megastore optimization: if you commit to slot N, you’re automatically the "leader" for slot N+1.
+- PaxosStore: time-based exclusion for a log slot once you hear a proposal for it (also geographic closeness).
 
-The remaining advantages for the command-based model are that they make it easier to sequence and schedule actions in autonomous, and that in principle they prevent multiple pieces of logic from accessing the hardware simultaneously. But as I've already suggested, a stateless, time-driven approach to autonomous works better in most situations, intra-subsystem state can be handled in `periodic`, and the `periodic` approach avoids the need for the `requirements` system by construction. (And if you want to ensure that a subsystem method is called only once per `periodic`, this can be easily achieved with a flag and a log message in the subsystem method itself.)
+Neither really fundamentally saved them.
 
-So, although it might seem crazy, I strongly encourage everyone to avoid command-based programming.
+However, it’s nice that replica catchup is easy because there’s one log with one ordering to replicate, and one can easily describe a snapshot of data by just the log offset.  But, the latency spikes worse than leader election timeouts removes the motivation for using quorums in the first place.
 
-## A final example
+What if we built CashDB using some E-Paxos ideas?
 
-Let me conclude with a snippet of real `teleopPeriodic` code from our 2025 codebase:
+Egalitarian Paxos introduces doing consensus where one agrees upon an order only for the exactly necessary dependencies.  This naively results in a sparse, potentially disconnected, graph of operations.  This graph frees us from having the One Big Log causing unnecessary contention.  The closest that E-Paxos gives to any hint on how to do replica catchup is something that looks very much like [Cassandra Enhancement Proposal 45 Mutation Tracking](https://cwiki.apache.org/confluence/spaces/CASSANDRA/pages/337676893/CEP-45+Mutation+Tracking) if you squint at it.
 
-```
-def teleopPeriodic(self):
-  # Get raw speeds from joysticks (to be converted to field/robot relative)
-  joystickX = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getX(), 0.1)
-  joystickY = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getY(), 0.1)
+Our almost production example comes from Cassandra again.  There’s an old 50k line un-merged patch which gives Lightweight Transactions an overhaul onto a new E-Paxos implementation.
 
-  # Turn speed is the same regardless of field/robot relative
-  turnSpeed = wpimath.applyDeadband(-self.rightStick.getX(), 0.1)
+CAN. IT. CASHDB???
 
-  # Precision mode
-  if self.leftStick.getRawButton(1) or self.rightStick.getRawButton(1):
-    joystickX *= 0.5
-    joystickY *= 0.5
-    turnSpeed *= 0.5
+Also No
 
-  # Drive
-  doRobotRelative = self.leftStick.getRawButton(3) or self.rightStick.getRawButton(3)
-  if doRobotRelative:
-    self.drivetrain.drive_robot_relative(-joystickY, -joystickX, turnSpeed)
-  else:
-    # Flip to red alliance if necessary
-    xSpeed = -joystickY
-    ySpeed = -joystickX
-    if utils.isRedAlliance():
-      xSpeed *= -1
-      ySpeed *= -1
-    self.drivetrain.drive_field_relative(xSpeed, ySpeed, turnSpeed * constants.kMaxTurnSpeed)
-```
+It’s not clearly better or worse than a log here…​
 
-There is no subsystem default command, just a function call. There are no separate commands for field vs. robot relative, just an if statement. There is no separate command or global state for precision controls, just an if statement. There is no binding of commands to buttons, just if statements. Reversed field-relative coordinates for the red alliance? If statement.
+E-Paxos also was noted to have a huge latency cliff under contention, which again ruins our latency desires. There’s actually [an infinite tail latency theoretical result](https://arxiv.org/abs/2008.02512) for this.
 
-Does this feel ugly to you? If so, think of this an acquired taste! This is 25 lines of dead-simple code that completely encapsulates all of our teleop driving logic. The command-based alternative would probably be several classes and 100 to 200 lines of code (when you count all the boilerplate). Here there is no possibility of command cancellation, bad defaults, incorrect execution order, or conflicting writes to the hardware. Instead the code expresses the logic directly and simply.
+E-Paxos doesn’t give any great way to define a snapshot other than commit a dependency on everything.
 
-I suspect that many readers will think this is *too* simple, like surely this approach will cause problems in practice. But it doesn't! This is our actual 2025 robot code, which supported field-relative and robot-relative swerve drive, odometry and vision, and multiple Choreo-based autonomous routines with different starting points and scoring positions. If you are Orbit and your strategy is 100% autonomous game piece retrieval and placement, then feel free to ignore me. But I believe this approach to FRC programming would be successful for at least 95% of all FRC teams.
+Cassandra’s EPaxos already had anti-entropy and so they had a paxos repair that ran every 5min to fix up lost proposals.  It still benchmarked better than LWT though.
 
-<sup>[1]</sup>The problem with advice like "classes should do one thing, and do it well" is that no one can describe what "one thing" is. This is even acknowledged in books like Clean Code but not clarified in a way I find satisfactory. It is therefore not actionable advice. The decision of where to draw an API boundary should instead be determined by the amount of information that has to cross that boundary. In our `ElevatorAndArm` example, we could indeed have separated the `Elevator` and `Arm` into separate subsystems, but our "coral level 3" preset would then have required calls to two separate subsystems, and both subsystems would have needed references to each other in order to maintain safety constraints. When two classes are deeply aware of each other's internals, you should just combine them.
+For things that have a good history in production, that’s it.  It doesn’t seem great.
+
+From looking at what pieces were good and bad, we can put together the missing feature wishlist for leaderless replication:
+
+We need to survive contention because we cannot have latency climb incredulously as contention increases.  We desire quorums for low latency.  If there’s an easy trap that causes concerningly high latency, then we might as well use Raft.
+
+Consistent local snapshots would be nice. If you need to do a quorum read and merge for a table scan while executing SQL, you’re going to lose tremendously to a system which doesn’t.  We need *some* way to define a consistent snapshot locally.
+
+Lastly, If a node has missed proposals, catching up (to get to a snapshot) should be O(missed work) and not O(total data).
+
+So let’s do another pass, and now look at some very recent approaches instead.
+
+If we look back at consensus over logs, the thing we need to fix is the latency under contention.  How can we do that?
+
+SOSP'23 had a paper on QuePaxa.  QuePaxa gives us leaderless consensus that offers much better bounded latency under contention. Proposers collaborate instead of conflict. Consensus will take somewhere from 1 to 7RTT.  But you’re unlikely to go over 7RTT.
+
+QuePaxa in 60 seconds:
+
+- Every proposal gets a priority value, priority equals value for sake of diagram simplicity.
+- The algorithm proceeds with proposers walking in lockstep through phases across the acceptors.
+- If you fall off the lockstep bandwagon, you can get back on with some other valid proposer’s state.
+- Phase 1 only records the first proposal it hears.
+- From then on there is a fixed number of proposals, and the consensus intuition is:
+- I define a phase as "read from a quorum of phase N and write the max priority proposal to a quorum to begin phase N+1", if I repeat that enough times, everyone should eventually become aware of the best proposal.
+
+Actual algorithm, more complicated.
+
+You can replace paxos in a megastore-style system with QuePaxa.
+
+QuePaxa’s 1RTT fastpath comes from a spiritually similar Megastore optimization where winning round N gives you an ability to do a 1RTT commit to round N+1.
+
+CAN. IT. CASHDB???
+
+Not yet
+
+I’m nearly certain some of those 7RTT cases can be trimmed down.  Superficially, pipelining isn’t discussed, and so getting good throughput seems hard.  QuePaxa needs like 5 more optimization papers, and then it’s very worth revisiting.
+
+*Note: I had received a question about the jump from E-Paxos to QuePaxa, and what QuePaxa was trying to solve.  The intended comparison is mostly just Megastore to QuePaxa, and I think the chance of you regretting putting Megastore into production is much higher than the chance of you regretting putting QuePaxa (+ Optimizations) into production.*
+
+[Cloudflare is working on pushing QuePaxa into production](https://blog.cloudflare.com/meerkat-introduction/), and so I hope they’ll also do a lot of that needed optimization work.  I highly look forward to their results.
+
+If we look back at consensus over graphs, we need to fix…​ everything.  Which sounds hard, but we actually have two great examples here.
+
+SIGMOD'26 gave us Neo4J doing a very graph-centric leaderless consensus protocol.
+
+*Note: Jim Webber was at HPTS'26 and came up to say hello after this talk.  He is a very nice person, and it was really cool to get to meet him.*
+
+RIOT builds a DAG where each transaction is a node, and the current snapshot is defined as the set of nodes with no parents, the “Leading Edge”.
+Nodes gain a dependency when they conflict, or have a time ordering.
+
+Do one transaction on a snapshot?
+
+Add yourself as a node with the snapshot as your parents.
+You are now the leading edge.
+
+Do many concurrent transactions?
+
+Each node becomes a new part of the "leading edge".
+
+And RIOT is centered around the leading edge.
+Transactions are committed when a quorum accepts a new node into the transaction graph, and that’s sent with a leading edge.
+If you hear about a node you don’t know about from another replica, you get caught up on it, and all its parents you don’t know about.
+RIOT tells us you can do DAG replication by keeping our DAGs connected, and keep them tall and narrow.
+
+CAN. IT. CASHDB???
+
+Probably?
+
+Their results show…​ it’s like, pretty okay at low-ish concurrency: 300txn/partition/second.
+And that’s fine for neo4j usage, and they have production stats that justify that the tradeoffs in RIOT match their production usage well, which is really all I want to see when picking a replication algorithm.
+
+It’s just not an amazing fit for CashDB.  CashDB would do lots of small transactions.  RIOT happens better for fewer and larger transactions.  It’s a super cool paper either way. it’s the only thing I’ve seen that answers how to do pure DAG replication like this well, and it gave Neo4J lower latency than their Raft implementation.
+
+Our second system to examine is, you won’t believe it, but it’s Cassandra again, because we can’t stop talking about Cassandra in every part of this talk.  CEP-15 introduces Accord, which is an E-Paxos style protocol.
+
+Its closest direct relative is the tempo paper, but accord does physical timestamps instead of logical timestamps.
+
+Accord provides a 1RTT fast path.  It takes up to 3RTT in the slowest case.
+It borrows the ordered broadcast optimization from E-Paxos Revisited, which means you’ll end up on the fast path more often
+
+It collects agreement on what timestamp to execute a transaction at, such that the timestamp is after all of its dependencies.  The same epaxos-like logic applies for dependency collection, but, the reliance on the timestamp stability work dodges the e-paxos infinite tail latency theoretical result.
+
+Timestamp ordered execution linearizes proposals which gives it an easy way to support consistent local snapshots and incremental replica catch-up.
+
+CAN. IT. CASHDB???
+
+Hell yeah, huge Accord fan.
+
+CashDB would be only small OLTP transactions. It doesn’t need interactivity. You would have to commit a debit/credit, and then execute it and find out if it was valid or not as like a durable OCC, but that’s not the worst.
+
+I like Accord a lot and think you should read about it.
+
+And I wanted to take an extra quick moment to highlight that epaxos revisited ordered broadcast primitive.
+
+The difficult part of leaderless consensus is agreeing upon ordering.  Leaders are great at ordering!
+Wouldn’t it be great if everything could just be ordered upon arrival?
+
+Client generated timestamps.  Make up your order on your client, broadcast it with your message.
+Variants of this idea show up in papers *often*.
+
+What if you process messages only on or after their deadline?
+
+What if you also drop out-of-order messages?
+
+What if the network provides best effort ordering?
+
+What if it’s byzantine?
+
+What if it’s a transaction timestamp?
+
+No details for time, and we’re ending on TAPIR so I can mention System #3 that I *think* SurrealDB is putting TAPIR into production which is pretty cool.
+
+Our last bag of tricks are a few very related ideas because applying any one of them, gives you the same high level architecture.
+
+There’s a cloud of unordered commutative operations from which you pull a log out of afterwards with some great-at-ordering leadered consensus.
+You can do a 1RTT quorum write into the unordered pool, and remember that  [Linearizable Quorum Reads](https://scholar.google.com/scholar?cluster=10098760952745259234) says you can do a 1RTT read from a quorum of non-leaders, so you’re left only stalling read-after-writes.
+
+CURP is a really nice introduction to this idea, and hides a description of how to apply it to raft in the appendix
+
+It was then later generalized to work on more consensus algorithms and fixed in Jetpack
+
+Both stop at defining “commutative” operations as those that affect two different keys.
+Pulling this diagram from CURP, they accepted a quorum write to Y and to Z, but another write to Y would be forced to stall while the leader works on propagating Y into the log.
+
+CURP almost got a production implementation in {uri-cncn-xline}[CNCF Xline], but they went straight from Beta to Archived.
+
+To take these ideas one step further, you need the Skyros paper introducing Nil-Externality.
+
+Nil-externality is a generalization of blind writes to all operations that don’t return any state about the system.
+Skyros lets you just keep quorum writing nil-external operations to the same key.
+Each replica remembers its local order, and a leadered consensus can pull back out a correct linearizable order later.
+
+Nil-Externality has no *direct* implementation in industry, but we’ve been doing similar logic on the concurrency control side by not checking conflicts between blind writes in serializable MVCC databases for a long time.
+
+Skyros tacks on commutative operations like increments but doesn’t discuss it much.
+
+I’ll give MDCC credit as the other paper I know of which directly took on commutative updates under a leaderless generalized paxos model
+
+and 1986 Escrow transactions let you extend that commutative logic to …​ almost commutative operations.
+
+Escrow says: let increments and decrements commute as long as it’s impossible for your constraint to be violated.  If in the absolute worst case where all the increments abort, and all decrements succeed, then the value still remains above 0, then what do you care just treat them all as commutative.
+
+Escrow has only one implementation I’m aware of, Oracle 23c introduced it under the name “lockfree reservations”, but, Oracle is not a quorum database
+
+To apply this to quorum systems, you need the 1992 paper: High Throughput Escrow Algorithms for Replicated Databases
+which tells you that in the standard 3 of 5 quorum setup, the worst case value needs to stay above 40% of the current account value instead of 0. It’s not a terribly hard fix.
+
+So if we squish all these ideas together…​
+
+CAN. IT. CASHDB???
+
+Yes.
+
+CashDB only supports an escrow-able account transfer operation and a nil-external log append.  I obviously designed CashDB for this argument.
+In isolation this async leader trick is not 100% leaderless, but I include it because it’s a great step towards better latency.
+
+I’m also mentioning it because leveraging blind and commutative operations makes EVERY OTHER ALGORITHM BETTER and we never do it.
+In Consensus over Logs, Nil-Externality and Escrow would help guide us as to what operations are safe to pipeline with a leaderless log.
+In Consensus over Graphs, it means we get to reduce the dependencies tracked, and thus end up on the fast path more often.
+
+Increments are the best operation ever because you can treat them as commutative OR a nil-external fused together read-modify-write that returns nothing, and we still basically never special case them?!? We just execute them under exclusive locks, it saddens me.
+
+Alright, I’m out of time and out of content, so:
+
+- We have very recently gotten much better algorithms for leaderless replication
+- We have very recently gotten much better production-or-almost-there examples of how to write good quorum databases.
+- There are still more good ideas we have yet to apply to their full extent.
+
+I do not think we will see a proliferation of quorum databases until we have good production examples to copy from.
+
+So I implore you.  Choose something different.  Choose something with better latency.
+Choose something that lets you drop a "why quorums are better" blog post every time your competitor has an outage.
+
+Thank you.
+
+See discussion of this page on
+      [Reddit](https://www.reddit.com/search/?q=url%3Atransactional.blog/talk/please-implement-a-quorum-database),
+      [Hacker News](https://hn.algolia.com/?query=transactional.blog/talk/please-implement-a-quorum-database), and
+      [Lobsters](https://lobste.rs/search?q=domain%3Atransactional.blog+title%3A%22Please Implement A Quorum Database%22&what=stories).
