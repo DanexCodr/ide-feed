@@ -1,156 +1,54 @@
-[Here's an article](https://eli.thegreenplace.net/2008/09/26/recursive-descent-ll-and-predictive-parsers/) I wrote on the subject a few months ago. It provides a good introduction on how RD parsers are constructed and what grammars they can parse.
+This project presents a first working state for live migration of bhyve guests on FreeBSD 15.1. A running amd64 guest can move between two hosts over TCP while continuing to run; it is paused only for the final stop-and-copy phase. The work builds on bhyve's experimental snapshot support and adds dirty-page tracking in the vmm kernel module together with a migration protocol in bhyve and bhyvectl.
 
-Here I want to focus on a couple of problems with the RD parser developed in that article, and propose solutions.
+I previously discussed the state of bhyve live migration, its historical development, existing limitations, and why it matters for the future of FreeBSD virtualization in my article [bhyve on FreeBSD and VM Live Migration – Quo vadis?](https://gyptazy.com/blog/bhyve-on-freebsd-and-vm-live-migration-quo-vadis/).
 
-### Problem #1: operator associativity
+The goal is deliberately practical: make it possible to test, discuss, and improve a real implementation rather than discuss live migration only in the abstract. The current code and test tooling are being published as a WIP RFC so that the next steps can be shaped in the open. A more detailed demonstration of a VM being live migrated can be watched on my [YouTube channel](https://youtu.be/0jcFKo0u10A).
 
-If you recall from the [previous article](https://eli.thegreenplace.net/2008/09/26/recursive-descent-ll-and-predictive-parsers/), the expr rule of the parser looks like this (BNF notation):
+## Why this matters
 
-```
-<expr>    : <term> + <expr>
-          | <term> - <expr>
-          | <term>
-```
+Live migration is an important building block for enterprise virtualisation. It enables host maintenance, hardware replacement, load balancing, and failure-domain management with far less disruption to workloads. It is also central to the Sylve project, which aims to offer a Proxmox-like virtualisation solution for FreeBSD. Migration is not an optional convenience in that kind of platform; it is one of the capabilities that makes clustered operations practical.
 
-It's built this way (expr on the right-hand side of the expression, term on the left-hand side), to avoid *left-recursion* in the grammar, which can crash a RD parser by sending it wheeling in an infinite loop.
+It is equally important for BoxyBSD, where I offer free BSD-based VPS instances to individuals. Without a credible migration path, routine host work can require a guest outage. That makes live migration a current show stopper for the project, and is why this work is being pushed toward a testable, reviewable state.
 
-But as I hinted in the footnotes (and some readers caught on in the comments), this injects an associativity problem into the grammar. Let's see why.
+## How the current implementation works
 
-Wikipedia is much better than me at explaining what [operator associativity](http://en.wikipedia.org/wiki/Operator_associativity) is, so I'll assume you've read and understood it.
+The source starts with a pre-copy phase. It sends populated guest memory, then repeatedly obtains a bitmap of pages changed since the previous scan and sends only those pages. Once the remaining dirty set fits the configured downtime target, stops shrinking, or reaches the configured round limit, bhyve pauses the guest and its devices. It then sends the final dirty pages and the existing snapshot state for the vCPUs, kernel state, and emulated devices.
 
-In short, however, left associativity of the minus operator means that 5 - 1 - 2 = (5 - 1) - 2 and not 5 - (1 - 2) (which returns a different result).
+The destination validates the basic VM geometry, receives memory and state, restores it, and reports that it is ready. Only then does the source send *GO*, the commit point. Before *GO*, a failed migration can resume the source guest. The destination does not start the guest if it does not receive that commit message. A warm, stop-and-copy mode is available too, which is useful both as a fallback and as a comparison baseline.
 
-But if you run 5 - 1 - 2 in the parser with the above BNF for expr, you'll get 6 instead of 2. So what went wrong?
+## What is implemented today
 
-The problem is in the grammar definition (BNF) itself. The way the expr rule is defined makes it inherently right-associative instead of left-associative. The hierarchy of the rules implicitly defines their associativity, because it defines what will be grouped together. To understand it better, perhaps the code implementing the expr rule will help:
+- Pre-copy and warm migration: live pre-copy is configurable with downtime and maximum-round controls; explicit stop-and-copy migration is also supported.
+- Multi-vCPU protocol support: the migration handshake carries the guest vCPU count, the destination refuses a count mismatch, and all guest vCPUs are paused and resumed as part of migration. The published test bed has primarily exercised a one-vCPU guest, so multi-vCPU stress and race testing remain required before making broader claims.
+- Memory consistency checks: dirty-page tracking covers guest and mapped emulation writes through page dirty state, while vmm write holds are recorded separately. The test workload rewrites and verifies guest memory and reports any missing or stale page as a mismatch. Repeated ping-pong migrations have been used to check that the workload continues without errors.
+- Disk-write validation: a guest-side workload repeatedly writes and fsyncs files, verifies checksums, and is checked again after a cold reboot. This is intended to exercise the device pause, drain, and restore path.
+- Failure handling: destination refusal, an unreachable target, and a target disappearing during both pre-copy and stop-and-copy have been tested. Before commit, the source is intended to resume the paused guest after failure.
+- Basic destination checks: protocol version, page size, memory layout, and vCPU count are checked before data transfer. The migration socket is opened by bhyvectl and passed into bhyve so that bhyve can remain inside its Capsicum sandbox.
+- Supported scope: this is amd64-only and depends on the experimental BHYVE_SNAPSHOT support. It relies on snapshot-capable emulated devices; PCI passthrough is not migratablem, yet.
 
-```
-def _expr(self):
-    lval = self._term()
+## Observed results
 
-    if self.cur_token.type == '+':
-        self._match('+')
-        op = lambda a, b: a + b
-    elif self.cur_token.type == '-':
-        self._match('-')
-        op = lambda a, b: a - b
-    else:
-        print 'returning lval = %s' % lval
-        return lval
+In the current two-host test environment, repeated live migrations, memory-rewrite workloads, and fsync-heavy disk workloads have completed successfully. For a slowly dirtying 512 MiB guest, observed downtime has been roughly 138–171 ms. A rapidly dirtying guest may not converge during pre-copy, but still falls back to a correct stop-and-copy completion with a longer pause. These are encouraging engineering results, not a production support promise or a complete correctness proof.
 
-    rval = self._expr()
-    print 'lval = %s, rval = %s, res = %s' % (
-        lval, rval, op(lval, rval))
-    return op(lval, rval)
-```
+## Blockers before upstreaming can be evaluated further
 
-Note that the first term is parsed, and then the rule recursively calls itself for the next one. So the expression is being built from right to left, and this causes its right-associativity.
+The following are neutral engineering requirements, not criticism of the value of the prototype. They need to be addressed first before further upstreaming into FreeBSD can be evaluated responsibly.
 
-As you can see, I've added a couple of printouts to better show what's going on. When run on the expression 5 - 1 - 2, this prints:
+- Prove and harden dirty-log correctness. The kernel-side dirty-page algorithm must be demonstrated not to lose a write while dirty bits are examined and cleared. It needs focused concurrency, paging, emulation-write, and multi-vCPU stress coverage, plus a reviewable locking and memory-ordering argument.
+- Define a complete compatibility contract. Matching memory size and vCPU count is not enough. A destination should verify guest identity, CPU capabilities, bhyve/vmm and snapshot format compatibility, device topology and capabilities, and shared-storage identity before accepting a migration.
+- Harden the transport and protocol. The current TCP transport has no authentication or encryption and uses a first-version native protocol. A stable protocol needs explicit wire formats, bounded message handling, timeouts, version negotiation, authentication or a supported external secure transport model, and clear operational guidance.
+- Clarify the commit and device-side-effect boundary. The source/destination handoff must be reviewed so that device restoration cannot cause externally visible work before the source has committed, and so that the unavoidable uncertain outcome after a lost post-commit acknowledgement is operationally recoverable.
+- Specify storage and network handoff. Shared storage must have defined coherency, durability, and fencing assumptions. Network migration also needs a clear answer for tap/bridge handling, MAC/IP movement, and traffic convergence.
+- Build an in-tree test strategy. The current scripts and test-bed workloads are useful, but upstream review will need automated regression coverage and a documented support matrix across CPU counts, memory sizes, supported devices, host CPUs, and failure cases.
+- Separate the work into reviewable patches. Dirty-page tracking, snapshot API refactoring, protocol/receiver work, CLI changes, and tests should be independently reviewable. This will make design feedback more actionable and reduce the risk of merging coupled changes.
 
-```
-returning lval = 2
-lval = 1, rval = 2, res = -1
-lval = 5, rval = -1, res = 6
-```
+## Next steps
 
-We clearly see the problem here. The actual returns are done from right to left because of the recursion.
+We have already had deeper discussions about these questions in the Sylve Discord. Publishing this current state is intended to make those discussions more concrete, bring in wider FreeBSD and bhyve feedback, and turn the prototype into a clear roadmap. The immediate focus is correctness, compatibility validation, transport safety, and repeatable tests—not adding performance features first. Currently, some peopel already have access to it and it's planned ot publish this at least as a proposal on my git and GitHub at:
 
-Note that this grammar evaluates addition, multiplication, subtraction and division in a right-associative way. This causes problems for both subtraction and division, but not for addition and multiplication, because these operations compute the same whether right-to-left or left-to-right [[1]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id3).
+- git.gyptazy.com/gyptazy/freebsd-bhyve-live-migration
+- github.com/gyptazy/freebsd-bhyve-live-migration
 
-### A solution for the associativity problem
+Compression, zero-page elision, broader device coverage, richer orchestration, and performance tuning can follow once the foundation is sound. If you operate bhyve, work on FreeBSD virtualisation, or are interested in Sylve or BoxyBSD, testing the RFC and contributing design feedback would be especially valuable.
 
-I suppose the problem can be solved by rewriting the BNF rules in some sophisticated way that makes them both left-associative and not left-recursive [[2]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id4), but I'll pick another way.
-
-BNF is somewhat limiting, since it doesn't really allow much options when defining rules. All the rules must have a very strict structure, and if you want to customize something you must resort to defining sub-rules and referencing them recursively.
-
-Enter [EBNF](http://en.wikipedia.org/wiki/Ebnf). It was developed to fix some of the deficiencies of plain BNF. One of those is the addition of repetition of sub-rules. For instance, we can write the expr rule in EBNF as follows:
-
-```
-<expr>    : <term> {+ <term>}
-          | <term> {- <term>}
-```
-
-Note the braces { ... }. In EBNF, these mean "repeated 0 or more times". This is still a LL(1) grammar, but now it's expressed a bit more comfortably. Such a representation is very suitable for coding, because the repetition can be expressed naturally with a loop.
-
-Here's a re-implementation of the expr rule using this idiom:
-
-```
-def _expr(self):
-    lval = self._term()
-
-    while ( self.cur_token.type == '+' or
-            self.cur_token.type == '-'):
-        if self.cur_token.type == '+':
-            self._match('+')
-            lval += self._term()
-        elif self.cur_token.type == '-':
-            self._match('-')
-            lval -= self._term()
-
-    return lval
-```
-
-Note the while loop "eating up" all successive terms in the expression and accumulating the result in the expected left-to-right manner. Now the computation 5 - 1 - 2 will correctly produce 2.
-
-### The code
-
-This is a good place to refer to the code. In [here](https://github.com/eliben/code-for-blog/tree/main/2009/py_rd_parser_example) you will find the source of both the old (BNF-based) parser and the new (EBNF-based) one, along with the lexer module that implements the tokenizer. Each of the parsers is self contained and can be used separately. Note that they were developed and tested with Python 2.5
-
-### Right-associative operators
-
-Some operators are inherently right-associative. Exponentiation, for example. 2^3^2 = 2^(3^2) = 512, and not (2^3)^2 (which equals 64).
-
-We can leave these operators defined as before, using a recursive rule that naturally results in right-associativity. Here's the code of the power rule that was added to the EBNF-based parser to support exponentiation:
-
-```
-# <power>   : <factor> ** <power>
-#           | <factor>
-#
-def _power(self):
-    lval = self._factor()
-
-    if self.cur_token.type == '**':
-        self._match('**')
-        lval **= self._power()
-
-    return lval
-```
-
-### Intermission
-
-We now have a correct recursive descent parser that uses EBNF-based rules to parse expressions with the desired associativity for each operator. This parser can be readily employed to parse simple languages - it is production-use ready. The next "problem" I present only has to do with the parser's efficiency, so it is probably of no concern unless performance is crucial.
-
-### Problem #2: efficiency
-
-There's an inherent performance problem with recursive-descent parsers when dealing with expressions. This problem stems from the need to define operator precedence, and in RD parsers the only way to define this precedence is by using recursive sub-rules. For example (from the EBNF-based code):
-
-```
-<expr>    : <term> {+ <term>}
-          | <term> {- <term>}
-<term>    : <power> {* <power>}
-          | <power> {/ <power>}
-```
-
-The nesting of these rules defines the relative precedence of addition and multiplication. It tells the parser: between plus signs, dive into the expression and collect all sub-terms connected by multiply signs. In other words, it tells it to group the expression: 5 + 2 * 2 as 5 + (2 * 2) and not as (5 + 2) * 2.
-
-To see the problem this nesting causes, I've inserted simple printouts into each of the expr, term, power and factor rules to show which functions get called while parsing. Let's see what happens when the trivial expression 42 is parsed:
-
-```
-expr called with NUMBER(42) at 0
-term called with NUMBER(42) at 0
-power called with NUMBER(42) at 0
-factor called with NUMBER(42) at 0
-```
-
-**Yikes!!!** 4 function calls just to parse the single-token input 42! Unfortunately, while this problem may look simple on the surface, it is not. There's simply no other way to express precedence in RD parsers - you have to use nested rules, and this nesting turns out to be inefficient for parsing expressions.
-
-The solution to this problem is to use a hybrid parser instead of a pure RD one. Some algorithms were developed to efficiently parse [infix expressions](http://en.wikipedia.org/wiki/Infix_notation). [This article](http://www.engr.mun.ca/~theo/Misc/exp_parsing.htm) provides a good survey. One such algorithm can be combined with RD to provide a general-purpose parser for both expressions and higher programming language constructs.
-
-In a future article I will discuss an implementation of such a parser.
-
-| [[1]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id1) | To be more precise, addition and multiplication are [associative binary operators](http://en.wikipedia.org/wiki/Associativity) in the mathematical sense. |
-| --- | --- |
-
-| [[2]](https://eli.thegreenplace.net/2009/03/14/some-problems-of-recursive-descent-parsers#id2) | But I'm too lazy to look for such a way at the moment. Let me know if you find it. |
-| --- | --- |
+*Status:* WIP RFC for a first working bhyve live-migration implementation on FreeBSD 15.1.

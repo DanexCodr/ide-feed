@@ -1,560 +1,497 @@
-We have a lot of performance-critical SIMD code (single-instruction, multiple-data)
-running on CPUs across the firm. These are highly parallel programs where you run the same
-computation across arrays of data, in our case for options pricing or for low-latency risk
-checks. Because OCaml hasn’t historically exposed SIMD instructions, these programs often
-involve an inner loop written in fairly esoteric C. Writing these loops requires
-implementers to think carefully about hardware, and doing performance tuning, such as
-modifying unroll factors or vector widths, can require major changes to the code.
-Moreover, these programs are constrained to a specific instruction set. If we were to
-target a different architecture or a newer processor, we’d have to rewrite the program.
+In our [previous article](https://sigseis.dev/articles/2026/10/06), we covered what declarative macros are, and how to define and use them.In this article, we will focus on how to integrate them into your crate. That means we’ll cover macro scoping, organization, and exporting. We’ll also take a look at some common use-cases with examples.Hopefully, after reading these two articles, you’ll feel ready to start experimenting with declarative macros in your own crates!This article is tested under the 2024 edition of Rust.For older code you may see some older patterns, like using a lot of `#[macro_use]` statements, but this article is going to focus on more modern practices. If something doesn’t compile for you, check your Rust version and edition.
 
-For his summer internship, Sai Konkimalla built a compiler for a domain specific language
-(DSL) that makes SIMD more ergonomic and widely accessible. The compiler takes advantage
-of [OxCaml](https://oxcaml.org/) features that were only very recently added to the
-language, such as runtime metaprogramming, to enable users to write a kernel just once as
-a regular-ish OxCaml function, then compile and run it on multiple architectures.
+## How To Integrate Declarative Macros Into Your Crate
 
-## Single Program, Multiple Data
+Broadly speaking, I like to differentiate declarative macros based on access level.**crate-exported**: Intended to be exported from your crate and used by your dependents**crate-local**: Intended to be used privately within your crate**You should prefer to keep macros crate-local if possible.**Macros can be useful even if you don’t intend on exporting them. Actually, that’s most commonly how I make use of macros!The main way to differentiate between the two is whether a macro is marked with the `#[macro_export]` attribute. If not, then it’s a **crate-local** macro.
 
-To help solve the problem of SIMD code being rather difficult to write and maintain, our
-DSL uses the S**P**MD, or “single **program**, multiple data” programming model. As
-opposed to SIMD intrinsics, SPMD is higher level and not tied to a specific instruction
-set. We might normally think of higher-level languages as slower, but with SPMD, a higher
-level of abstraction lets the compiler make better decisions about how to optimally use
-the underlying hardware. This ability can lead to significantly faster code.
+For historic reasons, macros have two different ways they scope into the surrounding code.**Textual Scoping**: The macro scope is based on *where in the file it’s defined***Path-Based Scoping**: The macro becomes an item in the module tree (acting more similarly to a standard Rust item)Where possible, you should prefer *path-based scoping*, but textual scoping can come in handy in some cases. Additionally, you’re very likely to run into heavy usage of the original textual scoping rules. So it’s worth understanding them regardless.
 
-SPMD was popularized by CUDA (for Nvidia GPUs) and ISPC (for Intel CPUs). In this model,
-you write a program describing what happens at each index of a loop, then the compiler
-converts it into a parallel computation. For example, in CUDA:
+#### Textual Scoping Rules
 
-```
-__global__ void kernel(const float* x, float* out, int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
-        out[idx] = 2.0f * x[idx] + idx;
+**By default, declarative macros take on a textual scope.**Textual scoped declarative macros have some counter-intuitive visibility and access rules.The macro may be used only after its definition within a module, function, or logical scope.The macro may be used by any submodules after the macro definition, *even without importing it explicitly*.So unlike other parts of the Rust language, **order actually matters for textual scoped declarative macros**.The most narrow visibility is within a logical scope (for example a function). Sometimes, though admittedly rarely, this can be useful for functions that have a lot of internal repetition.`fn example() {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    helper_macro!();
+}
+
+// You cannot access this macro outside of the function.
+`If the macro is going to be used in multiple items within the same module, you can simply define it in the module itself. This is more visible than within a single function, but it’s still constrained to only the current module and its submodules.`// You cannot use it here, because it's not defined yet.
+
+macro_rules! helper_macro {
+    () => {};
+}
+
+// Now it can be invoked and used.
+helper_macro!();
+
+// It can be used within functions, as one might expect.
+fn within_functions() {
+    helper_macro!();
+}
+
+// Works within submodules of any depth as well,
+// which might feel counter-intuitive.
+mod even_within_submodules {
+    helper_macro!();
+}
+`Sometimes it can be beneficial to use a macro from the *parent* module the containing module is defined under.**Modern Rust syntax allows for this better with path-based scoping**, which we’ll learn about in the next section.That said, you may still run into this syntax, so we should cover it.To hoist macros defined in a submodule into the parent’s textual scope, you can attach the `#[macro_use]` attribute on the containing module.`// We still cannot use `helper_macro!` here, it isn't defined yet.
+
+// After the module definition completes,
+// it's now defined in the parent's textual scope.
+#[macro_use]
+mod submodule {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    helper_macro!();
+}
+
+// See? Now we can access and use it here even without an import.
+// It acts as-if we had defined it textually after `submodule`.
+helper_macro!();
+
+// Works within submodules of any depth as well,
+// since it's a part of the textual scope.
+mod sibling_submodule {
+    helper_macro!();
+}
+`But note that `#[macro_use]` will not automatically propagate further up the module tree.If you want your macro to continue to be defined all the way up the module tree, you’ll have to continue to attach the `#[macro_use]` attribute on all the parent modules.`#[macro_use] // <- Necessary if you need it...
+mod outer_file {
+    #[macro_use]
+    mod other_file {
+        macro_rules! helper_macro {
+            () => {};
+        }
+        helper_macro!();
+    }
+    helper_macro!();
+}
+helper_macro!(); // <- ... at this location onwards.
+`Historically, `#[macro_use]` was also used to import external macros from other crates into your textual scope.You should not be doing this anymore for macros imported from other crates, however.
+
+Path-based scoping for declarative macros allows us to work with macros in a way which feels more idiomatic.The macro works a lot like any other item, and can be invoked before the definition.In order to be used, it needs to be manually imported or resolved from the module tree.This can be accomplished with a small bit of code right after the macro definition:`macro_rules! helper_macro {
+    () => {};
+}
+
+// Re-export as an item in the module tree.
+pub(crate) use helper_macro;
+`When you do this, since the macro is now a part of the module tree, order no longer matters.`// Can call here, even if the macro isn't defined yet.
+helper_macro!();
+
+macro_rules! helper_macro {
+    () => {};
+}
+pub(crate) use helper_macro;
+
+// Can obviously still call here.
+helper_macro!();
+`Even though you can refer to macros out of order when they use path-based scoping, you’ll probably still want to define them before they’re used within the same file. Not because it’s necessary, but because it’s readable!The real benefit of this is that other modules can import and use the macro like they would any other item.`mod submodule {
+    macro_rules! helper_macro {
+        () => {};
+    }
+    pub(crate) use helper_macro;
+}
+
+mod another_submodule {
+    // You can use it like a normal item!
+    use crate::submodule::helper_macro;
+    helper_macro!();
+
+    // Or you can refer to it by a path!
+    crate::submodule::helper_macro!();
+}
+`It’s most common to see this used with `pub(crate)`, but you can really use all item visibilities here (`pub(super)`, `pub(in some::path)`, *empty for private*). `pub` has some strange properties, however - we’ll cover that in the next section.
+
+If you want a declarative macro to be usable from outside your crate, you have to attach the `#[macro_export]` attribute to it.**Be careful when deciding to export a macro!**After you export a macro, users may grow to depend on it, and it may become difficult to change or maintain. This is why I usually prefer *not* exporting a macro, until I’m *sure* it’s warranted.Still, if you’re sure it’s the right thing to do, you can accomplish it like so:`#[macro_export]
+macro_rules! exported_macro {
+    () => {};
+}
+
+mod submodule {
+    use crate::exported_macro;
+    exported_macro!();
+}
+`The observable effects of this attribute are:The root of your crate will publicly export the macro for dependents to use (`use your_crate::exported_macro`).You can privately import the macro using normal path-based scoping (`use crate::exported_macro`).It doesn’t matter whether the macro is in a submodule or not, it will *always* export at the root.`exported_macro!(); // <- Works because of `#[macro_export]`
+mod module {
+    use crate::exported_macro;
+
+    exported_macro!(); // <- Works because of the `use` statement
+    mod submodule {
+        #[macro_export]
+        macro_rules! exported_macro {
+            () => {};
+        }
+    }
+    exported_macro!(); // <- Works because of the `use` statement
+}
+exported_macro!(); // <- Works because of `#[macro_export]`
+`The `#[macro_use]` attribute still has an effect privately within your crate, as one would expect for textual scoping rules. Though, I don’t recommend using it on modules containing exported macros, instead just go through the exported path.`exported_macro!(); // <- Works because of `#[macro_export]`
+mod module {
+    // <- Would not be usable here without a `use` statement
+
+    #[macro_use]
+    mod submodule {
+        #[macro_export]
+        macro_rules! exported_macro {
+            () => {};
+        }
+    }
+    exported_macro!(); // <- Works because of `#[macro_use]`
+}
+exported_macro!(); // <- Works because of `#[macro_export]`
+`If you want to export a macro somewhere *other* than the crate root, there’s a way to allow for that.It would be nice if you could just not use `#[macro_export]`, and instead `pub use exported_macro`, but as for now this doesn’t work. If you try it, you will be met with a compile error that the macro is “only public within the crate, and cannot be re-exported”.So, you *MUST* use `#[macro_export]` on exported macros. Then, you can bind that exported macro to a specific location in the module tree with `pub use exported_macro`.That’s annoying since it’ll publish a macro in the root (which you probably don’t intend), so the general pattern for this is:Hide the publicly exported macro (so folks can’t see it’s actually at the root).Create a public path binding in the module where you want the macro to be accessed from.So, for instance:`pub mod submodule {
+    // Since this is `#[macro_export]`,
+    // it will still wind up at the crate root.
+    //
+    // Because of that, we name this in a way that deters usage.
+    // We'll also hide it, so that it doesn't appear in docs.
+    #[doc(hidden)]
+    #[macro_export]
+    macro_rules! __exported_macro {
+        () => {};
+    }
+
+    /// The actual documentation will go here!
+    #[doc(inline)]
+    pub use __exported_macro as exported_macro;
+}
+
+// Technically this does export the following macro...
+crate::__exported_macro!();
+
+// However, documentation will only list this version.
+// And, this version will be public for dependents to use.
+crate::submodule::exported_macro!();
+`In future versions of Rust, this cruft around visibility and module tree exporting may get cleaned up.It’s hard to make changes like this to the Rust language that won’t break existing code. So this has remained one of those weird parts of the language which - if you’re not careful - can work in odd, non-idiomatic ways.There’s a pretty in-depth thread about this [here](https://internals.rust-lang.org/t/pub-on-macro-rules/19358) on the Rust internals forum.
+
+Recall from our prior article, when we talked about [macro hygiene](https://sigseis.dev/articles/2026/10/06#what-s-this-macro-hygiene-thing), that Rust uses what’s known as “mixed-site hygiene”.Most items - other than local variables - are resolved from where the macro is invoked (functions, types, traits, etc.). For crate-local macros, you can be a little looser with this and require that the invoking code imports some items as needed to compile. But for crate-exported macros, it’s not a good idea to force the user to do this.Because of that, you should keep the following things in mind:You usually want to avoid using the `crate` keyword directly, because it may not refer to *your* crate.Since you’re in less control over the surrounding code for crate-exported macros, you should not assume anything about what has been imported at the invocation site.For declarative macros, there’s a special, always-present meta-variable called `$crate`, which resolves to the crate that your declarative macro is defined in. So it’s usually prudent to use that as a common reference point for any items needed by your macro’s expansion.`// Example type - pretend we have a full type definition.
+pub struct MyCustomHashMap<K, V> {
+    /*...*/
+}
+
+/// A declarative macro that produces a hash map.
+///
+/// Note: Actually, the standard is attempting to add this!
+///       See: https://doc.rust-lang.org/stable/std/macro.hash_map.html
+#[macro_export]
+macro_rules! hash_map {
+    ( $( $key:expr => $value:expr ),* $(,)? ) => {{
+        // Use our hashmap implementation from our crate.
+        let mut map = $crate::MyCustomHashMap::new();
+        $( map.insert($key, $value); )*
+        map
+    }}
+}
+
+#[test]
+fn example() {
+    let map = hash_map! {
+        "key" => "value",
+    };
+    assert_eq!(map.get("key"), Some(&"value"));
+}
+`In the above example we demonstrate this with a `MyCustomHashMap` which our crate *also* exports. Other standing functions, or other required traits, would also need to be resolved via `$crate`.If your macro depends on items from other crates, it’s often wise to re-export those dependencies in a public module hidden within your crate. We usually name this something like `__private` and mark it `#[doc(hidden)]` to deter usage.`#[doc(hidden)]
+pub mod __private {
+    // Publicly re-export things that your macro uses here.
+}
+`The [`serde`](https://crates.io/crates/serde) crate does this with its own [`__private`](https://docs.rs/serde/1.0.229/src/serde/core/crate_root.rs.html#158-163) module. Though, their instance of it may be more for their procedural macros (`Serialize` and `Deserialize`). After all, this isn’t a problem specific to declarative macros.
+
+Macros very often don’t have a specific type they’re bound to, usually they’re general convenience macros.That being the case, I recommend the following organization strategy:For macros which are constrained to a single module or function, **just define them where they’re needed**.For macros which are shared across multiple modules, **define them in a common parent module**.Tip: For smaller crates, this can often be easiest to target the top-most module (`lib.rs`).I don’t like to carelessly slap macros into some parent module (or I have several of them, which becomes unwieldy). So I put them in separate files for each macro that I define, and then re-export them into some organizational parent module.Crate-exported macros fit into this pretty well. In those cases, I just don’t re-export into the parent if the intended way to access the macro is by from the crate root.This harkens back to my [module organization article](https://sigseis.dev/articles/2026/06/26), where I detail methods of using “organizational modules”, and defining types in their own separate files.Please take a look at that if you are having trouble understanding my organization strategy.**mod.rs:** *(organizational module; often `lib.rs`)*`mod macros;
+mod type_a;
+mod type_b;
+mod type_c;
+// etc...
+`**macros/mod.rs:** *(organizational module)*`// Modules:
+mod exported_macro;
+mod helper_macro_a;
+mod helper_macro_b;
+mod helper_macro_c;
+// etc...
+
+// Re-Exports:
+pub(crate) use helper_macro_a::*;
+pub(crate) use helper_macro_b::*;
+pub(crate) use helper_macro_c::*;
+// etc...
+`**macros/exported_macro.rs:**`// In this case, I'm happy to bind it to the root.
+#[macro_export]
+macro_rules! exported_macro {
+    () => {};
+}
+`**macros/helper_macro_a.rs:**`macro_rules! helper_macro_a {
+    () => {};
+}
+pub(crate) use helper_macro_a;
+`**Elsewhere in the crate:**`// Either pull them in for usage:
+use crate::macros::{helper_macro_a, helper_macro_b};
+helper_macro_a!();
+helper_macro_b!();
+
+// Or refer to them via absolute paths:
+crate::macros::helper_macro_c!();
+`I know this *seems* like overkill, but the nice thing about this is I can always very easily find a macro. Either the macro is defined near its usage (so it’s within the same file), *or* the file is named the same thing as the macro so it’s easy to open via a command.If a macro is very closely related to another macro, and they’re only split up for ease of maintenance, I usually put them in the same file. But I only do that if they are meant to be implementation details of the main macro intended to be invoked.And, you don’t always need an organizing `macros` module - you could just re-export the macros right into the main organizational module. That’s for each person and project to decide on.
+
+## Use Cases for Declarative Macros
+
+Now that we know how to integrate declarative macros into our project, let’s look at some use cases for them.At the risk of sounding like a broken record - I would like to remind you to try as hard as possible ***NOT*** to export the macro.A crate-local macro, as stated, is really nice because users only depend on the side effects of it. You control the syntax and the places it’s invoked completely. There’s less to worry about with respects to breaking changes, or dependencies on unintended usage of the macro.Only export a macro if you’re *sure* it’s a wise decision.
+
+While developing a crate, you may author types that have some nearly-identically-implemented functions or traits.If the types are semantically closely related, we can reduce duplication using a helper macro. The helper macro will implement the common traits or function, with some information provided to it.Some specific examples of when this is beneficial include:If you need to author several types which are mostly simple wrappers of other types (something like a newtype).If you want to ensure several types have an identical subset of an API (functions and traits).Be careful not to reach for declarative macros at the smallest sign of duplication, though. Instead, you should consider it when things appear to be very cut-and-paste. If you over-generalize, that could make maintenance *more* of a burden, not less.For implementation macros like these, I like to follow a `key = value` pattern.`macro_rules! impl_example {
+    (
+        input_1 = $input_1:literal,
+        input_2 = ($($input_2:tt)*),
+        input_3 = {
+            grouped_input_1 = $grouped_input_1:literal,
+            grouped_input_2 = $grouped_input_2:ident,
+            grouped_input_3 = $grouped_input_3:expr,
+        },
+        input_4 = [$($input_4:expr),* $(,)?],
+    ) => { /*Expansion Here*/ };
+}
+
+impl_example! {
+    input_1 = 123,
+    input_2 = (complex; grouped, input),
+    input_3 = {
+        grouped_input_1 = "sample",
+        grouped_input_2 = Sample,
+        grouped_input_3 = concat!("..."),
+        // ...
+    },
+    input_4 = [
+        array_value_1,
+        array_value_2,
+        array_value_3,
+        // ...
+    ],
+    // ... etc ...
+}
+`My reason for preferring this syntax is:You cannot accidentally map a fragment to the wrong input without it being visible at the call site.It uses a different binding syntax from struct initialization to distance itself from appearing to initialize an object.Despite the binding syntax being different, it feels familiar enough to be immediately understood.Though, I’ll admit the last two points aren’t that important. If you feel more comfortable you could use a more “struct field initialization” style format (`key: value`). That’s up to you!**Don’t over-generalize these**, accept them in *one* order - we’re only using these internally after all.I sometimes like to order them alphanumerically by key name, so that the order is at least consistent.**Examples**An example of this in the wild are the integer types in the Rust language itself. Integer types (like [`u8`](https://doc.rust-lang.org/1.99.1/src/core/num/mod.rs.html#586-614)) use a crate-local [`int_impl`](https://doc.rust-lang.org/1.99.1/src/core/num/int_macros.rs.html) macro to implement common functions and traits.It’s also common to use declarative macros to assist in implementing a trait across tuples of different arities. Commonly useful in cases where your trait will just call the same trait on all tuple elements. You can see an example of this in the [`serde`](https://crates.io/crates/serde) crate with the crate-local [`tuple_impls!`](https://docs.rs/serde/1.0.229/src/serde/core/ser/impls.rs.html#404-420) macro.If you’d like a toy example - here’s one using some strongly typed time values. The macro helps us ensure the conversion implementations are consistent between the different types.`#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct OverflowError;
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Hours(u32);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Minutes(u32);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Seconds(u32);
+
+macro_rules! impl_time_functionality {
+    (
+        from = [$($from:ty),* $(,)?],
+        seconds_per = $seconds_per:expr,
+        try_from = [$($try_from:ty),* $(,)?],
+        type = $type:ty,
+    ) => {
+        // Ensure that we have common functions that we expect all of these time types to have.
+        //
+        // Reminder that you can open multiple impl blocks for a single type, so if there are
+        // functions that don't make sense to be commonly implemented here, then just write them
+        // in a separate impl block for the intended type outside of this macro.
+        impl $type {
+            // Helper constant to facilitate conversion impls.
+            // We don't want to export it publicly from this case.
+            pub(crate) const SECONDS_PER: u32 = $seconds_per;
+
+            pub fn to_u32(self) -> u32 {
+                self.0
+            }
+        }
+
+        $(
+            impl TryFrom<$try_from> for $type {
+                type Error = OverflowError;
+                fn try_from(value: $try_from) -> Result<Self, Self::Error> {
+                    // This const assert ensures we haven't used the helper macro improperly.
+                    const _: () = assert!(
+                        <$try_from>::SECONDS_PER > $seconds_per,
+                        concat!(stringify!($try_from), " must contain more seconds than ", stringify!($type)),
+                    );
+                    Ok(Self(value.to_u32()
+                        .checked_mul(<$try_from>::SECONDS_PER / Self::SECONDS_PER)
+                        .ok_or(OverflowError)?))
+                }
+            }
+        )*
+
+        $(
+            impl From<$from> for $type {
+                fn from(value: $from) -> Self {
+                    // This const assert ensures we haven't used the helper macro improperly.
+                    const _: () = assert!(
+                        <$from>::SECONDS_PER < $seconds_per,
+                        concat!(stringify!($from), " must contain fewer seconds than ", stringify!($type)),
+                    );
+                    Self(value.to_u32() / (Self::SECONDS_PER / <$from>::SECONDS_PER))
+                }
+            }
+        )*
+    };
+}
+
+impl_time_functionality! {
+    from = [],
+    seconds_per = 1,
+    try_from = [ Minutes, Hours ],
+    type = Seconds,
+}
+
+impl_time_functionality! {
+    from = [ Seconds ],
+    seconds_per = 60,
+    try_from = [ Hours ],
+    type = Minutes,
+}
+
+impl_time_functionality! {
+    from = [ Seconds, Minutes ],
+    seconds_per = 60 * 60,
+    try_from = [],
+    type = Hours,
+}
+
+#[test]
+fn test() {
+    assert_eq!(Hours::from(Seconds(60 * 60)), Hours(1));
+    assert_eq!(Minutes::from(Seconds(60 * 60)), Minutes(60));
+    assert_eq!(Seconds::from(Seconds(60 * 60)), Seconds(60 * 60));
+    assert_eq!(Hours::from(Minutes(60)), Hours(1));
+    assert_eq!(Minutes::from(Minutes(60)), Minutes(60));
+    assert_eq!(Seconds::try_from(Minutes(60)), Ok(Seconds(60 * 60)));
+    assert_eq!(Hours::from(Hours(1)), Hours(1));
+    assert_eq!(Minutes::try_from(Hours(1)), Ok(Minutes(60)));
+    assert_eq!(Seconds::try_from(Hours(1)), Ok(Seconds(60 * 60)));
+}
+`Sometimes the deduplication is not worth the obfuscation that it creates, but that’s a case-by-case thing. For simple types like this (and the integer types from the standard library), the benefit is clear, as it produces the obvious intended end result and ensures the APIs are all implemented uniformly.If you find yourself adding a lot of special-casing and splitting your macro into many separate macros, that might be a sign that you’ve attempted to use this pattern in a place where it’s not helpful.In those cases, it’s probably best to just write out all your traits and impls by-hand, even if it results in some duplication.
+
+A really popular use for declarative macros is to wrap the [`format!`](https://doc.rust-lang.org/stable/std/macro.format.html) macro from the standard library, adapting the formatting syntax for another related use-case.`// Because we assume the user will call `some_adapter` a lot.
+// To make this easier on them, we have a small helper macro.
+//
+// Instead of a plain function, where the user types:
+//   some_adapter(format!(...))
+//
+// They can import this macro and type:
+//   some_adapter!(...)
+#[macro_export]
+macro_rules! some_adapter {
+    ($($msg:tt)*) => {
+        $crate::__private::some_adapter(format!($($msg)*))
     }
 }
-```
+`You don’t always need to provide such a macro, sometimes you can just take `impl Into<String>` and let the user format as they please. But it can make things more readable in cases where the user will *always* be formatting a string, or if you want formatting to be conditionally compiled-out when disabling `alloc` support.**Examples**To point at the standard library again, we can look at the [`todo!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#884-891) macro. It’s simple enough that it’s just implemented right there as a declarative macro instead of being a built-in like many other macros (similar to [`assert_eq!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#43-70), [`matches!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#431-439), and a few others).It’s a bit of a low-hanging fruit, but the [`log`](https://crates.io/crates/log) crate has some pretty obvious examples; [`info!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#252-273), [`warn!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#204-225), and [`error!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#165-186). In general, anything with a `format!`-like operation benefits from a declarative macro.`assert!`-like macros are another example of this kind of macro. You may not think too much about it, but it can be nice to provide added details about a failure for unit tests. The `assert!` macros all accept format arguments at the end, and you can too if you need some adapter `assert!` macro.`macro_rules! assert_in_range {
+    ($input:expr, $low:expr, $high:expr, $($msg:tt)*) => {{
+        let input = $input;
+        let low = $low;
+        let high = $high;
+        assert!(
+            input >= $low,
+            "{}: range check failed: {input} >= {low}",
+            format_args!($($msg)*),
+        );
+        assert!(
+            input <= $high,
+            "{}: range check failed: {input} <= {high}",
+            format_args!($($msg)*),
+        );
+    }};
+}
 
-Notice how there’s no loop here: you only define the loop body, and the compiler decides
-how to run it. In CUDA, when you launch a kernel on a GPU, you can declare how many blocks
-of threads to run and the GPU will schedule them accordingly.
+#[test]
+fn example() {
+    let number = 5;
+    assert_in_range!(number, 50, 100, "formatted example (input={})", number);
+}
+`The failure here looks like this:`thread 'example' (50) panicked at src/lib.rs:22:5:
+formatted example (input=5): range check failed: 5 >= 50
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+`
 
-In ISPC, `foreach` also abstracts away how the loop is actually executed:
+For many types, you can get away with either the struct initialization format, or using the builder pattern.`#[derive(Default)]
+struct Example {
+    foo: u8,
+    bar: String,
+    baz: bool,
+}
 
-```
-export void kernel(uniform float x[], uniform float out[], uniform int n) {
-    foreach (i = 0 ... n) {
-        out[i] = 2.0f * x[i] + i;
+// Some initialization patterns:
+fn struct_initialization() {
+    let object = Example {
+        foo: 0,
+        bar: format!("example formatted string"),
+        baz: false,
+    };
+}
+
+fn struct_initialization_partial() {
+    let object = Example {
+        bar: format!("example formatted string"),
+        ..Example::default()
+    };
+}
+
+fn builder_pattern() {
+    // `ExampleBuilder` type not shown for brevity.
+    let object = ExampleBuilder::default()
+        .with_foo(123)
+        .with_bar(format!("example formatted string"))
+        .finish();
+}
+`But sometimes we want a different syntax than this, for readability reasons.Often custom syntaxes are only beneficial if there’s some common, well-accepted, pre-existing format (e.g. an existing data markup language, like JSON). But occasionally a purely custom syntax can be helpful.Containers are a great example of custom initialization syntax that everyone should have some experience with.It’s true you can (and should) implement [`FromIterator`](https://doc.rust-lang.org/stable/std/iter/trait.FromIterator.html) to initialize from some sequence of elements. But this syntax can be awkward for explicit initialization that isn’t coming from some already constructed values. So for developer convenience we often create small helper macros to improve readability.Like with many things relating to macros, only add them when you’re sure they’re useful. Think about whether the pre-existing methods for initializing objects is good enough.**Examples**It should go without saying, but the [`vec!`](https://doc.rust-lang.org/stable/std/macro.vec.html) macro is a really popular example of this. And soon we will have yet another version of this, with the [`hash_map!`](https://doc.rust-lang.org/stable/std/macro.hash_map.html) macro.The best example of this I can think of for object initialization is the [`json!`](https://docs.rs/serde_json/latest/serde_json/macro.json.html) macro from the `serde_json` crate.This is actually a good example of using declarative macros to do something non-trivial. Specifically, note that they hide the implementation details of the macro by splitting it into multiple macros, [`json!`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#54-59) is the main one you call, and it redirects to another exported macro which is hidden from documentation called [`json_internal`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#68-281).Though, I will admit, `json!` is one of those declarative macros I think is teetering on the edge of “should have been a procedural macro”. Though, it might be hard to safely change it over at this point.
+
+Sometimes you find yourself writing many similar lines of code within a small set of functions.In most cases, it’s best to just change these into helper functions and let the compiler optimize things. But sometimes you’ll run into situations where you can’t do that.You need to generate a distinct *type* per functional configuration (e.g. not just logic or impls).You’re using it to provide the body of a function that the macro is implementing, and you can’t generalize this function body over any trait bounds.When your macro influences the surrounding control flow (`break`, `continue`, `return`).For optimization reasons (which you have surely bench tested).**Be careful when altering control flow.**It can have some utility for really simple, localized helper macros. But I tend to consider it to be an anti-pattern to *export* such macros. However, used very sparingly, in unique cases to assist in implementing something, it can be helpful.Honestly, I even lean away from it for crate-local macros as well. Obfuscating the control flow negatively impacts readability in my experience.**Examples**One example where this pattern being used for optimization reasons is within the Rust standard library. The `str` type specializes based on string lengths for optimization reasons ([`specialize_for_lengths`](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#81-109); used [here](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#200)).The [`bytes`](https://crates.io/crates/bytes) crate actually uses some macros to reduce code duplication. See the crate-local [`buf_get_impl`](https://docs.rs/bytes/1.12.1/src/bytes/buf/buf_impl.rs.html#72-85) macro. This is a good example of the macro providing a common implementation for a set functions. The functions that are being implemented simply invoke the macro to expand this common implementation.An example of a crate-exported macro used to produce new types can be found in the [`bitflags`](https://crates.io/crates/bitflags) crate. In this case, it uses some custom syntax that looks kind of like regular Rust code, so it’s a good reference for how to use some different fragment specifiers (like `meta` or `vis`).Finally, probably one of the most popular control-flow-impacting macros, is anyhow’s [`bail!`](https://docs.rs/anyhow/latest/anyhow/macro.bail.html) macro. As mentioned, I’m not a fan of these kinds of macros (including this one). But I want to mention it anyway, since it fits within this set of example use-cases, and likely has some popularity. (Another potential example of this is the standard library’s [`ready!`](https://doc.rust-lang.org/nightly/core/task/macro.ready.html) macro for polling futures.)A really simple example of this is constructing a newtype that redirects to the underlying implementation. We may want to ensure that the types are actually distinct from one another, but we may not want to re-implement the functionality the type provides ([`impl_displayable_type`](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/macros/impl_displayable_type.rs.html) - example usage [here](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/bounded/as_lower_camel.rs.html#15-54) - is an example of this from one of my own crates, [`typed-ident`](https://crates.io/crates/typed-ident)).`// A simplified form of `impl_displayable_type` to use as an example.
+macro_rules! impl_displayable_type {
+    (
+        name=$name:ident,
+        over=$over:ident,
+        docs=$docs:expr,
+    ) => {
+        #[doc = $docs]
+        pub struct $name($over);
+
+        impl core::fmt::Display for $name {
+            #[inline]
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+    };
+}
+
+// We have some displayable types that we don't want to conflate.
+
+impl_displayable_type! {
+    name = ObjectId,
+    over = u64,
+    docs = "Example documentation here",
+}
+
+impl_displayable_type! {
+    name = GroupId,
+    over = u64,
+    docs = concat!(
+        "`docs` is an expression so you can do things like this.\n",
+        "\n",
+        "Multi-line documentation, for better readability!",
+    ),
+}
+
+// So now, if we have an API like this...
+struct Object;
+impl Object {
+    pub fn object_id(&self) -> ObjectId {
+        todo!()
+    }
+    pub fn group_id(&self) -> GroupId {
+        todo!()
     }
 }
-```
 
-In both cases, the compiler translates the code into low-level SIMD instructions. Not
-specifying the exact instructions also means SPMD programs can benefit from future
-hardware improvements. If we get a new, faster CPU with a different instruction set, the
-SPMD compiler can seamlessly compile existing code to it.
-
-## A quick overview of the DSL
-
-Let’s go over an example of the DSL that Sai implemented. We start by defining the
-kernel’s signature, including its output type, input types, and the dimension of the
-output:
-
-```
-Spmd.Kernel.create
- F32           (* output element type *)
- [ F32; F32 ]  (* input slice types   *)
- [ () ]        (* one output dimension *)
- (fun graph [ x; scale] [ Dim i ] -> exclave_
-   ...)
-```
-
-In this example, we’re writing a kernel that takes in two `F32` slices and returns one
-`F32` slice.
-
-Future work on a ppx syntax extension will make it possible to rewrite the above simply
-as:
-
-```
-let%spmd kernel (x : f32 slice) (scale : f32) (i : dim) : f32 =
-```
-
-Next, we write the actual computation:
-
-```
-Spmd.Kernel.create
-  F32           (* output element type *)
-  [ F32; F32 ]  (* input slice types   *)
-  [ () ]        (* one output dimension *)
-  (fun graph [ x; scale ] [ Dim i ] -> exclave_
-     let open (val Spmd.open_ graph) in
-     let i = index i in
-     F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
-```
-
-Note the `let open (val Spmd.open_ graph) in`. This brings the DSL operations which
-construct a computational graph into scope. You can think of the `graph` value as proof
-that you’re in the graph-construction phase, not the runtime of the generated program.
-([Bonsai](https://github.com/janestreet/bonsai) uses a [similar
-trick](https://github.com/janestreet/bonsai_web/blob/master/docs/guide/thinking_in_bonsai.md#what-is-bonsaigraph)
-for creating its incremental graph.)
-
-Like CUDA, we don’t write the kernel as a loop. Instead, the developer writes a function
-that computes a single entry of the output slice, and the SPMD compiler generates code to
-loop over the output slice and compute the value at each index.
-
-You may wonder why we loop over the *output* and not the inputs. Looping over the output
-is easier to model because each iteration writes to exactly one location, so iterations
-can be easily vectorized, reordered, or parallelized. If we were to loop over the inputs,
-different iterations could write to the same output entry. The compiler would then have to
-reason about whether the writes could be re-ordered. By guaranteeing that each output
-entry is written exactly once, we can avoid this complexity.
-
-## Where runtime metaprogramming comes in
-
-One wrinkle with Sai’s project is that we wanted to execute the SPMD compiler at runtime.
-Runtime compilation (often called just-in-time or JIT compilation) is when the compiler
-generates code while the program is running. This gives us two main advantages: we don’t
-have to worry about building for all potential target architectures at compile time, and
-we can use data obtained at runtime for optimizations.
-
-That latter point is especially important for generating high-performance code. When
-executing at runtime, the compiler has more data that it can use to optimize the code than
-it would when executing ahead-of-time. For example, our compiler can use runtime data to
-compile away branch instructions, which can slow down execution by consuming CPU
-resources.
-
-To implement our JIT compiler, we used runtime metaprogramming, a feature that lets us
-generate, compile, and evaluate OxCaml code at runtime by using the OxCaml compiler as a
-library. As far as we know, Sai’s project was the first real program at Jane Street to use
-it. (He discovered some bugs in its implementation and helped report/reproduce them for
-the OxCaml team.)
-
-Let’s take a look at an example that illustrates the power of compiling at runtime. In
-this code, we match on the `metric` to choose which algorithm to execute:
-
-```
-type metric =
-  | Euclidean
-  | Manhattan
-
-let measure ~metric =
-  Spmd.Kernel.create
-    F32
-    [ F32; F32 ]
-    [ () ]
-    (fun graph [ samples; targets ] [ Dim i ] -> exclave_
-       let open (val Spmd.open_ graph) in
-       let sample = samples.!(index i) in
-       let target = targets.!(index i) in
-       let diff = F32.(sample -. target) in
-       match metric with
-       | Euclidean -> F32.(diff *. diff)
-       | Manhattan ->
-         let zero = broadcast (F32.lit #0.s) in
-         select F32.(diff >=. zero) ~pass:diff ~fail:F32.(zero -. diff))
-;;
-```
-
-With a normal OCaml program, this would create a branch and two code paths. Every time we
-execute this code, we’d have to spend time evaluating the branch and picking the right
-code path.
-
-With the SPMD compiler, we can compile *after* we know the value of `metric`. Then the JIT
-compiler can evaluate the branch during compilation and produce more efficient code. For
-example, here’s the intermediate representation that the code gets compiled into:
-
-```
-let%expect_test "IR: euclidean" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32_mul v2 v2
-      store out[i] = v3
-    }
-    |}]
-;;
-
-let%expect_test "IR: manhattan" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32 0.
-      let v4 = f32_ge v2 v3
-      let v5 = f32_sub v3 v2
-      let v6 = select v4 v2 v5
-      store out[i] = v6
-    }
-    |}]
-;;
-```
-
-Notice how we don’t branch on `metric` in the emitted code. Because the compiler knows the
-value of `metric`, it can emit just the chosen algorithm.
-
-## Implementing the front end
-
-Sai started his project by working on the compiler’s front end. The front end takes the
-kernel definition that we saw above and translates it into the following
-[GADT](https://dev.realworldocaml.org/gadts.html) that models a directed acyclic graph
-(DAG):
-
-```
-type (_ : any, _) node =
-  | Literal   : 'a Literal.t                                     -> ('a, uniform) node
-  | Broadcast : ('a, uniform) t                                  -> ('a, varying) node
-  | Load      : { storage : 'a Storage.t; idx : (i32, 'u) t }    -> ('a, 'u) node
-  | Dimop     : { op : ('a, 'u) Dimop.t; dim : 'd Dim.t }        -> ('a, 'u) node
-  | Binop     : { op : ('o, 'x, 'y) Binop.t
-                ; x : ('x, 'u) t; y : ('y, 'u) t }               -> ('o, 'u) node
-  | Unop      : { op : ('o, 'x) Unop.t; x : ('x, 'u) t }         -> ('o, 'u) node
-  | Select    : { cond : (bool#, varying) t
-                ; pass : ('a, 'u) t; fail : ('a, 'u) t }         -> ('a, varying) node
-  | If        : { cond : (bool#, uniform) t; then_; else_ }      -> ('a, 'u) node
-  | If_var    : { cond : (bool#, varying) t; then_; else_ }      -> ('a, varying) node
-
-and ('a : any, 'u) t = { node : ('a, 'u) node; ty : 'a Ty.t; id : int }
-```
-
-(The `'u` type variable in this GADT declares the expression’s *rate*, which indicates
-whether an expression is the same for every index in the entire output slice (`uniform`)
-or may change at each element in the slice (`varying`). In other words, it signals which
-pieces of your computation only need to be computed once and which pieces need to be
-computed per index.)
-
-Sai’s first task was to add support for numeric data types such as `I8`, `I16`, `I64`,
-`U8`–`U64` and `F64`, including arithmetic operations and conversion operators. After
-that, he started implementing booleans and control flow constructs. Unlike most
-conventional programming languages, SPMD has some nuances to its control flow. Instead of
-a single `if` construct, SPMD has three separate constructs all designed for parallel
-execution:
-
-| form | condition | semantics |
-| --- | --- | --- |
-| `select` | bool# varying | The selected branch can vary per index. Both branches are always evaluated. |
-| `if_` | bool# uniform | Every index picks the same branch. The untaken branch is not executed. |
-| `if_var` | bool# varying | The selected branch can vary based on index. The untaken branch is not observable, but may or may not be executed. |
-
-`if_var` lets you branch on data that varies per index (i.e., per SIMD lane). In the code
-below, the `if_var` allows the user to guard code that should only be run when `g` happens
-to be positive:
-
-```
-(fun graph [ group; totals; counts ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let g = group.!(index i) in
-   let zero = broadcast (I32.lit #0l) in
-   if_var I32.(g > zero)
-     ~then_:F32.(totals.!(g) /. of_i32 counts.!(g))
-     ~else_:(broadcast (F32.lit #0.s)))
-```
-
-The plain `if_` can’t do that, because the condition is a `bool# uniform` and therefore it
-must be the same value for all lanes.
-
-`select` and `if_var` are similar in that they both take in a condition of type `bool#
-varying`. Where the two constructs differ is in how the branches are evaluated. With
-`if_var`, the compiler can decide whether to execute the branch that is *not* chosen by
-the condition, whereas with `select`, both branches are always evaluated. Further,
-if `if_var` executes an untaken branch, any potential side effects, such as raising
-exceptions, will not be observable. So `select true 1 (1/0)` will raise an exception,
-but `{if,if_var} true 1 (1/0)` will not.
-
-## Writing the backend
-
-Usually, a high-performance JIT compiler would target a low-level language such as
-assembly or LLVM IR, which necessitates thinking quite hard about complicated details such
-as registers, pointers, and so on. Luckily, we didn’t have to do this, since we could use
-metaprogramming to emit OxCaml code. This also lets us rely on optimizations in the OxCaml
-compiler, saving us from having to implement them ourselves.
-
-OxCaml’s metaprogramming features let us explicitly generate OxCaml code at runtime using
-*quotes* and *splices*. A quotation represents an OxCaml expression that is created at
-runtime and will be evaluated at a later time. For example, `<[if Random.bool () then 42
-else 5]>` represents an unevaluated expression of type `int`, so the quotation itself has
-type `<[int]> expr`. Once this expression is evaluated, its result will be an `int`.
-
-Quotations can be interpolated into other quotations by splicing (`$`):
-
-```
-# let quote = <[2 + 3]> in <[$quote * 4]>;;
-- : <[int]> expr = <[Base.( * ) (Base.( + ) 2 3) 4]>
-```
-
-So rather than writing the standard recursive `power` function that computes `x^n`:
-
-```
-# let rec power n x =
-    if n = 0 then 1 else x * power (n - 1) x;;
-val power : int -> int -> int = <fun>
-```
-
-you can write a `power_expr` function that creates a quoted expression that will compute
-`x^n` for a given `n`, effectively inlining and optimizing the recursive function into a
-single expression. This is a form of [partial
-evaluation](https://en.wikipedia.org/wiki/Partial_evaluation) where we’re able to take a
-function and produce a much faster version specialized to a particular value of `n`.
-
-```
-# let rec power_expr n xq =
-    if n = 0 then <[1]>
-    else <[$xq * $(power_expr (n - 1) xq)]>;;
-val power_expr : int -> <[int]> expr -> <[int]> expr @ once = <fun>
-
-# <[ fun x -> $(power_expr 5 <[x]>) ]>;;
-- : <[int -> int]> expr =
-<[fun x -> Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x (Base.( * ) x 1))))]>
-```
-
-Sai’s backend walked the DAG and emitted OxCaml code for each node. For instance, the
-backend emits the following quoted OxCaml code for arithmetic expressions:
-
-```
-let rec emit node =
-  match node with
-  | Add (x, y) -> <[ F32.O.( + ) $(emit x) $(emit y) ]>
-  | Mul (x, y) -> <[ F32.O.( * ) $(emit x) $(emit y) ]>
-  | Load (input, idx) -> <[ Slice.Imm.unsafe_get $input $(emit idx) ]>
-```
-
-If we were to compile a basic kernel such as:
-
-```
-(fun graph [ a; b; c ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let i = index i in
-   F32.((a.!(i) +. b.!(i)) *. c.!(i)))
-```
-
-we’d get a DAG that represents the arithmetic operations, and use that to generate quoted
-OxCaml code:
-
-```
-emit (Mul (Add (Load a, Load b), Load c))
-= <[ F32.O.( * ) $(emit (Add (Load a, Load b))) $(emit (Load c)) ]>
-= <[ F32.O.( * )
-       (F32.O.( + ) $(emit (Load a)) $(emit (Load b)))
-       $(emit (Load c)) ]>
-= <[ F32.O.( * )
-       (F32.O.( + )
-          (Slice.Imm.unsafe_get a (I32.to_i64 i))
-          (Slice.Imm.unsafe_get b (I32.to_i64 i)))
-       (Slice.Imm.unsafe_get c (I32.to_i64 i)) ]>
-```
-
-Sai implemented these emitters for all of the node types in the DAG, such as the `if_`,
-`if_var` and `select` control flow constructs.
-
-## Cross-checking and benchmarking every program and implementation
-
-At this point, Sai needed to validate that his JIT implementation was both fast and
-correct. One strategy he used was to compare the JIT against a reference implementation.
-We had previously implemented an interpreter that took the front-end representation and
-directly executed it. While extremely slow, we could be fairly confident that the
-interpreter would have the correct behavior, so could be used to verify that the JIT was
-also correct.
-
-Sai wrote four example programs, including an implementation of Newton’s square root
-algorithm and a kernel adapted from some production code, in plain OxCaml, C with AVX2
-intrinsics, C with AVX512 intrinsics, and as an SPMD kernel (which could be either
-executed by the interpreter or JIT compiled). Each combination was benchmarked on inputs
-of various sizes.
-
-Sai also worked on an extensive test suite for all of the different language features and
-edge-cases. This suite included a test that generated random inputs with Quickcheck
-generators, then ran those inputs on the four example programs. Their outputs were
-cross-checked and compared bit by bit. He also wrote tests confirming that the code didn’t
-allocate on the heap.
-
-### How did the JIT do?
-
-[![Bar chart of the interpreter, plain OxCaml, and the first JIT for four kernels, as time relative to C with AVX2 on a wide scale; the interpreter is 237x to 1,267x slower than C, while the JIT and plain OxCaml are within 36x](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-interpreter.png)
-
-The benchmarks found that the JIT was much faster than the interpreter. However, the JIT
-was about the same speed (or slightly slower) than the manual OxCaml code and
-significantly slower than the C implementations. This wasn’t that surprising, since we
-hadn’t implemented any real optimizations or tuning in the compiler. Naturally, this
-needed to change if we wanted to catch up to the C implementations.
-
-## Optimizing using an intermediate representation
-
-Sai then started looking at adding optimizations to the compiler. With the current
-compilation pipeline, this would have been slightly painful. Our front end representation
-was not designed to be easily analyzed or optimized. While that wouldn’t have necessarily
-stopped us from doing analysis, it’s often a better idea to add an intermediate
-representation (IR) that is more amenable to optimization. Sai implemented an IR based on
-A-normal form (ANF), a format where each intermediate value gets its own variable. This is
-the IR that we saw in the previous section about optimizing away control flow:
-
-```
-let%expect_test "IR: euclidean" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Euclidean) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32_mul v2 v2
-      store out[i] = v3
-    }
-    |}]
-;;
-
-let%expect_test "IR: manhattan" =
-  let lowered = For_testing.Ir.of_kernel (measure ~metric:Manhattan) in
-  print_string (For_testing.Ir_body.to_string lowered.body);
-  [%expect
-    {|
-    let n = shape[0]
-    for i in n (normal) {
-      let v = load_f32 in0[i]
-      let v1 = load_f32 in1[i]
-      let v2 = f32_sub v v1
-      let v3 = f32 0.
-      let v4 = f32_ge v2 v3
-      let v5 = f32_sub v3 v2
-      let v6 = select v4 v2 v5
-      store out[i] = v6
-    }
-    |}]
-;;
-```
-
-The IR is more verbose but easier to analyze. For example, because all intermediate values
-are assigned a variable, it becomes easy to remove dead code; just look if an intermediate
-value is used anywhere after its definition.
-
-### Designing the IR to make code generation trivial
-
-Sai designed this IR with a key design principle in mind: Generating the final OxCaml code
-from the IR should be a trivial process. Any interesting compilation logic should end up
-explicitly represented in the IR.
-
-One instance of this principle shows up in how we model loops. As we mentioned before,
-kernels only declare *what* we do on each loop iteration, not *how* we loop over the code
-itself.
-
-```
-(fun graph [ x; scale ] [ Dim i ] -> exclave_
-   let open (val Spmd.open_ graph) in
-   let i = index i in
-   F32.((x.!(i) *. broadcast scale.!(I32.lit #0l)) +. of_i32 i))
-```
-
-But in the IR, we explicitly specify the loop, as well as load/store logic. That way, the
-optimizer can reason about how to re-order or unroll loops. For example, the above kernel
-would produce the following IR:
-
-```
-let n = shape[0]
-for i in n (normal) {
-  let v = load_f32 in0[i]
-  let v1 = i32 0
-  let v2 = load_f32 in1[v1]
-  let v3 = f32_mul v v2
-  let v4 = f32_of_i32 i
-  let v5 = f32_add v3 v4
-  store out[i] = v5
+// ... You can't accidentally do something like this.
+fn example_bad_usage_that_no_longer_compiles(object: Object) {
+    let group_id: GroupId = object.object_id(); // Fails to compile!
 }
-```
+`It can be tempting to use declarative macros in places where a `#[derive(...)]` procedural macro would make more sense. Try to avoid creating such macros unless necessary.A common toy example for declarative macros is to create a function on enums so you can get static strings of the enum variant names. But this can be accomplished through a derive macro, and that feels more idiomatic to me (like [`IntoStaticStr`](https://docs.rs/strum/latest/strum/derive.IntoStaticStr.html) from the [`strum`](https://crates.io/crates/strum) crate, or - maybe better - having a custom trait to represent this).**Do what you believe the end-user would find most natural.** If what your macro is doing is implementing a trait - you probably ought to make it a derive macro unless you have good reason not to.We’ll talk more about derive macros when we cover procedural macros in a later article, though.
 
-The optimizer can analyze this IR and see that `v1` and `v2` do not depend on `i` and
-therefore can be lifted out of the loop:
-
-```
-let n = shape[0]
-let v1 = i32 0
-let v2 = load_f32 in1[v1]
-for i in n (normal) {
-  let v = load_f32 in0[i]
-  let v3 = f32_mul v v2
-  let v4 = f32_of_i32 i
-  let v5 = f32_add v3 v4
-  store out[i] = v5
-}
-```
-
-It can also rewrite the loop to process 4 elements at a time, which reduces the amount of
-branching in the code.
-
-```
-let n = shape[0]
-let v1 = i32 0
-let v2 = load_f32 in1[v1]
-for io in div n 4 (normal) {
-  let i_0 = add (mul io 4) 0
-  let i_1 = add (mul io 4) 1
-  let i_2 = add (mul io 4) 2
-  let i_3 = add (mul io 4) 3
-  let v_0 = load_f32 in0[i_0]
-  let v_1 = load_f32 in0[i_1]
-  let v_2 = load_f32 in0[i_2]
-  let v_3 = load_f32 in0[i_3]
-  let v3_0 = f32_mul v_0 v2
-  let v3_1 = f32_mul v_1 v2
-  let v3_2 = f32_mul v_2 v2
-  let v3_3 = f32_mul v_3 v2
-  let v4_0 = f32_of_i32 i_0
-  let v4_1 = f32_of_i32 i_1
-  let v4_2 = f32_of_i32 i_2
-  let v4_3 = f32_of_i32 i_3
-  let v5_0 = f32_add v3_0 v4_0
-  let v5_1 = f32_add v3_1 v4_1
-  let v5_2 = f32_add v3_2 v4_2
-  let v5_3 = f32_add v3_3 v4_3
-  store out[i_0] = v5_0
-  store out[i_1] = v5_1
-  store out[i_2] = v5_2
-  store out[i_3] = v5_3
-}
-```
-
-By making the IR fairly explicit, we’re able to reason about—and therefore optimize—the
-code effectively.
-
-### Validating the IR backend
-
-Like with the previous backend implementation, Sai put in a lot of work to validate the
-correctness of the new compilation path. He added the new backend to the existing
-cross-validation logic across the test suite, then added expect tests that printed the IR
-and the emitted OxCaml for various examples, which helped us confirm that the behavior was
-exactly as expected.
-
-Once we were confident that the new IR-based path was correct, Sai deleted the previous
-backend.
-
-## How fast is the new backend?
-
-With the current implementation, the IR backend generates essentially the same code as the
-first JIT, so the two perform about the same.
-
-[![Bar chart of plain OxCaml, the first JIT, and the IR JIT for four kernels, as time relative to C with AVX2; the two JIT backend bars are nearly the same length for every kernel](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-ir-jit.png)
-
-However, optimizations are now significantly easier to add. We’re currently working on
-adding vectorization and constant hoisting to the compiler. Preliminary benchmarks have found
-that these changes result in code that is on-par with our C AVX2 implementation.
-
-[![Bar chart of the vectorized JIT and plain OxCaml for four kernels at 65,536 elements, as time relative to C with AVX2; the vectorized JIT is within 1.4x of C for every kernel and matches C on newton sqrt](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)](https://blog.janestreet.com/writing-a-dsl-for-high-performance-parallel-programming-in-oxcaml/benchmark-vectorized.png)
-
-We’re also working on adding scheduling. Scheduling lets users customize how the kernel
-loops over the code with a sophisticated set of transformations like “split this loop into 8
-piece chunks, vectorize these chunks, then unroll by 4”. Intelligent scheduling is important
-for getting the maximum possible performance out of the kernel. Eventually these schedules
-could also be auto-generated and benchmarked, so that the compiler can find the optimal
-one for your kernel.
+**Thanks for reading!**Macros are a really complex topic, so thanks for sticking with me through these articles as I try to explain them.If you were able to learn something new, and want to show your gratitude, please consider [**sending a donation on Ko-Fi**](https://ko-fi.com/sigseis)!I’d love to be able to work with the community full-time, and support like that will allow me to continue writing articles like these.In this article, we:Learned about macro scoping, and how to export declarative macros.Learned a method for organizing declarative macros for ease of maintenance.Explored a small selection of use cases for declarative macros.Saw some examples of declarative macro usage (some real-world, and other toy examples).I still have a little more to say about declarative macros…The original draft of this article was 7500 words, and that’s too long. The next article will focus on best practices, and common pain points with declarative macros. Please look forward to it!I promise we’ll get to procedural macros eventually. :)

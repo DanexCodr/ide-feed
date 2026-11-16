@@ -1,95 +1,224 @@
-[clice](https://github.com/clice-io/clice) recently hit 1,000 commits, a special milestone for the project. Since July 19, 2026, clice has been shipping nightly builds and going through roughly four months of alpha testing, with a huge number of bugs fixed thanks to real-world feedback from early users. Over the same stretch, I built a rigorous testing system for clice and ran extensive tests across many real open-source projects, tracking down and fixing the issues they uncovered. What does that mean? Every core feature is now stable, and you rarely run into problems in day-to-day use. So I think the time is right to ship the first stable release. The project looks very different today from where it stood two years ago in [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), and this is probably the first time I’m promoting it widely, so please let me introduce it to you once again! This is the project I have poured the past **two and a half years** into, the work I am proudest of, the one that has excited me the most and left me sad and anxious more times than I can count, and the most ambitious thing I have taken on in my short life.
+Redox OS is a complete Unix-like general-purpose microkernel-based operating system
+written in Rust. October was a very exciting month for Redox! Here’s all the latest news.
 
-## What is clice?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-is-clice)
+## Donate to Redox
 
-In short, clice is a C/C++ language server written in **modern C++**, but it’s **more than** just a language server. It is still built on LLVM/Clang, but unlike clangd and ccls, which are also Clang-based, clice was redesigned from the ground up to fix architectural problems that have gone unsolved in those servers for years. It is written entirely in C++23 and serves as an example of modern C++ best practices in its own right, with all the major modern C++ features coming together remarkably well:
+If you would like to support Redox, please consider donating or buying some merch!
 
-- Written entirely with C++20 coroutines, using our own libuv-based structured-concurrency async library for intricate asynchronous logic. It is a complex concurrent program running an event loop on the main thread while coordinating both multiple processes (IPC) and multiple threads.
-- Written entirely with C++20 named modules and C++23 import std, and fully self-hosted: module wrappers for third-party libraries are generated automatically by clice modularize, and clice runs smoothly on its own codebase to provide module-aware language services.
-- Uses static reflection built on templates and C++20 concepts for all serialization and deserialization across formats, including TOML, JSON, bincode, blob, and command-line arguments, with Rust-macro-like declarative annotations and zero boilerplate.
-- Data-oriented code design throughout, with almost no virtual functions outside the callback interfaces Clang requires. Makes heavy use of modern C++ APIs like std::format, std::expected, std::ranges, and std::views, steering clear of outdated legacy C++98/11 APIs.
-- A completely hermetic, reproducible build powered by Bazel, compiled with the unified xclang toolchain for a consistent cross-platform cross-compilation workflow. Compiled binaries are heavily optimized (PGO + LTO), and build artifacts depend on nothing beyond system libraries.
+## Golang On Redox!
 
-> People are always debating whether modern C++ features like modules are actually ready for real work. clice’s answer is: yes, of course, completely usable! They hold up for complex software like clice, with hundreds of thousands of lines of code. Maybe this is what the modern C++ we have been hoping for looks like. That said, the surrounding ecosystem really is inconvenient enough right now that getting this whole workflow running end to end took a huge amount of effort on my part to track issues and adapt everything.
+Wildan Mubarok ported the official Go programming language compiler after months of porting iterations. It supports both cross-compilation and self-hosted compilation of Go programs.
 
-### Language Server[#](https://www.ykiko.me/en/articles/2105384023094834022/#language-server)
+The Go compiler uses `relibc` and does not require an external compiler (GCC). During porting this compiler, it revealed issues in many parts of the system, such as the `range-tree` library fix mentioned below.
 
-Here is an overview of clice’s main features:
+The Go compiler port is currently a fork, as upstreaming will be another effort.
 
-- Multi-process compilation: clice compiles code in a process pool modeled after modern web browsers, whereas clangd uses multithreading. Why multiple processes? Because C++ is simply **too complex**, and on certain [corner cases](https://github.com/clice-io/clice/issues/1057) the compiler can easily crash or leak memory. That is especially true for **incomplete** code in the middle of editing: a huge downstream user base tests compilers on complete code, while very few people test them on half-written code, where the compiler mostly falls back on best-effort heuristics. In clangd, a compiler crash takes down the whole server and forces a restart. In clice, compilation happens in isolated child processes: losing one worker does not affect the rest of the server, so go-to-definition, highlighting, and other services keep working. It also makes it much easier to manage memory usage and schedule compilation priorities, cutting down on unnecessary resource consumption. ![Left: clangd 23.1.0 with default settings; right: clice. Requesting completion at the same spot crashes Clang every time. After clangd’s entire process crashes 5 times, the extension stops restarting it and hover disappears too; clice only loses a single worker, warns about the crash on the file, and keeps everything else working normally](https://pic2.zhimg.com/v2-bb2148a7f481c6a765369447b3ffaf5d_r.gif)
-- Modules and shared caching: clice has full support for C++20 named modules. All you need is a `compile_commands.json` containing all module files, and clice scans dependencies on its own and lazily builds required modules on demand, regardless of your build system or compiler, with full support for module completion, highlighting, go-to-definition, hover, and more. Built PCHs and PCMs are also cached on local disk for reuse across sessions. By comparison, clangd offers only very limited module support and no persistent cache. ![Left: clangd 23.1.0 with default settings; right: clice. Completing a module name, hovering on it to see its doc comment, Ctrl+clicking into math.cppm, then completing and hovering on an exported function](https://pic1.zhimg.com/v2-54bef9288e8bdc73f0626f0595762304_r.gif)
-- Compilation context: clice has full support for non-self-contained files, and more generally for the concept of a compilation context. You can explicitly pick the active context of a file: a specific compile command for a source file, or a specific inclusion site for a header. When you open a non-self-contained file, clice detects its context automatically, so it works out of the box. More broadly, it also supports grouping compile commands into build configurations, letting you switch between, say, debug and release. ![Left: clangd 23.1.0 with default settings; right: clice. Opening the non-self-contained real.hpp from precise.cpp triggers 3 errors in clangd while clice handles it cleanly; switching the context from fast.cpp to precise.cpp updates the inactive regions and the type of Real accordingly](https://pic4.zhimg.com/v2-27fb6b3b6914125776c38490f6b49c47_r.gif)
-- Better template support: clice implements a DFS pseudo instantiator that infers what many dependent names resolve to without needing concrete template arguments for a full instantiation. When a template has been instantiated once, clice also draws on that instantiation to power language features, such as completing on `auto` parameters of a lambda passed to a `ranges` call. On top of that, clice treats a template as a duck-typed interface and each instantiation as one of its implementations, much like a virtual function and its overrides: Go to Implementation on a dependent call inside a template lists the functions it actually calls across every instantiation, and Find References and Call Hierarchy work the same way. ![Completing the dependent name grid[0\]. inside a template, along with the auto parameter of a lambda passed to ranges::for_each](https://pic1.zhimg.com/v2-531baf573d9a4a9ff3280aa38638c75a_r.gif) ![Go to Implementation on the dependent call shape.draw(), listing Circle::draw and Square::draw](https://pic2.zhimg.com/v2-a2a20f8ee9a6869e3f8026ad3e5ae499_r.gif)
-- Out-of-the-box experience: Most projects need nothing more than a `compile_commands.json`. clice ships with built-in environment probing for 50+ toolchains, covering nvcc, MSYS2, Cygwin, zigcc, and more, automatically handling mismatches between your actual compiler and Clang. You don’t have to manually add piles of compiler flags to a config file the way you do with clangd.
+## Redox on Cloud Hypervisor!
 
-Beyond these main features, clice also fixes a long list of smaller clangd issues that have gone untouched for years across semantic highlighting, folding, hover, and more. If you’re interested, give it a try and see what surprises you find. Overall, clice surpasses clangd in ease of use, feature support, and performance. You can install the clice extension in VS Code and other editors and start using it right now.
+MJ Pooladkhay was able to boot Redox on [Cloud Hypervisor](https://www.cloudhypervisor.org/), as part of his [NLnet](https://nlnet.nl/)-funded work on Redox virtualization. This is an important step towards Redox as a web server in the cloud. He also added integration to the Redox build system, to simplify testing.
 
-### Command Line[#](https://www.ykiko.me/en/articles/2105384023094834022/#command-line)
+He wrote [this](https://www.redox-os.org/news/virtualized-redox/) article about this initial work.
 
-Besides running as a language server, clice can also be used from the CLI to access its language features directly. Currently supported subcommands include:
+Read [this](https://doc.redox-os.org/book/cloud-hypervisor.html) page to learn how to use it.
 
-- clice index: Builds a persistent index for the entire project ahead of time and supports resuming interrupted runs, so your editor starts warm as soon as you open the project.
-- clice lint: Built-in clang-tidy runner that checks translation units concurrently across a process pool and merges duplicate diagnostics from headers; pass --index to reuse the same parse pass to build the index along the way.
-- clice format: A wrapper around clang-format that automatically finds files to format from your config file or CDB and formats them efficiently in parallel.
-- clice command: Shows the effective compile command for a file after rule rewrites and toolchain probing, or converts compile_commands.json into resolved -cc1 commands for other Clang tools.
-- clice query: Reads the on-disk index directly without starting a server and outputs symbol definitions, references, call graphs, inheritance hierarchies, and file dependencies as JSON.
-- clice refactor: Rewrites source files directly from the persistent index without recompiling, supporting project-wide symbol and macro renaming as well as batch renames in one pass via --spec.
-- clice analyze: Outputs project-structure JSON from the index to guide refactoring; for example, analyze modules analyzes module dependencies and cycles across directories and lists code patterns that stand in the way of modularization.
-- clice modularize: Automatically wraps third-party libraries used by a project as C++20 modules without modifying any source files; following the split analyze proposes, it can also rewrite the project’s own code into module units, turning headers into partitions and #include into import. clice used it to modularize itself.
+## WebKitGTK3 Video Support
 
-## The story behind it[#](https://www.ykiko.me/en/articles/2105384023094834022/#the-story-behind-it)
+Wildan Mubarok fixed the missing codecs in GStreamer using FFmpeg libraries for video playback in WebKit.
 
-That wraps up the feature tour. Next, I want to talk about the story behind the project, some of its design decisions, and my own thoughts and struggles along the way, especially now, in the age of AI.
+- Mozilla Developer Network HTML5 video example
 
-### Why not improve clangd?[#](https://www.ykiko.me/en/articles/2105384023094834022/#why-not-improve-clangd)
+- YouTube
 
-First, why start a new project instead of improving clangd? That is the question I get asked most often. There are several reasons. I discussed some of them in my earliest [post](https://www.ykiko.me/en/articles/13394352064), and today those problems are even easier to see firsthand:
+## GIMP On Redox!
 
-- Maintenance and staffing: At root, clangd has been **effectively unmaintained** since around 2024. That sounds surprising. How could a tool used by hundreds of thousands of developers have no one maintaining it? I stumbled onto this fact in 2024 when I was getting ready to submit a [PR](https://github.com/clangd/clangd/issues/443#issuecomment-2254535078) to clangd for better code completion inside templates. From what I understand, it ties back to a shift in Google’s C++ strategy. Before that, clangd was maintained mainly by several Google engineers, and around 2024 Google started scaling back its investment in C++ (Clang); clangd was deemed good enough for Google’s internal needs, and those engineers were reassigned elsewhere. Since then, clangd has lacked any real long-term maintainers. Only [Nathan Ridge](https://github.com/HighCommander4) has been answering questions unpaid in his spare time, purely out of passion, and one person only has so much bandwidth, making it nearly impossible to handle large PRs. That is why clangd’s C++20 modules [PR](https://github.com/llvm/llvm-project/pull/66462) dragged on for nearly a year, and even today it still isn’t really usable on large projects, with plenty of flaws and nobody working on them. Earlier this year, in 2026, Clang’s lead maintainer Aaron Ballman recognized the problem and posted a [call for help](https://discourse.llvm.org/t/help-needed-with-clangd-maintenance/89820) on the community forum, saying clangd is very close to unmaintained, with a heavy backlog of PRs and issues, and hoping to find new community maintainers; otherwise clangd **could** eventually be removed from the LLVM project.
-- Scale of the code changes: As mentioned at the start, clice introduces many new architectural ideas, such as multi-process compilation. Implementing those inside clangd would come close to **rewriting** clangd. Nobody is going to review and accept changes of that size. Self-hosting with modules would also require sweeping changes to LLVM’s build system, which I will go into in detail when I introduce xclang later.
-- LLVM repository constraints: clice relies on a lot of third-party libraries for better performance and user experience, such as `libuv`, `simdjson`, and `tomlplusplus`. To keep builds simple, LLVM requires the repository to remain self-contained, so pulling in that many third-party libraries is out of the question. You would either have to rewrite and port them into LLVM or put up with worse ergonomics and lower performance. On top of that, a language server is not a **standalone** project: it also includes extensions and adapters for different editors. Keeping them in the same repo as the server makes maintenance much easier, and LLVM would be just as unlikely to accept that editor code (spanning Rust, Lua, TypeScript, and so on). For long-term maintainability and our core goals, a separate repository was unavoidable.
+Wildan Mubarok ported GIMP after some months of work. As GIMP uses the recent Orbital backend of the GTK port, the experience may not be smooth in this initial port.
 
-So in mid-2024, I started looking into how to design and write a new language server. At the end of 2024, I published [Design and Implementation of a New C++ Language Server](https://www.ykiko.me/en/articles/13394352064), setting out clice’s core goals and kicking off development in earnest.
+## Servo 0.7 Update
 
-### How did we get here?[#](https://www.ykiko.me/en/articles/2105384023094834022/#how-did-we-get-here)
+Wildan Mubarok updated our Servo fork to version 0.7 after months of work to fix regressions and new bugs.
 
-Next, let’s talk about how clice was built. How did it get to its current state? Over the past two and a half years, at a rough guess, I have put nearly 3,000 hours into this project. Even that number doesn’t really tell the story, because clice became part of my life. It was always on my mind, like eating or sleeping: there wasn’t a moment when I wasn’t turning over some problem related to it. Development broke down into roughly four stages:
+## Ratatui 3D Showcase
 
-Mid-2024 to early 2025: I spent this period studying Clang and clangd’s codebase and internals. Anyone who has looked through my older blog posts will know I am a longtime template metaprogramming enthusiast, familiar with C++ and its implementation details down to language-lawyer territory. During this phase I settled on clice’s core goals and overall design, and put together an initial demo. I was a third-year undergrad at the time: I would wake up and start coding right away, skip lunch, walk out to the McDonald’s outside the campus gate when I got hungry, and put in 8 to 10 hours a day.
+Ribbon tested the Ratatui 3D rendering of [Cornell box](https://en.wikipedia.org/wiki/Cornell_box) demo from [ratatui-3d](https://github.com/limlabs/ratatui-3d) project.
 
-Early 2025 to early 2026: I originally expected to ship a usable version of clice fairly quickly during this stage. Instead, progress went much slower than I expected, and it remained a long way from production-ready. Looking back, there were a few main reasons:
+## NUMA Support Testing
 
-1. Above all, time. I had assumed I would keep putting in 8 to 10 hours a day like before. My undergraduate major was chemistry, though, and everything I knew about programming was self-taught. Even though I had plenty of C++ experience and had participated in GSoC, I lacked specific “domain knowledge.” To find a job, I spent most of 2025 interning and picking up a new field (unrelated to C++ frontends), while also dealing with university chores and everything involved in graduating. The hours I had left for clice shrank drastically compared to my earlier assumptions, so progress naturally slowed down.
-2. Getting the project genuinely production-ready also took far more than the core architecture. It meant working through countless corner cases of C++ syntax alongside subtle cross-platform differences: URI parsing, file paths and file uniqueness, OS-level quirks, and so on. The workload turned out to be much bigger than I had imagined. I also have a bit of an obsessive streak and dislike band-aid solutions that barely get by, so to build things the way I wanted I ended up reinventing quite a few wheels, covering serialization, IPC/LSP, async, and more. Had I chosen Rust at the start, development might have taken considerably less time, since those pieces already existed in the Rust ecosystem and had been thoroughly proven in other language servers. Still, writing a C++ language server in Rust felt odd, and it would have ruled out self-hosting, so I didn’t go that route.
-3. Lack of experience scheduling and managing complex software. Even with so much work on the table, several early contributors were already interested in the project and willing to put real time into helping write code. Unfortunately, I had very little teamwork experience back then (being completely self-taught and only three years into programming altogether), so I failed to turn that interest into effective contributions. That sank in much deeper once I started working in industry: 3 or 4 of my coworkers can split up responsibilities, stand up a project from scratch in 2 to 3 months, and ship it to production, whereas I had poor instincts for project planning and mostly just wrote whatever was on my mind at the moment. Open-source volunteer bandwidth can’t be compared to a full-time job, of course, yet the truth is I didn’t do a great job of building a community or pushing the project forward.
+The first real hardware NUMA tests on a Dell Poweredge R420 server were done, which confirms that EuclidDivisionLemma’s effort on NUMA support is complete enough to work.
 
-Early 2026 to July 2026: The turning point came when coding agents led by Claude Opus 4.6 started catching on. I began using agents to help with the mountain of tedious detail work and painful cross-platform debugging, and found they were remarkably good at it. During this stretch I did a sweeping cleanup of the existing codebase and established the prototype of clice as it stands today. As agents grew stronger, I handed them increasingly complex tasks and kept moving the project forward rapidly. It was an exciting period: I could finally stop burning hours on tedious details and focus on architecture and feature work. At the same time, it hit me that coding agents were only going to keep getting stronger. If humans stop writing code altogether in the future, what point does a language server even have? That pushed me to start designing and building clice’s CLI features.
+Tests conducted by EuclidDivisionlemma, showed, on average, a 45.2% reduction in time taken on the NPB MG Workload.
 
-July 2026 to present: By July I felt the timing was right to put out early test builds and iterate based on real user feedback. Core language server features were already in place and fully usable day to day, though still short of everything I had originally envisioned, so I threw myself into building out the rest of that vision, tuning performance, and fixing bugs. In October, I started planning clice’s modular self-hosting. That was a remarkably complicated undertaking, because C++ module support today is a long, painful story:
+## Fixed RISC-V Dynamic Linking
 
-- CMake supports modules, yet if implementation units importing a module use different compile flags, CMake forks a separate compilation of the module even when those flags don’t affect PCM compatibility. CMake also has no built-in compilation cache, which matters a lot for CI; normally we reach for ccache to solve that, except ccache doesn’t support modules.
-- clice has a demanding platform matrix: six combinations across Windows/Linux/macOS × ARM64/x64, plus ASan builds, prebuilt LLVM/Clang binaries to speed up CI, C++23 import std, and build artifacts that depend only on system libraries rather than extra shared libraries so everything works out of the box for users.
+lbecher fixed RISC-V dynamic linking, which is the last CPU architecture using static linking in our build system.
 
-I surveyed the options extensively, and the answer was that an out-of-the-box setup for this **simply did not exist** in open source, and most open-source C++ module projects don’t have build requirements nearly this involved. After thinking it through carefully, I built [xclang](https://github.com/clice-io/xclang), inspired by zigcc, to give every target platform a unified cross-compilation experience, and paired it with Bazel (which includes built-in build caching) to solve the build problem for good. Going one step further, I wrote `clice modularize` to automatically generate module wrappers for every third-party library we depend on, completing clice’s self-hosted modularization! That probably makes clice one of the most complex open-source C++ projects using modules today.
+It will allow our application testing in RISC-V to easily scale.
 
-Alongside all of this, I ran extensive fuzz testing across many open-source projects and fixed a huge number of bugs, bringing clice to genuine production readiness!
+## Initial Rootless Package Installation
 
-### What about agents?[#](https://www.ykiko.me/en/articles/2105384023094834022/#what-about-agents)
+Wildan Mubarok finished the first part of rootless package installation code, which allows the creation of system-wide paths mappings to user equivalent paths.
 
-As I mentioned earlier, I designed a CLI interface for clice so that it would still hold some value in the agent era. An obvious idea is replacing `grep` with `clice query`: it is more accurate and uses fewer tokens. That is true, except exact symbol lookup requires indexing the whole project first, which takes a very long time. `grep` is imprecise, sure, yet 2 or 3 `grep` calls are usually enough to find the target, and the extra text `grep` pulls back isn’t necessarily a bad thing for helping an agent understand the codebase. Put plainly, most of this CLI isn’t actually all that useful. The part that really earns its keep is probably `clice modularize`: if you ask an agent to modularize a project on its own, it spins up a swarm of subagents and writes custom scripts to pull off the migration, which is both slow and expensive. Giving the agent `clice modularize` to assist the migration works much better. LLMs are trained first and foremost for generality, and what they do best is writing and combining scripts to generalize across problems. As things stand, only highly specialized tools still carry real value; otherwise you are usually better off letting the LLM compose its own scripts.
+## virtiofs On Redox!
 
-As agents keep getting stronger, especially with models led by Claude Opus 5.5 and Fable 5.2, the cost of building complex software keeps falling, and 10x or even 100x the productivity of the past is well within reach. Over on X, you can see plenty of people asking Claude in a single sentence to rewrite the TypeScript compiler in another programming language and getting better performance out of it. Surprising at first glance, yet completely reasonable when you think about it. Software written in the past was bounded by human time, cost, and skill, so codebases inevitably accumulated lots of suboptimal code paths. When humans optimize performance, we go after the main bottlenecks, whereas an agent can tirelessly optimize every path until the small wins add up. Refactoring also often produces a better architecture than existing code; rewriting or refactoring software was just too expensive to justify before. In the foreseeable future, then, most code may be written entirely by agents, humans may stop writing code and even reading it (which is already happening now), and language servers may have no reason to exist at all. Agents might even invent programming languages better suited to themselves: compilation and interpretation themselves have often become the bottleneck in the agent loop, and agents already have the ability to optimize that underlying infrastructure; they just haven’t started yet. Ideally, every stage of the agent loop should be something the agent itself can improve and speed up, compilers and toolchains included.
+MJ Pooladkhay has completed the `virtiofs` driver and integrated it into the Redox build system. It’s now possible to share any directory on a Linux host with a Redox VM running under QEMU or Cloud Hypervisor.
 
-## To be continued[#](https://www.ykiko.me/en/articles/2105384023094834022/#to-be-continued)
+For example, the `make qemu share=redox` command shares the Redox build system directory on Linux to Redox.
 
-That is a sad reality, and in an era like this it means the effort I poured into clice over the past two and a half years is unlikely to have the lasting meaning I first imagined. Every time I dwell on it, I slip into a dark mood, bordering on nihilism. I can’t help asking myself: thousands of hours and a lot of money, and what was it all for?
+Read [this](https://doc.redox-os.org/book/virtio-fs.html) page to learn how to use it.
 
-Because I taught myself programming off the beaten path without a CS degree, I got used early on to the cycle of finding my own goals, defining problems, solving them, and then looking for the next goal. Interest alone only sustains me for a little while; sticking with something for the long haul takes some deeper “meaning” or “vision” behind it, ideally one I defined for myself. And now that meaning is fading away. So over the past few months, I started pushing myself relentlessly. The more those thoughts crept in, the harder I used agents to drive the project forward, trying to finish it before it lost its meaning altogether.
+## NUMA Information Reporting
 
-Imagine an alternate timeline where coding agents never took off. clice wouldn’t be nearly as complete as it is today, of course, yet I would have slowly gained experience, learned how to collaborate and plan work, built a community around it, and watched clice move forward slowly and steadily. Except the SOTA models have already been trained. Models like Opus 5.5 and Fable 5.2 are real, and whether AI is a bubble or not, they aren’t going away. Software becoming cheap is already an undeniable fact.
+EuclidDivisionLemma implemented NUMA hardware information reporting, exposed in `/scheme/sys/numa` resource.
 
-We have to face reality, so what mindset should we bring to all of this? My thinking has shifted again recently, though honestly neither my mental state nor my daily life is in a great place right now. Pouring yourself too deeply into one thing naturally takes a heavy toll when it doesn’t turn out the way you hoped. Still, if you zoom out over a longer stretch of time, what does it really amount to? Even if I had done nothing at all for these two and a half years, so what? There is plenty of life ahead. I know that in principle, yet letting go is hard, especially when this project has been part of my life for over two years. As I mentioned in an earlier post, graduating from college never really felt real to me, because the rhythm of my life barely changed afterward: apart from my job, it was just this project. Something has to change eventually, though. I can treat clice as my graduation project: my real graduation project, not one from the chemistry major I never really liked. And that’s enough. I don’t need to force a grander meaning onto it. This graduation project has met **every single goal** I set two years ago, and exceeded them by a wide margin. It stands on its own as the best illustration of modern C++, neatly bringing together everything I studied about C++ in college. If on top of that it can be helpful to people just learning to program or curious about modern C++, that is plenty.
+```
+NUMA nodes: 4
+Node 0:
+	CPUs: 0 1 2 3 4 5 6 7 
+	Memory: 8.00 GiB
+Node 1:
+	CPUs: 8 9 10 11 12 13 14 15 
+	Memory: 4.00 GiB
+Node 2:
+	CPUs: 
+	Memory: 8.00 GiB
+Node 3:
+	CPUs: 
+	Memory: 12.00 GiB
+```
 
-So this post is a kind of ritual for me. I need to step out of my old life and look for other things worth doing, maybe things outside code. I will keep maintaining clice, just not at the intensity I used to; practically everything worth building is already built anyway, so from here on it will mostly be incremental optimizations and bug fixes based on user feedback. In times like these, it is hard to say what the right path is, or what you ought to be doing. Nobody knows what will happen next week, let alone next year, or how far AI will actually go. I think it is time to rest for a while so I don’t burn out, and have the energy to face whatever problems come next. I still have a strong drive to keep creating good work. It just might not be about programming anymore, and figuring that out is what I need to learn and think through in this next stage.
+## Simplified AI Policy
 
-That’s all for this post. Thanks for reading. I hope you’ll give clice a try, and feel free to report any problems!
+Jeremy Soller simplified the AI policy and the Board Of Directors approved, now it is:
+
+“Redox OS does not accept contributions generated by LLMs ([Large Language Models](https://en.wikipedia.org/wiki/Large_language_model)), sometimes also referred to as “AI”.”
+
+## Ring Buffers Project Summary
+
+Anhad Singh, Ibuki Omatsu, 4lDO2 and Ron Williams wrote a [technical report](https://www.redox-os.org/news/nlnet-rb-summary/) of the conclusion of the Redox Ring Buffers project.
+
+## Bootloader Improvements
+
+- (boot) MJ Pooladkhay fixed a UEFI exit failure bug due to a stale memory-map key to ExitBootServices
+
+## Kernel Improvements
+
+- (kernel) 4lDO2 reduced the x86 kernel binary file size in ~200 KiB by using naturally aligned kernel stacks on x86
+- (kernel) 4lDO2 did a code cleanup
+- (kernel) 4lDO2 fixed some code warnings
+- (kernel) Wildan Mubarok fixed a CPU context-wide deadlock in futex code
+- (kernel) Wildan Mubarok fixed thread lock ordering in futex code, which fixed a hang
+- (kernel) EuclidDivisionLemma implemented wrappers to libredox to ease the manipulation of scheduler CPU affinity.
+- (kernel) EuclidDivisionLemma fixed incorrect APIC ID reading
+- (kernel) EuclidDivisionLemma fixed more NUMA bugs
+- (kernel) EuclidDivisionLemma fixed some code warnings
+- (kernel) EuclidDivisionLemma did some refactoring and cleanup in NUMA code
+- (kernel) Radek Pietruszewski implemented RISC-V CPU information reporting
+- (kernel) bjorn3 fixed some code warnings
+- (kernel) Val Lorentz fixed some code warnings
+
+## Driver Improvements
+
+- (driver) Jeremy Soller created the audiod library to unify the audio buffer size handling of all sound drivers
+- (driver) MJ Pooladkhay fixed a bug with the device DMA memory lifetime being ended while the device was using it
+- (driver) The “beef” contributor fixed the Intel HD Audio driver’s Function Group Type parameter ID
+- (driver) bjorn3 did some code cleanup
+
+## System Improvements
+
+- (sys) Jeremy Soller added COSMIC Monitor and GTK3 demos to Redox demo variant
+- (sys) bjorn3 moved the Unix domain socket code from the ipcd daemon to a new daemon called udsd because this code was not related to Redox IPC, simplifying the system
+- (sys) bjorn3 did some code deduplication
+- (sys) Ibuki Omatsu replaced/unified the fstat, unlinkat, flink, and frename functions with std_fs_call
+- (sys) Ibuki Omatsu moved the F_SETFD, F_GETFD, and F_DUPFD* fcntl flags from redox_syscall to libredox
+- (sys) Wildan Mubarok fixed a TTY write panic in getty when a CLI application hangs
+
+## Relibc Improvements
+
+- (libc) Wildan Mubarok implemented dladdr and dl_iterate_phdr functions
+- (libc) Wildan Mubarok implemented POLLHUP, POLLERR, EPOLLHUP, and EPOLLER event codes
+- (libc) Wildan Mubarok added a initial link.h function group implementation
+- (libc) Wildan Mubarok added initial locale support: implemented decimal locale support in strtod function, implemented setlocate function and LOCPATH
+- (libc) Wildan Mubarok fixed TLS relocation alignment in LTO compilation
+- (libc) Wildan Mubarok fixed EINTR error handling behavior in futex and kill
+- (libc) Wildan Mubarok fixed the scanf function parsing invalid %d
+- (libc) Wildan Mubarok fixed sigaltstack stack information, SSIZE_MAX type, and stpcpy test on i586
+- (libc) Wildan Mubarok fixed the dl_phdr_info::dlpi_tls_data type
+- (libc) Wildan Mubarok fixed a float_t redefinition error when the same header is used in multiple places
+- (libc) Wildan Mubarok fixed limits.h constant suffixes
+- (libc) Wildan Mubarok fixed the futimens function test
+- (libc) Wildan Mubarok implemented input sanitization in inet_aton function
+- (libc) Wildan Mubarok moved most of unsafe Rust code of poll, epoll, utimensat, futimens, nanosleep, fstat, fstatvfs, and inet_aton functions to leaf functions
+- (libc) Niel D fixed mkdirat function directory permission handling
+- (libc) auronandace implemented __fseterr from Gnulib
+- (libc) auronandace fixed the readv function test
+- (libc) auronandace fixed a typo in POSIX_MADV_DONTNEED constant
+- (libc) auronandace reduced more as casting usage to prevent problems in code refactorings
+- (libc) auronandace enabled some Clippy lints
+- (libc) Konstantin Shabanov fixed and added a getsockopt test
+- (libc) Konstantin Shabanov fixed false-positives when running a single test, due to wrong paths in expected output
+- (libc) Val Lorentz fixed some Clippy warnings
+
+## RedoxFS Improvements
+
+- (rfs) Wildan Mubarok fixed bug in the range-tree library that caused a underflow in fmap implementation
+
+## Packaging Improvements
+
+- (pkg) Wildan Mubarok greatly reduced compressed packaged size when Clang ThinLTO is used
+
+## Programs
+
+- (app) Wildan Mubarok enabled FFMPEG and AAC codec support in GStreamer
+- (app) Wildan Mubarok enabled multi-threading on XZ
+- (app) Wildan Mubarok updated Git version from 2.13.1 to 2.56.0
+- (app) Wildan Mubarok fixed gettext compilation with Clang
+- (app) bjorn3 updated the periodictable and sodium installation paths to comply with Linux FHS
+- (app) auronandace updated rsync from version 3.4.1 to 3.5.1
+
+## Build System Improvements
+
+- (build) Wildan Mubarok fixed Redox toolchain fetch checksum mismatches
+- (build) Wildan Mubarok fixed the build.dev-dependencies recipe data type rule handling difference between cookbook.lock and filesystem configuration
+- (build) Wildan Mubarok added cbindgen to Redoxer image
+- (build) Wildan Mubarok added libunwind to the toolchain
+- (build) Wildan Mubarok changed Clang to use libgcc for runtime consistency
+- (build) Wildan Mubarok implemented dl_iterate_phdr support to libgcc to workaround hangs in recipes compiled with Clang
+- (build) Wildan Mubarok changed toolchain packaging archiver to be deterministic
+- (build) Radek Pietruszewski improved QEMU configuration for NixOS
+
+## Documentation Improvements
+
+- (doc) Wildan Mubarok documented how to do RedoxFS partition manipulation from Linux in dual-boot installation
+- (doc) Wildan Mubarok documented Clang support
+- (doc) Wildan Mubarok improved the self-hosted development documentation
+- (doc) Radek Pietruszewski documented MacOS QEMU instructions
+- (doc) Radek Pietruszewski documented NixOS QEMU instructions
+- (doc) Radek Pietruszewski recommended the livedisk image instead of harddrive image to fix ARM64 and RISC-V boot in QEMU, due to lack of MSI-X support on them
+- (doc) Ribbon documented the driver graphics API migration to Linux DRM API
+- (doc) Ribbon added a introduction to `relibc` function tracing and updated the kernel system call tracing to also mention userspace tracing
+- (doc) Ribbon documented that Orbital hangs don’t stop the mouse cursor when VirtIO-GPU is used, because the cursor is processed on host
+- (doc) Ribbon documented the Redox build system and Redoxer purposes on Developer FAQ
+
+## How To Test The Changes
+
+To test the changes of this month download the `server` or `desktop` variants of the [daily images](https://static.redox-os.org/img/).
+
+Use the `desktop` variant for a graphical interface. If you prefer a terminal-style interface, or if the `desktop` variant doesn’t work, please try the `server` variant.
+
+- If you want to test in a virtual machine use the “harddrive” images
+- If you want to test on real hardware use the “livedisk” images
+
+Read the following pages to learn how to use the images in a virtual machine or real hardware:
+
+Sometimes the daily images are outdated and you need to build Redox from source.
+For instructions on how to do this, read the [Building Redox](https://doc.redox-os.org/book/podman-build.html) page.
+
+### Programs
+
+To test the changes on applications and libraries, see if the wanted program is available in the following lists and run the following command to install them: `sudo pkg install package-name`
+
+There’s also a package web interface if you want detailed package information:
+
+## Join us on Matrix Chat
+
+If you want to contribute, give feedback or just listen in to the conversation,
+join us on [Matrix Chat](https://matrix.to/#/%23redox-join:matrix.org).

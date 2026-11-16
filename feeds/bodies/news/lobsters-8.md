@@ -1,169 +1,61 @@
-I recently retired from mentoring my [*FIRST* Robotics Competition](https://www.firstinspires.org/programs/frc/) (FRC) team. I started as a student in 2010, and went straight into mentoring upon graduation, so in total I have been writing FRC programs for about 17 years.
+*core* is [a program that I wrote](https://git.citrons.xyz/core) which spills the viscera of other programs onto the screen and allows you to prod them. it could be called an “esoteric debugger” or a “paint program.”
 
-Over time though I've become more and more dismayed with how FRC programs are typically written. For decades, I feel that *FIRST* and [WPILib](https://docs.wpilib.org/en/stable/docs/software/what-is-wpilib.html) have encouraged students to severely overengineer their robot programs. As time has gone on, I have become more and more frustrated with the state of FRC programming, and our team's code style has drifted further and further away from the norm.
+the visual content of the program is constructed as follows:
 
-To be clear, I have the utmost respect for the time and effort that *FIRST* and the WPILib maintainers put in every year, and it is thanks to their efforts that FRC teams have reliable and complete libraries every year. But I think the accepted programming practices in FRC are leading students astray and ought to be corrected.
+- pages of memory (hardcoded for now as 4096 bytes) are arranged on a Z-order curve.
+- each page of memory is displayed as a 256x128 rectangle.
+- each pixel represents a bit. a white pixel represents one, and a black pixel represents zero.
+- the bits are arranged in rows, and the bytes are arranged in columns
 
-So as I step away from *FIRST*, I decided I should write down my philosophy of robot programming in FRC, which I have decided to give the pithy name of **Periodic-Oriented Programming**.
+[![the text and data segment of a program](https://citrons.xyz/files/j_ODSJFQ.png)](https://citrons.xyz/files/j_ODSJFQ.png)
 
-## What is Periodic-Oriented Programming?
+as well as the display of program memory, core allows for its manipulation. if core shows you a picture of a program’s insides, then it is only natural that it allows you to scribble on it. the overcommitted empty space below the stack stack provides an inviting empty space to scribble in. it’s a perfect place to hide your terrible secrets in some poor, innocent process.
 
-Periodic-Oriented Programming is very simple: Do as much as possible in your `periodic` function. Uses very few abstractions, and write most of your logic in one big function, top to bottom. This is so simple and beginner-like that it seems like it shouldn't work for serious programs. But it does, as long as you carefully establish a few simple boundaries and practices.
+core is the logical conclusion of blinkenlights, “Allblinkenlights,” if you will. the intended experience is evocative aimlessness. the human visual system is highly parallel and very good at recognizing patterns. you are encouraged to allow these patterns to wash over you.
 
-For context, the essential structure of an FRC program is typically to use the `TimedRobot` framework provided by WPILib. To use it, you simply implement `periodic` functions and the robot framework calls them 50 times per second. For example, here's a complete "tank drive" robot program in Python:
+many textures arise from different kinds of data in memory. ASCII text is incredibly recognizable, by virtue of being a 7-bit encoding, as well as having a biased distribution of values. 64-bit pointers are similarly easy to recognize because their last two bytes will either be zero or one.
 
-```
-import wpilib
-import rev
+[![a view of the stack of a program. there are text and arrows scribbled in empty spaces, pointing to ASCII data, *envp and *argv, and return addresses](https://citrons.xyz/files/PzvOTBbx.png)](https://citrons.xyz/files/PzvOTBbx.png)
 
-class MyRobot(wpilib.TimedRobot):
-  def robotInit(self):
-    self.gamepad = wpilib.XboxController(0)
-    self.leftMotor = rev.SparkMax(10, rev.SparkLowLevel.MotorType.kBrushless)
-    self.rightMotor = rev.SparkMax(11, rev.SparkLowLevel.MotorType.kBrushless)
+in the mesmerizing undulations of complex programs, these textures may blink or move around or stay boringly still. if you are keen, you may catch some large data structure being allocated or filled in. or you may see the first generation of a garbage collector fly by as short-lived objects are created at a rapid rate. in games, the stack can be seen flickering rapidly and changing every frame.
 
-  def teleopPeriodic(self):
-    self.leftMotor.set(self.gamepad.getLeftY())
-    self.rightMotor.set(self.gamepad.getRightY())
-```
+core can make stark the immensity of memory and the way that programs use it. data structures and programming patterns appear in the physical reality of which bits are toggled where.
 
-50 times per second, the left and right motor speeds will be updated to use the left and right gamepad axes. The robot framework and hardware abstraction layers do the rest.
+I was very keen to see what a program would look like that uses continuation passing style implemented as in the famous paper, [CONS should not CONS its arguments, part II: Cheney on the M.T.A](https://dl.acm.org/doi/10.1145/214448.214454). I compiled a game programmed in CHICKEN scheme and was delighted to see a stack that moved like a waterfall.
 
-In essence, every FRC program does the following work in `periodic`:
+[![a stack continuously filled with pointers](https://citrons.xyz/files/UvkDiSvw.png)](https://citrons.xyz/files/UvkDiSvw.png)
 
-- Get user inputs (or autonomous state)
-- Compute the desired state of the hardware (motor speeds, actuator positions, etc.)
-- Enforce safety constraints, smooth signals, or otherwise process the outputs
-- Update hardware outputs
+graphical programs can be the most interesting. visual patterns in graphics in memory can emerge vividly.
 
-In Periodic-Oriented Programming, I basically encourage my students to lean into this pattern. POP code should have few abstractions, and most of the logic should be written top-to-bottom in a single function. And to the greatest extent possible, everything should be run on every `periodic`—no modes, no commands, no state.
+[![sprites from super mario brothers are visible in the memory](https://citrons.xyz/files/eSPOP7T+.png)](https://citrons.xyz/files/eSPOP7T+.png)
 
-As programs get larger, more structure is needed, but the core philosophy remains the same. The most important piece of structure is **subsystems**.
+when attached to virtual machines or emulators, core gains omniscience over an entire operating system.
 
-## Hardware lives in subsystems
+[![many, many pages filling the VM memory porously](https://citrons.xyz/files/M_ujZTMA.png)](https://citrons.xyz/files/M_ujZTMA.png)
 
-The use of "subsystem" classes will be familiar to most FRC teams, but the specifics are what matter here:
+it is astounding to see an immense creature flicker to life. pages fill empty space in speckled patterns. panning over a chasm, the page tables can be seen vibrating and filling in with new allocations. it is reminiscent, perhaps, of insects, like a beehive.
 
-1. Every subsystem has a `periodic` method. This is called from robotPeriodic so it runs 100% of the time.
-2. Hardware is never accessible outside the subsystem. All access to the hardware must be mediated through subsystem methods.
+one could not hope to wholly understand the way that physical memory is arranged, but they may peer voyeuristically into random pages of process memory, abound with text strings and recognizable graphics.
 
-These rules extend the Periodic-Orientation into the subsystem code. For each subsystem, all of its logic should be centralized in one function and readable top to bottom. In most cases, the subsystem `periodic` is the only place in the entire program that actually touches the hardware. This has many advantages: it ensures by construction that hardware is only touched once per tick, that safety constraints are respected 100% of the time, and that logging and telemetry are run consistently.
+[![windows XP icons are visible in the memory: two Xs, an information symbol, and a question mark bubble](https://citrons.xyz/files/5_iWtVQQ.png)](https://citrons.xyz/files/5_iWtVQQ.png)
 
-Centralizing most logic in `periodic` also provides a nice platform for both autonomous and teleoperated code. The subsystem's API surface can be comprised of very high-level functions like `driveFieldRelative(vx, vy)` or `goToElevatorPreset(coralOrAlgae, level)`, which basically just set instance variables to be read later in `periodic`. These subsystem functions also provide a consistent place to validate inputs (e.g. impossible speeds, angles, or presets), convert units, etc.
+[![more XP icons: more Xs, an alert symbol](https://citrons.xyz/files/dNhSc6rG.png)](https://citrons.xyz/files/dNhSc6rG.png)
 
-By the way, don't be afraid to combine two subsystems if their logic is intertwined. For example, in 2025 our robot had an arm on an elevator, and the safe angles for the arm were dependent on the height of the elevator. Therefore, we made a combined `ElevatorAndArm` subsystem. (If you've heard advice that classes should be about "one thing", ignore that advice, it is wrong.<sup>[1]</sup>)
+programs often exist in the mind as something ineffable, intangible, and abstract. even their physical existence is locked inside black plastic squares, harboring impossibly tiny transistors. in my opinion, to lay visceral the individual bits in a computer program is an idea that despite being simple, is immensely potent.
 
-## Chase the desired state
+peer into the core.
 
-As I described earlier, every FRC program computes the desired state of the hardware, then updates the outputs to move in that direction. This is most obviously true of closed-loop control (PID, typically), where you simply set a target value (e.g. "elevator at 6 feet") and then compute outputs that will move the hardware toward that target.
+![ferrite core memory](https://citrons.xyz/files/BIUqMjSM.png)
 
-Successful Periodic-Oriented programs apply this philosophy to the entire robot program. **What hardware state do I want, and how do I get there?** This way of thinking applies at the actuator level (e.g. motor speeds), the mechanism level (e.g. arm angles), and the whole-robot level (e.g. safety constraints like "arm can only go out when elevator is down"). It is universal to all robot control.
+## journal
 
-The question of "What hardware state do I want?" falls naturally into `teleopPeriodic` and `autonomousPeriodic`. They naturally define answers to questions like: Where on the field? What velocity? What elevator position? What arm angle? What shooter RPM?
-
-The question of "How do I get there?" then falls naturally into a subsystem `periodic`. Often it is as simple as `elevatorMotor.setReference(elevatorHeight)`, deferring the actual closed-loop behavior to your motor controllers. But extra behaviors can easily be layered in here too; for example, the whole-robot constraint described earlier can be as simple as:
-
-```
-def periodic(self):
-  newArmAngle = self.desiredArmAngle
-  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
-    newArmAngle = 0 # pull arm in if elevator is up
-  self.armMotor.setReference(newArmAngle)
-```
-
-Or you could do a "state machine" approach, where attempting to put the arm out will actually drop the elevator to a safe position first:
-
-```
-def periodic(self):
-  newArmAngle = self.desiredArmAngle
-  newElevatorHeight = self.desiredElevatorHeight
-  if self.getElevatorHeight() > constants.kMaxElevatorHeightForArm:
-    newArmAngle = 0 # pull arm in if elevator is up
-  if self.desiredArmAngle > 0:
-    newElevatorHeight = 0 # move elevator down if arm wants to be out
-  self.armMotor.setReference(newArmAngle)
-  self.elevatorMotor.setReference(newElevatorHeight)
-```
-
-In a Periodic-Oriented program, complex behaviors like this are easy to debug, robustly uphold safety constraints, never produce conflicting outputs to hardware, and often require less state than other approaches. Speaking of:
-
-## Minimize state
-
-Robots have enough state to deal with in the real world. So don't add extra state to your program!
-
-For the beginners in the audience, "state" in programming is data in your program that changes over time. Common sources of state in FRC programs include:
-
-- Physical robot state (e.g. location on field, velocity, mechanism positions)
-- User inputs (e.g. joystick axis values and button states)
-- Modes (e.g. the ability for operators to toggle between "coral mode" and "algae mode" controls)
-- Timers
-- Signal processing state (e.g. for smoothing sensor data or slewing outputs)
-- Coprocessor state (e.g. data stored on motor controllers or computer vision devices)
-
-Some of these are inherent, such as the physical robot state (which is the entire point). Others are not, such as modes. It is well-known in programming, across [many domains](https://number-none.com/blow/blog/programming/2014/09/26/carmack-on-inlined-code), that more state == more problems, so remove or isolate state wherever you can:
-
-- Avoid modes. They are confusing for both operators and programmers. For example, rather than storing a flag for `armIsExtended` that is toggled by a single button press, consider having an "out" button and an "in" button, or consider extending the arm only while the button is held. This eliminates ambiguity: the operator knows exactly what state the robot should be in based only on the buttons they are currently pressing.
-- Avoid duplicating coprocessor state in your robot code. For example, don't have a variable in your subsystem for `currentArmAngle`; read it directly from your motor controller instead. If they can get out of sync, that is an opportunity for bugs.
-- Avoid timers. They are a frequent source of bugs because the state of the world is often not what you expect when the timer expires. For example, instead of running your shooter for three seconds, consider running it until a sensor detects that the hopper is empty.
-- **Avoid autonomous state.** For most teams, it is very viable to represent all autonomous outputs as a function of time. In the extreme, this might look like: `if 2 <= elapsedTime and elapsedTime <= 5: shooter.shoot() else: shooter.stopShooter()` [TODO: BAD CSS HERE] But while this looks silly, this is more or less what tools like [Choreo](https://choreo.autos/) let you do. A Choreo trajectory is just a list of desired positions, velocities, and actions for the robot over time, and executing a Choreo trajectory is literally as simple as looking up the current desired state and applying it to your drivetrain. (This is also true of PathPlanner, but to a lesser extent due to its dependence on commands.) And it need not be fancy: In 2011, when I was a student, my dad (an industrial automation engineer) advised me to author our autonomous routines in spreadsheets. Each autonomous routine that year was literally a CSV file, with one column per actuator and one row per "step" (with start and end times). At any given time, you could simply look up the current row of the table, and look at each column to see what each motor's output should be. It worked well! I don't know why we never did it again.
-
-And there is one final piece of advice that eclipses all others:
-
-## Avoid commands at all costs
-
-The WPILib ["command-based"](https://docs.wpilib.org/en/stable/docs/software/commandbased/what-is-command-based.html) programming system is an unmitigated disaster that should never be used under any circumstances.
-
-Harsh? Yes. But after writing and teaching command-based code for ten years, then trying other approaches for another seven, I have concluded that the command-based approach is almost entirely without merit.
-
-At its heart, the problem with the command-based system is that it is woefully, impossibly stateful. When using commands, you don't know which commands are currently active in the scheduler, you don't know what order they execute in, it's difficult to predict when they start, and it's all but impossible to know when they end.
-
-I have witnessed three generations of students (myself included), across multiple teams, debugging bizarre and entirely artificial problems caused entirely by the command-based system. "Why can't we run autonomous twice? Oh, because you can't always call `initialize` after `end`? Maybe I need to construct a new command instance? But how can I do that if `onTrue` takes a `Command` instead of a `() -> Command`? Why did the robot stop driving? Oh, something canceled the `Drivetrain` subsystem's default command? I guess it shouldn't `require` the subsystem then? Oh, I guess now we're setting the motor speeds twice? Why did that one run before the default command?"
-
-I could keep going. "Why did the robot shoot just then? Wait, there was still a command running from earlier in autonomous? Why didn't it get canceled?" Every one of these questions is a stupid waste of time.
-
-The other problem with commands is that they spread once-simple logic across dozens of files. This is purportedly a *benefit* of using commands, but the reality is that neither students nor mentors are good at piecing all the logic together in their head again. When you have a bug at competition and need to make a code change *now*, you need code that is brutally simple, where you can be confident that your change won't have unexpected side effects. Straight-line code is better for this purpose.
-
-The remaining advantages for the command-based model are that they make it easier to sequence and schedule actions in autonomous, and that in principle they prevent multiple pieces of logic from accessing the hardware simultaneously. But as I've already suggested, a stateless, time-driven approach to autonomous works better in most situations, intra-subsystem state can be handled in `periodic`, and the `periodic` approach avoids the need for the `requirements` system by construction. (And if you want to ensure that a subsystem method is called only once per `periodic`, this can be easily achieved with a flag and a log message in the subsystem method itself.)
-
-So, although it might seem crazy, I strongly encourage everyone to avoid command-based programming.
-
-## A final example
-
-Let me conclude with a snippet of real `teleopPeriodic` code from our 2025 codebase:
-
-```
-def teleopPeriodic(self):
-  # Get raw speeds from joysticks (to be converted to field/robot relative)
-  joystickX = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getX(), 0.1)
-  joystickY = constants.kMaxSpeed * wpimath.applyDeadband(self.leftStick.getY(), 0.1)
-
-  # Turn speed is the same regardless of field/robot relative
-  turnSpeed = wpimath.applyDeadband(-self.rightStick.getX(), 0.1)
-
-  # Precision mode
-  if self.leftStick.getRawButton(1) or self.rightStick.getRawButton(1):
-    joystickX *= 0.5
-    joystickY *= 0.5
-    turnSpeed *= 0.5
-
-  # Drive
-  doRobotRelative = self.leftStick.getRawButton(3) or self.rightStick.getRawButton(3)
-  if doRobotRelative:
-    self.drivetrain.drive_robot_relative(-joystickY, -joystickX, turnSpeed)
-  else:
-    # Flip to red alliance if necessary
-    xSpeed = -joystickY
-    ySpeed = -joystickX
-    if utils.isRedAlliance():
-      xSpeed *= -1
-      ySpeed *= -1
-    self.drivetrain.drive_field_relative(xSpeed, ySpeed, turnSpeed * constants.kMaxTurnSpeed)
-```
-
-There is no subsystem default command, just a function call. There are no separate commands for field vs. robot relative, just an if statement. There is no separate command or global state for precision controls, just an if statement. There is no binding of commands to buttons, just if statements. Reversed field-relative coordinates for the red alliance? If statement.
-
-Does this feel ugly to you? If so, think of this an acquired taste! This is 25 lines of dead-simple code that completely encapsulates all of our teleop driving logic. The command-based alternative would probably be several classes and 100 to 200 lines of code (when you count all the boilerplate). Here there is no possibility of command cancellation, bad defaults, incorrect execution order, or conflicting writes to the hardware. Instead the code expresses the logic directly and simply.
-
-I suspect that many readers will think this is *too* simple, like surely this approach will cause problems in practice. But it doesn't! This is our actual 2025 robot code, which supported field-relative and robot-relative swerve drive, odometry and vision, and multiple Choreo-based autonomous routines with different starting points and scoring positions. If you are Orbit and your strategy is 100% autonomous game piece retrieval and placement, then feel free to ignore me. But I believe this approach to FRC programming would be successful for at least 95% of all FRC teams.
-
-<sup>[1]</sup>The problem with advice like "classes should do one thing, and do it well" is that no one can describe what "one thing" is. This is even acknowledged in books like Clean Code but not clarified in a way I find satisfactory. It is therefore not actionable advice. The decision of where to draw an API boundary should instead be determined by the amount of information that has to cross that boundary. In our `ElevatorAndArm` example, we could indeed have separated the `Elevator` and `Arm` into separate subsystems, but our "coral level 3" preset would then have required calls to two separate subsystems, and both subsystems would have needed references to each other in order to maintain safety constraints. When two classes are deeply aware of each other's internals, you should just combine them.
+- 2026-09-13 Lou Sou Gales ie la Ta
+- 2026-09-09 type declaration syntax
+- 2026-06-01 bootstrapping the latest go on 9front
+- 2026-05-20 flight recorder
+- 2026-04-13 paint in the memory of other programs
+- 2025-12-29 life without scotch tape
+- 2025-11-23 have you heard of this website called Google? part II
+- 2025-10-24 have you heard of this website called Google?
+- 2025-09-12 distributions are good!
+- more...

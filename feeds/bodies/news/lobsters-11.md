@@ -1,291 +1,229 @@
-1. The device is stolen or lost and its contents must remain secret.
-2. The device is tampered with, and all attempts at tampering must render it unusable.
+I’ve just released [hegel-clj](https://github.com/aphyr/hegel-clj), a Clojure interface for the [Hegel](https://hegel.dev) generative testing library. You can jump right to [the docs](https://cljdoc.org/d/com.aphyr/hegel-clj/0.1.1/doc/readme), but I thought it might be interesting to explain why I want another testing library.
 
-Right now, we will focus on the first threat model. It is very difficult to build a tamper-proof system, and you need to worry about tamper-proofing your hardware, depending on what kind of actor is a realistic threat.
-
-If we want to keep data on the system secret, we must first consider which data is worth protecting. On a NetBSD system, our data can be grouped into two broad categories:
-
-1. System files (open source software)
-2. User-modified files
-
-Does the `/bin/sh` executable downloaded from the NetBSD FTP server contain any sensitive information?
-
-On a BSD system, due to the separation of the base system and packages, many root file system directories are mostly unmodified outside of upgrades. In a properly configured system, nearly all system daemons and user applications are not going to be running as `root`, so won’t have permission to modify or create files in `/bin`.
-
-We can reasonably assume that `/bin/sh` is the same binary that every other NetBSD user is running. A user may even opt to make directories containing such system files read-only.
-
-## Problems with disk encryption
-
-The operating system needs to be able to load files to boot.<sup>[[citation needed]](https://en.wikipedia.org/wiki/Citation_(horse))</sup>
-
-This makes "true" full disk encryption difficult to achieve without specialized hardware, since the user needs some way to enter a password or an encryption key, and can’t do so without some form of software running on their computer. NetBSD also needs to store some amount of metadata about the encrypted partition on the disk, such as information on how to generate a secure 256-bit key from a 24 character password.
-
-It is common for Unix systems to use shared libraries, which are loaded by programs to access system functionality. If these become unavailable, for example, by `/usr/lib` going missing, it becomes much harder to use the system. Familiarize yourself with the standard utilities in `/rescue` which don’t need working shared libraries to be useful.
-
-The cryptographic algorithms that get standardized by the US government tend to be
-[slow when implemented in software](https://www.imperialviolet.org/2012/10/21/nist.html).
-This carries a performance penalty. As a result, many modern CPUs include implementations of ciphers like AES in hardware. For those that don’t, there’s alternative ciphers like
-[Adiantum](https://en.wikipedia.org/wiki/Adiantum_(cipher)).
-
-## Which directories are sensitive?
-
-And which are necessary for the OS to load?
-
-On a normal NetBSD system, several directories have a high chance of being modified during system operation:
-
-- `/home` - user-specific files
-- `/var` - log files, system-wide databases (e.g. mail notifications), crash dumps…
-- `/root` - configuration files relevant to the root user account
-- `/usr/pkg` and `/usr/local` - where third-party software is installed
-- `/etc` - init scripts, system-wide configuration for the base system
-
-A simple approach might be to encrypt `/home`. However, this might not be enough for some users. Although the crash directory can be easily changed with
-[sysctl](https://man.netbsd.org/sysctl.8),
-a crash dump contains a snapshot of system memory which might be sensitive. If any servers have been run on the system, the log files might be sensitive. Mail sent to users (e.g. about their interrupted vi sessions and associated backups) might reveal sensitive file names.
-
-Some users opt for the
-[cgdroot](https://wiki.netbsd.org/security/cgdroot/)
-approach, which uses only a small unencrypted ramdisk to pivot to an encrypted file system. However, this modifies the system startup routines significantly and may make certain rescue options harder. So, it’s worth asking whether there’s an approach that is somewhere in the middle, and still uses the standard NetBSD installation and boot process. Many BSD systems use separate file system partitions for `/usr` and `/var`, and this is a standard configuration supported by the NetBSD installer.
-
-`/etc` is a harder problem to solve, since it contains files necessary to boot the system. However, on a typical desktop system, many files in `/etc` remain untouched. Passwords in `/etc` are generally stored only in hash form, *except* for Wi-Fi access points and certain VPN configurations (although it’s easy to reconfigure `wpa_supplicant_flags` to use a different configuration file from the default one in `/etc`). Many configuration files are only loaded much later in the boot process, after `/usr` is already mounted, and can easily be replaced with symbolic links to files on another file system.
-
-## The installation process
-
-The NetBSD installer has basic functionality, but gets the job done quickly. In this configuration, we’re going to install NetBSD to a small unencrypted root file system. When you start to ignore the growth that can occur in `/usr` and `/var` and `/home`, even a complete NetBSD installation with development tools included is tiny. 4 GB should be more than enough.
-
-For example purposes, I am going to use a sparc64 virtual machine, but the process is basically the same for more mainstream CPU architectures like amd64.
-
-The installer detects that we already have a partitioned disk. We’re going to pick the "e: Delete everything" option so we have a fresh disk to start with:
-
-Next, we’re going to choose "Set sizes of NetBSD partitions". This will allow us to have a small root, and reserve a large encrypted partition:
-
-Here, I’ve decided I want a 4096 MB (4 GB) root file system, and a 11263 MB (11 GB) partition allocated for `/var`. Later, we’ll make `/usr` and `/var` share a disk partition, so don’t worry about this too much. Select "Go on".
-
-On the next screen, I’ve changed the type of the secondary partition to "cgd" (listed under "Other type"), NetBSD’s encrypted device driver. I’ve also set its mount point to "-" so we can reconfigure it later:
-
-I tell the installer I want to do a Full Installation and it completes as normal, installing everything into the small root partition.
-
-When we reboot and log in as `root`, we enter a new world… our 4 GB unencrypted root partition.
-
-## Post-installation setup (disklabel)
-
-| Note | Disklabel partitions are supported by every NetBSD port, and are required by some ports, such as sparc64 in our example. However, if your system uses UEFI, or you opted to use GPT partitions in the installer, your system has disk wedges instead. Ignore this section and read the section below for information about wedges. |
-| --- | --- |
-
-Since I’m on sparc64, the disk is partitioned into disklabels. `wd0` is the primary drive, and the `disklabel` command shows that `/dev/wd0d` is the partition reserved for our encrypted file system:
+I do a lot of generative testing in Clojure with the excellent [test.check](https://github.com/clojure/test.check). However, using test.check can be frustrating! In particular, complex generators can get stuck during shrinking, leaving me trying to prune down a complex data structure by hand. The culprit is usually `bind`. If you’re not familiar with test.check, Quickcheck, or other libraries in this family, `bind` is a generator which draws some random value, then uses that to construct a *new* generator, which in turn is used to draw some other value.
 
 ```
-# disklabel wd0
-#        size    offset     fstype [fsize bsize cpg/sgs]
- a:   8389584         0     4.2BSD      0     0     0  # (Cyl.      0 -   8322)
- b:   2097152   8389584       swap                     # (Cyl.   8323 -  10403*)
- c:  33554432         0     unused      0     0        # (Cyl.      0 -  33288*)
- d:  23067072  10487232        cgd                     # (Cyl.  10404 -  33287)
+(require '[clojure.test.check :as tc]
+         '[clojure.test.check.generators :as tcg]
+         '[clojure.test.check.properties :as tcp])
+(tcg/bind ; Take a number from `nat`, a generator of small positive
+          ; integers.
+          tcg/nat
+          ; Now with that number, construct a generator of vectors, each
+          ; with that many elements.
+          (fn [size]
+            (tcg/vector tcg/large-integer size)))
 ```
 
-We can go directly ahead with creating a parameters file for the `cgd`:
+We can also write this using test.check’s `let` macro, which expands to a series of nested `bind`s under the hood.
 
 ```
-# cgdconfig -g -k argon2id -o /etc/cgd/wd0d adiantum 256
+(tcg/let [size tcg/nat]
+  (tcg/vector tcg/large-integer size))
 ```
 
-And then load the configuration and set our password:
+This leads to the [canonical example](https://github.com/clojure/test.check/blob/master/doc/growth-and-shrinking.md#gotchas-1) of poor shrinking in test.check. Let’s try to find a vector containing `42`:
 
 ```
-# cgdconfig -V re-enter cgd0 /dev/wd0d
+(-> (tc/quick-check 1000
+      (tcp/for-all [xs (tcg/let [size tcg/nat]
+                         (tcg/vector tcg/large-integer size))]
+                   (not-any? #{42} xs))
+      {:seed 1777986545686})
+  :shrunk :smallest first)
+
+[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
 ```
 
-Now `cgd0` appears to the system as yet another disk, but all attempts to access that disk will be automatically encrypted/decrypted by the kernel.
+That *does* contain 42, but this vector is *enormous*. Why are there all these zeroes? Once test.check found this vector, surely it could have shrunk it to just `[42]`, right?
 
-The next time we enter our password, we want to be able to verify that the password was correct, to avoid reading or writing invalid data.
-
-This is done by choosing a verification method based on the contents of the encrypted partition. For flexibility’s sake, we’re going to put another disklabel inside the encrypted partition. This will allow the system to easily verify the password is correct by looking for a valid disklabel, but also gives us flexibility in our choice of file system.
+The answer has to do with shrink trees. Test.check generators don’t actually return values like `64`. Instead they return a lazily evaluated tree of values: the root might be `64`, and its children might be `[32 48 ... 63]`, and each of *those* children has further children: `32` has children `[16, 24, ... 31]`, and so on. Simplifying a bit, here’s how the tree for large integers [is defined](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L228-L237):
 
 ```
-# disklabel -i cgd0
+(defn- shrink-long
+  "Given a number x, returns a coll of (x-x, x-x/2, x-x/4, x-x/8, ..., x-1)"
+  [^long x]
+  (core/let [size (- 64 (Long/numberOfLeadingZeros (Math/abs x)))
+             ^longs vals (long-array size)]
+    (loop [i 0 n x]
+      (if (zero? n)
+        vals
+        (do
+          (aset vals i (- x n))
+          (recur (inc i) (quot n 2))))))))
 ```
 
-This opens the interactive editor. We’re going to enter `N` to set a name for our disklabel (enter something like "cgdlabel"), then enter `a` to modify the first sub-partition.
+So, if test.check finds that `64` violates some property we’re testing, it tries the first child of `64`, `32`. Let’s say that passes the test, so test.check tries the next child of `64`: `48`. If `48` fails, test.check tries its first child `24`, and so on. By performing this depth-first search of the tree, and choosing the branches cleverly, test.check can often quickly shrink an integer to a smaller one that still fails the test.
 
-First, it asks for a file system type. Enter `?` to display a list of types:
+A similar strategy applies to fixed-size vectors. The tree for a vector like `[2 2]` has children like `[1 2]` and `[2 1]`, based on the trees for each individual element of the vector. This explains why test.check produced a vector like `[0 0 0 ... 42 0]`: it found something like `[91 23 1034543 ... 42 15]`, then shrank the first element to zero, then the second, and so on. The only element it couldn’t shrink was the one that caused our property to fail: `42`. Because our generator `(tcg/vector tcg/large-integer size)` always used a fixed `size`, the tree for that vector always contained `size` elements—in this case, 39.
 
-```
-partition>a
-Filesystem type [unused]: ?
-Supported file system types:
-```
-
-Since I’m running -current and want to test the Log File System, I’m going to enter "4.4LFS". A more common and well-tested configuration would be "4.2BSD".
-
-Next is the start offset and partition size:
+Hang on! We didn’t just generate fixed-size vectors. We used `bind` to draw a size, then built a vector of that size:
 
 ```
-Start offset ('x' to start after partition 'x') [0c, 0s, 0M]: 0
-Partition size ('$' for all remaining) [0c, 0s, 0M]: $
+(tcg/bind tcg/nat
+          (fn [size]
+            (tcg/vector tcg/large-integer size)))
 ```
 
-Since "a" is the only sub-partition at the moment, the default start of 0 is fine. "$" will use all available space on the cgd.
+What kind of trees does `bind` produce? The [code](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L125-L142) involves some gnarly higher-order functions, but in essence `bind`’s trees can shrink in two ways. They can shrink the outer value (the `size` returned by `tcg/nat`), or they can shrink the inner value (the vector returned by `(tcg/vector ...)`.
 
-Finally, we’ll save our new label and quit the disklabel editor:
+Now imagine `bind` draws a size of `100`, then generates a vector of a hundred elements like `[15 32 42 ...]`. This contains `42`, so test.check begins hunting through the shrink tree. One of the branches it can take shrinks the `size` parameter, starting with `[50, 75, ... 99]`. But if `bind` picks any of those sizes, the vector `[15 32 42 ...]` is useless—it’s the wrong size! So `bind` calls our function with `50` to construct a generator of 50-element vectors, and generates a single vector from that generator. This vector will have *different* random elements, like `[69, 45, 1, ...]`.
 
-```
-partition>W
-Label disk [n]?y
-Label written
-partition>Q
-```
-
-Now change the `verify_method` in `/etc/cgd/wd0d` to `disklabel`,
-and add a line in /etc/cgd/cgd.conf to create the cgd at boot time:
+If there’s no `42` in the vector of 50 elements, then test.check abandons that branch and moves on to size `75`. It draws a new vector of 75 elements like `[8 7 42 ...]`, and since that contains `42`, it can continue shrinking. But since `42` is an uncommon integer, and test.check draws new elements for each `size`, it is very likely that most sizes will not produce a vector with `42`, and test.check will get stuck with, say, 39 elements. From there it can shrink each element, producing the comically oversized…
 
 ```
-cgd0 /dev/wd0d /etc/cgd/wd0d
+[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
 ```
 
-We can now access this hidden partition as `/dev/cgd0a`. But for it to be useful, we’ll need to create a file system on it. Once again, here I’m using the Log File System:
+For this vector it’s fairly obvious what’s wrong. But for [nontrivial test.check generators](https://github.com/jepsen-io/particledb/blob/4e911c2d6ebf5ed97becba08c12d754cbbd4da53/src/jepsen/particledb/gen/tc.clj), there might be a dozen nested levels of `bind` with complex downstream consequences. Every one of them offers a place for test.check to get stuck, and the smallest failing case can be devilishly tricky to understand. Experienced test.check users try to avoid `bind` and `let`—but they’re fundamentally inescapable for many problems.
+
+Over in the Python world, the [Hypothesis](https://hypothesis.works/) team took a very different approach to shrinking. Test.check is fundamentally a two-phase system: first it asks a generator to produce a shrink tree. Then, if the root of that tree looks “bad”, it explores the rest of that tree. Instead, Hypothesis generators produce a single value, and if that value looks bad, they re-run the generator and [ask it to produce something similar, but smaller](https://drmaciver.github.io/papers/reduction-via-generation-preview.pdf). This approach, called *internal test-case-reduction*, is the foundation of [Hegel](https://hegel.dev/).
+
+## [Hegel-clj](https://aphyr.com/posts/428-announcing-hegel-clj#hegel-clj)
+
+Hegel is a new cross-platform library for generative testing. It provides deterministic generators which draw random values from an imperative, structured RNG, as well as a rich family of special values and shrinking tactics. Writing these generators and shrinkers is hard. The idea is that Hegel’s core library will do this hard work once, and simpler wrapper libraries will extend the benefits of that hard work across many languages.
+
+I’ve been working for a few months on [hegel-clj](https://github.com/aphyr/hegel-clj), which offers Clojure bindings for Hegel, and I think it’s ready for the folks to try it out. To test something, you call `hegel-clj/test!`, draw some values from generators, and throw an exception if the test fails. Hegel searches for values that make that body throw, then shrinks them.
 
 ```
-# newfs_lfs /dev/rcgd0a
+(require '[hegel-clj [core :as h] [generator :as g]])
+(h/test! {:seed 4}
+  (assert (even? (h/draw! (g/integer)))))
+
+{:passed? false
+ :status :failed
+ :statistics {:total 34
+              :valid 5
+              :invalid 0
+              :overrun 18
+              :interesting 11}
+ :health-check-failed? false
+ :failures ({:draws {"draw_1" 1}
+             :exception
+             #error {:cause "Assert failed: (even? (h/draw! (g/integer)))"
+                     ...}})
+ :reproduce-blob "AAEAAAAACgEAAAAB", :caveat nil}
 ```
 
-A more normal and well-tested configuration would be FFSv2ea:
+The smallest case Hegel found involved a single draw of the number `1`, which caused the assertion `(even? 1)` to throw.
+
+Generators are pure, composable structures, just like in test.check. Here’s a vector of booleans:
 
 ```
-# newfs -O2ea /dev/rcgd0a
+(h/sample 5 (g/boolean))
+
+[false false true true false]
 ```
 
-We can now mount and access the encrypted file system:
+Or a map representing a person, with a name generated by a regular expression and an integer age:
 
 ```
-# mkdir -p /encfs
-# mount /dev/cgd0a /encfs
+(h/sample 5 (g/hmap {:name (g/regex-str #"[A-Z][a-z]+")
+                     :age  (g/integer 0 101)}))
+
+[{:name "Aa", :age 0}
+ {:name "Iyjdklppzxhqdnwmd", :age 89}
+ {:name "Kslvqorm", :age 64}
+ {:name "Fvyybe", :age 45}
+ {:name "Puwppxqag", :age 4}]
 ```
 
-Add a new line in `/etc/fstab` for our encrypted mount point:
+The higher-order combinators are all there too. You can transform generated values with `fmap`:
 
 ```
-/dev/cgd0a      /encfs  lfs     rw,noatime      1 2
+(h/sample 5 (g/fmap keyword (g/string)))
+
+[: :R :👍🏻 :True :çç¦ç¦򜝉ÏÏ򜝉¦¦Ï¦¦ç򜝉Ï¦ç򜝉çÏ򜝉çç¦]
 ```
 
-Use "ffs" instead of "lfs" if you aren’t using the Log File System. If using FFS, you may want to use the options `rw,log,noatime` to enable journaling.
-
-## Post-installation setup (disk wedges)
-
-On a recent amd64 machine, your system probably uses GPT and disk wedges instead of disklabels. Assuming our primary disk is `ld0`, we can see a list of wedges with `dkctl`:
+Or build one generator out of another using `bind`:
 
 ```
-# dkctl ld0 listwedges
-/dev/rld0: 3 wedges:
-dk0: 20e57277-ad70-408e-9c68-225270ed1500, 9267072 blocks at 64, type: ffs
-dk1: abad5a2d-8411-4d36-980e-a5f2b03a1047, 4194304 blocks at 9267136, type: swap
-dk2: 2c4d136a-f7ed-48f8-aae8-38afdd50c661, 53647360 blocks at 13461440, type: cgd
+(h/sample 2 (g/bind (fn [size]
+                      (g/tuple (g/vector size (g/integer))
+                               (g/vector size (g/boolean))))
+                    (g/integer 0 3)))
+
+[[[] []]
+ [[144229 531621 -364 -1569883 8194954 -913 16 -745]
+ [false true false true]]]
 ```
 
-| Note | If your disk is SATA rather than NVMe, it’s probably called `wd0` instead of `ld0`. |
-| --- | --- |
-
-In this case, our partition reserved for our encrypted file system is `/dev/dk2`, also accessible via the UUID alias `NAME=2c4d136a-f7ed-48f8-aae8-38afdd50c661`.
-
-We can go directly ahead with creating a parameters file for the `cgd`:
+Like test.check, we offer a `let` macro which lets you bind both regular values or generators to variables; if the right-hand side is a generator, it draws a random value from it. And unlike test.check, these generators shrink well. Instead of thirty-nine elements, Hegel can find the much-shorter “bad” vector, `[42]`.
 
 ```
-# cgdconfig -g -k argon2id -o /etc/cgd/maincgd aes-cbc 256
+(-> (h/test! {:test-cases 1000
+              :seed       1777986545686}
+      (h/let [size (g/integer {:min 0, :max 128})
+              xs   (g/vector {:size size} (g/integer))]
+        (assert (not-any? #{42} xs))))
+    :failures first :draws (get "xs"))
+
+[42]
 ```
 
-And then load the configuration and set our password:
+With `test.check`, if you want to thread multiple values through `bind` or `fmap`, you have to build and destructure maps or tuples. Hegel-clj lets you lift arbitrary code into a generator using `composite`, which makes it easier to build complex generators:
 
 ```
-# cgdconfig -V re-enter cgd0 NAME=2c4d136a-f7ed-48f8-aae8-38afdd50c661 /etc/cgd/maincgd
+(h/sample 2
+  (g/composite
+    (h/let [name      (g/string)
+            cat-count (g/integer 0 2)
+            cats      (g/vector {:size cat-count, :unique? true} (g/string))]
+      {:name name     
+       :cats cats})))
+
+[{:name "",
+  :cats []}
+ {:name "𝐓𝐡𝐞 𝐪𝐮𝐢𝐜𝐤 𝐛𝐫𝐨𝐰𝐧 𝐟𝐨𝐱 𝐣𝐮𝐦𝐩𝐬 𝐨𝐯𝐞𝐫 𝐭𝐡𝐞 𝐥𝐚𝐳𝐲 𝐝𝐨𝐠",
+  :cats ["🇺🇸" "👍🏻"]}]
 ```
 
-Now `cgd0` appears to the system as yet another disk, but all attempts to access that disk will be automatically encrypted/decrypted by the kernel.
-
-The next time we enter our password, we want to be able to verify that the password was correct, to avoid reading or writing invalid data.
-
-This is done by choosing a verification method based on the contents of the encrypted partition. For flexibility’s sake, we’re going to put another GPT partition table inside the encrypted partition. This will allow the system to easily verify the password is correct by looking for a valid GPT table, but also gives us flexibility in our choice of file system.
+You can build recursive generators with a promise-style API. The `deferred` generator provides a blank space for a generator, which can be filled in later:
 
 ```
-# gpt create cgd0
+(let [leaf (g/integer 0 9)
+      tree (g/deferred)]
+  (g/set-deferred! tree (g/one-of [leaf (g/vector tree)]))
+  (mapv prn (h/sample 5 tree)))
+
+0
+[[1] 8 [2 []] 5 [] [[4 6 []]]]
+[[1] 2]
+3
+0
 ```
 
-Now change the `verify_method` in `/etc/cgd/maincgd` to `gpt`,
-and add a line in `/etc/cgd/cgd.conf` to create the `cgd` at boot time:
+And best of all, `hegel-clj` ships with easy-to-use integration for clojure.test, making generative tests as easy as example-based ones:
 
 ```
-cgd0 NAME=2c4d136a-f7ed-48f8-aae8-38afdd50c661 /etc/cgd/maincgd
+(require '[clojure.test :refer :all] '[hegel-clj.clojure-test :refer [with]])
+
+(defn bad-add
+  "Adds two integers via floating-point"
+  [x y]
+  (long (+ (float x) (float y))))
+
+(deftest bad-add-test
+  (with {:test-cases 100}
+        [x (g/integer)
+         y (g/integer)]
+    (h/fprn :x x, :y y)
+    (is (= (+ x y) (bad-add x y)))))
+
+(bad-add-test)
+
+:x 0 :y 16777217
+
+FAIL in (bad-add-test) (form-init7301103820420620476.clj:6)
+expected: (= (+ x y) (bad-add x y))
+  actual: (not (= 16777217 16777216))
 ```
 
-For now, we’ll only create one partition inside the new sub-table. I’m running -current and want to test the Log File System, so I’ll use the "lfs" partition type. A more common and well-tested configuration would be "ffs".
+It’s hard to log debugging output with test.check—you’ll have to sift through thousands of test runs with complex inputs, and many of those runs won’t actually trigger the bug you’re searching for. Hegel has the notion of a “final” test case: after it’s found a counterexample, and shrunk it to a smaller version, it comes back and re-runs that case as a part of the final phase. We can use `(when (h/final?) ...)` to execute some debugging code only during these final cases, or `fprn` and `finfo`, which wrap `clojure.core/prn` and `clojure.tools.logging/info` respectively. I think there’s a [bug in Hegel](https://github.com/hegeldev/hegel-java/issues/32) that causes it to run more final cases than it should, but it’s still a big step up.
 
-```
-# gpt add -l encfs -t lfs cgd0
-```
+Finally, test.check has been around for a while, and like many Clojure projects it has an exceptionally stable API. That’s great for compatibility, but it means some early choices are now fossilized. It’s `(fmap gen f)`, but `(bind f gen)`. If you want an integer you have to remember the difference between `nat`, `int`, `pos-int`, `s-pos-int`, `small-integer`, `large-integer`, `large-integer*`, etc. Common generators require keyword arguments, like `(large-integer* {:min 0, :max 10})`. Some generators like `hash-map` are only callable with varargs, which makes composition tricky. The [properties API](https://clojure.github.io/test.check/clojure.test.check.properties.html) feels a tad fussy. And many of the ergonomic features you want, like generating strings from a regular expression, or integration with clojure.test, require an extra library like [test.chuck](https://github.com/gfredericks/test.chuck). Test.check is *really good*, but with the benefit of hindsight and a fresh canvas, I’ve tried to design a more streamlined, consistent, and approachable API.
 
-You should receive a kernel message, readable with the `dmesg` command, which notes that a new wedge is available, including its number. In this case, it’s `dk3`.
+I’ve used test.check for over a decade now and it’s one of my favorite things about Clojure. I want to thank Reid Draper, Gary Fredericks, Alex Miller, and everyone else who’s contributed to the library. I’m also indebted to David MacIver, Liam DeVoe, and Esau Rodriguez from the Hegel team at [Antithesis](https://antithesis.com/). They took time to talk me through Hegel’s design, answered endless questions about the protocol, and helped fix a whole slew of issues that we found. Y’all rock.
 
-For it to be useful, we’ll need to create a file system on it. Once again, here I’m using the Log File System:
-
-```
-# newfs_lfs /dev/rdk3
-```
-
-A more normal and well-tested configuration would use FFSv2ea:
-
-```
-# newfs -O2ea NAME=encfs
-```
-
-We can now mount and access the encrypted file system:
-
-```
-# mkdir -p /encfs
-# mount NAME=encfs /encfs
-```
-
-Add a new line in `/etc/fstab` for our encrypted mount point:
-
-```
-NAME=encfs /encfs       lfs     rw,noatime      1 2
-```
-
-Use "ffs" instead of "lfs" if you aren’t using the Log File System. If using FFS, you may want to use the options `rw,log,noatime` to enable journaling.
-
-## Final steps (moving over the data)
-
-These are required regardless of whether using disklabel or wedges.
-
-We’re going to copy our important directories to the new encrypted file system:
-
-```
-# umount /var/shm
-# cp -a /home /var /usr /encfs/
-```
-
-We need to create a symbolic link with `ln` because the `/usr/lib` directory contains some relative links to `../../`, and it expects the lib directory to be there at the root. This is a hack:
-
-```
-# ln -s /lib /encfs/lib
-```
-
-Then, we move our important directories out of the way and replace them with links to the encrypted ones:
-
-```
-# /rescue/mv /home /home2
-# /rescue/ln -s /encfs/home /home
-# /rescue/mv /var /var2
-# /rescue/ln -s /encfs/var /var
-# /rescue/mv /usr /usr2
-# /rescue/ln -s /encfs/usr /usr
-```
-
-Finally, we need to add a line to `/etc/rc.conf` to tell it to mount the encrypted partition early, so that `/usr` and `/var` are available during the init process:
-
-```
-# echo 'critical_filesystems_local="/encfs"' >> /etc/rc.conf
-```
-
-## Disclaimer
-
-After this process, the NetBSD installer is not aware of the encrypted partition existing during upgrades. Online upgrades must be used, rather than offline upgrades where the installer is booted from removable media. This may be done with a tool like `sysupgrade`.
-
-This guide was 100% written by one human and might contain human errors.
+I’m pleased to announce [hegel-clj 0.1.1](https://github.com/aphyr/hegel-clj), and I’m starting to use it to test my own projects. I hope it will be useful for you too. ❤️
