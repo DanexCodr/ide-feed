@@ -512,5 +512,3 @@ AI development is shifting all the tradeoffs in software
 development - they're not gone, but they have shifted. The AI can write Rust,
 even if you don't know it. But I trust plenty of contexts remain where my Rust
 experience plus AI leads to a better outcome than AI by itself.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50522563)

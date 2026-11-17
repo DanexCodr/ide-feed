@@ -1,69 +1,135 @@
-One feature of the Wii U is the backwards compatibility with Wii games through Wii Mode, often referred to as vWii. In theory, this is a really nice way to enjoy Wii games on a modern TV, since the Wii U has HDMI output. Unfortunately, Wii Mode does not look great. Ironically, the output of an original Wii can look better.  
+A squircle is a shape intermediate between a square and a circle.
+There is no single mathematical definition, rather there are a number of curves that fit this shape.
+All general squircles are parametrized, and can vary between circle and square.
 
-The two most prominent issues are the force-cropped output and color bleed issues.
+Loading the interactive tester…
 
-Reports of these issues go back to 2013<sup>[[1]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-1)</sup>, shortly after the Wii U was released, but a fix was never provided.
+## Superellipse
 
-In this blog post we'll take a closer look at the technical architecture of Wii Mode graphics, how two simple typos in the firmware caused these issues, and what modern AMD GPUs have in common with the Wii U.
+The best known squircle is the superellipse, popularized by Piet Hein.
+Martin Gardner wrote a detailed narrative of its origin in a [Scientific American column](https://archive.org/details/mathematicalcarn00gard/page/240/mode/2up) in 1977.
+The text is replicated in [https://piethein.com/superellipse/](https://piethein.com/superellipse/) but that’s missing equations and figures.
 
-## The DMCU
+The superellipse has the formula $|x|^n + |y|^n = 1$ (we’ll use a unit radius for convenience).
+When $n=2$ it is a circle, and it approaches a square asymptotically as $n \rightarrow \infty$.
 
-So who can we blame for these issues? One candidate is the DMCU. To get a quick overview of the DMCU, I'm quoting fail0verflow's description from their 2014 Wii U blog post<sup>[[2]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-2)</sup>:
+## Measurement
 
-> You may have noticed that good old VI (the display controller / Video Interface of ye olde GameCube and Wii) is gone. Huh? How does that work? Turns out they’re emulating that in software and translating its configuration to the R7xx’s CRTC registers. But where does this emulation software run? Sneaky: they added a special microcontroller to the Latte just for this purpose. The DMCU is a [68HC11](http://en.wikipedia.org/wiki/HC11) compatible 8-bit CPU whose sole purpose is to perform VI emulation. It has a frontend hardware shim that looks like VI to the Wii software, and behind the scenes it translates those registers to the Radeon’s, including upscaling configuration. cafe2wii loads the DMCU’s firmware (the DMCU doesn’t seem to be active in Wii U mode). It has its own dedicated RAM and access to both the faux-VI back side and the Radeon’s register area. [...]
+There is no standard measurement for squircles.
+For superellipses, the exponent is the most common parameter.
+A good choice is the coordinates of the midpoint of the quadrant, assuming a unit radius; here $x$ and $y$ are equal.
+The conversion formula is simple and intuitive: $x = 0.5^{1/n}$.
+This measurement is called "gauge" in the interactive demo above, and is the primary parameter; with the exception of some unreachable regions of parameter space, it should be possible to compare different squircle variants with similar gauge.
 
-To get to the bottom of these issues, I decided to reverse-engineer the firmware of the DMCU. The DMCU firmware is located in the Wii U's storage and is loaded into the DMCU's RAM before launching cafe2wii. Unfortunately, my favorite reverse-engineering tool Ghidra does not support the HC11, so in 2024 I ended up writing my own processor specification for it<sup>[[3]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-3)</sup>. Luckily, Ghidra already supported the HCS08 and HCS12, which I could base my specification on.
+## Flat-sided squircles
 
-I then spent several days reverse-engineering the DMCU firmware. The firmware itself is relatively straightforward. The DMCU has an interface to access the 32-bit registers of the display controller. The faux-VI hardware shim triggers interrupts in the DMCU firmware, which then configures the display controller accordingly.
+There are two basic approaches to squircle creation.
+One is a single analytic curve, where curvature reaches zero at the poles, but is otherwise nonzero.
+The other is mixing straight line segments with corners.
+A significant advantage of the latter approach is that it can adapt to rectangles of arbitrary aspect ratio without distorting the corner shape.
 
-Reverse engineering the DMCU quickly reveals the reason for the cropped image. The DMCU configures the display controller's viewport to simulate overscan. This crops off up to 16 pixels, which does not look great in several titles. Luckily, this is an easy fix; I can simply patch the bytes of the firmware directly to change the values written to the viewport registers.
+## The Apple squircle shape
 
-## AMD's DMCU
+Squircles received renewed attention when Apple changed the icon shape from rounded rectangle to their own squircle in iOS 7 in 2013.
+There were several blog posts to analyze and recreate the shape.
+An early analysis suggested that it was a superellipse of exponent 5, but when people extracted the Béziers and looked more closely, that was found to be inaccurate.
+Rather, it’s a flat-sided squircle.
 
-What fail0verflow didn't know at the time, or at least didn't mention, is that the DMCU is not a Wii U-specific microcontroller, but is found in other AMD GPUs too. A patch submitted by an AMD employee in 2018 to the amd-gfx mailing list<sup>[[4]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-4)</sup> mentions the following:
+For the raw Bézier path data of the Apple shape, the best source is the [PaintCode blog](https://www.paintcodeapp.com/blogpost/code-for-ios-7-rounded-rectangles).
+This blog correctly points out some bugs in that logic, and also has some details on behavior for oval rather than square aspect ratios.
 
-> DMCU (Display Microcontroller Unit) is a GPU chip involved in eDP features like Adaptive Backlight Modulation and Panel Self Refresh.
+The Apple shape has a number of flaws, including one extraneous straight line segment, and a lack of symmetry.
+However, those flaws are minor, and really only reveal themselves under close analysis.
 
-At least now we know what DMCU stands for. Could this really be the same chip design as used by the Wii U? The linux-firmware repository has several DMCU binary blobs for different GPUs<sup>[[5]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-5)</sup>. After downloading `raven_dmcu.bin` and `navi12_dmcu.bin`, I wrote a quick tool to parse the headers of the firmware blobs and extract the part that actually gets loaded into ERAM<sup>[[6]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-6)</sup>.
+The Apple shape has no additional parameter, so its variation is controlled entirely by the length of the flat side.
+With no flat side, it has a gauge fixed at 0.809.
 
-After loading the AMD Raven and Navi 12 DMCU firmware into Ghidra, I was able to confirm that the newer AMD GPUs still use an M68HC11-based DMCU. Even the display controller interface is almost identical to the one used on the Wii U.
+An extremely detailed analysis of the Apple shape is in [The Art of Continuous Corners](https://tsuijunxi.github.io/en/2026/06/23/the-art-of-continuous-corners/).
 
-## Decompiling the DMCU
+## The Figma squircle
 
-Since I grew tired of having to apply byte patches to the existing DMCU firmware, I decided to create a C decompilation of the firmware. This would also allow me to get a deeper understanding of how everything works.
+Figma published a blog post, [Desperately Seeking Squircles](https://www.figma.com/blog/desperately-seeking-squircles/), with an analysis of the Apple squircle and their own approximation.
+It is influential because Figma is an important design tool, because their writeup was compelling, and because there are any number of open source implementations of it, mostly TypeScript/JavaScript.
 
-At first, I needed a proper toolchain to compile my project. GCC used to have upstream support for the M68HC11 and M68HC12<sup>[[7]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-7)</sup>. The last upstream release with support is GCC 3.3.5 from 2005. Later versions broke it before it was removed entirely. I eventually stumbled across releases from 2006 on the personal website of Stéphane Carrez<sup>[[8]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-8)</sup>, the author of the original port. This leaves me with GCC 3.3.6 and binutils 2.15, which will have to do for now.
+- squircle-path-kit from msurguy
+- figma-squircle from phamfoo
+  - corner-smoothing from sanalabs (uses figma-squircle)
+  - squircle-js from bring-shrubbery (uses figma-squircle)
+- figma_squircle from aloisdeniel (Dart/Flutter)
+- Lisse from JaceThings
 
-To my surprise, I was able to byte-match entire functions by hand from the original Wii U DMCU firmware using this compiler. To help with matching I created a modified version of [decomp.me](https://github.com/decompme/decomp.me) with support for the previously mentioned compiler.
+The Figma blog contains a plot of the Béziers comprising a cleaned up version of iOS 7 rounded rectangle, revealing three Bézier segments per quadrant.
+It fixes the straight-line segment and the asymmetry, so is not an exact match.
+The middle segment is very close to an arc.
+The other segments are more problematic.
+They have zero curvature at the endpoints, so are G2 continuous with flat sides, but there is a curvature discontinuity with the middle (arc) section, and their curvature profile is not especially smooth.
+A reasonable guess is that it was drawn by hand to be approximately smooth.
 
-For example, the following function (compiled with `gcc3.3.6-m68hc1x-20060122 -Os -m68hc11 -fomit-frame-pointer -mshort`) results in an exact byte-match in the Wii U DMCU firmware.
+Without a flat side, the Figma squircle is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.854.
+Gauges up to 1 are of course attainable by adding the flat side.
 
-Looks like AMD or Nintendo (I'm not sure who was responsible for writing the Wii U's DMCU firmware) might have used Carrez's GCC port from 2006 when they were writing the Wii U's DMCU firmware. Are they still using it? Unfortunately, I wasn't able to get an exact match in the Raven or Navi 12 DMCU. They might have used some convoluted compiler flags that I couldn't figure out, or a different compiler entirely.
+## Clothoid squircles
 
-One interesting thing I noticed during reverse engineering is that the `nn_cmpt.rpl` library responsible for loading the DMCU firmware ends up writing the current display resolution into the middle of the DMCU's ERAM. These resolutions are unused by the DMCU firmware, but end up overwriting instructions in the middle of the firmware. By sheer luck, the overwritten functions happen to be unused, resulting in no issues being caused by this. Since I'm loading my custom firmware in the same way as the original one, this required some special attention in my decompilation. I had to create a carveout section for the resolutions and place the text section before these resolutions, manually placing larger functions into a section behind this carveout.
+The Figma blog suggests “smoothed curvature profiles” which have a piecewise linear relationship between arc length and curvature.
+It then goes on to approximate them with cubic Bézier segments, but their approximation has fairly significant curvature discontinuities when joining to the circular arc.
+The clothoid squircle is worth describing explicitly, as it has G2 continuity (as opposed to G1 for the Figma approximation).
 
-After manually decompiling the entire DMCU firmware to C, I had a functionally equivalent firmware. Not every function is byte-identical, but it seems good enough for me. I ended up publishing this firmware under the name [OpenDMCUFirm](https://github.com/GaryOderNichts/OpenDMCUFirm/tree/main) in 2025, in the hope that others could help with taking a closer look.
+The behavior is generally similar to the Figma variant.
+Without a flat side, it is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.790.
 
-## The Cause of Color Bleed
+## The box decorations corner-shape spec
 
-Several months after releasing OpenDMCUFirm, I noticed two bugs in the DMCU firmware, which led to the color bleed issues in Wii mode.
+Squircles got a big boost as they’re now standardized in CSS, as the [corner-shape](https://www.w3.org/TR/css-borders-4/#propdef-corner-shape) property of the [box decorations spec](https://www.w3.org/TR/css-borders-4/).
+These specify real superellipse corners, with additional tweaks and support for animation.
 
-The DMCU firmware processes events in the main event loop. These events are triggered based on interrupts from the faux-VI hardware shim. In the IRQ handler, status bits are mapped from an FVI register to events, which are then processed in the main loop. The code looks roughly like this<sup>[[9]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-9)</sup>:
+### The Chromium superellipse approximation
 
-If an event is currently already being handled by the main loop, it is marked as "active". The IRQ handler checks for that and marks it to be "retriggered" instead. This causes the event loop to immediately run the event handler again after the handler returns<sup>[[10]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-10)</sup>:
+While the CSS spec mandates the actual superellipse shape, practical implementations will generally use a Bézier approximation.
+A blog post, [The corner cases of implementing CSS corner-shape in Blink](https://developer.chrome.com/blog/implementing-corner-shape), gives an efficient closed-form approximation, with two Bézier segments per quadrant.
+This formula, determined using symbolic regression, is parametrized, and handles exponents 2 and above well.
+It is exact for placing the midpoint (this is part of the formula), so is well calibrated in that regard.
 
-Looks like someone made a typo in the IRQ handler, though. Instead of checking if the event active bit is set in `eventFlags`, they're checking if the bit is set in `irqStatus`, which is the hardware status register. If the bit for the active event happens to be set in the IRQ status register, the event is now "retriggered" and never marked as pending. This means the event is never actually processed by the main event loop. The fix for this is really simple:
+### Apple-like behavior with the corner-shape spec
 
-I tested this on hardware and confirmed that this occurs for events 2 and 3. They are executed once and are then always stuck in the "retrigger" state and are never processed again. All because of a simple typo.
+The early analysis of the Apple squircle shape as being approximately an exponent 5 superellipse was based on coarse shape only and didn't take into account its flat side.
+A much better match to the Apple shape is attainable using a superellipse with exponent 3 and a corresponding flat side length to match the gauge.
+This has G2 continuity and a similar curvature profile.
+This illustration was made using the Chromium approximation, so it should match the browser.
 
-So what are events 2 and 3 used for? Event handler 2 configures a bit in the `DEINT` register block called `CBCR_SWAP`, based on the horizontal origin of the image<sup>[[11]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-11)</sup>:
+![The Apple squircle beside a superellipse of exponent 3 with flat sides](https://linebender.org/wiki/curves/squircle/apple_vs_superellipse.svg)
 
-There's actually another typo in this function, which was probably never noticed since this event handler is never called: `CBCR_SWAP` should be enabled for odd origins, not even origins. The fix for this is again really simple:
+Here's the CSS to accomplish the "close to Apple" squircle shape.
+Note that the parameter to the `superellipse()` function is the base-2 log of the exponent, so the value for an exponent of 3 is 1.585.
 
-Making these two changes fixes the color bleed issues.
+```css
+.icon {
+  aspect-ratio: 1;
+  border-radius: 46.2%;
+  corner-shape: superellipse(1.585);
+}
+```
 
-I'm not entirely sure yet what event handler 3 is used for. There don't seem to be any visual differences without it. It appears to be similar to event handler 1, so maybe they moved event handler 3's functionality there after noticing it wasn't working.
+## Continuity
 
-## Try it out now!
+A superellipse of exponent $n$ has continuity $G(\lceil n \rceil - 1)$.
+This includes the flat-sided variants, as, for exponent > 2, the endpoint of the quadrant has zero curvature.
+A perfect circle (and indeed, any even integer exponent) without flat sides is of course the exception, as it has an infinitely high order of continuity.
 
-These fixes are part of the [custom branch](https://github.com/GaryOderNichts/OpenDMCUFirm/tree/custom) in OpenDMCUFirm. You can load this version of OpenDMCUFirm with the latest release of [evWii](https://github.com/GaryOderNichts/evwii). Let me know how it looks!
+As a general observation, for visual smoothness, the shape should have G2 continuity.
+Of the variants discussed, only the clothoid and superellipse (for n > 2) have this property.
+The Chromium approximation comes close; it doesn't have zero curvature by construction when joining the flat part, but does at the corner join by symmetry (unlike the Figma approximation, which has an additional arc there).
+
+## Other squircles
+
+Quite a number of other curves can be pressed into service as squircles if need be.
+
+- The polynomial spiral (“spiro”) curve can do a reasonable flat-sided squircle with G2 continuity. See the “suitcase corners” section of [Raph's thesis](https://levien.com/phd/phd.html), figure 7.2.
+- Conic sections (hyperbolas). These approximate a sharp corner but are only G1 continuous (if flat sided).
+- Fernández-Guasti squircle, defined by $x^2 + y^2 - s^2x^2y^2 = 1$. This is used in engineering but likely not in graphic design.
+- The [Wikipedia page on squircles](https://en.wikipedia.org/wiki/Squircle) has a “periodic squircle” which has very similar behavior to the Fernández-Guasti one (they are visually near indistinguishable).
+
+## Related topics
+
+The offset curve of a squircle is not a squircle, but (a) it’s close, and (b) concentric squircles might be visually just as appealing or more so; for example a slightly rounded inner corner might look better than a sharp one if the curvature exceeds the stroke half-width.
+
+The [blurred rounded rectangle approximation](https://raphlinus.github.io/graphics/2020/04/21/blurred-rounded-rects.html) is based on applying shading to a superellipse; each iso-line is in fact a superellipse.

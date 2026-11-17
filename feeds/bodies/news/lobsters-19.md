@@ -1,109 +1,61 @@
-FreeBSD pkgbase finally brings the base OS to you as discrete packages
-instead of monolithic tarball "package sets". However, if you want to
-deploy a lot of systems or FreeBSD jails you will be hitting the
-official FreeBSD mirrors repeatedly which is not ideal. I have my own
-internal package repository where I build packages from source, but I
-don't do that for the base OS and do not intend to; there's really no
-changes that I would want to make to the builds and having the base OS
-match the official upstream releases is important for ensuring their
-integrity and being able to report any bugs you encounter.
+*core* is [a program that I wrote](https://git.citrons.xyz/core/about) which spills the viscera of other programs onto the screen and allows you to prod them. it could be called an “esoteric debugger” or a “paint program.”
 
-This problem started to become very obvious to me when I was converting
-all of my FreeBSD jails to pkgbase deployments as the process wasn't
-caching the packages anywhere locally and each conversion was hitting
-the official mirrors over and over -- 36 times if I didn't intervene.
-This is a lot of bandwidth wasted when I could just mirror it locally.
-So I did, and this is how you can do it too.
+the visual content of the program is constructed as follows:
 
-## Apache
+- pages of memory (hardcoded for now as 4096 bytes) are arranged on a Z-order curve.
+- each page of memory is displayed as a 256x128 rectangle.
+- each pixel represents a bit. a white pixel represents one, and a black pixel represents zero.
+- the bits are arranged in rows, and the bytes are arranged in columns
 
-Believe it or not, I'm still using Apache for a few things. If someone
-wants to share a similar configuration for Nginx I'll publish that as
-well.
+[![the text and data segment of a program](https://citrons.xyz/files/j_ODSJFQ.png)](https://citrons.xyz/files/j_ODSJFQ.png)
 
-The one thing that bit me was that initially I pointed the reverse proxy
-configuration to `pkg.freebsd.org`. This won't work because that server
-will redirect you to a CDN and Apache won't read through the redirect
-and cache it, so I pointed directly to the CDN right now. This
-absolutely will change in the future when the CDN is completely hosted
-by the FreeBSD project again, but for now this is the requirement.
+as well as the display of program memory, core allows for its manipulation. if core shows you a picture of a program’s insides, then it is only natural that it allows you to scribble on it. the overcommitted empty space below the stack stack provides an inviting empty space to scribble in. it’s a perfect place to hide your terrible secrets in some poor, innocent process.
 
-```
+core is the logical conclusion of blinkenlights, “Allblinkenlights,” if you will. the intended experience is evocative aimlessness. the human visual system is highly parallel and very good at recognizing patterns. you are encouraged to allow these patterns to wash over you.
 
-<IfModule !cache_module>
-  LoadModule cache_module libexec/apache24/mod_cache.so
-</IfModule>
+many textures arise from different kinds of data in memory. ASCII text is incredibly recognizable, by virtue of being a 7-bit encoding, as well as having a biased distribution of values. 64-bit pointers are similarly easy to recognize because their last two bytes will either be zero or one.
 
-<IfModule !cache_disk_module>
-  LoadModule cache_disk_module libexec/apache24/mod_cache_disk.so
-</IfModule>
+[![a view of the stack of a program. there are text and arrows scribbled in empty spaces, pointing to ASCII data, *envp and *argv, and return addresses](https://citrons.xyz/files/PzvOTBbx.png)](https://citrons.xyz/files/PzvOTBbx.png)
 
-<IfModule !ssl_module>
-  LoadModule ssl_module libexec/apache24/mod_ssl.so
-</IfModule>
+in the mesmerizing undulations of complex programs, these textures may blink or move around or stay boringly still. if you are keen, you may catch some large data structure being allocated or filled in. or you may see the first generation of a garbage collector fly by as short-lived objects are created at a rapid rate. in games, the stack can be seen flickering rapidly and changing every frame.
 
-<IfModule !proxy_module>
-  LoadModule proxy_module libexec/apache24/mod_proxy.so
-</IfModule>
+core can make stark the immensity of memory and the way that programs use it. data structures and programming patterns appear in the physical reality of which bits are toggled where.
 
-<IfModule !proxy_http_module>
-  LoadModule proxy_http_module libexec/apache24/mod_proxy_http.so
-</IfModule>
+I was very keen to see what a program would look like that uses continuation passing style implemented as in the famous paper, [CONS should not CONS its arguments, part II: Cheney on the M.T.A](https://dl.acm.org/doi/10.1145/214448.214454). I compiled a game programmed in CHICKEN scheme and was delighted to see a stack that moved like a waterfall.
 
-CacheRoot          /var/cache/apache-pkg
-CacheDirLevels     2
-CacheDirLength     1
+[![a stack continuously filled with pointers](https://citrons.xyz/files/UvkDiSvw.png)](https://citrons.xyz/files/UvkDiSvw.png)
 
-CacheIgnoreQueryString   On
-CacheIgnoreCacheControl  On
-CacheIgnoreNoLastMod     On
-CacheIgnoreHeaders       Set-Cookie
-CacheMaxFileSize         1073741824
-CacheMinFileSize         1024
-CacheDefaultExpire       31536000
-CacheDetailHeader        On
+graphical programs can be the most interesting. visual patterns in graphics in memory can emerge vividly.
 
-<VirtualHost *:80>
-    ServerName pkg.feld.me
-    DocumentRoot /var/repos/
+[![sprites from super mario brothers are visible in the memory](https://citrons.xyz/files/eSPOP7T+.png)](https://citrons.xyz/files/eSPOP7T+.png)
 
-    Alias /robots.txt /usr/local/www/apache24/data/robots.txt
+when attached to virtual machines or emulators, core gains omniscience over an entire operating system.
 
-    # Where my local package repos are
-    <Directory /var/repos/>
-      AllowOverride none
-      Options Indexes FollowSymLinks
-      Require all granted
-    </Directory>
+[![many, many pages filling the VM memory porously](https://citrons.xyz/files/M_ujZTMA.png)](https://citrons.xyz/files/M_ujZTMA.png)
 
-    # pkgbase: reverse proxy, cache ONLY the immutable Hashed/blobs
-    SSLProxyEngine On
-    <LocationMatch "^/pkgbase/[^/]+/[^/]+/Hashed/">
-      CacheEnable disk
-    </LocationMatch>
+it is astounding to see an immense creature flicker to life. pages fill empty space in speckled patterns. panning over a chasm, the page tables can be seen vibrating and filling in with new allocations. it is reminiscent, perhaps, of insects, like a beehive.
 
-    CacheQuickHandler off
+one could not hope to wholly understand the way that physical memory is arranged, but they may peer voyeuristically into random pages of process memory, abound with text strings and recognizable graphics.
 
-    ProxyRequests     Off
-    ProxyPreserveHost Off
-    # Have to use the CDN directly to not chase redirects
-    ProxyPass         /pkgbase/ https://cloudfront.aws.pkgbase.freebsd.org/ connectiontimeout=30 timeout=600
-    ProxyPassReverse  /pkgbase/ https://cloudfront.aws.pkgbase.freebsd.org/
+[![windows XP icons are visible in the memory: two Xs, an information symbol, and a question mark bubble](https://citrons.xyz/files/5_iWtVQQ.png)](https://citrons.xyz/files/5_iWtVQQ.png)
 
-    #    LogLevel cache:debug
+[![more XP icons: more Xs, an alert symbol](https://citrons.xyz/files/dNhSc6rG.png)](https://citrons.xyz/files/dNhSc6rG.png)
 
-</VirtualHost>
-```
+programs often exist in the mind as something ineffable, intangible, and abstract. even their physical existence is locked inside black plastic squares, harboring impossibly tiny transistors. in my opinion, to lay visceral the individual bits in a computer program is an idea that despite being simple, is immensely potent.
 
-Now on my servers I just change the repo config for the `FreeBSD-base` repo to:
+peer into the core.
 
-```
+![ferrite core memory](https://citrons.xyz/files/BIUqMjSM.png)
 
-FreeBSD-base: {
-  url: "https://pkg.feld.me/pkgbase/${ABI}/base_release_${VERSION_MINOR}",
-  mirror_type: "none",
-  enabled: yes
-}
-```
+## journal
 
-Something I should consider is publishing an SRV record that falls back to the official mirror if my webserver is down, but I haven't bothered with that yet.
+- 2026-09-13 Lou Sou Gales ie la Ta
+- 2026-09-09 type declaration syntax
+- 2026-06-01 bootstrapping the latest go on 9front
+- 2026-05-20 flight recorder
+- 2026-04-13 paint in the memory of other programs
+- 2025-12-29 life without scotch tape
+- 2025-11-23 have you heard of this website called Google? part II
+- 2025-10-24 have you heard of this website called Google?
+- 2025-09-12 distributions are good!
+- more...

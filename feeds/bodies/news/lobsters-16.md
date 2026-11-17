@@ -1,220 +1,89 @@
-Have you heard about [dynamic derivations](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application)?
+TL;DR: We are enabling the parallel frontend of the Rust compiler on nightly by default,
+to find remaining issues in preparation for its stabilization.
 
-They are an experimental-feature in Nix that lets a derivation produce other derivations as its output. Why ? This lets you dynamically create your build graph, instead of having to know it all at evaluation time. It’s Nix’s answer to try and match the build speed of other build systems like [Bazel](https://bazel.build/) or [buck2](https://buck2.build/).
+## Context
 
-[![So hot right now meme: Mugatu from Zoolander under the caption "Dynamic derivations", above "So hot right now"](https://fzakaria.com/assets/images/derived/dyn_drv_so_hot_meme-748w.webp)](https://fzakaria.com/assets/images/dyn_drv_so_hot_meme.png)
+The Rust compiler has been using multiple threads to compile code in its "backend" part (using LLVM) for a long time. However, its "frontend" part (which includes type checking and borrow checking) has been executing sequentially, on a single thread, which of course limits the performance of the compiler. If you are interested in a more in-depth explanation of parallelism in the Rust compiler, see this [previous post](https://blog.rust-lang.org/2023/11/09/parallel-rustc/#existing-intraprocess-parallelism-the-back-end).
 
-There is not much written about dynamic derivations, and the documentation is sparse. I have [written](https://fzakaria.com/2025/03/10/an-early-look-at-nix-dynamic-derivations) [a](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application) [few](https://fzakaria.com/2025/03/12/nix-dynamic-derivations-a-lang2nix-practicum) [posts](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) about them, so I sometimes get questions about them.
+The compiler frontend actually had support for running in parallel for a long time, but it was not enabled by default due to various issues. [Three years ago](https://blog.rust-lang.org/2023/11/09/parallel-rustc/), we made it possible to opt into the parallel frontend on the nightly channel, with the plan to stabilize it in 2024. Clearly, we did not achieve that goal, but work on the parallel frontend was still slowly progressing in the meantime.
 
-Recently, I got a DM from [Evan Porter](https://www.linkedin.com/in/evanwp/) over [LinkedIn](https://www.linkedin.com/), the ultimate bug triaging network, about whether it is possible to query the deriver of a dynamic derivation to get the initial derivation.
+Last year, [Vadim Petrochenkov](https://github.com/petrochenkov), together with several other contributors, started a coordinated effort to finally get the parallel frontend over the finish line. Since then, many long-standing issues were fixed, and its performance was improved. Now we are at a point where we would like to make it widely available. But before that, we want to find out if people encounter issues with it in the wild, which is why we are enabling it by default only on the nightly channel. Once we will be confident enough that it is working well, we want to stabilize it.
 
-> For dynamic derivations let’s say I have a .drv.drv file. This file outputs a derivation.
-> Is it usually possible to query deriver the output derivation to obtain the initial derivation?
+The parallel frontend has been enabled on the nightly channel by default since `nightly-2026-11-14`.
 
-They had tried it and got this:
+## Benefits
 
-```
-$ nix-store --query --deriver \
-    $(nix-store --query --deriver ./result)
-unknown-deriver
-```
+The primary benefit of enabling the parallel frontend is, of course, faster compilation of Rust programs.
 
-That should work. 🤨 Every path a build registers carries a `deriver`, the `.drv` that produced it, and a `.drv` that came out of a build is still a path a build registered.
+We benchmarked the parallel frontend in our [benchmark suite](https://github.com/rust-lang/rustc-perf), which measures the duration to compile the *leaf* crate in a crate graph. As usual, the results were varied. In some benchmarks, the parallel frontend barely helped. In others, for example when performing a `cargo check` of the `nalgebra`, `cargo` or `diesel` crates, the compilation was almost three times faster, using 8 threads.
 
-When I tried it, it worked. 🤷
+In the table below, you can find the aggregated wall-time mean change for the real-world benchmarks in our suite, when building a single crate from scratch across several configurations, compared to the same build using a sequential frontend.
 
-You will need `extra-experimental-features = dynamic-derivations ca-derivations recursive-nix` in your `nix.conf` to drive the samples in this post.
+| Frontend threads / Profile | `check` | `clippy` | `debug` | `opt` |
+| --- | --- | --- | --- | --- |
+| 2 | -21.95 % | -20.74 % | -14.2 % | -12.51 % |
+| 4 | -37.99 % | -36.01 % | -29.14 % | -23.67 % |
+| 8 | -44.23 % | -41.76 % | -36.1 % | -27.88 % |
 
-```
-$ nix build -f default.nix \
-    --print-out-paths
-/nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
+It is clear that the parallelization is not perfect, and we definitely plan to invest more effort into improving its performance. Nevertheless, with 8 threads, it can make the end-to-end compilation time of `cargo check` ~2x faster for several crates that we tested, which is still quite an improvement.
 
-$ nix-store --query --deriver \
-    /nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
-/nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
+The performance benefits for incremental rebuilds are much more modest, and also very hard to compare, because the performance of rebuilds depends on what was changed and how were the codegen units laid out. In our benchmark suite, we saw a mean improvement of 3-5% for incremental rebuilds. But we currently do not have great benchmarks for this use-case, so your results might vary.
 
-$ nix-store --query --deriver \
-    /nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
-/nix/store/m5x261fv29jkn0rvznqj2fzkaql01xiy-result.drv.drv
-```
+We can also zoom in on an individual crate. Here is a chart of how the wall-time scales when compiling the `nalgebra 0.33` crate, for a full non-incremental build (`full`), full incremental build (`incr-full`) and an incremental rebuild (`incr-patched`) across several build configurations:
 
-Turns out, there is a case where you do get `unknown-deriver` if you set `__contentAddressed = true` on the producer. If the producer is content-addressed, its output path is not known until after the build, and Nix does not fill in the `deriver` of a path that already exists.
-I filed [NixOS/nix#16823](https://github.com/NixOS/nix/issues/16823).
+![Nalgebra benchmark results](https://blog.rust-lang.org/2026/11/16/enabling-parallel-frontend-on-nightly/nalgebra-0.33.png)
 
-The question though made me wonder how far back you can walk the chain of dynamic derivations. I had to try it. 😈
+What is interesting to note is that enabling the parallel frontend can actually also make the backend faster, for reasons explained [here](https://blog.rust-lang.org/2023/11/09/parallel-rustc/#new-intraprocess-parallelism-the-front-end).
 
-Let’s pick a fun example to see how far we can go. Here is a derivation that imitates the classic song *99 bottles of beer* by producing a chain of derivations, each one outputting the next verse.<sup>1</sup>1The builder writes the next derivation by hand in [ATerm](https://fzakaria.com/2025/03/23/nix-derivations-by-hand), so there is no recursive Nix and no `nix-instantiate` involved.
+It is important to note that all benchmark results presented above measured only the compilation of a single crate. When compiling a whole crate graph, your CPU cores might already be saturated because of backend (LLVM) parallelism or by Cargo compiling multiple crates in parallel. So the final performance effect will vary heavily based on the workload that you are running, and on the number of cores that you have available.
 
-```
-export PATH=$busybox/bin
+We also benchmarked `cargo check` end-to-end (checking the whole crate graph) on the `cargo` crate itself on a machine with 8 CPU cores. With 8 threads, it resulted in a ~15% end-to-end improvement:
 
-# A content-addressed derivation does not know its output path, so its
-# "out" variable holds this placeholder and Nix swaps in the real path at
-# build time. It is "/" + nix32(sha256("nix-output:out")), the same for
-# every derivation with an output named "out".
-OUT_PLACEHOLDER=/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9
+- 36.7s with 1 frontend thread
+- 35.1s with 2 frontend threads
+- 31.9s with 4 frontend threads
+- 30.8s with 8 frontend threads
 
-bottles() {
-  case $1 in
-    0) echo "no more bottles" ;;
-    1) echo "1 bottle" ;;
-    *) echo "$1 bottles" ;;
-  esac
-}
+As can be seen from the results above, when the CPU cores are already saturated with parallel crate compilation and LLVM, the positive effect of the parallel frontend is reduced.
 
-# The last derivation in the chain writes the punchline instead of a .drv.
-if [ "$n" -eq 0 ]; then
-  echo "No more bottles of beer on the wall, no more bottles of beer." >&2
-  echo "Go to the store and buy some more." > $out
-  exit 0
-fi
+## Tuning the thread count
 
-next=$((n - 1))
-echo "$(bottles $n) of beer on the wall, $(bottles $n) of beer." >&2
-echo "Take one down, pass it around, $(bottles $next) of beer on the wall." >&2
+At the start, the nightly toolchain will default to the parallel frontend using only `2` threads. This is a conservative choice that should still allow us to find potential issues while not increasing memory usage a lot at the same time.
 
-# Input sources must be sorted.
-srcs=$(printf '"%s"\n' "$busybox" "$script" | sort | paste -sd, -)
-
-# Write the derivation for the next verse. A .drv is a single line of
-# ATerm, so strip the spaces and newlines that are only here for reading.
-# Nix takes a derivation's name from its store path, so the next name is
-# ours minus one ".drv".
-tr -d ' \n' > $out <<EOF
-Derive(
-  [("out", "", "text:sha256", "")],
-  [],
-  [$srcs],
-  "$system",
-  "$busybox/bin/sh",
-  ["$script"],
-  [
-    ("builder", "$busybox/bin/sh"),
-    ("busybox", "$busybox"),
-    ("n", "$next"),
-    ("name", "${name%.drv}"),
-    ("out", "$OUT_PLACEHOLDER"),
-    ("outputHashAlgo", "sha256"),
-    ("outputHashMode", "text"),
-    ("script", "$script"),
-    ("system", "$system")
-  ]
-)
-EOF
-```
-
-> **Tip**
-> A derivation whose output is a `.drv` must set `outputHashMode = "text"`.
-
-In our example we are using a content-addressed derivation, but the same idea works with an input-addressed one, but it’s more work to compute the output path in the shell, unless you are using `nix-instantiate` to do it for you with recursive Nix.
-
-The Nix side builds the first derivation and then follows `builtins.outputOf` once per bottle.
+If you want to test out the performance with different thread counts, you can override the number of threads used for the frontend using the `--jobs-frontend` compiler flag. It can be specified either in the `RUSTFLAGS` environment variable, or you can put it into a [`.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html) file:
 
 ```
-let
-  pkgs = import (fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/6dadaf4375be35033e1c84395adbd53ff5fded96.tar.gz";
-  }) { };
-  inherit (pkgs) lib;
-
-  # maximum bottles of beer on the wall,
-  # 50 is the most that fits in a store path!?
-  bottles = 50;
-
-  top = derivation {
-    name = "beer" + lib.concatStrings (lib.replicate bottles ".drv");
-    system = builtins.currentSystem;
-    builder = "${pkgs.busybox}/bin/sh";
-    args = [ ./bottles.sh ];
-    script = ./bottles.sh;
-    busybox = pkgs.busybox;
-    n = bottles;
-    __contentAddressed = true;
-    outputHashMode = "text";
-    outputHashAlgo = "sha256";
-  };
-in
-# Follow the chain of outputs down to the last derivation.
-lib.foldl' (drv: _: builtins.outputOf drv "out") top.outPath (lib.range 1 bottles)
+[build]
+rustflags = ["-Zunstable-options", "--jobs-frontend=8"]
 ```
 
-While working through this example, I hit a bug in Nix that made me set `__contentAddressed = true` on the top derivation. That is not necessary for a derivation that outputs a `.drv`, but it works around the bug. I filed [NixOS/nix#16830](https://github.com/NixOS/nix/issues/16830).
+Currently, the performance of the parallel frontend will likely not scale very well above ~8 threads, but you can try it on your workload to test what happens. Note that using higher thread counts will likely lead to higher memory usage of the compiler, and in extreme cases it might cause you to run out of memory.
 
-You might notice that we limit the number of beers to 50. Why 50 and not 99?
+## Limitations and known issues
 
-Well, 50 is the most that fits in a store path.
+Due to the used parallelism, the produced order of diagnostics might not be deterministic when using the parallel frontend.
 
-```
-error: path '…-beer.drv.drv.drv…' is not a valid store path:
-  name 'beer.drv.drv.drv…' must be no longer than 211 characters
-```
+In some situations, the generated binary might also not be reproducible, though we currently consider these cases bugs, and we would like to identify them and fix them.
 
-The maximum length of a store path is [211 characters](https://github.com/NixOS/nix/blob/7f1ff3fec92f9d60327e4ca9e51acd565a91cc6c/src/libstore/include/nix/store/path.hh#L48). A derivation’s store path must include the `.drv` suffix, and every `.drv` in a chain adds four characters. The top derivation is named `beer` and if you add 51 `.drv`s we get 208 characters. No room for any more beer. 🍻
+There are currently some [known issues](https://github.com/rust-lang/rust/issues?q=state%3Aopen%20label%3AA-reproducibility%20label%3AA-parallel-compiler) related to the reproducibility of the Rust compiler when using the parallel frontend, which are being worked on.
 
-Let’s <del>build</del> sing it.
+## How do I opt out?
 
-```
-$ nix build -f beer.nix \
-    --print-out-paths \
-    --print-build-logs
-building '/nix/store/di5x9yrhh6pfn214c41bnpxh1avya51c-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 50 bottles of beer on the wall, 50 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 49 bottles of beer on the wall.
-building '/nix/store/zg35ykl6qvh6gasy6q4pc6d4kyqcq0sd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 49 bottles of beer on the wall, 49 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 48 bottles of beer on the wall.
-building '/nix/store/g07drgnkmwkbyccwk8vzzibbfdznpqjd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 48 bottles of beer on the wall, 48 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 47 bottles of beer on the wall.
-...
-building '/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv'...
-beer.drv> 1 bottle of beer on the wall, 1 bottle of beer.
-beer.drv> Take one down, pass it around, no more bottles of beer on the wall.
-building '/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv'...
-beer> No more bottles of beer on the wall, no more bottles of beer.
-/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
+To reiterate: this is only being enabled on nightly for now. If you are using the stable toolchain, you will still be using the sequential frontend by default.
 
-$ cat result
-Go to the store and buy some more.
-```
-
-Fifty-one builds, one after another<sup>2</sup>2A single trivial build takes about 1.5 seconds on my laptop, so the cost of building 51 derivations is about 75 seconds largely due to substituter lookups. If you disable substituters `--option substituters ''`, the builds take about 1.3 seconds in total. . Evaluation knows about only the first one. Nix discovers each of the other 50 by building the one before it. 🍺
-
-> **Aside**
-> Hey, didn’t an [earlier post](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) have dynamic derivation chains 500 deep?!
->
-> Yes! The difference is whether a derivation *outputs* the next one or *depends* on it. A derivation whose output is another derivation gets one more `.drv` appended to the name. The dice chain linked each step to the next as a dependency, and a dependency keeps its own name, so no name ever had more than two `.drv`s in it.
-
-Back to the original question: can we query the deriver of the output derivation to get the initial derivation? Yes, we can.
-
-Let’s put `nix-store --query --deriver` in a loop that walks from the result all the way back to the top.
+If you want to disable the parallel frontend on the nightly channel, pass `-Zunstable-options --jobs-frontend=1` to `rustc`, either via the `RUSTFLAGS` environment variable, or with the [`.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html) configuration file:
 
 ```
-$ p=$(readlink result)
-$ while [ "$p" != unknown-deriver ]; do
-    echo "$p"
-    p=$(nix-store --query --deriver "$p")
-  done > chain.txt
-
-$ wc -l < chain.txt
-52
-
-$ head -4 chain.txt
-/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
-/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv
-/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv
-/nix/store/flj05chf2yyn5bxsjq41if7mihcjjqkp-beer.drv.drv.drv
+[build]
+rustflags = ["-Zunstable-options", "--jobs-frontend=1"]
 ```
 
-We have the result plus 51 derivations. 💪
+If you have to do this for some reason, please do tell us why [on GitHub](https://github.com/rust-lang/rust/issues/113349) or [on Zulip](https://rust-lang.zulipchat.com/#narrow/channel/187679-t-compiler.2Fparallel-rustc/topic/Parallel.20frontend.20issues/with/624551811). We would especially like to know about any compiler crashes that you encounter, or the produced binaries not being reproducible when the parallel frontend is enabled.
 
-Since every derivation in the chain was built, every one has a build log, and you can ask any of them to sing its verse again.
+## What's next?
 
-```
-$ nix log "$(sed -n 26p chain.txt)"
-24 bottles of beer on the wall, 24 bottles of beer.
-Take one down, pass it around, 23 bottles of beer on the wall.
-```
+Over the next few months, we will be monitoring GitHub and Zulip for any reported issues about the parallel frontend. Once we have enough confidence that it is working well, and there are no major issues, we would like to move forward and finally stabilize it.
 
-I’m very excited for the future of dynamic derivations. [tomberek](https://github.com/tomberek) is [leading a working-group](https://discourse.nixos.org/t/dynamic-derivations-dynamic-build-graphs-next-steps/79409/) to finalize the feature and are currently meeting weekly. With dynamic derivations, Nix will be able to compete with other build systems in terms of speed and flexibility and *take over the world*.
+We would also like to improve its performance, and make more things parallel. So far, a lot of the work on the parallel frontend has been focused on making it work correctly, rather than tuning its performance down to the last percent. We thus expect that we might still be able to make further performance improvements to it.
+
+We would also like to make more parts of the frontend actually parallel, as some parts are currently still sequential even if parallelism is enabled. There is some ongoing work on this. Last year, we had a Google Summer of Code project focused on enabling [parallel macro expansion and name resolution](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#improving-the-rustc-parallel-frontend-parallel-macro-expansion), and there is also an open [pull request](https://github.com/rust-lang/rust/pull/163495) for parallelizing the lowering of the Abstract Syntax Tree (AST) to the High-Level Intermediate Representation (HIR). More work remains to be done on this front.

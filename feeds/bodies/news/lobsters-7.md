@@ -1,463 +1,80 @@
-*During the past year, we have significantly improved the reliability and
-correctness of Aerogramme's IMAP implementation. This is the first part in a
-series of blog posts elaborating on why implementing IMAP correctly is not so easy, and the set of
-techniques we have been using to make our IMAP code as high-quality as
-we can. In this first part, we focus on one challenging aspect of IMAP:
-fine-grained retrieval and querying of emails.*
-
-*[Aerogramme](https://aerogramme.deuxfleurs.fr/) is an experimental email server
-(& calendar, contacts), designed to be geo-distributed, hosted outside of
-datacenters, on refurbished hardware, and reliable even in presence of network
-issues and hardware failures. It is built on top of
-[Garage](https://garagehq.deuxfleurs.fr/) and shares the same philosophy.
-Aerogramme is AI-free: we do not wish to use unethical technology and prefer to
-spend effort on careful craftmanship and community-building.*
-
-**Implementing an IMAP server is not easy.** Partly because IMAP is an
-old protocol, with a good number of extensions that has accumulated quite a bit
-of complexity over time. On top of that IMAP provides - for good reasons - two
-classes of features that are fundamentally challenging to implement:
-fine-grained retrieval and querying of email contents and concurrent
-multi-client multi-session access to mailboxes.
-
-This is the first part in a series of posts discussing how we have been
-approaching IMAP access. In the past year, we have been
-refining Aerogramme's IMAP implementation to be "more correct", in a context
-where "correctness" is unfortunately not always well specified: IMAP and email are defined in
-documents that are often vague, and furthermore, real-world implementations
-do not always follow specifications.
-
-Today, we'll walk you though our work on the **correctness and reliability of
-Aerogramme for retrieving and querying emails**, and explain why your mailbox is,
-in fact, a database...
-
-*This work was funded by [NLNet](https://nlnet.nl) under the "[Aerogramme
-1.0](https://nlnet.nl/project/Aerogramme-1.0/)" grant, and could not have been
-possible without their support.*
-
-*Feel free to join the Aerogramme [matrix
-channel](https://matrix.to/#/#aerogramme:deuxfleurs.fr) for updates or if you
-just want to chat!*
-
-# Your mailbox is a database
-
-One challenge of the IMAP specification is the rich feature-set it provides for
-retrieving mailbox and email contents. We may sometimes think of a mailbox as a
-directory containing plain email files; however, from the point of view of an
-IMAP server (or client), a mailbox is closer to a database, accessed using a
-dedicated query language.
-
-For instance, mobile clients, which have slower and unreliable connectivity,
-benefit from fine-grained querying of a mailbox contents. User experience is
-much better if an email client can selectively fetch the subject of new emails
-(to update the list of emails in the mailbox) without having to first download
-all of their attachments or doing a sync of the entire mailbox.
-
-To facilitate the mobile client use-case, IMAP specifies two key mechanisms for querying and (partial) retrieval of
-emails in a mailbox:
-
-- SEARCH looks up the emails in a mailbox that satisfy a given "search criteria"; it returns their identifiers. Criteria can select emails based on the contents of specific headers, date, text contents, or flags - metadata attached to emails that can be edited by the client. It can also be any combination of those using OR/NOT/AND boolean operators.
-- FETCH queries the contents of an email given its identifier. Extremely versatile. On top of fetching the entire email, it allows querying an email based on its high-level structure (emails have a recursive structure with sub-parts containing e.g. attachments or text+html alternative views of the same contents), its raw byte-level representation, or a combination of both. It is possible to selectively fetch sub-parts of an email (according to its structure), obtain an "abstract syntax tree" (AST) for the email and the value of some of its headers, and also fetch specific byte ranges for sub-parts.
-
-A direct consequence of these features is that **an IMAP server actually needs to parse
-the emails, not just store them**. It then needs to (correctly) interpret the (sometimes
-tricky) query language of SEARCH and FETCH, and internally support a data
-architecture that enable efficiently searching and querying over the emails.
-
-# Email querying in Aerogramme
-
-Our implementation of SEARCH and FETCH is backed by
-the three following components:
-
-*The logic for SEARCH and FETCH is implemented as an interpreter* that takes
-already parsed emails and walks down their AST to evaluate IMAP-specific
-queries<sup>[1](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#compile-queries)</sup>. This separates email structure (email ASTs do not
-depend on IMAP concepts) from IMAP-specific business logic. This layer has been
-*significantly reworked* in the last months, fixing a good number of logic bugs
-and edge cases in our implementation of the SEARCH and FETCH IMAP specification.
-
-*Email parsing is done using the
-[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec) companion library*,
-that we also develop and maintain. The eml-codec library parses emails into a
-rich, structured AST while also giving access to raw input slices that
-correspond to relevant AST nodes; this is required for implementing FETCH. In
-the past year, eml-codec has evolved from an email parsing library with
-IMAP-specific quirks to a robust, well-tested, general-purpose email library
-with support for both parsing and printing of emails. You can read more about
-the library design choices in our work-in-progress [design
-document](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md).
-
-*Aerogramme's internal data architecture splits mailbox state, email metadata,
-and email contents.* It is [briefly
-described](https://aerogramme.deuxfleurs.fr/documentation/internals/mailbox/) in
-Aerogramme's documentation. Mailbox state (emails IDs and flags) and email
-metadata (parsed headers, date, size) are stored in Aerogramme's metadata
-storage using [Garage
-K2V](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#k2v-api-experimental),
-while email contents are stored in blob storage using [Garage
-S3](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#s3-api).
-This allows SEARCH to be efficient by only reading pre-computed information in
-metadata storage. At the moment there are no other significant optimizations
-for FETCH/SEARCH; the likely next step would be to add a full-text search
-engine.
-
-These components are all quite non-trivial! Let's now talk about the strategies
-we've deployed to make them as correct as we could.
-
-# Testing Aerogramme's FETCH and SEARCH query interpreter
-
-We ran our implementation of FETCH and SEARCH through
-[ImapTest](https://dovecot.github.io/imaptest/): a testing tool for IMAP servers
-maintained by the Dovecot developers. `ImapTest` was invaluable in surfacing issues
-with FETCH and SEARCH, but is equally useful to test all other aspects of IMAP.
-
-Most relevant for FETCH and SEARCH was the test suite provided with `ImapTest`: a
-collection of hand-crafted test scenarios testing many subtle or "interesting"
-aspects of the IMAP specification. Each scenario consists of IMAP
-commands to send to the server, and a specification of the corresponding
-expected responses.
-
-Running the ImapTest test suite found a small number of bugs in SEARCH, mostly
-in edge-cases of the specification. However, testing FETCH
-revealed that our initial implementation of the `BODY[<section>]` subcommand was
-conceptually wrong in many cases! This subcommand of `FETCH` retrieves a
-sub-part of an email by following its structure, which we implement by walking
-down the email's AST. Our initial implementation was done by reading the IMAP
-specification and interpreting its sometimes vague wording as best as we could;
-only testing with `ImapTest` made us realize that our best-guess interpretation
-was wrong in many cases. More precisely: it did not match ImapTest's reading of
-the spec, which, in doubt, is what we prefer to follow!
-
-`ImapTest` was also relatively pleasant to use to do manual "differential testing"
-for any remaining edge-cases: when we had any doubt, we could easily write
-additional scenarios and compare Aerogramme's output with Dovecot's; treating
-Dovecot as an oracle. After a few rounds of bugfixing, Aerogramme's
-implementation of FETCH and SEARCH is now in much better shape.
-
-**The lesson we learned is that the IMAP specification can leave room for
-interpretation in surprising ways.** In fact, to further illustrate this point,
-let's talk about one `ImapTest` scenario that we haven't "fixed" yet in Aerogramme
-because we just found it very confusing, and we are not sure what to do!
-
-### Example: the confusing case of `SEARCH` and structured fields
-
-He's a tricky case. `SEARCH FROM <string>` returns the list of emails whose `From`
-header "contains" the given string. Now, what does "contains" mean here,
-exactly? When running `SEARCH FROM foo@example.com` on the two following
-headers, which ones should match?
-
-```
-From: Foo Bar <foo@example.com>
-From: Foo Bar < "foo" (comment) @ example.com>
-```
-
-Some additional context on email syntax is useful here: these two email addresses are
-equivalent. The local-part of the email (before the `@`) allows quoted strings,
-so `"foo"` can be used and simply denotes `foo`. Email syntax also allows
-comments in various places; they are written between parentheses. Comments have
-no formal meaning but are shown by email clients and can be useful; they are
-sometimes used by mailing-list software to indicate the name of the list.
-As an example [SYMPA](https://sympa.community) emits `From` headers of the form `From: Alice (via Super Friends List) <list-address@server.org>`).
-
-At the moment, Aerogramme implements `SEARCH FROM` as plain substring search on
-the text representation of the header: here, the first header matches, but not
-the second. However, *the ImapTest test suite says that both headers should
-match*! So, what does the specification says?
-
-```
-FROM <string>
-   Messages that contain the specified string in the envelope
-   structure's FROM field.
-```
-
-Hmm, so, what is this "envelope structure"? Reading further:
-
-```
-An envelope structure is a parsed representation of the [RFC5322] 
-header of the message. [...] The from, sender, reply-to, to, cc, 
-and bcc fields are parenthesized lists of address structures. [...]
-An address structure is a parenthesized list that describes an 
-electronic mail address. The fields of an address structure are in 
-the following order: display name, [SMTP] at-domain-list [...], 
-mailbox name (local-part ABNF production from [RFC5322]), and hostname.
-```
-
-So the FROM field of an email's "envelope structure" contains a *structured* representation of *parsed* email addresses.
-Regarding our two headers above, they are both represented in the envelope structure as:
-
-```
-("Foo Bar" NIL "foo" "example.com")
-```
-
-What does it mean for this structured value to "contain" the string
-`foo@example.com`? Clearly none of the strings in the structure contain
-`foo@example.com`, so perhaps instead we should re-print the structure as an
-email address and do a substring search on that? However, *there is not a unique
-way of printing a given email address*, and the IMAP specification does not
-define any...
-
-We are quite curious to know if IMAP experts have more to say on this point!
-
-In the meantime, our bugfixes for FETCH and SEARCH have been shipped in
-[Aerogramme 0.5.1](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.5.1)
-(see the release notes for more details), with the exception of [two extra
-fixes](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/pulls/195) shipped in
-[Aerogramme 0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
-
-# Improving email parsing in Aerogramme
-
-FETCH and SEARCH operate on the *parsed* email ASTs produced by
-[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec). How do we
-ensure that we have correctly implemented all the subtleties of the email format
-in eml-codec, which is itself described in an old and tricky set of
-specifications? As often, the answer is: more testing.
-
-## Property-Based Testing for eml-codec
-
-To ensure our implementation is correct, we performed fuzzer-guided Property-Based Testing (PBT) of the email parser and
-printer in eml-codec. Specifically, [we tested the following "roundtrip"
-property](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/commit/a317094811edaadbbd77657c0da05e3e771c1af6/fuzz/fuzz_targets/message_print_parse.rs#L8):
-
-> “for an arbitrary email value in eml-codec's internal AST, printing it then
-> parsing the printed output must yield an equivalent AST”
-
-The starting AST is generated by a fuzzer as a structured value using the
-`Arbitrary` trait; the [cargo-fuzz tutorial](https://rust-fuzz.github.io/book/cargo-fuzz.html) calls this
-"Structure-Aware Fuzzing". A roundtrip in the other direction, i.e.
-"parse then print then test for string equality" would not generally hold, as
-there are many equivalent ways of printing the same email, for instance because
-of line folding...
-
-While it may seem that any reasonable implementation would satisfy our roundtrip
-property, in practice, this methodology immediately surfaced a lot
-of bugs and edge cases.
-
-The recurring theme was that the fuzzer would generate "exotic" AST values
-breaking the roundtrip property, for which we had to clarify:
-
-- if these revealed an inconsistency/confusion between parser and printer, where the value, after printing, could result in invalid syntax or syntax that parsed into a different AST;
-- if these values should in fact be considered invalid; this means strengthening the AST invariants and fixing the fuzzer-based generator accordingly;
-- or whether the "equivalence checking" function for AST values needed to be relaxed (in some cases, syntactically different values represent the "same" conceptual value up to implementation details).
-
-In the first case, this fixed bugs or potential security issues for users of the
-parser (like Aerogramme) or printer. In the second case, it improved the
-definition of internal AST types, which is relevant when using eml-codec to
-programatically compose emails, not something we use in Aerogramme itself, but relevant for an
-experimental mailing-list server project in Deuxfleurs using the same library.
-
-To illustrate the kind of issues that we are talking about here, let's look at
-an tricky example that was found using our fuzzing methodology.
-
-### Example: encoded words shenanigans
-
-The ["MIME Part Three" specification
-(RFC2047)](https://datatracker.ietf.org/doc/html/rfc2047) specifies a way of
-using non-ASCII text in selected places of email headers. (Full support for
-UTF-8 in headers, which eml-codec also supports, was only [introduced
-later](https://datatracker.ietf.org/doc/html/rfc6532).) Where allowed by the
-specification, ASCII text can be replaced by an "encoded word": an ASCII
-encoding of non-ASCII text using special syntax introduced by the specification.
-
-As an example, the UTF-8 word `aérogramme` can be encoded as follows:
-
-```
-=?utf-8?q?a=C3=A9rogramme?=
-```
-
-More generally, a MIME encoded word has the following structure:
-
-```
-=? <charset> ? <encoding> ? <encoded-text> ?=
-```
-
-When using the `q` encoding like above, *most* ASCII characters can be used
-directly in the encoded text, and other bytes must be encoded as `=` followed by
-their hexadecimal code.
-
-Now, let us consider the following `From` header:
-
-```
-From: =?utf-8?q?@[?= X]
-```
-
-This looks like an encoded word followed by some extra junk; is this a valid
-`From` header? Perhaps surprisingly, *there is no encoded word in this header,
-and it is a valid email address!* The email address is `=?utf-8?q?` @ `[?= X]`
-(it is technically valid!), where the part after the '@' uses the uncommon
-"domain-literal" syntax.
-
-Now, consider the following `Subject` header with the same byte representation:
-
-```
-Subject: =?utf-8?q?@[?= X]
-```
-
-This time, the first part of the header *is an encoded word*, and the whole
-header tells us that the subject is the string `@[ X]`!
-
-The explanation for this behavior follows from the specification (which is
-[fairly clear on this
-aspect](https://datatracker.ietf.org/doc/html/rfc2047#section-5)): the set of
-ASCII characters that can be used *unescaped* in `<encoded-text>` **depends on
-the context in which the encoded word appears**.
-
-Encoded words *can appear* in `From` headers (for example `From: =?utf-8?q?a=C3=A9rogramme?= <aerogramme@deuxfleurs.fr>` is valid), but in that
-context they cannot use `@` or `[` unescaped, which is why the first example
-does not in fact contain a valid encoded word. In the context of a `Subject`
-header, the set of valid unescaped characters is broader and includes both `@`
-and `[`, making `=?utf-8?q?@[?=` is a valid encoded word representing the string
-`@[`.
-
-To implement this behavior, we needed to correctly track the context in which we
-parse encoded words, "tokenize" them according to that context, and also track
-context sensitivity in our email AST and during printing. Getting every detail
-to align properly between parsing, our internal AST, and printing took us
-several attempts! In that process, our property-testing setup was *extremely
-useful*, as it could quickly come up with new convoluted examples like the one
-above that revealed bugs in edge cases of our code.
-
-The lesson here is that email specifications can be *quite complicated and
-tricky to implement*, even when they are clear! And, in our experience, without
-automatic test generation (like our fuzzer setup), it is very hard to manually
-come up with examples that actually cover edge cases...
-
-If you want to see more details, the bulk of our PBT/fuzzing work on eml-codec
-was done in [eml-codec
-0.3](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3) and
-shipped in [Aerogramme
-0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0), with
-some [additional
-improvements](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/pulls/84) shipped
-in [Aerogramme
-0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
-
-## Testing eml-codec on real-world emails
-
-We tested eml-codec on collections of real-world emails (more than 100k emails)
-to evaluate and improve the *recovery strategies* of eml-codec's parser on
-invalid or broken syntax.
-
-Many legitimate emails found in the real world are, indeed, incorrect with
-respect to [email
-specifications](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/#rfc-and-iana-references).
-Often, the use of invalid or broken syntax is local (to specific headers, or
-parts of a header); in some cases, it is "only" a minor deviation from the
-specification.
-
-### Example: the many shapes of message IDs
-
-The case of "message IDs" can be taken as an example. Emails can be given an
-identifier (specified using the `Message-ID` header) so that later emails can
-reference it (using the `In-Reply-To` and `References` headers). This is useful
-to display email "threads" in email clients, for example. The message ID syntax
-is also used to identify attachments with the `Content-ID` header.
-
-Reading the
-[specification](https://datatracker.ietf.org/doc/html/rfc5322#section-3.6.4), a
-message ID is of the form:
-
-```
-<foo.bar@baz.com>
-```
-
-and a list of message IDs as used by `In-Reply-To` and `References` separates message IDs with whitespace:
-
-```
-<msg1@foo.com> <msg2@bar.eu> <msg3@baz.fr>
-```
-
-The specification also documents that, for the list syntax, "obsolete" syntax
-(that we must support) can include extra text surrounding message IDs...
-
-Now, what do we find in our sample of real-world emails?
-
-```
-Content-ID: <1855BC2C-077C-406B-AEA4-CAF088755676>
-```
-
--> Emitted by apple-mail, and *invalid*: no `@`!
-
-```
-Content-ID: text-body
-Message-ID: foo@bar.com
-```
-
--> *Invalid*: no angle brackets `<`/`>`!
-
-```
-In-Reply-To: <3DE2736D.F4FCC064@orcaware.com>; from redacted@orcaware.com on Mon, Nov 25, 2002 at 11:01:01AM -0800
-In-Reply-To: Your message of Thu, 18 Mar 1993 22:28:19 GMT.\n             <8280.9303182228@damsay.dcs.ed.ac.uk> 
-```
-
--> *Valid*: an instance of the "obsolete" syntax documented by the specification.
-
-```
-References: <abc@def>,<foo\n\tbar@outlook.com>,<baz@outlook.com>
-```
-
--> Commas are valid as part of the obsolete syntax, but the second message-id is malformed because of incorrect line folding (`\n\t`) in the middle of a word.
-
-### Engineering eml-codec for real-world emails
-
-The consequence is that eml-codec needs to be able to *recover from
-broken syntax*: on an email containing invalid syntax, it should be able to
-discard the broken parts and parse as much as it can from the rest of the email,
-instead of simply returning an error. It should also ideally be
-able to *parse invalid but common deviations from the specifications* in order
-to recover information instead of discarding them.
-
-We first extended eml-codec with coarse-grained recovery strategies, such as
-discarding an entire header field if we couldn't parse it. This allowed us to
-quickly reach a state where the eml-codec parser is a *total function*: for any
-input bytes, it always returns an email AST representing an RFC-compliant
-email<sup>[3](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#email-ast-compliant)</sup>, discarding any part of the input it does not
-understand.
-
-We then instrumented the parser to *log each time it discards broken input* when
-recovering, and ran the instrumented parser on the email that we collected. This
-gave us a lot of examples of legitimate emails with broken syntax. In each case,
-then, we manually looked at the piece of broken syntax, see if we could make
-some sense of it, and decide whether:
-
-1. we could reasonably extend our parser to parse it;
-2. we could discard it more selectively (e.g. only discard a broken element in a list instead of discarding the entire list);
-3. our existing discarding strategy was the best we could do.
-
-This whole process was particularly interesting because it made us face the many
-subtleties of real-world emails (sometimes far from the "truth" of
-specifications); eml-codec is now much more robust operating on real-world emails!
-
-This methodology involves a lot of
-tradeoffs and judgment calls: there is a limit to the amount of parsing hacks
-that we can add in terms of code quality but also parsing ambiguity; and some
-classes of emails are more critical than others (e.g. we should not spend too
-much effort supporting spam emails). A strong design constraint of
-eml-codec is that, up to a few exceptions, we want its internal AST to only
-represent RFC-compliant emails, so we did not want to pollute it to include
-random broken syntax just for the sake of "recovering more". The whole process,
-in particular, helped us clarify the
-[design](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md)
-of eml-codec as a library.
-
-For more details, you can look at the release notes of [eml-codec
-0.3.1](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3.1) where
-the bulk of the work is done, building on [eml-codec
-0.2](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.2) for the
-initial setup of parsing recovery. Both shipped with [Aerogramme
-0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0).
-
-IMAP's search and retrieval features are essential because they allow clients to
-have a snappy UX while handling mailboxes with thousands of emails. This post
-focused on getting those basic features right. But, more broadly, we think that
-the "mailbox as database" perspective is useful because it raises the question:
-which end-user workflows can we enable and support? Which features should we
-prioritize or optimize to best support the workflows of day-to-day email users?
-
-*Stay tuned for the next blogpost in the series where we discuss the other big
-challenge for an IMAP server: mailbox concurrency!*
-
-Following the database analogy, the logical next step could be to optimize this by first "pre-compiling" queries before running them on emails. Right now we don't know if this optimization would actually matter in practice...
-
-This links to IMAP4rev1 but the more recent IMAP4rev2 isn't more specific on this subject
-
-The current eml-codec AST has a few selected exceptions to this rule, where it allows representing non-compliant data in well identified cases. One of such cases is non-compliant message IDs, such as message IDs without `@`...
+AI disclosure: this story was written entirely by human hands, with AI doing proof-reading and light edits.
+
+No, not the rapper Coolio, but rather [Dennis M. Moran](https://en.wikipedia.org/wiki/Dennis_Moran_%28computer_criminal%29).
+No dishonor intended for the real
+[Coolio](https://en.wikipedia.org/wiki/Coolio), the rapper, though arguably
+mine was harder.
+
+There I was, standing on the couch in my basement, pointing at the TV. Janet Reno is giving a press conference on CNN, vowing to bring these cyber terrorists to justice. My jaw is open, I’m laughing. I can’t believe it. She’s talking about my friend Dennis “Coolio” Moran, a 17-year-old.
+
+But let’s back up.
+
+We were the #goonies on EFNet. We broke off from #doom, following our friend chunkk, the [legendary Doom player](https://www.doom2.net/history/history.html) (I still haven’t seen The Goonies movie though). Some of these people are still very close friends and at the time they were much closer friends than anyone I had IRL since they were computer elite and my local friends were all llamas. Above all, we were still very teenage and very dumb.
+
+They were fond of robotripping, since it was all the drugs teenagers could afford. As a suburban kid from Queens from a loving supportive family I knew drugs were bad and would sit this stuff out. I had a job at a dialup ISP in Manhattan called nyct.net as a FreeBSD sys admin. I was moving up in the world.
+
+Others, not so much. The most extreme robotripper and psychonaut on #goonies was Coolio. He was also a lot of fun. He basically never spoke ill of anyone. Everyone loved him. Girls would fall for him just watching him say stuff on IRC over my shoulder.
+
+He was also the poorest friend I’ve ever had. He grew up in Wolfeboro, New Hampshire. His mom wasn’t in his life and his dad was, as far as I knew, a decent fellow, though they struggled to make ends meet and he had lived out of a tent for a period of his life. People mostly sort their friends and they get a picture of the world that’s very curated. Dennis (and indeed the rest of IRC) was my window out of my Queens NY bubble.
+
+We did eventually hang out IRL. Dennis came to visit me in NYC and we went to Mindless Self Indulgence shows together, which were insanely fun. After one of them the (freakishly tall) lead singer Little Jimmy Urine was offering kisses for $5 (“VD free”). Dennis offered $20 over the heads of a bunch of clawing girls and he and Jimmy Urine made out.
+
+When he wasn’t talking about drugs or girls, he was talking about hacking. We were all dabbling in computer stuff. We loved Doom and Quake and we had aspirations about becoming game developers. I bought a book on C and installed DJGPP and was trying my best to learn, but lost interest in games and pivoted to networks and coding on Linux. And also hacking. Though it had been out for years, I had just caught up with that Phrack article about Smashing the Stack for Fun and Profit and was curious about how to apply it. Dennis was interested too, and we thought about how cool it’d be to write a PoC exploit together.
+
+Dennis found out about a BIND vulnerability with no PoC. We wrote one together. It worked! We were pumped. I thought we should promote internet health by publishing the PoC, since that was how you got people to fix bugs in those days. Dennis goes quiet for a few days. Then he comes back. Bro had been busy, he hacked into all of the vulnerable servers and recruited them into an insane botnet. I was shocked. WTF was he going to do with this? I thought we were just learning and there he goes hacking into half of the DNS servers on the internet! At least he patched BIND for them afterwards.
+
+Dennis reads about the [CD Universe extortion attempt](https://time.com/archive/6740163/extortion-on-the-internet) and sees a business idea. What if he combines his botnet with [smurfing](https://en.wikipedia.org/wiki/Smurf_attack) to do massive DDoS attacks? Then he could threaten to knock sites offline if they didn’t pay. I thought this sounded crazy but he insisted on trying. His reasoning was you can’t just cold email executives out of nowhere and try to extort them. You gotta build up a reputation first. So he flexed his muscle and took down Yahoo!
+
+He would say “watch this” and the sites would go down. First Yahoo, then buy.com and eBay, then etrade.com.
+
+He picked buy.com because it was the day of their IPO. What better way to show his power than ruin a company during the dot com bubble on their IPO day.
+
+In our teenage chat room this all made sense. Like a lot of teenagers (and adults), Dennis thought wealth was often illegitimately acquired, and that it was only fair to take from the rich in the bullshit days of the dot com bubble. Thug life, kind of. Definitely worked on the girls, which was probably not healthy for him.
+
+To learn more about his views on wealth maybe we should go back to Wolfeboro. I visited twice, once while he was in jail and once just to hang out and party, and it was absolutely nothing like where I was from in Queens. According to Google it’s a small town of 6,000 known as being full of lakefront summer homes. The part I saw was very much not summer homes. It was houses in the sticks. The rich, such as Mitt Romney, were vacationing in his town while his family was, at times, living in a tent.
+
+Which brings us back to the basement. I’m standing on the couch, pointing at Janet Reno on the TV, laughing. She says they’ll find whoever did this. I know who did this. I know what he used, too, because I helped write it. Are we all going to jail??
+
+Dennis wasn’t done though. He had previously rooted DNS servers and defaced [dare.com](https://attrition.org/mirror/attrition/1999/11/14/www.dare.com/) and [cwc.gov](https://attrition.org/mirror/attrition/1999/11/14/www.cwc.gov/), but took the opportunity to deface [rsa.com](https://attrition.org/mirror/attrition/2000/02/12/www.rsa.com/) after the DDoS attacks. He did recruit his friends on IRC to help him write ad copy for the defacements. I am sad to admit some of those are my words.
+
+He was especially tickled by defacing RSA since they had just put out a press release advertising that they could help defend against his DDoS attacks. Rekt.
+
+This played out over the course of a couple of days. Being teenagers on IRC, we didn’t exactly all keep his secret.
+
+We were “infiltrated” by an assistant security officer at Stanford named David Brumley. He came on calling himself “aforce” and he reeked of How Do You Do Fellow Kids energy, but it still took us way too long to kick him out. It was all for naught anyway: he was tapping the ircd at Stanford, an EFNet server, and could read absolutely everything, private messages included. Coming into the channel was probably just to provoke us into revealing even more. Oh, uh, it also didn’t help that Dennis’s RSA defacement specifically taunted aforce, which directly linked someone in #goonies to the crime.
+
+Once word got out that US digital infrastructure was being brought to its knees by a robotripping 17-year-old, the intensity died down. They ultimately did arrest Dennis, and showed him a thick stack of IRC logs of teenagers bullshitting, which is as hilarious as it sounds. He admitted to defacing the web sites, and to getting into Army and Air Force computers at four military bases, but denied launching the DDoS attacks.
+
+As it turned out, we were not all going to jail. Nothing happened to me. No FBI visit. No emails from third parties. Nothing. It was as if I had never been in the room.
+
+Meanwhile, in Canada, a copycat named [Mafiaboy](https://en.wikipedia.org/wiki/Michael_Calce) took credit for all of them. I’m not saying he did none of them. Dennis didn’t launch DDoS attacks against news sites since he thought they would help spread the story about his underworld reputation. So, it’s possible Mafiaboy did do those. No dishonor intended for Mafiaboy either. I’m sure he was a legit cyber criminal in his own way.
+
+Dennis didn’t exactly get off scot-free. He was sentenced to a year in county jail and was released after nine months. He was also ordered to pay $15,000 in restitution, $5,000 of it to RSA. A security company collecting damages for getting hacked. IMO that situation is a wash.
+
+When I visited him in jail, the Carroll County House of Corrections, I was expecting him to be depressed but he seemed really upbeat about it. He was almost having fun. He was treating it like a sleepaway camp, and the other inmates seemed to love him. While we were talking I overheard an extremely loud, very powerful toilet flush. He said something nuts like “Oh, yeah. Some kid joined our block the other day. We tried to flush him down that toilet but he wouldn’t fit so we decided he was cool.” (Years later he would tell me another story, this time about prison. Dennis was a not-big white guy, and a very large black man who had just moved to his cell wrapped a towel around his head and yanked it so hard that Dennis flipped off the bed and hit the ground. Terrifying. Dennis got up laughing his ass off, and the guy ended up being his best friend in there.)
+
+And don’t just take it from his IRC friends that he was lovable. Paul Zimmerman, a local businessman who wrote to Dennis in jail and then visited him there, [told a reporter in 2001](https://www.foxnews.com/story/teen-hacker-coolio-gets-fresh-start-as-head-of-computer-services-company): “I found him to be a most delightful person.” And: “He was not angry or vindictive or mad at the system. He was taking his licks in an honorable way.”
+
+Anyway, at that age you don’t usually get such an early view of law enforcement, but here it was: they didn’t really care about the truth of the story. They knew full well Dennis did it. The stack of IRC logs printed out screamed that he did it. The FBI has them. They know. But Mafiaboy was already willing to take the rap so why bother indicting Dennis.
+
+Dennis’s story has not fully been told to this day because he did not have a rehabilitation arc. He didn’t turn it into a career the way Mafiaboy did. Not because he never had chances: Dennis was offered a security engineering gig at a local firm but one day just walked off the job, bored.
+
+The years after that went in cycles. He’d get straight and hold down an honest job in a sandwich shop for a year or two. Then he’d lose touch with reality and do some nonsensical crime. He’d sober up in jail, which he seemed not too upset about, and then he’d be back to normal.
+
+One time he dropped LSD and started going through people’s mailboxes. He was convicted of that. Soon after starting his jail sentence he came on IRC, and he told us he had secured work release, helping a local strip club with their web site. Doing his time meant he’d leave jail, go to the strip club, hang out with strippers and smoke weed, then go back to his cell in jail at night. When society needed Dennis to repay his debts this is usually what it had in mind.
+
+He spent a while bouncing around the country. He had lots of friends from IRC who welcomed him into their homes, often romantically. Ultimately he settled in the Bay Area.
+
+I wish the story ended there. We thought he’d eventually figure it out.
+
+This story is a secret we’ve been keeping for Dennis all of this time: he did launch those DDoS attacks, and we watched him do it. There’s really no need anymore. Dennis had a secret of his own: he was addicted to heroin, and he hid that from us for years. It seems he found a community of heroin addicts out there, and it got out of control.
+
+I have some guilt about all this. Dennis went to jail, which is probably where he learned about heroin. A few of the rest of us on IRC got questioned in person by the FBI. Absolutely nothing happened to me.
+
+I really loved Dennis. We all did. We tried to help Dennis but couldn’t. He threatened to kill himself if we ever said the word “rehab” around him. He dabbled in dealing research chemicals in the Bay Area, and on the darkweb for Bitcoin, but was eventually busted and the walls began to close in around him as his court date loomed. He became paranoid and started lashing out. He was using all of the time. The last thing that happened between us was that I joined a different chat room I knew he was in. It was on a different platform, so I picked a different nick, as a joke, but one I thought he would easily grok as me. He didn’t recognize the nick and freaked out. He accused me of being a narc. I told him I was sorry and that I wasn’t trying to stress him out, but he just quit in a huff. I never talked to him again. He disappeared from IRC for several weeks. I ended up hearing from mutual IRC friends that he had been found dead in his room, in 2013 of a heroin overdose. Age 30.
+
+There was never a proper goodbye. On some level I still don’t accept that he’s gone.
+
+I still have dreams sometimes where Coolio connects to IRC and joins the chat, and we all shoot the shit like nothing had ever happened.
+
+*Did you know Coolio? Did he DDoS attack you? :P Let’s talk about it on [X](https://x.com/mbacarella/status/2122355335885422599), [Bluesky](https://bsky.app/profile/michael.bacarella.com/post/3n2gutmtxos2f), [Mastodon](https://infosec.exchange/@mbacarella/117626904151960541) or [Hacker News](https://news.ycombinator.com/item?id=50518786).*

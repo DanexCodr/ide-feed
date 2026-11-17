@@ -1,57 +1,155 @@
-Earlier this month I found a one-click universal XSS issue with uBlock Origin (the MV2 Firefox version, although a similar but less problematic issue also affected the MV3 version, uBO Lite), where a malicious website could trick the extension into adding arbitrary trusted filters. Trusted filters can inject JavaScript code into pages, and so the malicious website could create a trusted filter on another website and run arbitrary JS in the context of any site. This issue is fixed now; you can read [the GitHub advisory](https://github.com/gorhill/uBlock/security/advisories/GHSA-cmqw-9r2w-6wv2) for some more details.
+Software hasn’t been working too well lately, has it?
 
-GPT-5.6 Sol did most of the hard work of finding the issue. I figured there might be some kind of UXSS from filter injection, so I asked it to take a look, and it found the issue. I then checked and verified the issue it proposed. I wrote all of the prose in this post myself; Claude wrote most of the code for the PoC.
+This weekend we saw the double-whammy of a 2 day global Microsoft outage, then an FAA ground-stop that halted all flights in the United States.
 
-## The issue
+Can you believe it’s only been **four weeks** since the [PHP2Shell](https://en.wikipedia.org/wiki/PHP2Shell) vulnerability? A critical exploit in PHP, powering an estimated 70% of the world’s websites, with sites taken completely offline as engineers frantically patched their systems.
 
-uBlock Origin has an element picker that you can pull up by right-clicking on the page. You can use this to create a filter rule to block an element on the page without leaving the page.
+And then there was the [eMudhra fiasco](https://en.wikipedia.org/wiki/EMudhra#2026_weak_key_incident), where thousands of SSL certificates - the way we secure HTTPS websites and internet traffic - were compromised by a private key so weak, it was almost comical.
 
-![uBO element picker](https://iter.ca/ubo-epicker.png)
+It’s like 2026 has been a year of hacks, outages, vulnerabilities and IT panics. What exactly is going on here?
 
-The element picker is implemented by injecting an iframe to a URL like `moz-extension://76b2331a-894c-4d25-8b89-fcce37e79cc4/web_accessible_resources/epicker-ui.html`. That page can talk to the extension background script and tell it to add filters.
+You might be tempted to blame AI, and you wouldn’t be completely wrong. Artificial intelligence models are definitely a part of this. Even if companies like Microsoft don’t divulge whether broken systems were built with AI, we do know that hackers and researchers can now use AI technology to find complicated exploits in a matter of hours.
 
-Basically the attack here is:
+I work with AI heavily in my job. It’s tremendously powerful. It’s also corrosive if used unwisely.
 
-1. Figure out the element picker URL
-2. Create our own invisible (opacity 0) iframe that embeds it
-3. Drive the picker to put the filter we want in it
-4. Position the invisible iframe to trick the user into pressing the invisible “Create” button
+But AI is both a cause and a symptom of the problem here. What we are seeing is software breaking down at a systemic level. This problem is insidious because it is not only the software itself that is broken, but the entire way we’ve come to build it.
 
-### Figuring out the element picker URL
+## What does it mean for a failure to be systemic?
 
-On Firefox, the only information we needed to figure out was the extension internal UUID which is random per-installation.
+Look at the recent crises in software reliability and you’ll notice they don’t share immediate causes - that we know of - yet they look uncannily *similar* to each other.
 
-On the default setup uBO has a `lootdest.*##+js(no-fetch-if, adsbygoogle, war:googlesyndication_adsbygoogle.js)` filter rule (from uAssets), which hooks `fetch`. From inside the `fetch` hook, it makes an XHR request to `moz-extension://<extension UUID>/web_accessible_resources/googlesyndication_adsbygoogle.js` and returns the response from that as the fetch body, instead of actually making the request. The filter rule is intended to replace a network request for JS from an ad server with a dummy script that has the correct API but doesn’t do anything.
+### Microsoft
 
-But the attacker website can itself hook the XHR made from inside the `no-fetch-if` hook to extract the random extension UUID.
+The Microsoft outage likely emerged from a [network configuration failure](https://x.com/tomwarren/status/2121212124508885175) that stopped MS datacenters communicating with each other. Exactly what happened next remains confidential, but it seems to have triggered a cascading failure where no service could be restored into a valid state long enough to bear traffic.
 
-```js
-const origOpen = XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open = function(m, url, ...a) {
-    const e = /^moz-extension:\/\/[^/]+/.exec(url);
-    if (e) {
-        e[0] // <- has the extension UUID!
-    }
-    return origOpen.call(this, m, url, ...a);
-};
-```
+Reddit and Bluesky speculated that even MSFT engineers had no real handle on the complexity of this outage.
 
-Then the attacker website can run `fetch('/adsbygoogle.js').catch(() => {});` to trigger the filter, and make their hooked XHR run. Note that there are several ways that the extension internal UUID could be leaked; it’s not just this one filter rule.
+Microsoft have faced increasing criticism for the (un)reliability of their Azure platform. Back in March, ex-MSFT engineer Axel Rischin published this [scathing criticism](https://isolveproblems.substack.com/p/how-microsoft-vaporized-a-trillion):
 
-### Creating an iframe
+> Microsoft rushed Azure out of the gates under intense competitive pressure. Corners were cut. Fundamental principles of reliability and operational simplicity were quietly abandoned.
 
-Then you can use that to iframe the element picker. Given an iframe element in the page, you just set its src to ``moz-extension://${origin}/web_accessible_resources/epicker-ui.html``.
+> Instead of going back to the drawing board to tackle the growing technical debt, Microsoft relied on quick fixes: layers of automation running mitigation scripts, a growing team of on-call staff, and, when automation was not enough, manual repairs.
 
-### Sending messages to it
+His article depicts a highly complex system made of low quality parts, where nobody can make sense of the whole picture.
 
-Now we can drive the element picker. We can create a MessageChannel and do `iframe.contentWindow.postMessage({ what: 'epickerStart' }, '*', [ch.port2]);` to send it to the picker iframe. Then we talk to it: it sends us a `start` message, we send it a `showDialog` message with a filter and a `resultsetDetails` message<sup>[1](https://iter.ca/post/ubo-uxss/#fn:1)</sup> to enable the create button and set `opt`.
+### The PHP event
 
-Normally the picker restricts what filters you can enter, and doesn’t let you add scriptlet filters. But there’s a trick we can do to add arbitrary filters. There’s an `opt` field we set in the second message which is normally the type of network request to match (like `image`), and gets appended to the filter with a `$` if set, like `$image`. But since we control it, we can put a newline in it and make it `"image\ngoogle.com##+js(trusted-rpnt, script, ...)"` to inject an arbitrary trusted filter that injects a script.<sup>[2](https://iter.ca/post/ubo-uxss/#fn:2)</sup>
+On October 21st, security research firm Wiz [proudly shared an exploit that could execute arbitrary code on any PHP website](https://www.wiz.io/blog/php2shell-php-rce). Called PHP2Shell, Wiz trumpeted the power of AI tools to achieve exploits far beyond the skills of human attackers.
 
-This is where the main issue is - the element picker shouldn’t accept messages from the attacker. One of the fixes was having a secret password that the real element picker gets from the content script, that the element picker sends in the initial postMessage.
+It turns out the PHP runtime had hidden several complex memory bookkeeping bugs for over a decade. PHP is used extensively in e-commerce and most famously in WordPress, which was once the go-to for cheaply building simple websites.
 
-### Getting the click
+The PHP2Shell writeup depicts an internet dependent on a long chain of dependencies, hiding vulnerabilities too complex for any human to identify.
 
-I didn’t bother actually implementing this, but malicious websites could overlay stuff on top of the embedded element picker or make it invisible by setting the iframe opacity to 0. So as long as the website can get the user to click on the page, it can add arbitrary trusted filters for arbitrary domains.
+### Shai Hulud attack, May 2026
 
-Filters added by the element picker are always treated as trusted (at least until a recompile), which is why it can add a trusted filter. If the user later changes their custom filters it would cause a recompile, clearing the filter trust. But in practice the attacker could just immediately open the victim webpage, so this doesn’t help much.
+Most people outside of tech won’t have heard of this, but back in May we faced a crisis when an attacker compromised some important packages in the JavaScript ecosystem (NPM).
+
+These packages used GitHub Actions to perform Continuous Integration (CI) - automated tests, releases, etc. - and had a crucial misconfiguration where anyone who forked their projects could insert compromised code back upstream.
+
+When the next upstream CI build ran, it would retrieve libraries from a cache. The JavaScript package manager, NPM, allows these libraries to include scripts. They’re intended for housekeeping tasks, but here, they were used to hijack the projects’ secret tokens.
+
+The JavaScript ecosystem has long been criticised for poor security. NPM projects are complicated chains of dependencies calling dependencies calling dependencies.
+
+Any dependency may carry scripts. Any dependency author was just one slip away from allowing their code to be compromised - all they had to do was copy-paste the wrong code.
+
+In other words: a highly complex system made of low quality parts, where a single error can compromise everything.
+
+## How we lost control
+
+It wasn’t always like this. Only 12 years ago, tech was a different industry.
+
+Building software was *hard*. Computer programs comprise millions of tiny instructions, and turning these into a workable system is like constructing a watch by hand, with hundreds of interacting components. Except, unlike a watch, each computer program must do something completely new and different.
+
+It was the most fun I’d had as an adult. It was as much an art as a science. You had to be able to hold everything in your head at once: visualise how all the tiny parts could be orchestrated into a cohesive whole. I recommend anyone the adventure of writing a computer program by hand.
+
+But, it was less fun if you were a manager. Not many people can write computer programs well, and it’s very hard to scale human beings. Getting them to communicate without misunderstandings is hard. Many projects failed. You can find programmers who know how to manage the complexity, but they want to be paid lots of money.
+
+Different movements attempted to solve the core problem. Some people thought that software development practices could help, like if you turned programming into highly structured templates of “best practices”. Or if you used management styles like SCRUM. But they only ever helped so much.
+
+About ten years ago, two small revolutions happened in our industry, whilst the rest of the world paid little attention. They were cloud computing, and open source libraries.
+
+Cloud computing was about substituting your hardware and infrastructure with virtualised infra you could rent from someone like Amazon Web Services. You could click a button in AWS and it was like a server just popped into existence by magic.
+
+Companies loved Cloud because it allowed them to remove sysadmins and ops people from the equation. You didn’t have to wait for someone to actually go to a site and install a rack in a datacenter. The promise was that your software could *move as fast as code* and not long after, a movement called DevOps essentially ended up merging developers and ops.
+
+And then, we had the Open Source boom.
+
+It was always possible to reuse code from other places - programmers sharing snippets on forums or sites like StackOverflow - but when tools like NPM hit the scene in 2014, it really felt like a gamechanger. You could just add a line to your `package.json`, hit `npm install` and - whoosh - now you could reuse code written by any stranger on the internet.
+
+Teams loved NPM (and PyPi, Maven…) because now they didn’t have to solve any hard problems if someone else had solved it first. All of the little components in a program - the cogs and wheels in my watchmaker analogy - were once crafted by hand. Now you could get cogs and wheels and whole mechanisms, for free, forever.
+
+This meant that the programmers could focus less on the details. Instead of figuring out the nitty gritty of, say, writing the code needed to check someone’s password, you could just ask NPM and friends to take care of it.
+
+Open source was great because you had a small number of passionate, unpaid developers, building code that everyone else depended on. You could make millions of dollars from their code, and you didn’t even have to be particularly nice to them. (People weren’t)
+
+But the cost was that everyone stopped knowing the details. You had to give away control. If an NPM package is compromised, or the author has an agenda, you’re in trouble.
+
+### The cultural change
+
+Because there were fewer details to take care of, tech professionals began to lose their specialisms. You didn’t need a team of ops people, a team of backend developers, a team of mobile developers, a team of testers. You could flatten them into generalists.
+
+This changed the balance of power between workers and management.
+
+Imagine a building site where there is a plumber, a builder, and an electrician. If any one of them threatens to quit, you have a problem, because you need each of them to get the project done. Whereas if you can make everyone a mix of plumber-builder-electrician, they lose that leverage.
+
+Whether you think that power imbalance is a bad thing may depend on your politics. But it had a slow effect of taking influence away from the people close to the work. They’re the ones able to raise the alarm when things start going wrong.
+
+By 2016-17, there were signs that the superstructure of open source had weak points.
+
+The [left-pad incident](https://en.wikipedia.org/wiki/Npm_left-pad_incident) was an early warning of where we were going. In the tangled web of the JavaScript ecosystem, with its myriad dependencies, one library author took down his packages in a legal conflict, and ended up breaking almost everyone else’s projects.
+
+But largely we managed to make do. Even after the hiring and firing cycle of the post-pandemic era, and near misses like the [XZ Utils backdoor](https://en.wikipedia.org/wiki/XZ_Utils_backdoor), technology managed *mostly* to remain stable - thanks to armies of diligent developers and ops folk across the globe.
+
+### And then AI came in
+
+…And, yes, then AI.
+
+A lot has been written about how AI systems are inherently non-deterministic, a kind of slot machine that only creates simulacra of work. Acting like a stochastic parrot, this argument goes, AI generated code will always be prone to hallucinations and bugs.
+
+And there’s truth to that. But I think the danger in the *present* moment is the opposite. It’s not so much that the model outputs are crap and unreliable. They’re actually pretty good at doing what you ask them to do (though I suspect that mostly works because Anthropic and co heavily subsidise compute).
+
+I think the real AI threat is *decoherence*.
+
+Kristen Maevyn wrote an essay named [The Decoherence Trap](https://maevyn.codes/decoherence) which talks about a problem where the individual parts of a system may look fine in isolation, but don’t make sense as part of a larger system.
+
+> Decoherence: the accumulation of locally valid but mutually incompatible or redundant models within a system, such that the cost of change is dominated by translating among those models and preventing unintended side-effects.
+
+Software engineers, as I’ve seen them working over the last year, have all but turned over all their work to AI agents. It started with small tasks like writing tests, functions, and individual components. But now it’s everything - not only the components, but the design, the orchestration, the whole concept.
+
+Programming was the activity of translating ideas and intents from the messy human world into code so crystalline, so precise and pedantic, that even a *computer* could execute it. It was fundamentally the act of distilling complexity into order, making something real out of nothing.
+
+This activity is rapidly dying. It no longer happens in most tech companies.
+
+Most SWEs now are unable to tackle engineering problems without some form of AI assistance. That’s not because they’re incompetent - they just can’t keep on top of the complexity. Even if they could once, they now face a tsunami of AI generated code. This is affecting everyone, at all levels - we are all fighting the tide of small, incoherent changes that look rational in isolation but slowly lose sense as a whole.
+
+Kristen writes:
+
+> Decoherence grows relative to the rate of change of a system, and it increases faster the more decoherent a system is, resulting in runaway exponential growth. It is not a new phenomenon, and humans have always countered it through carefully finding ways to do more with less, unifying disparate patterns and models into a cohesive whole. However, the widespread use of AI is currently producing it at a rate that is unsustainable.
+
+A form of learned helplessness has emerged, along with a paradoxical false confidence, caused by the ways LLMs provide the illusion of work without actually forcing us to think through the details.
+
+This de-skilling of software engineers only shifts the balance of power even further away from developers - who can no longer raise the alarm. At its worst, AI turns tech workers into “meat proxies” who spend their days massaging prompts and letting Claude figure out if the work is actually complete.
+
+## Systemic decay
+
+It’s not just programmers. It’s the whole chain, top to bottom. Everyone is using AI, especially in big tech.
+
+Claude generates code because the engineer wrote a prompt. The prompt comes from a ticket that was written with Claude. The project manager wrote the ticket based on a summary of a document, that was written by, and then summarised back, by Claude. The document uses statistics from a calculation, by Claude. The business is panicking about the stock market, and the stock market prioritises short term trends over long term engineering.
+
+Does this sound accurate? It’s a caricature, but not by a lot.
+
+**I believe that tech companies risk losing their “organisational cognition”** - their ability to think and respond as a coherent unit.
+
+This is the real threat: a scenario where nothing in the system is done with intent, and nobody in the system has control. We generate complexity faster than we can tame it.
+
+Look at the problems I’ve outlined. They are about systems of excessive complexity, made of parts that need to work perfectly or else everything falls apart. These parts are being individually corroded by corner-cutting, cost-cutting, overcomplication, over-reliance on uncompensated work and - I fear - helplessness amongst the people who build digital infrastructure.
+
+## What is at stake?
+
+This is a threat to all of us. The tech industry is now critical to everyday life. It’s the software that controls your flights, your banking, your petrol pumps, your TV, your payroll. It’s what allows you to navigate roads and find your friends. It’s how you date and how you eat. It’s how you’re reading this.
+
+Society has extended trust, too much trust, into technical systems that are now demonstrating systemic deterioration. I do not think society, government, or institutions are prepared for a world where the incidents and outages of 2026 become commonplace. They too are extending the chain of dependencies, assumptions, complexity and unwarranted trust. Each layer, each link in the chain is a new point of attack that can subvert everything on top of it.
+
+The internet is at a breaking point. The software we build is not legible enough to bear the responsibility the world is giving it. We are telling ourselves the AI revolution is succeeding, precisely because of the rate at which we are generating complexity. The actual load-bearing parts of the ecosystem - open source, engineering-led judgement - are crumbling away.
+
+I think we are only at the beginning of a very painful phase. This is not a blip, and it’s not an aberration - it’s the new normal.

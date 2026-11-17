@@ -1,55 +1,49 @@
-It all started with some exasperated emails. Back in 2009, a group of researchers began venting their frustration with the programming languages designed to help scientists and other researchers perform complex mathematical operations and statistical simulations without learning how to code. These programming languages were rigid and slow. If scientists built something that really worked, they’d need to rewrite the entire program in another language just to run it more quickly.
+A region of the brain called the striatum is critical for many cognitive and motor functions, including decision-making, control of movement, habit formation, and processing of reward. It also plays a role in addiction and is significantly affected by Huntington’s disease, schizophrenia, and other disorders.
 
-The emails turned into a research project at MIT with the mission of building an easy-to-use, high-performance programming language called Julia, which is designed for scientific research, data analysis, and modeling complex systems such as jet engines, drugs, financial markets, and robots, to name a few examples.
+In work that could help scientists devise new treatments for those diseases, MIT researchers have generated a new atlas of the neurons found within the striatum. Using single-cell RNA sequencing and other techniques, they were able to identify 31 subgroups of neurons based on which genes they express.
 
-That research project turned into a lab at MIT, and the lab turned into the company [JuliaHub](https://juliahub.com/). Along the way, Julia gained a loyal following among scientists, engineers, mathematicians, and others. Today, the free and open-source language counts more than 1 million users, including people working in thousands of companies and universities around the world.
+These groups include neurons that are involved in addiction, depression, and schizophrenia. The researchers also discovered why some neurons of the striatum are more vulnerable to Huntington’s disease. All of these results, the researchers say, could help scientists develop new drugs to combat these conditions.
 
-It is only a slight exaggeration to say Julia has been used to model everything under the sun, from the behavior of tiny atoms to [semiconductors](https://juliahub.com/videos/software-at-asml-the-force-behind-making-microchips), neural networks, [race cars](https://juliahub.com/case-studies/williams-racing-unlocks), and airplanes. It has also been used to study much beyond the sun, with astronomers [using Julia for imaging black holes](https://www.youtube.com/watch?v=xk-SIRH3sbE).
+“We see this as the foundation that will allow more studies in our Huntington’s disease and opioid use disorder projects. We needed a roadmap of what is there,” says Myriam Heiman, the Picower Professor of Neuroscience and director of MIT’s Picower Institute for Learning and Memory.
 
-Julia’s secret sauce is in the way it compiles code depending on the type of data being used. Such “just-in-time compilation” makes Julia faster and more flexible than other numerical programming languages.
+Heiman; Manolis Kellis, a professor of computer science in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and a member of the Broad Institute of MIT and Harvard; and Dana Gabuzda, a principal investigator at Dana-Farber Cancer Institute and a professor of neurology at Brigham and Women’s Hospital and Harvard Medical School, are the senior authors of the study, which appears today in *Cell*. MIT postdoc Raleigh Linville and MIT graduate student Benjamin James are the paper’s lead authors.
 
-“Scientists and engineers are not programmers. Building scientific applications with multidisciplinary teams of scientists, engineers, and programmers is challenging,” JuliaHub co-founder and CEO Viral Shah says. “We asked: What if you could equip the scientists and engineers with a programming language that allowed them to express their ideas at a high level and also get great software performance?”
+**Mapping the striatum**
 
-Making programming easy for non-programmers has been a north star for JuliaHub’s founders, who include Julia co-creators Shah, MIT professor of mathematics Alan Edelman, Jeff Bezanson SM ’12, PhD ’15, and former MIT research scientist Stefan Karpinski.
+The striatum, located deep within the brain, receives diverse inputs from the cortex, midbrain, hippocampus, and other regions, which it uses to coordinate planning, movement, and decision-making, as well as processing reward. In this study, the researchers focused on the most populous cell type in the striatum, a type of inhibitory neuron called the medium spiny neuron, which responds to dopamine.
 
-In April, JuliaHub’s team took another big step in that direction with the [launch of Dyad 3.0](https://juliahub.com/blog/juliahub-announces-dyad3.0-general-availability), the latest version of its AI platform to help engineering teams accelerate the development of complex physical systems like rockets, heat pumps, and satellites. Engineers are already using Dyad to direct autonomous AI agents as they work through physics simulations, safety analyses, quality controls, and more.
+Most of these medium spiny neurons belong to either the direct pathway, which helps to promote movement, or the indirect pathway, which suppresses unwanted movements. These pathways are distinguishable by what type of dopamine receptor they express — dopamine receptor 1 (D1) or dopamine receptor 2 (D2).
 
-“With [Dyad](https://juliahub.com/products/dyad) 3.0, [you can upload data and design documents and the system will design an entire aircraft](https://juliahub.com/videos/automating-aerospace-systems-engineering-pdf-to-simulation-with-the-dyad-agent) for you,” Shah says. “Working with customers like Boeing, we are building agentic hardware design capabilities for engineers. Simplistically, you want to say, ‘Okay computer, build me a plane’; upload the design documents; and have the system account for all the physics, compile all the code, verify everything, and build the entire design agentically.”
+Beyond these two divisions, scientists knew that there were many subpopulations performing different roles, especially in the anatomically ventral (lower) regions of the striatum. However, it has been difficult to generate a consensus on how to classify these cells, in part because prior studies focused on specific subregions, meaning that overarching principles of striatal cellular organization were lacking.
 
-**Humble beginnings**
+To overcome that challenge, the researchers worked closely with brain banks in the United States and Canada to collect postmortem striatal samples representing diverse anatomical regions.
 
-After discussing the need for better programming languages for scientists and other researchers, Julia’s co-creators started the Julia Lab around 2009. The Julia Lab remains active in MIT’s Computer Science and Artificial Intelligence Laboratory.
+Then, they used three different techniques to analyze the samples, including single-cell RNA sequencing — a method that can measure RNA molecules within individual cells to reveal which genes are being expressed. Two additional techniques — multiplexed fluorescent in situ hybridization and spatial transcriptomics — allowed the researchers to identify spatial principles of organization within the tissue.
 
-The core idea was to create a high-performance platform that would excel at engineering, scientific, and mathematics applications. Shah says before Julia, scientists and engineers would either have to hire someone to build software for them or accept the slow performance of the few programming languages designed for them.
+Using these techniques, the researchers were able to identify 31 different subpopulations of neurons, including nine types of medium spiny neurons. Among their medium spiny neuron types are two “outlier” populations that appear to play important roles in schizophrenia, substance use disorder, and depression.
 
-“We wanted to create something as easy to use as Python or MATLAB but as fast as the C programming language,” Shah says. “We built Julia for ourselves.”
+One of those populations, known as D1 outliers, showed high expression of genes involved in addiction and substance use disorder, especially genes related to opioid response. Another population, called D2 outliers, showed high expression of genes that respond to antidepressants. And, both populations appeared to respond strongly to clozapine, an antipsychotic drug used to treat schizophrenia.
 
-Edelman says at first, the researchers didn’t think anyone would want their creation.
+Clozapine is among the most effective antipsychotics available, but it’s not widely used in the United States because it can cause a fatal blood disorder in a small percentage of patients. Now that researchers know which cells the drug acts on, they may be able to design more targeted therapeutics to overcome psychosis, but without the harmful side effects, Heiman says.
 
-“We figured it would take 10 years before anyone was interested, but we said, ‘Patience is a virtue, so let’s do it,’” Edelman recalls.
+**Huntington’s vulnerability**
 
-The MIT researchers announced Julia with a blog post in 2012. They quickly realized many other researchers shared their frustration.
+Another key finding of the paper helps to shed light on why the dorsal (upper) part of the striatum is more vulnerable to Huntington’s disease. The disease is caused by an inherited version of the huntingtin gene that carries too many repetitive DNA segments, called CAG repeats.
 
-“When we first started, we were targeting interactive research workflows, but increasingly people are using it for everything,” Bezanson says. “Now we’re moving the whole stack of the language onto smaller, embedded devices as we evolve with our users.”
+The researchers found that dorsal populations of medium spiny neurons express higher levels of the genes MSH2 and MSH3, which play a role in increasing the number of CAG repeats found in the huntingtin gene. As more of those repeats accumulate, the mutated version of the huntingtin protein becomes more harmful to cells.
 
-Since those early days, Edelman has taught a class on Julia with students from nearly every department at MIT. Today, he often learns students are already using Julia when they enroll in the class for applications as wide ranging as robotics, astronomy, physics simulations, and finance.
+The researchers also found that a rare population of medium spiny neurons that forms island-like structures in the ventral striatum was more resistant to the accumulation of CAG repeats. Further study of this class of cells might help researchers learn how to induce other medium spiny neurons to become more resistant to the disease, Heiman says.
 
-“Researchers come up to me and say, ‘I tell my supervisor I’m using Julia because it’s fast, but don’t tell them I’m using Julia because it’s really fun,’” Edelman says. “The key thing is Julia’s abstractions. A lot of times a coding language forces you to solve the one problem you’re thinking about. Julia’s language makes it so you’re solving not only the problem you’re thinking about, but other people’s problems around the world too. It encourages you to solve problems more generally.”
+“Looking at the genes that these neurons express or don’t express might give us some clues as to how to make other medium spiny neurons resilient like them,” she says.
 
-As Julia gained popularity, researchers around the world started asking the Julia team for support. By 2015, the demand became strong enough that they decided to start JuliaHub and help users through the company full-time. They received support from the MIT Deshpande Center for Technological Innovation and others at MIT to get the company off the ground.
+**Insights into substance use disorders**
 
-JuliaHub’s work has evolved from simply helping users to advancing the language more generally. That’s powered an impressive list of creations from Julia’s loyal users. Julia has been used to simulate computer circuits, detect health disparities, model global climates and oceans, analyze brain activity, and more.
+The researchers also compared their findings from human tissue samples to samples from mice and found several differences, especially in the expression of genes related to drug response and substance use disorders. One such gene, which encodes the mu opioid receptor (OPRM1), is highly expressed in the human D1 outlier population, but not in the corresponding population of neurons in mice.
 
-After someone built a pharmaceutical modeling platform in Julia, it was used to accelerate development of Moderna’s Covid-19 vaccine. In another case, researchers used Julia to create a [program for avoiding aircraft collisions](https://juliahub.com/case-studies/lincoln-labs). They found it ran about 50 times faster than an earlier version built on Python. Engineers at Meta used Julia to develop a better audio codec for WhatsApp’s 4 billion users.
+This means that standard mouse models may not fully capture the biology of opioid responses, and that engineering mice to express this receptor in a similar manner to humans could make those models significantly more accurate.
 
-“Over the years we’ve seen industrial, government, and academic users doing all kinds of interesting things with the Julia language,” Edelman says. “It’s honestly surprised us in many ways, the wide-ranging things people are using it for.”
+“Some of the diversity we’re seeing in the human ventral striatum is species-specific and has implications for modeling substance use disorder in rodents,” Heiman says. “Now that we understand better the species differences, we can use the rodent models for specific questions that apply for conserved genes, but we could also think about humanizing some models.”
 
-**Autonomous design**
+The researchers hope that this map, built from tissue contributions by brain donors and their families, and assembled across disciplines and institutions, will provide an important starting point for researchers pursuing new treatments for some of the most difficult-to-treat brain disorders.
 
-JuliaHub launched Dyad 1.0 in June of 2025 as a research agent to accelerate programming and Dyad 2.0 in December. The founders believe Dyad 3.0 represents a new level of ability and autonomy for designing complex systems.
-
-“One important thing about Dyad is that it is a physics compiler and hence [enforces physical laws](https://help.juliahub.com/dyad/stable/tutorials/getting-started.html),” Shah explains. “General AI systems often solve physical problems in ways that violate physical laws. When using the Dyad agent, it will detect such violations and guide the agent in the direction of the physically correct solution. We expect it will decrease design times in product engineering by orders of magnitude, leading to months of work being accomplished in hours.”
-
-One way Edelman sees the impact of Julia is through his class. One student recently used Dyad to model how robots move around in space. Another used it to build a rocket engine.
-
-“At the end he said, ‘I couldn’t believe how easy that was — I just got a rocket engine!’” Edelman recalls.
+The research was funded, in part, by the National Institutes of Health, the G. Harold and Leila Y. Mathers Charitable Foundation, the Freedom Together Foundation, the Natalia Mental Health Foundation, the Biswas Family Foundation, and the Milken Institute.
