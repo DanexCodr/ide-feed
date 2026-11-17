@@ -1,159 +1,69 @@
-> For women, the need and desire to nurture each other is not
-> pathological but redemptive, and it is within that knowledge that
-> our real power I rediscovered. It is this real connection which is
-> so feared by a patriarchal world. Only within a patriarchal structure
-> is maternity the only social power open to women.
+One feature of the Wii U is the backwards compatibility with Wii games through Wii Mode, often referred to as vWii. In theory, this is a really nice way to enjoy Wii games on a modern TV, since the Wii U has HDMI output. Unfortunately, Wii Mode does not look great. Ironically, the output of an original Wii can look better.  
 
-The open software ecosystem is not in a good way. We’ve seen escalating
-abuse of our commons by the very entities we were trying to provide
-an alternative to. Our default tool against this, copyleft, is repeatedly
-showing itself incapable of rising to these challenges. understandably,
-many find it difficult to see a path forward. In this context, many are
-attempting to [double down on copyleft](https://ploum.net/2024-07-01-opensource_sustainability.html),
-with some even going as far as [making their work proprietary](https://acadia.engineering/license/faq)
-in an attempt to maintain control of how it’s used. Herein I hope to share
-a different vision.
+The two most prominent issues are the force-cropped output and color bleed issues.
 
-## some context on copyright
+Reports of these issues go back to 2013<sup>[[1]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-1)</sup>, shortly after the Wii U was released, but a fix was never provided.
 
-A comprehensive history of copyright is out of scope for essay, but I think
-it worth highlighting a critical point in its conception:
+In this blog post we'll take a closer look at the technical architecture of Wii Mode graphics, how two simple typos in the firmware caused these issues, and what modern AMD GPUs have in common with the Wii U.
 
-The Licensing of the Press Act 1662 in England was drafted in the wake of the
-printing press to provide publishers with a monopoly on printing registered
-books. Its purpose was to protect publishers from competition, ensuring their
-profitability, and to provide a means for censorship. Notably unrepresented in
-this consideration are authors, who could not register books themselves. The act
-was temporary, and in 1694, unable to secure a continuation from parliament,
-publishers were in need of a new approach. It was only then that they chose to
-highlight authors’ rights, to make the proposed legislation palatable to a
-public tiring of their greed. Yet, they did this knowing that even with authors
-holding these rights, they could do little with them other than sell them
-straight back to the publishers from a disadvantaged bargaining position.
+## The DMCU
 
-The publishers have spent the centuries since clawing back as much as they can
-from this small concession. Authors have hardly noticed the change. Before
-copyright, creative workers primarily made their living by commission and
-patronage. Today, creative workers continue to primarily make our living by
-commission and patronage.
+So who can we blame for these issues? One candidate is the DMCU. To get a quick overview of the DMCU, I'm quoting fail0verflow's description from their 2014 Wii U blog post<sup>[[2]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-2)</sup>:
 
-That’s not to say we haven’t had our wins. Copyleft was a big one. But I’m
-reminded of Lorde’s wisdom:
+> You may have noticed that good old VI (the display controller / Video Interface of ye olde GameCube and Wii) is gone. Huh? How does that work? Turns out they’re emulating that in software and translating its configuration to the R7xx’s CRTC registers. But where does this emulation software run? Sneaky: they added a special microcontroller to the Latte just for this purpose. The DMCU is a [68HC11](http://en.wikipedia.org/wiki/HC11) compatible 8-bit CPU whose sole purpose is to perform VI emulation. It has a frontend hardware shim that looks like VI to the Wii software, and behind the scenes it translates those registers to the Radeon’s, including upscaling configuration. cafe2wii loads the DMCU’s firmware (the DMCU doesn’t seem to be active in Wii U mode). It has its own dedicated RAM and access to both the faux-VI back side and the Radeon’s register area. [...]
 
-> Those of us who stand outside the circle of this society’s definition of
-> acceptable women; those of us who have been forged in the crucibles of
-> difference—those of us who are poor, who are lesbians, who are Black, who are
-> older—know that survival is not an academic skill. It is learning how to take
-> our differences and make them strengths. For the master’s tools will never
-> dismantle the master’s house. They may allow us temporarily to beat him at his
-> own game, but they will never enable us to bring about genuine change. And
-> this fact is only threatening to those women who still define the master’s
-> house as their only source of support.
+To get to the bottom of these issues, I decided to reverse-engineer the firmware of the DMCU. The DMCU firmware is located in the Wii U's storage and is loaded into the DMCU's RAM before launching cafe2wii. Unfortunately, my favorite reverse-engineering tool Ghidra does not support the HC11, so in 2024 I ended up writing my own processor specification for it<sup>[[3]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-3)</sup>. Luckily, Ghidra already supported the HCS08 and HCS12, which I could base my specification on.
 
-Copyright is one of the master’s tools, that’s carved into its bones. It
-was intended to protect power and capital, yes, but more importantly for us the
-means by which it does that protecting is also power and capital. One enforces
-one’s copyright by making threats, and hiring lawyers to back up those threats,
-ideally very expensive lawyers. Under that superficial enforcement lies the
-state, setting the legal framework. The state is made up of politicians and
-bureaucrats who can be plied, bought, or blackmailed, and derives its power
-from its ability to imprison or do violence to you. In the long term, I don’t
-think it possible to use such a tool without perpetuating the logic of power
-and control it’s built on.
+I then spent several days reverse-engineering the DMCU firmware. The firmware itself is relatively straightforward. The DMCU has an interface to access the 32-bit registers of the display controller. The faux-VI hardware shim triggers interrupts in the DMCU firmware, which then configures the display controller accordingly.
 
-## the form of our work
+Reverse engineering the DMCU quickly reveals the reason for the cropped image. The DMCU configures the display controller's viewport to simulate overscan. This crops off up to 16 pixels, which does not look great in several titles. Luckily, this is an easy fix; I can simply patch the bytes of the firmware directly to change the values written to the viewport registers.
 
-Lorde’s advice is to take our differences and make them strengths. I think
-there’s more to that I haven’t seen how to apply to our trade yet, but I can
-at least take a superficial reading:
+## AMD's DMCU
 
-I remember as a child my parents were paranoid that my sister or I might get
-tattoos or unconventional piercings. This wasn’t because they had any
-particular dislike or prejudice toward such things, or even that they were
-worried about discrimintation or prejudice from individuals. Their worry instead
-was that it might make us “unemployable”. We routinely cut off parts of
-ourselves, to make us generic and palatable enough to be fed into the maw
-of industry, and we advise others to do the same. I’m not sure I can advise
-everyone to stop cold turkey in good conscience, as most of us do still rely
-on an employer to make sure we’re fed and housed, but I’m not willing to do it
-to myself outside that context, and even within it I find it necessary to push
-back on some of the conventions of professionalism. I’m definitely not willing
-to do it to others.
+What fail0verflow didn't know at the time, or at least didn't mention, is that the DMCU is not a Wii U-specific microcontroller, but is found in other AMD GPUs too. A patch submitted by an AMD employee in 2018 to the amd-gfx mailing list<sup>[[4]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-4)</sup> mentions the following:
 
-I’d like to praise [Soatok](https://soatok.blog/) for the example he’s set for
-me on this front. He’s talked before about regularly getting complaints that
-his blog is too “unprofessional” to share at work and, like, good. Fuck your
-company.
+> DMCU (Display Microcontroller Unit) is a GPU chip involved in eDP features like Adaptive Backlight Modulation and Panel Self Refresh.
 
-If you don’t want your project used by a company, filling it with personality
-seem a more promising way to achieve that than a license. Of course it’s not
-perfect, your work can always be whitewashed, but if the roots go deep
-enough those stains can be hard to shake. In any case, it’s more work
-for the company downstream, especially if they want to track your changes.
+At least now we know what DMCU stands for. Could this really be the same chip design as used by the Wii U? The linux-firmware repository has several DMCU binary blobs for different GPUs<sup>[[5]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-5)</sup>. After downloading `raven_dmcu.bin` and `navi12_dmcu.bin`, I wrote a quick tool to parse the headers of the firmware blobs and extract the part that actually gets loaded into ERAM<sup>[[6]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-6)</sup>.
 
-Who would have guessed a decade ago that sarcastic commenters on Reddit would
-be such a big stumbling block for LLM training.
+After loading the AMD Raven and Navi 12 DMCU firmware into Ghidra, I was able to confirm that the newer AMD GPUs still use an M68HC11-based DMCU. Even the display controller interface is almost identical to the one used on the Wii U.
 
-## the structure of a technology
+## Decompiling the DMCU
 
-I recently had to implement OIDC auth in a Rust service at work, and so had the
-pleasure of dealing with the trait soup that is the `openidconnect` crate. It
-crossed my mind that I could write a better version of this crate, or at the
-very least some more serviceable documentation. Judging by what others have to
-say in the crate’s issues, there’s demand for it, so I’d be scratching my own
-itch and helping other programmers out. Myself of even a couple of years ago
-would have done it. What I wouldn’t have stopped to consider then is why we’re
-being asked to implement this protocol, and who is served by the protocol
-becoming easier to implement. It’s a tool for centralisation, lock-in, and
-surveillance, and I really don’t need to do Google’s legwork for them. Every
-bit of extra friction in using it is a good thing, in hindsight even my
-struggles were good. The extra implementation time is a cost my employer paid
-for making a bad decision, and the compile time burden of all those traits is
-another cost they will continue to pay until they rip the feature out. If the
-`openidconnect` crate didn’t exist, they probably would have given up on the
-feature entirely.
+Since I grew tired of having to apply byte patches to the existing DMCU firmware, I decided to create a C decompilation of the firmware. This would also allow me to get a deeper understanding of how everything works.
 
-It’s not always possible to know how a technology will be used before it
-exists, but we can make some pretty good guesses. A technology like BitTorrent
-functions to advance freedom of information, and because that purpose is set so
-clearly in it’s structure, it has proved resistant to subversion. Indeed it
-seems resistant to attempts to do anything else but share information,
-including its creator’s attempts to monetise it.
+At first, I needed a proper toolchain to compile my project. GCC used to have upstream support for the M68HC11 and M68HC12<sup>[[7]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-7)</sup>. The last upstream release with support is GCC 3.3.5 from 2005. Later versions broke it before it was removed entirely. I eventually stumbled across releases from 2006 on the personal website of Stéphane Carrez<sup>[[8]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-8)</sup>, the author of the original port. This leaves me with GCC 3.3.6 and binutils 2.15, which will have to do for now.
 
-## mutual aid
+To my surprise, I was able to byte-match entire functions by hand from the original Wii U DMCU firmware using this compiler. To help with matching I created a modified version of [decomp.me](https://github.com/decompme/decomp.me) with support for the previously mentioned compiler.
 
-This is not a only a hobby for most of us, but also how we sustain ourselves.
-An undercurrent in the complaints about the state of open software is that it’s
-hard to make a living writing open software, but I think that’s somewhat by
-design. The thing we came here to oppose was the control companies exert on the
-use and development of their software, and the externalities that exerts on the
-users; they do this mostly as a means to extract money. If we were to turn our
-goal towards extracting money, it would indeed make sense to start exerting
-more control on the use and development of our software, but at that point we
-have to question why we’re here and not in a startup lab.
+For example, the following function (compiled with `gcc3.3.6-m68hc1x-20060122 -Os -m68hc11 -fomit-frame-pointer -mshort`) results in an exact byte-match in the Wii U DMCU firmware.
 
-The old advice to have a day job and do this on the side still carries weight,
-but I dream of a world where sustenance is not synonymous with profit. I don’t
-see why I shouldn’t be able to write software that benefits others, and have
-others do work that benefits me, without either feeling the need to control and
-capture. We have achieved that within software, but I can’t eat software.
+Looks like AMD or Nintendo (I'm not sure who was responsible for writing the Wii U's DMCU firmware) might have used Carrez's GCC port from 2006 when they were writing the Wii U's DMCU firmware. Are they still using it? Unfortunately, I wasn't able to get an exact match in the Raven or Navi 12 DMCU. They might have used some convoluted compiler flags that I couldn't figure out, or a different compiler entirely.
 
-When most people today hear “mutual aid”, they think of charity, and charity is
-often an ugly thing. Those with many resources “giving” some away to those with
-few, to ease the suffering caused by their lack of resources, while ignoring
-the reality that the lack of resources is often solely due to enclosure of the
-resources by those with many. It offers no real answer to the injustice it
-purports to address, and instead primarily functions to assuage the guilt of
-the perpetrators, and give them an excuse to avoid having to contend with the
-root of the problem. We can do better.
+One interesting thing I noticed during reverse engineering is that the `nn_cmpt.rpl` library responsible for loading the DMCU firmware ends up writing the current display resolution into the middle of the DMCU's ERAM. These resolutions are unused by the DMCU firmware, but end up overwriting instructions in the middle of the firmware. By sheer luck, the overwritten functions happen to be unused, resulting in no issues being caused by this. Since I'm loading my custom firmware in the same way as the original one, this required some special attention in my decompilation. I had to create a carveout section for the resolutions and place the text section before these resolutions, manually placing larger functions into a section behind this carveout.
 
-Mutual aid is about seeing systems that produce bad outcomes and working
-together, whether we are directly affected by those systems or not, to address
-those outcomes systemically. It is about involving those “in need” (which
-includes you and your need to eat) in how those needs are met. There are people
-out there doing things you need, with expertise you don’t have, who would
-benefit from some software help. The connections you build with this kind of
-work often turn out to be worth more than a paycheck, and it gives you a chance
-to practice making software that molds to its users’ needs rather than the
-reverse, which has given me a needed ray of sunshine amid the bleak outlook
-this industry engenders on our profession.
+After manually decompiling the entire DMCU firmware to C, I had a functionally equivalent firmware. Not every function is byte-identical, but it seems good enough for me. I ended up publishing this firmware under the name [OpenDMCUFirm](https://github.com/GaryOderNichts/OpenDMCUFirm/tree/main) in 2025, in the hope that others could help with taking a closer look.
+
+## The Cause of Color Bleed
+
+Several months after releasing OpenDMCUFirm, I noticed two bugs in the DMCU firmware, which led to the color bleed issues in Wii mode.
+
+The DMCU firmware processes events in the main event loop. These events are triggered based on interrupts from the faux-VI hardware shim. In the IRQ handler, status bits are mapped from an FVI register to events, which are then processed in the main loop. The code looks roughly like this<sup>[[9]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-9)</sup>:
+
+If an event is currently already being handled by the main loop, it is marked as "active". The IRQ handler checks for that and marks it to be "retriggered" instead. This causes the event loop to immediately run the event handler again after the handler returns<sup>[[10]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-10)</sup>:
+
+Looks like someone made a typo in the IRQ handler, though. Instead of checking if the event active bit is set in `eventFlags`, they're checking if the bit is set in `irqStatus`, which is the hardware status register. If the bit for the active event happens to be set in the IRQ status register, the event is now "retriggered" and never marked as pending. This means the event is never actually processed by the main event loop. The fix for this is really simple:
+
+I tested this on hardware and confirmed that this occurs for events 2 and 3. They are executed once and are then always stuck in the "retrigger" state and are never processed again. All because of a simple typo.
+
+So what are events 2 and 3 used for? Event handler 2 configures a bit in the `DEINT` register block called `CBCR_SWAP`, based on the horizontal origin of the image<sup>[[11]](https://garyodernichts.blogspot.com/2026/11/improving-wii-us-wii-mode.html#fn-11)</sup>:
+
+There's actually another typo in this function, which was probably never noticed since this event handler is never called: `CBCR_SWAP` should be enabled for odd origins, not even origins. The fix for this is again really simple:
+
+Making these two changes fixes the color bleed issues.
+
+I'm not entirely sure yet what event handler 3 is used for. There don't seem to be any visual differences without it. It appears to be similar to event handler 1, so maybe they moved event handler 3's functionality there after noticing it wasn't working.
+
+## Try it out now!
+
+These fixes are part of the [custom branch](https://github.com/GaryOderNichts/OpenDMCUFirm/tree/custom) in OpenDMCUFirm. You can load this version of OpenDMCUFirm with the latest release of [evWii](https://github.com/GaryOderNichts/evwii). Let me know how it looks!

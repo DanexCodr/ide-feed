@@ -1,1 +1,463 @@
-You are getting early access to this article as a subscriber. Your support makes articles like this possible. Thank you.C is well known for requiring manual memory management with malloc and free. And while many major projects do actually manage memory like this, many projects also implement higher-level memory management primitives such as regions (where objects allocated within a region need not be manually freed, freeing a region frees all objects allocated within the region at once), reference counting (manually incrementing and decrementing outstanding references, freeing an object only when its references go to zero), scope-based cleanup using compiler extensions, and a number of major C projects even actually implement garbage collection (fully automatic memory management).Programmers sometimes assume that projects famous for diligence lean away from purely manual memory management. But [SQLite](https://theconsensus.dev/project/sqlite.html), famous for correctness, allocates 100% manually while [cURL](https://theconsensus.dev/project/curl.html) and [Redis](https://theconsensus.dev/project/redis.html) allocate mostly manually (94% and 79%), reference counting only some of their objects. Another surprising finding is that [Linux](https://theconsensus.dev/project/linux.html) and [QEMU](https://theconsensus.dev/project/qemu.html) in the last few years have been starting to use scope cleanup rules (i.e. compiler extensions) to automatically clean up memory, such as Linux's [`__free(kfree)`](https://github.com/torvalds/linux/blob/v7.2/drivers/input/touchscreen/raydium_i2c_ts.c?utm_source=theconsensus.dev&utm_medium=referral#L174) and QEMU's [`g_autofree`](https://github.com/qemu/qemu/blob/v11.1.2/block.c?utm_source=theconsensus.dev&utm_medium=referral#L855).The Consensus tracks and indexes code for over 400 major software infrastructure [projects](https://theconsensus.dev/projects.html). This article surveys 40 of the C projects within this group, excluding test code, third-party code, and examples.Majority allocation strategy[#](https://theconsensus.dev/p/2026/11/08/c-memory-management-survey.html#majority-allocation-strategy)To discover majority allocation we count allocation call sites (which is certainly a limited metric, not accounting for sub-region or size of allocation, etc.). [seL4](https://theconsensus.dev/project/sel4.html) is an exception to much of this article since it has no heap at all.8 projects solely allocate with malloc, implementing no other general higher-level strategy for allocating. These projects are: [brotli](https://theconsensus.dev/project/brotli.html), [FreeRTOS](https://theconsensus.dev/project/freertos.html), [HAProxy](https://theconsensus.dev/project/haproxy.html), [libdeflate](https://theconsensus.dev/project/libdeflate.html), [lz4](https://theconsensus.dev/project/lz4.html), [SQLite](https://theconsensus.dev/project/sqlite.html), [xz-utils](https://theconsensus.dev/project/xz-utils.html), and [zlib](https://theconsensus.dev/project/zlib.html).16 projects primarily, but not exclusively, allocate with malloc.ProjectManual %Region %Garbage Collector %Reference Counting %[PgBouncer](https://theconsensus.dev/project/pgbouncer.html)98002[tmux](https://theconsensus.dev/project/tmux.html)98002[git](https://theconsensus.dev/project/git.html)96300[curl](https://theconsensus.dev/project/curl.html)94006[dqlite](https://theconsensus.dev/project/dqlite.html)92008[QEMU](https://theconsensus.dev/project/qemu.html)860014[Vim](https://theconsensus.dev/project/vim.html)850015[Redis](https://theconsensus.dev/project/redis.html)790021[Neovim](https://theconsensus.dev/project/neovim.html)7410015[universal-ctags](https://theconsensus.dev/project/universal-ctags.html)720028[Linux](https://theconsensus.dev/project/linux.html)712900[zstd](https://theconsensus.dev/project/zstandard.html)703000[tree-sitter](https://theconsensus.dev/project/tree-sitter.html)620038[Erlang](https://theconsensus.dev/project/erlang.html)570394[PostGIS](https://theconsensus.dev/project/postgis.html)544601[Xen](https://theconsensus.dev/project/xen.html)5149007 projects primarily, if not all exclusively, allocate with a region system. With region based allocators, objects are allocated within a region. Freeing the region frees all objects within the region. Sometimes regions can be nested. And sometimes you might still manually free an object allocated within a region.ProjectRegion %Manual %Garbage Collector %[pgvector](https://theconsensus.dev/project/pgvector.html)10000[TimescaleDB](https://theconsensus.dev/project/timescaledb.html)10000[Citus](https://theconsensus.dev/project/citus.html)9910[httpd](https://theconsensus.dev/project/apache-http-server.html)9820[nginx](https://theconsensus.dev/project/nginx.html)9280[Postgres](https://theconsensus.dev/project/postgresql.html)78220[llama.cpp (ggml)](https://theconsensus.dev/project/llama-cpp.html)65350And 5 projects primarily allocate with a garbage collector.ProjectGarbage Collector %Manual %Region %[Ruby](https://theconsensus.dev/project/ruby.html)82180[Julia](https://theconsensus.dev/project/julia.html)80200[Emacs](https://theconsensus.dev/project/emacs.html)77230[OCaml](https://theconsensus.dev/project/ocaml.html)62380[Lua](https://theconsensus.dev/project/lua.html)604003 projects primarily allocate reference-counted objects.ProjectReference Counting %Manual %Region %[CPython](https://theconsensus.dev/project/python.html)85132[PHP](https://theconsensus.dev/project/php.html)62362[Perl](https://theconsensus.dev/project/perl.html)62380All projects[#](https://theconsensus.dev/p/2026/11/08/c-memory-management-survey.html#all-projects)Across all surveyed projects, with links to their various allocation strategies by example.Projectfree/mallocRegionGarbage CollectorReference CountsScope Cleanup[sqlite](https://theconsensus.dev/project/sqlite.html)[`sqlite3_mprintf`](https://github.com/sqlite/sqlite/blob/version-3.53.4/src/memdb.c?utm_source=theconsensus.dev&utm_medium=referral#L794), [`sqlite3_free`](https://github.com/sqlite/sqlite/blob/version-3.53.4/src/memdb.c?utm_source=theconsensus.dev&utm_medium=referral#L796)nonenonenonenone[haproxy](https://theconsensus.dev/project/haproxy.html)[`strdup`](https://github.com/haproxy/haproxy/blob/v3.4.0/src/mux_h1.c?utm_source=theconsensus.dev&utm_medium=referral#L5745), [`free`](https://github.com/haproxy/haproxy/blob/v3.4.0/src/mux_h1.c?utm_source=theconsensus.dev&utm_medium=referral#L5748)nonenonenonenone[pgbouncer](https://theconsensus.dev/project/pgbouncer.html)[`malloc`](https://github.com/pgbouncer/pgbouncer/blob/pgbouncer_1_26_0/src/scram.c?utm_source=theconsensus.dev&utm_medium=referral#L214), [`free`](https://github.com/pgbouncer/pgbouncer/blob/pgbouncer_1_26_0/src/scram.c?utm_source=theconsensus.dev&utm_medium=referral#L218)nonenone[`strpool_decref`](https://github.com/pgbouncer/pgbouncer/blob/pgbouncer_1_26_0/src/varcache.c?utm_source=theconsensus.dev&utm_medium=referral#L148)none[redis](https://theconsensus.dev/project/redis.html)[`zmalloc`](https://github.com/redis/redis/blob/8.10.1/src/networking.c?utm_source=theconsensus.dev&utm_medium=referral#L123), [`zfree`](https://github.com/redis/redis/blob/8.10.1/src/networking.c?utm_source=theconsensus.dev&utm_medium=referral#L2378)nonenone[`decrRefCount`](https://github.com/redis/redis/blob/8.10.1/src/acl.c?utm_source=theconsensus.dev&utm_medium=referral#L472)none[git](https://theconsensus.dev/project/git.html)[`xstrdup`](https://github.com/git/git/blob/v2.56.0/builtin/update-index.c?utm_source=theconsensus.dev&utm_medium=referral#L718), [`free`](https://github.com/git/git/blob/v2.56.0/builtin/update-index.c?utm_source=theconsensus.dev&utm_medium=referral#L720)[`mem_pool_alloc`](https://github.com/git/git/blob/v2.56.0/diff.c?utm_source=theconsensus.dev&utm_medium=referral#L1093), [`mem_pool_init`](https://github.com/git/git/blob/v2.56.0/diff.c?utm_source=theconsensus.dev&utm_medium=referral#L1068)none[`blame_origin_decref`](https://github.com/git/git/blob/v2.56.0/blame.c?utm_source=theconsensus.dev&utm_medium=referral#L1485)none[tmux](https://theconsensus.dev/project/tmux.html)[`xstrdup`](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c?utm_source=theconsensus.dev&utm_medium=referral#L505), [`free`](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c?utm_source=theconsensus.dev&utm_medium=referral#L507)nonenone[`server_client_unref`](https://github.com/tmux/tmux/blob/3.8/cmd-if-shell.c?utm_source=theconsensus.dev&utm_medium=referral#L186)none[vim](https://theconsensus.dev/project/vim.html)[`vim_strsave`](https://github.com/vim/vim/blob/v9.2.1167/src/clientserver.c?utm_source=theconsensus.dev&utm_medium=referral#L968), [`vim_free`](https://github.com/vim/vim/blob/v9.2.1167/src/clientserver.c?utm_source=theconsensus.dev&utm_medium=referral#L970)none[`garbage_collect`](https://github.com/vim/vim/blob/v9.2.1167/src/eval.c?utm_source=theconsensus.dev&utm_medium=referral#L112)[`dict_unref`](https://github.com/vim/vim/blob/v9.2.1167/src/dict.c?utm_source=theconsensus.dev&utm_medium=referral#L351)none[neovim](https://theconsensus.dev/project/neovim.html)[`xstrdup`](https://github.com/neovim/neovim/blob/v0.12.5/src/nvim/normal.c?utm_source=theconsensus.dev&utm_medium=referral#L696), [`xfree`](https://github.com/neovim/neovim/blob/v0.12.5/src/nvim/normal.c?utm_source=theconsensus.dev&utm_medium=referral#L698)[`arena_memdupz`](https://github.com/neovim/neovim/blob/v0.12.5/src/nvim/highlight_group.c?utm_source=theconsensus.dev&utm_medium=referral#L2087), [`arena_mem_free`](https://github.com/neovim/neovim/blob/v0.12.5/src/nvim/highlight_group.c?utm_source=theconsensus.dev&utm_medium=referral#L1528)none[`tv_dict_unref`](https://github.com/neovim/neovim/blob/v0.12.5/src/nvim/eval.c?utm_source=theconsensus.dev&utm_medium=referral#L3831)none[tree-sitter](https://theconsensus.dev/project/tree-sitter.html)[`ts_malloc`](https://github.com/tree-sitter/tree-sitter/blob/v0.27.1/lib/src/stack.c?utm_source=theconsensus.dev&utm_medium=referral#L626), [`ts_free`](https://github.com/tree-sitter/tree-sitter/blob/v0.27.1/lib/src/stack.c?utm_source=theconsensus.dev&utm_medium=referral#L634)nonenone[`ts_subtree_release`](https://github.com/tree-sitter/tree-sitter/blob/v0.27.1/lib/src/parser.c?utm_source=theconsensus.dev&utm_medium=referral#L213)none[universal-ctags](https://theconsensus.dev/project/universal-ctags.html)[`eStrdup`](https://github.com/universal-ctags/ctags/blob/v6.2.1/main/parse.c?utm_source=theconsensus.dev&utm_medium=referral#L2405), [`eFree`](https://github.com/universal-ctags/ctags/blob/v6.2.1/main/parse.c?utm_source=theconsensus.dev&utm_medium=referral#L2411)nonenone[`es_object_unref`](https://github.com/universal-ctags/ctags/blob/v6.2.1/main/field.c?utm_source=theconsensus.dev&utm_medium=referral#L1638)none[zstandard](https://theconsensus.dev/project/zstandard.html)[`malloc`](https://github.com/facebook/zstd/blob/v1.5.7/lib/dictBuilder/cover.c?utm_source=theconsensus.dev&utm_medium=referral#L1028), [`free`](https://github.com/facebook/zstd/blob/v1.5.7/lib/dictBuilder/cover.c?utm_source=theconsensus.dev&utm_medium=referral#L1033)[`ZSTD_cwksp_reserve_aligned64`](https://github.com/facebook/zstd/blob/v1.5.7/lib/compress/zstd_compress.c?utm_source=theconsensus.dev&utm_medium=referral#L2042), [`ZSTD_cwksp_init`](https://github.com/facebook/zstd/blob/v1.5.7/lib/compress/zstd_compress.c?utm_source=theconsensus.dev&utm_medium=referral#L132)nonenonenone[zlib](https://theconsensus.dev/project/zlib.html)[`ZALLOC`](https://github.com/madler/zlib/blob/v1.3.2/deflate.c?utm_source=theconsensus.dev&utm_medium=referral#L440), [`ZFREE`](https://github.com/madler/zlib/blob/v1.3.2/deflate.c?utm_source=theconsensus.dev&utm_medium=referral#L1306)nonenonenonenone[xz-utils](https://theconsensus.dev/project/xz-utils.html)[`lzma_alloc`](https://github.com/tukaani-project/xz/blob/v5.8.4/src/liblzma/common/string_conversion.c?utm_source=theconsensus.dev&utm_medium=referral#L919), [`lzma_free`](https://github.com/tukaani-project/xz/blob/v5.8.4/src/liblzma/common/string_conversion.c?utm_source=theconsensus.dev&utm_medium=referral#L924)nonenonenonenone[lz4](https://theconsensus.dev/project/lz4.html)[`ALLOC`](https://github.com/lz4/lz4/blob/v1.10.0/lib/lz4.c?utm_source=theconsensus.dev&utm_medium=referral#L1457), [`FREEMEM`](https://github.com/lz4/lz4/blob/v1.10.0/lib/lz4.c?utm_source=theconsensus.dev&utm_medium=referral#L1466)nonenonenonenone[brotli](https://theconsensus.dev/project/brotli.html)[`BROTLI_ALLOC`](https://github.com/google/brotli/blob/v1.2.0/c/enc/backward_references_hq.c?utm_source=theconsensus.dev&utm_medium=referral#L106), [`BROTLI_FREE`](https://github.com/google/brotli/blob/v1.2.0/c/enc/backward_references_hq.c?utm_source=theconsensus.dev&utm_medium=referral#L113)nonenonenonenone[libdeflate](https://theconsensus.dev/project/libdeflate.html)[`libdeflate_aligned_malloc`](https://github.com/ebiggers/libdeflate/blob/v1.26/lib/deflate_compress.c?utm_source=theconsensus.dev&utm_medium=referral#L3910), [`libdeflate_aligned_free`](https://github.com/ebiggers/libdeflate/blob/v1.26/lib/deflate_compress.c?utm_source=theconsensus.dev&utm_medium=referral#L4078)nonenonenonenone[freertos](https://theconsensus.dev/project/freertos.html)[`pvPortMalloc`](https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/V11.3.3/tasks.c?utm_source=theconsensus.dev&utm_medium=referral#L1651), [`vPortFree`](https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/V11.3.3/tasks.c?utm_source=theconsensus.dev&utm_medium=referral#L1668)nonenonenonenone[dqlite](https://theconsensus.dev/project/dqlite.html)[`raft_malloc`](https://github.com/canonical/dqlite/blob/v1.18.7/src/gateway.c?utm_source=theconsensus.dev&utm_medium=referral#L330), [`raft_free`](https://github.com/canonical/dqlite/blob/v1.18.7/src/gateway.c?utm_source=theconsensus.dev&utm_medium=referral#L338)nonenone[`logRelease`](https://github.com/canonical/dqlite/blob/v1.18.7/src/raft/replication.c?utm_source=theconsensus.dev&utm_medium=referral#L53)none[curl](https://theconsensus.dev/project/curl.html)[`curlx_calloc`](https://github.com/curl/curl/blob/curl-8_23_0/lib/select.c?utm_source=theconsensus.dev&utm_medium=referral#L593), [`curlx_free`](https://github.com/curl/curl/blob/curl-8_23_0/lib/select.c?utm_source=theconsensus.dev&utm_medium=referral#L598)nonenone[`Curl_creds_unlink`](https://github.com/curl/curl/blob/curl-8_23_0/lib/creds.c?utm_source=theconsensus.dev&utm_medium=referral#L100)none[xen](https://theconsensus.dev/project/xen.html)[`xzalloc`](https://github.com/xen-project/xen/blob/RELEASE-4.22.0/xen/common/vm_event.c?utm_source=theconsensus.dev&utm_medium=referral#L67), [`xfree`](https://github.com/xen-project/xen/blob/RELEASE-4.22.0/xen/common/vm_event.c?utm_source=theconsensus.dev&utm_medium=referral#L103)[`GCSPRINTF`](https://github.com/xen-project/xen/blob/RELEASE-4.22.0/tools/libs/light/libxl_vtpm.c?utm_source=theconsensus.dev&utm_medium=referral#L43), [`GC_INIT`](https://github.com/xen-project/xen/blob/RELEASE-4.22.0/tools/libs/light/libxl_vtpm.c?utm_source=theconsensus.dev&utm_medium=referral#L96)nonenonenone[qemu](https://theconsensus.dev/project/qemu.html)[`g_new0`](https://github.com/qemu/qemu/blob/v11.1.2/migration/multifd-qpl.c?utm_source=theconsensus.dev&utm_medium=referral#L190), [`g_free`](https://github.com/qemu/qemu/blob/v11.1.2/migration/multifd-qpl.c?utm_source=theconsensus.dev&utm_medium=referral#L193)nonenone[`object_unref`](https://github.com/qemu/qemu/blob/v11.1.2/blockdev-nbd.c?utm_source=theconsensus.dev&utm_medium=referral#L65)[`g_autofree`](https://github.com/qemu/qemu/blob/v11.1.2/block.c?utm_source=theconsensus.dev&utm_medium=referral#L855)[linux](https://theconsensus.dev/project/linux.html)[`kzalloc_obj`](https://github.com/torvalds/linux/blob/v7.2/fs/binfmt_elf.c?utm_source=theconsensus.dev&utm_medium=referral#L1801), [`kfree`](https://github.com/torvalds/linux/blob/v7.2/fs/binfmt_elf.c?utm_source=theconsensus.dev&utm_medium=referral#L1803)[`devm_kzalloc`](https://github.com/torvalds/linux/blob/v7.2/drivers/input/touchscreen/raydium_i2c_ts.c?utm_source=theconsensus.dev&utm_medium=referral#L1069)none[`kref_put`](https://github.com/torvalds/linux/blob/v7.2/drivers/base/core.c?utm_source=theconsensus.dev&utm_medium=referral#L1305)[`__free`](https://github.com/torvalds/linux/blob/v7.2/drivers/input/touchscreen/raydium_i2c_ts.c?utm_source=theconsensus.dev&utm_medium=referral#L174)[postgresql](https://theconsensus.dev/project/postgresql.html)[`pg_strdup`](https://github.com/postgres/postgres/blob/REL_18_6/src/bin/pg_dump/dumputils.c?utm_source=theconsensus.dev&utm_medium=referral#L766), [`pg_free`](https://github.com/postgres/postgres/blob/REL_18_6/src/bin/pg_dump/dumputils.c?utm_source=theconsensus.dev&utm_medium=referral#L770)[`palloc`](https://github.com/postgres/postgres/blob/REL_18_6/src/backend/foreign/foreign.c?utm_source=theconsensus.dev&utm_medium=referral#L69), [`MemoryContextReset`](https://github.com/postgres/postgres/blob/REL_18_6/src/backend/tcop/postgres.c?utm_source=theconsensus.dev&utm_medium=referral#L4543)nonenonenone[pgvector](https://theconsensus.dev/project/pgvector.html)none[`palloc`](https://github.com/pgvector/pgvector/blob/v0.8.6/src/vector.c?utm_source=theconsensus.dev&utm_medium=referral#L308), [`MemoryContextDelete`](https://github.com/pgvector/pgvector/blob/v0.8.6/src/ivfinsert.c?utm_source=theconsensus.dev&utm_medium=referral#L216)nonenonenone[citus](https://theconsensus.dev/project/citus.html)[`strdup`](https://github.com/citusdata/citus/blob/v14.2.0/src/backend/distributed/connection/connection_configuration.c?utm_source=theconsensus.dev&utm_medium=referral#L130), [`free`](https://github.com/citusdata/citus/blob/v14.2.0/src/backend/distributed/connection/connection_configuration.c?utm_source=theconsensus.dev&utm_medium=referral#L100)[`palloc0`](https://github.com/citusdata/citus/blob/v14.2.0/src/backend/distributed/shardsplit/shardsplit_shared_memory.c?utm_source=theconsensus.dev&utm_medium=referral#L359), [`MemoryContextReset`](https://github.com/citusdata/citus/blob/v14.2.0/src/backend/distributed/connection/connection_management.c?utm_source=theconsensus.dev&utm_medium=referral#L1034)nonenonenone[timescaledb](https://theconsensus.dev/project/timescaledb.html)none[`palloc`](https://github.com/timescale/timescaledb/blob/2.30.0/src/constraint.c?utm_source=theconsensus.dev&utm_medium=referral#L119), [`AllocSetContextCreate`](https://github.com/timescale/timescaledb/blob/2.30.0/src/hypertable_cache.c?utm_source=theconsensus.dev&utm_medium=referral#L62)nonenonenone[postgis](https://theconsensus.dev/project/postgis.html)[`lwalloc`](https://github.com/postgis/postgis/blob/3.6.4/liblwgeom/gserialized1.c?utm_source=theconsensus.dev&utm_medium=referral#L240), [`lwfree`](https://github.com/postgis/postgis/blob/3.6.4/liblwgeom/gserialized1.c?utm_source=theconsensus.dev&utm_medium=referral#L247)[`palloc`](https://github.com/postgis/postgis/blob/3.6.4/libpgcommon/shared_gserialized.c?utm_source=theconsensus.dev&utm_medium=referral#L30), [`AllocSetContextCreate`](https://github.com/postgis/postgis/blob/3.6.4/libpgcommon/lwgeom_pg.c?utm_source=theconsensus.dev&utm_medium=referral#L172)none[`shared_gserialized_unref`](https://github.com/postgis/postgis/blob/3.6.4/libpgcommon/lwgeom_cache.c?utm_source=theconsensus.dev&utm_medium=referral#L183)none[nginx](https://theconsensus.dev/project/nginx.html)[`ngx_alloc`](https://github.com/nginx/nginx/blob/release-1.31.6/src/http/v3/ngx_http_v3_table.c?utm_source=theconsensus.dev&utm_medium=referral#L337), [`ngx_free`](https://github.com/nginx/nginx/blob/release-1.31.6/src/http/v3/ngx_http_v3_table.c?utm_source=theconsensus.dev&utm_medium=referral#L344)[`ngx_create_pool`](https://github.com/nginx/nginx/blob/release-1.31.6/src/http/ngx_http_request.c?utm_source=theconsensus.dev&utm_medium=referral#L584), [`ngx_destroy_pool`](https://github.com/nginx/nginx/blob/release-1.31.6/src/http/ngx_http_request.c?utm_source=theconsensus.dev&utm_medium=referral#L591)nonenonenone[apache-http-server](https://theconsensus.dev/project/apache-http-server.html)[`apr_bucket_alloc`](https://github.com/apache/httpd/blob/2.4.69/modules/generators/cgi_common.h?utm_source=theconsensus.dev&utm_medium=referral#L318), [`apr_bucket_free`](https://github.com/apache/httpd/blob/2.4.69/modules/generators/cgi_common.h?utm_source=theconsensus.dev&utm_medium=referral#L323)[`apr_pool_create`](https://github.com/apache/httpd/blob/2.4.69/server/mpm/prefork/prefork.c?utm_source=theconsensus.dev&utm_medium=referral#L448), [`apr_pool_clear`](https://github.com/apache/httpd/blob/2.4.69/server/mpm/prefork/prefork.c?utm_source=theconsensus.dev&utm_medium=referral#L559)nonenonenone[llama-cpp (ggml C)](https://theconsensus.dev/project/llama-cpp.html)[`calloc`](https://github.com/ggml-org/llama.cpp/blob/b11457/ggml/src/ggml-alloc.c?utm_source=theconsensus.dev&utm_medium=referral#L164), [`free`](https://github.com/ggml-org/llama.cpp/blob/b11457/ggml/src/ggml-alloc.c?utm_source=theconsensus.dev&utm_medium=referral#L354)[`ggml_new_tensor_1d`](https://github.com/ggml-org/llama.cpp/blob/b11457/ggml/src/ggml.c?utm_source=theconsensus.dev&utm_medium=referral#L2489), [`ggml_free`](https://github.com/ggml-org/llama.cpp/blob/b11457/ggml/src/ggml-cpu/ggml-cpu.c?utm_source=theconsensus.dev&utm_medium=referral#L3864)nonenonenone[python](https://theconsensus.dev/project/python.html)[`PyMem_Malloc`](https://github.com/python/cpython/blob/v3.14.7/Objects/memoryobject.c?utm_source=theconsensus.dev&utm_medium=referral#L3241), [`PyMem_Free`](https://github.com/python/cpython/blob/v3.14.7/Objects/memoryobject.c?utm_source=theconsensus.dev&utm_medium=referral#L3247)[`_PyArena_New`](https://github.com/python/cpython/blob/v3.14.7/Python/pythonrun.c?utm_source=theconsensus.dev&utm_medium=referral#L314), [`_PyArena_Free`](https://github.com/python/cpython/blob/v3.14.7/Python/pythonrun.c?utm_source=theconsensus.dev&utm_medium=referral#L323)[`PyObject_GC_New`](https://github.com/python/cpython/blob/v3.14.7/Modules/_asynciomodule.c?utm_source=theconsensus.dev&utm_medium=referral#L2058)[`Py_DECREF`](https://github.com/python/cpython/blob/v3.14.7/Objects/listobject.c?utm_source=theconsensus.dev&utm_medium=referral#L256)none[php](https://theconsensus.dev/project/php.html)[`emalloc`](https://github.com/php/php-src/blob/php-8.5.10/ext/ffi/ffi.c?utm_source=theconsensus.dev&utm_medium=referral#L3031), [`efree`](https://github.com/php/php-src/blob/php-8.5.10/ext/ffi/ffi.c?utm_source=theconsensus.dev&utm_medium=referral#L3033)[`zend_arena_alloc`](https://github.com/php/php-src/blob/php-8.5.10/sapi/phpdbg/phpdbg_print.c?utm_source=theconsensus.dev&utm_medium=referral#L370), [`zend_arena_release`](https://github.com/php/php-src/blob/php-8.5.10/ext/opcache/ZendAccelerator.c?utm_source=theconsensus.dev&utm_medium=referral#L4108)[`gc_collect_cycles`](https://github.com/php/php-src/blob/php-8.5.10/Zend/zend_execute_API.c?utm_source=theconsensus.dev&utm_medium=referral#L423)[`zend_string_release`](https://github.com/php/php-src/blob/php-8.5.10/Zend/zend.c?utm_source=theconsensus.dev&utm_medium=referral#L1637)none[perl](https://theconsensus.dev/project/perl.html)[`Newx`](https://github.com/Perl/perl5/blob/v5.44.0/av.c?utm_source=theconsensus.dev&utm_medium=referral#L172), [`Safefree`](https://github.com/Perl/perl5/blob/v5.44.0/av.c?utm_source=theconsensus.dev&utm_medium=referral#L174)nonenone[`SvREFCNT_dec`](https://github.com/Perl/perl5/blob/v5.44.0/av.c?utm_source=theconsensus.dev&utm_medium=referral#L383)[`sv_2mortal`](https://github.com/Perl/perl5/blob/v5.44.0/pp_hot.c?utm_source=theconsensus.dev&utm_medium=referral#L6867)[lua](https://theconsensus.dev/project/lua.html)[`luaM_growvector`](https://github.com/lua/lua/blob/v5.5.1/lparser.c?utm_source=theconsensus.dev&utm_medium=referral#L179), [`luaM_freearray`](https://github.com/lua/lua/blob/v5.5.1/ldo.c?utm_source=theconsensus.dev&utm_medium=referral#L1185)none[`luaS_new`](https://github.com/lua/lua/blob/v5.5.1/lapi.c?utm_source=theconsensus.dev&utm_medium=referral#L546)nonenone[ruby](https://theconsensus.dev/project/ruby.html)[`xmalloc`](https://github.com/ruby/ruby/blob/v4.0.6/prism_compile.c?utm_source=theconsensus.dev&utm_medium=referral#L11237), [`xfree`](https://github.com/ruby/ruby/blob/v4.0.6/prism_compile.c?utm_source=theconsensus.dev&utm_medium=referral#L11239)none[`TypedData_Make_Struct`](https://github.com/ruby/ruby/blob/v4.0.6/ast.c?utm_source=theconsensus.dev&utm_medium=referral#L286)nonenone[emacs](https://theconsensus.dev/project/emacs.html)[`xmalloc`](https://github.com/emacs-mirror/emacs/blob/emacs-31.1/src/sysdep.c?utm_source=theconsensus.dev&utm_medium=referral#L3369), [`xfree`](https://github.com/emacs-mirror/emacs/blob/emacs-31.1/src/sysdep.c?utm_source=theconsensus.dev&utm_medium=referral#L3372)none[`Fcons`](https://github.com/emacs-mirror/emacs/blob/emacs-31.1/src/alloc.c?utm_source=theconsensus.dev&utm_medium=referral#L2641)nonenone[ocaml](https://theconsensus.dev/project/ocaml.html)[`caml_stat_alloc`](https://github.com/ocaml/ocaml/blob/5.5.1/runtime/win32.c?utm_source=theconsensus.dev&utm_medium=referral#L679), [`caml_stat_free`](https://github.com/ocaml/ocaml/blob/5.5.1/runtime/win32.c?utm_source=theconsensus.dev&utm_medium=referral#L681)none[`caml_copy_double`](https://github.com/ocaml/ocaml/blob/5.5.1/runtime/bigarray.c?utm_source=theconsensus.dev&utm_medium=referral#L726)nonenone[erlang](https://theconsensus.dev/project/erlang.html)[`erts_alloc`](https://github.com/erlang/otp/blob/OTP-29.0.6/erts/emulator/beam/erl_thr_progress.c?utm_source=theconsensus.dev&utm_medium=referral#L337), [`erts_free`](https://github.com/erlang/otp/blob/OTP-29.0.6/erts/emulator/beam/erl_thr_progress.c?utm_source=theconsensus.dev&utm_medium=referral#L355)none[`HAlloc`](https://github.com/erlang/otp/blob/OTP-29.0.6/erts/emulator/beam/beam_bif_load.c?utm_source=theconsensus.dev&utm_medium=referral#L257)[`erts_bin_release`](https://github.com/erlang/otp/blob/OTP-29.0.6/erts/emulator/beam/beam_load.c?utm_source=theconsensus.dev&utm_medium=referral#L698)none[julia](https://theconsensus.dev/project/julia.html)[`malloc_s`](https://github.com/JuliaLang/julia/blob/v1.12.7/src/sys.c?utm_source=theconsensus.dev&utm_medium=referral#L656), [`free`](https://github.com/JuliaLang/julia/blob/v1.12.7/src/sys.c?utm_source=theconsensus.dev&utm_medium=referral#L659)none[`jl_gc_alloc`](https://github.com/JuliaLang/julia/blob/v1.12.7/src/array.c?utm_source=theconsensus.dev&utm_medium=referral#L64)nonenone[sel4](https://theconsensus.dev/project/sel4.html)nonenonenonenonenone
+*During the past year, we have significantly improved the reliability and
+correctness of Aerogramme's IMAP implementation. This is the first part in a
+series of blog posts elaborating on why implementing IMAP correctly is not so easy, and the set of
+techniques we have been using to make our IMAP code as high-quality as
+we can. In this first part, we focus on one challenging aspect of IMAP:
+fine-grained retrieval and querying of emails.*
+
+*[Aerogramme](https://aerogramme.deuxfleurs.fr/) is an experimental email server
+(& calendar, contacts), designed to be geo-distributed, hosted outside of
+datacenters, on refurbished hardware, and reliable even in presence of network
+issues and hardware failures. It is built on top of
+[Garage](https://garagehq.deuxfleurs.fr/) and shares the same philosophy.
+Aerogramme is AI-free: we do not wish to use unethical technology and prefer to
+spend effort on careful craftmanship and community-building.*
+
+**Implementing an IMAP server is not easy.** Partly because IMAP is an
+old protocol, with a good number of extensions that has accumulated quite a bit
+of complexity over time. On top of that IMAP provides - for good reasons - two
+classes of features that are fundamentally challenging to implement:
+fine-grained retrieval and querying of email contents and concurrent
+multi-client multi-session access to mailboxes.
+
+This is the first part in a series of posts discussing how we have been
+approaching IMAP access. In the past year, we have been
+refining Aerogramme's IMAP implementation to be "more correct", in a context
+where "correctness" is unfortunately not always well specified: IMAP and email are defined in
+documents that are often vague, and furthermore, real-world implementations
+do not always follow specifications.
+
+Today, we'll walk you though our work on the **correctness and reliability of
+Aerogramme for retrieving and querying emails**, and explain why your mailbox is,
+in fact, a database...
+
+*This work was funded by [NLNet](https://nlnet.nl) under the "[Aerogramme
+1.0](https://nlnet.nl/project/Aerogramme-1.0/)" grant, and could not have been
+possible without their support.*
+
+*Feel free to join the Aerogramme [matrix
+channel](https://matrix.to/#/#aerogramme:deuxfleurs.fr) for updates or if you
+just want to chat!*
+
+# Your mailbox is a database
+
+One challenge of the IMAP specification is the rich feature-set it provides for
+retrieving mailbox and email contents. We may sometimes think of a mailbox as a
+directory containing plain email files; however, from the point of view of an
+IMAP server (or client), a mailbox is closer to a database, accessed using a
+dedicated query language.
+
+For instance, mobile clients, which have slower and unreliable connectivity,
+benefit from fine-grained querying of a mailbox contents. User experience is
+much better if an email client can selectively fetch the subject of new emails
+(to update the list of emails in the mailbox) without having to first download
+all of their attachments or doing a sync of the entire mailbox.
+
+To facilitate the mobile client use-case, IMAP specifies two key mechanisms for querying and (partial) retrieval of
+emails in a mailbox:
+
+- SEARCH looks up the emails in a mailbox that satisfy a given "search criteria"; it returns their identifiers. Criteria can select emails based on the contents of specific headers, date, text contents, or flags - metadata attached to emails that can be edited by the client. It can also be any combination of those using OR/NOT/AND boolean operators.
+- FETCH queries the contents of an email given its identifier. Extremely versatile. On top of fetching the entire email, it allows querying an email based on its high-level structure (emails have a recursive structure with sub-parts containing e.g. attachments or text+html alternative views of the same contents), its raw byte-level representation, or a combination of both. It is possible to selectively fetch sub-parts of an email (according to its structure), obtain an "abstract syntax tree" (AST) for the email and the value of some of its headers, and also fetch specific byte ranges for sub-parts.
+
+A direct consequence of these features is that **an IMAP server actually needs to parse
+the emails, not just store them**. It then needs to (correctly) interpret the (sometimes
+tricky) query language of SEARCH and FETCH, and internally support a data
+architecture that enable efficiently searching and querying over the emails.
+
+# Email querying in Aerogramme
+
+Our implementation of SEARCH and FETCH is backed by
+the three following components:
+
+*The logic for SEARCH and FETCH is implemented as an interpreter* that takes
+already parsed emails and walks down their AST to evaluate IMAP-specific
+queries<sup>[1](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#compile-queries)</sup>. This separates email structure (email ASTs do not
+depend on IMAP concepts) from IMAP-specific business logic. This layer has been
+*significantly reworked* in the last months, fixing a good number of logic bugs
+and edge cases in our implementation of the SEARCH and FETCH IMAP specification.
+
+*Email parsing is done using the
+[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec) companion library*,
+that we also develop and maintain. The eml-codec library parses emails into a
+rich, structured AST while also giving access to raw input slices that
+correspond to relevant AST nodes; this is required for implementing FETCH. In
+the past year, eml-codec has evolved from an email parsing library with
+IMAP-specific quirks to a robust, well-tested, general-purpose email library
+with support for both parsing and printing of emails. You can read more about
+the library design choices in our work-in-progress [design
+document](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md).
+
+*Aerogramme's internal data architecture splits mailbox state, email metadata,
+and email contents.* It is [briefly
+described](https://aerogramme.deuxfleurs.fr/documentation/internals/mailbox/) in
+Aerogramme's documentation. Mailbox state (emails IDs and flags) and email
+metadata (parsed headers, date, size) are stored in Aerogramme's metadata
+storage using [Garage
+K2V](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#k2v-api-experimental),
+while email contents are stored in blob storage using [Garage
+S3](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#s3-api).
+This allows SEARCH to be efficient by only reading pre-computed information in
+metadata storage. At the moment there are no other significant optimizations
+for FETCH/SEARCH; the likely next step would be to add a full-text search
+engine.
+
+These components are all quite non-trivial! Let's now talk about the strategies
+we've deployed to make them as correct as we could.
+
+# Testing Aerogramme's FETCH and SEARCH query interpreter
+
+We ran our implementation of FETCH and SEARCH through
+[ImapTest](https://dovecot.github.io/imaptest/): a testing tool for IMAP servers
+maintained by the Dovecot developers. `ImapTest` was invaluable in surfacing issues
+with FETCH and SEARCH, but is equally useful to test all other aspects of IMAP.
+
+Most relevant for FETCH and SEARCH was the test suite provided with `ImapTest`: a
+collection of hand-crafted test scenarios testing many subtle or "interesting"
+aspects of the IMAP specification. Each scenario consists of IMAP
+commands to send to the server, and a specification of the corresponding
+expected responses.
+
+Running the ImapTest test suite found a small number of bugs in SEARCH, mostly
+in edge-cases of the specification. However, testing FETCH
+revealed that our initial implementation of the `BODY[<section>]` subcommand was
+conceptually wrong in many cases! This subcommand of `FETCH` retrieves a
+sub-part of an email by following its structure, which we implement by walking
+down the email's AST. Our initial implementation was done by reading the IMAP
+specification and interpreting its sometimes vague wording as best as we could;
+only testing with `ImapTest` made us realize that our best-guess interpretation
+was wrong in many cases. More precisely: it did not match ImapTest's reading of
+the spec, which, in doubt, is what we prefer to follow!
+
+`ImapTest` was also relatively pleasant to use to do manual "differential testing"
+for any remaining edge-cases: when we had any doubt, we could easily write
+additional scenarios and compare Aerogramme's output with Dovecot's; treating
+Dovecot as an oracle. After a few rounds of bugfixing, Aerogramme's
+implementation of FETCH and SEARCH is now in much better shape.
+
+**The lesson we learned is that the IMAP specification can leave room for
+interpretation in surprising ways.** In fact, to further illustrate this point,
+let's talk about one `ImapTest` scenario that we haven't "fixed" yet in Aerogramme
+because we just found it very confusing, and we are not sure what to do!
+
+### Example: the confusing case of `SEARCH` and structured fields
+
+He's a tricky case. `SEARCH FROM <string>` returns the list of emails whose `From`
+header "contains" the given string. Now, what does "contains" mean here,
+exactly? When running `SEARCH FROM foo@example.com` on the two following
+headers, which ones should match?
+
+```
+From: Foo Bar <foo@example.com>
+From: Foo Bar < "foo" (comment) @ example.com>
+```
+
+Some additional context on email syntax is useful here: these two email addresses are
+equivalent. The local-part of the email (before the `@`) allows quoted strings,
+so `"foo"` can be used and simply denotes `foo`. Email syntax also allows
+comments in various places; they are written between parentheses. Comments have
+no formal meaning but are shown by email clients and can be useful; they are
+sometimes used by mailing-list software to indicate the name of the list.
+As an example [SYMPA](https://sympa.community) emits `From` headers of the form `From: Alice (via Super Friends List) <list-address@server.org>`).
+
+At the moment, Aerogramme implements `SEARCH FROM` as plain substring search on
+the text representation of the header: here, the first header matches, but not
+the second. However, *the ImapTest test suite says that both headers should
+match*! So, what does the specification says?
+
+```
+FROM <string>
+   Messages that contain the specified string in the envelope
+   structure's FROM field.
+```
+
+Hmm, so, what is this "envelope structure"? Reading further:
+
+```
+An envelope structure is a parsed representation of the [RFC5322] 
+header of the message. [...] The from, sender, reply-to, to, cc, 
+and bcc fields are parenthesized lists of address structures. [...]
+An address structure is a parenthesized list that describes an 
+electronic mail address. The fields of an address structure are in 
+the following order: display name, [SMTP] at-domain-list [...], 
+mailbox name (local-part ABNF production from [RFC5322]), and hostname.
+```
+
+So the FROM field of an email's "envelope structure" contains a *structured* representation of *parsed* email addresses.
+Regarding our two headers above, they are both represented in the envelope structure as:
+
+```
+("Foo Bar" NIL "foo" "example.com")
+```
+
+What does it mean for this structured value to "contain" the string
+`foo@example.com`? Clearly none of the strings in the structure contain
+`foo@example.com`, so perhaps instead we should re-print the structure as an
+email address and do a substring search on that? However, *there is not a unique
+way of printing a given email address*, and the IMAP specification does not
+define any...
+
+We are quite curious to know if IMAP experts have more to say on this point!
+
+In the meantime, our bugfixes for FETCH and SEARCH have been shipped in
+[Aerogramme 0.5.1](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.5.1)
+(see the release notes for more details), with the exception of [two extra
+fixes](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/pulls/195) shipped in
+[Aerogramme 0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
+
+# Improving email parsing in Aerogramme
+
+FETCH and SEARCH operate on the *parsed* email ASTs produced by
+[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec). How do we
+ensure that we have correctly implemented all the subtleties of the email format
+in eml-codec, which is itself described in an old and tricky set of
+specifications? As often, the answer is: more testing.
+
+## Property-Based Testing for eml-codec
+
+To ensure our implementation is correct, we performed fuzzer-guided Property-Based Testing (PBT) of the email parser and
+printer in eml-codec. Specifically, [we tested the following "roundtrip"
+property](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/commit/a317094811edaadbbd77657c0da05e3e771c1af6/fuzz/fuzz_targets/message_print_parse.rs#L8):
+
+> “for an arbitrary email value in eml-codec's internal AST, printing it then
+> parsing the printed output must yield an equivalent AST”
+
+The starting AST is generated by a fuzzer as a structured value using the
+`Arbitrary` trait; the [cargo-fuzz tutorial](https://rust-fuzz.github.io/book/cargo-fuzz.html) calls this
+"Structure-Aware Fuzzing". A roundtrip in the other direction, i.e.
+"parse then print then test for string equality" would not generally hold, as
+there are many equivalent ways of printing the same email, for instance because
+of line folding...
+
+While it may seem that any reasonable implementation would satisfy our roundtrip
+property, in practice, this methodology immediately surfaced a lot
+of bugs and edge cases.
+
+The recurring theme was that the fuzzer would generate "exotic" AST values
+breaking the roundtrip property, for which we had to clarify:
+
+- if these revealed an inconsistency/confusion between parser and printer, where the value, after printing, could result in invalid syntax or syntax that parsed into a different AST;
+- if these values should in fact be considered invalid; this means strengthening the AST invariants and fixing the fuzzer-based generator accordingly;
+- or whether the "equivalence checking" function for AST values needed to be relaxed (in some cases, syntactically different values represent the "same" conceptual value up to implementation details).
+
+In the first case, this fixed bugs or potential security issues for users of the
+parser (like Aerogramme) or printer. In the second case, it improved the
+definition of internal AST types, which is relevant when using eml-codec to
+programatically compose emails, not something we use in Aerogramme itself, but relevant for an
+experimental mailing-list server project in Deuxfleurs using the same library.
+
+To illustrate the kind of issues that we are talking about here, let's look at
+an tricky example that was found using our fuzzing methodology.
+
+### Example: encoded words shenanigans
+
+The ["MIME Part Three" specification
+(RFC2047)](https://datatracker.ietf.org/doc/html/rfc2047) specifies a way of
+using non-ASCII text in selected places of email headers. (Full support for
+UTF-8 in headers, which eml-codec also supports, was only [introduced
+later](https://datatracker.ietf.org/doc/html/rfc6532).) Where allowed by the
+specification, ASCII text can be replaced by an "encoded word": an ASCII
+encoding of non-ASCII text using special syntax introduced by the specification.
+
+As an example, the UTF-8 word `aérogramme` can be encoded as follows:
+
+```
+=?utf-8?q?a=C3=A9rogramme?=
+```
+
+More generally, a MIME encoded word has the following structure:
+
+```
+=? <charset> ? <encoding> ? <encoded-text> ?=
+```
+
+When using the `q` encoding like above, *most* ASCII characters can be used
+directly in the encoded text, and other bytes must be encoded as `=` followed by
+their hexadecimal code.
+
+Now, let us consider the following `From` header:
+
+```
+From: =?utf-8?q?@[?= X]
+```
+
+This looks like an encoded word followed by some extra junk; is this a valid
+`From` header? Perhaps surprisingly, *there is no encoded word in this header,
+and it is a valid email address!* The email address is `=?utf-8?q?` @ `[?= X]`
+(it is technically valid!), where the part after the '@' uses the uncommon
+"domain-literal" syntax.
+
+Now, consider the following `Subject` header with the same byte representation:
+
+```
+Subject: =?utf-8?q?@[?= X]
+```
+
+This time, the first part of the header *is an encoded word*, and the whole
+header tells us that the subject is the string `@[ X]`!
+
+The explanation for this behavior follows from the specification (which is
+[fairly clear on this
+aspect](https://datatracker.ietf.org/doc/html/rfc2047#section-5)): the set of
+ASCII characters that can be used *unescaped* in `<encoded-text>` **depends on
+the context in which the encoded word appears**.
+
+Encoded words *can appear* in `From` headers (for example `From: =?utf-8?q?a=C3=A9rogramme?= <aerogramme@deuxfleurs.fr>` is valid), but in that
+context they cannot use `@` or `[` unescaped, which is why the first example
+does not in fact contain a valid encoded word. In the context of a `Subject`
+header, the set of valid unescaped characters is broader and includes both `@`
+and `[`, making `=?utf-8?q?@[?=` is a valid encoded word representing the string
+`@[`.
+
+To implement this behavior, we needed to correctly track the context in which we
+parse encoded words, "tokenize" them according to that context, and also track
+context sensitivity in our email AST and during printing. Getting every detail
+to align properly between parsing, our internal AST, and printing took us
+several attempts! In that process, our property-testing setup was *extremely
+useful*, as it could quickly come up with new convoluted examples like the one
+above that revealed bugs in edge cases of our code.
+
+The lesson here is that email specifications can be *quite complicated and
+tricky to implement*, even when they are clear! And, in our experience, without
+automatic test generation (like our fuzzer setup), it is very hard to manually
+come up with examples that actually cover edge cases...
+
+If you want to see more details, the bulk of our PBT/fuzzing work on eml-codec
+was done in [eml-codec
+0.3](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3) and
+shipped in [Aerogramme
+0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0), with
+some [additional
+improvements](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/pulls/84) shipped
+in [Aerogramme
+0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
+
+## Testing eml-codec on real-world emails
+
+We tested eml-codec on collections of real-world emails (more than 100k emails)
+to evaluate and improve the *recovery strategies* of eml-codec's parser on
+invalid or broken syntax.
+
+Many legitimate emails found in the real world are, indeed, incorrect with
+respect to [email
+specifications](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/#rfc-and-iana-references).
+Often, the use of invalid or broken syntax is local (to specific headers, or
+parts of a header); in some cases, it is "only" a minor deviation from the
+specification.
+
+### Example: the many shapes of message IDs
+
+The case of "message IDs" can be taken as an example. Emails can be given an
+identifier (specified using the `Message-ID` header) so that later emails can
+reference it (using the `In-Reply-To` and `References` headers). This is useful
+to display email "threads" in email clients, for example. The message ID syntax
+is also used to identify attachments with the `Content-ID` header.
+
+Reading the
+[specification](https://datatracker.ietf.org/doc/html/rfc5322#section-3.6.4), a
+message ID is of the form:
+
+```
+<foo.bar@baz.com>
+```
+
+and a list of message IDs as used by `In-Reply-To` and `References` separates message IDs with whitespace:
+
+```
+<msg1@foo.com> <msg2@bar.eu> <msg3@baz.fr>
+```
+
+The specification also documents that, for the list syntax, "obsolete" syntax
+(that we must support) can include extra text surrounding message IDs...
+
+Now, what do we find in our sample of real-world emails?
+
+```
+Content-ID: <1855BC2C-077C-406B-AEA4-CAF088755676>
+```
+
+-> Emitted by apple-mail, and *invalid*: no `@`!
+
+```
+Content-ID: text-body
+Message-ID: foo@bar.com
+```
+
+-> *Invalid*: no angle brackets `<`/`>`!
+
+```
+In-Reply-To: <3DE2736D.F4FCC064@orcaware.com>; from redacted@orcaware.com on Mon, Nov 25, 2002 at 11:01:01AM -0800
+In-Reply-To: Your message of Thu, 18 Mar 1993 22:28:19 GMT.\n             <8280.9303182228@damsay.dcs.ed.ac.uk> 
+```
+
+-> *Valid*: an instance of the "obsolete" syntax documented by the specification.
+
+```
+References: <abc@def>,<foo\n\tbar@outlook.com>,<baz@outlook.com>
+```
+
+-> Commas are valid as part of the obsolete syntax, but the second message-id is malformed because of incorrect line folding (`\n\t`) in the middle of a word.
+
+### Engineering eml-codec for real-world emails
+
+The consequence is that eml-codec needs to be able to *recover from
+broken syntax*: on an email containing invalid syntax, it should be able to
+discard the broken parts and parse as much as it can from the rest of the email,
+instead of simply returning an error. It should also ideally be
+able to *parse invalid but common deviations from the specifications* in order
+to recover information instead of discarding them.
+
+We first extended eml-codec with coarse-grained recovery strategies, such as
+discarding an entire header field if we couldn't parse it. This allowed us to
+quickly reach a state where the eml-codec parser is a *total function*: for any
+input bytes, it always returns an email AST representing an RFC-compliant
+email<sup>[3](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#email-ast-compliant)</sup>, discarding any part of the input it does not
+understand.
+
+We then instrumented the parser to *log each time it discards broken input* when
+recovering, and ran the instrumented parser on the email that we collected. This
+gave us a lot of examples of legitimate emails with broken syntax. In each case,
+then, we manually looked at the piece of broken syntax, see if we could make
+some sense of it, and decide whether:
+
+1. we could reasonably extend our parser to parse it;
+2. we could discard it more selectively (e.g. only discard a broken element in a list instead of discarding the entire list);
+3. our existing discarding strategy was the best we could do.
+
+This whole process was particularly interesting because it made us face the many
+subtleties of real-world emails (sometimes far from the "truth" of
+specifications); eml-codec is now much more robust operating on real-world emails!
+
+This methodology involves a lot of
+tradeoffs and judgment calls: there is a limit to the amount of parsing hacks
+that we can add in terms of code quality but also parsing ambiguity; and some
+classes of emails are more critical than others (e.g. we should not spend too
+much effort supporting spam emails). A strong design constraint of
+eml-codec is that, up to a few exceptions, we want its internal AST to only
+represent RFC-compliant emails, so we did not want to pollute it to include
+random broken syntax just for the sake of "recovering more". The whole process,
+in particular, helped us clarify the
+[design](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md)
+of eml-codec as a library.
+
+For more details, you can look at the release notes of [eml-codec
+0.3.1](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3.1) where
+the bulk of the work is done, building on [eml-codec
+0.2](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.2) for the
+initial setup of parsing recovery. Both shipped with [Aerogramme
+0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0).
+
+IMAP's search and retrieval features are essential because they allow clients to
+have a snappy UX while handling mailboxes with thousands of emails. This post
+focused on getting those basic features right. But, more broadly, we think that
+the "mailbox as database" perspective is useful because it raises the question:
+which end-user workflows can we enable and support? Which features should we
+prioritize or optimize to best support the workflows of day-to-day email users?
+
+*Stay tuned for the next blogpost in the series where we discuss the other big
+challenge for an IMAP server: mailbox concurrency!*
+
+Following the database analogy, the logical next step could be to optimize this by first "pre-compiling" queries before running them on emails. Right now we don't know if this optimization would actually matter in practice...
+
+This links to IMAP4rev1 but the more recent IMAP4rev2 isn't more specific on this subject
+
+The current eml-codec AST has a few selected exceptions to this rule, where it allows representing non-compliant data in well identified cases. One of such cases is non-compliant message IDs, such as message IDs without `@`...

@@ -1,497 +1,214 @@
-In our [previous article](https://sigseis.dev/articles/2026/10/06), we covered what declarative macros are, and how to define and use them.In this article, we will focus on how to integrate them into your crate. That means we’ll cover macro scoping, organization, and exporting. We’ll also take a look at some common use-cases with examples.Hopefully, after reading these two articles, you’ll feel ready to start experimenting with declarative macros in your own crates!This article is tested under the 2024 edition of Rust.For older code you may see some older patterns, like using a lot of `#[macro_use]` statements, but this article is going to focus on more modern practices. If something doesn’t compile for you, check your Rust version and edition.
+Six months ago, I wrote an [SQLite-backed cache](https://alexwlchan.net/2026/sqlite-cache/) to speed up the build system for this site. A static site generator is an ideal candidate for [caching](https://en.wikipedia.org/wiki/Caching), because there are lots of steps that have deterministic behaviour and no side effects. On a site with hundreds of pages, even a few milliseconds per step adds up to a meaningful improvement.
 
-## How To Integrate Declarative Macros Into Your Crate
+That first cache was fairly basic. It supported getting and setting strings, with a namespace for different functions, and not much else:
 
-Broadly speaking, I like to differentiate declarative macros based on access level.**crate-exported**: Intended to be exported from your crate and used by your dependents**crate-local**: Intended to be used privately within your crate**You should prefer to keep macros crate-local if possible.**Macros can be useful even if you don’t intend on exporting them. Actually, that’s most commonly how I make use of macros!The main way to differentiate between the two is whether a macro is marked with the `#[macro_export]` attribute. If not, then it’s a **crate-local** macro.
+```
+from mosaic.cache import SQLiteCache
 
-For historic reasons, macros have two different ways they scope into the surrounding code.**Textual Scoping**: The macro scope is based on *where in the file it’s defined***Path-Based Scoping**: The macro becomes an item in the module tree (acting more similarly to a standard Rust item)Where possible, you should prefer *path-based scoping*, but textual scoping can come in handy in some cases. Additionally, you’re very likely to run into heavy usage of the original textual scoping rules. So it’s worth understanding them regardless.
+cache = SQLiteCache("example.db")
 
-#### Textual Scoping Rules
+cache.set(namespace="fibonacci", key="10", value="55")
+print(cache.get(namespace="fibonacci", key="10"))
+```
 
-**By default, declarative macros take on a textual scope.**Textual scoped declarative macros have some counter-intuitive visibility and access rules.The macro may be used only after its definition within a module, function, or logical scope.The macro may be used by any submodules after the macro definition, *even without importing it explicitly*.So unlike other parts of the Rust language, **order actually matters for textual scoped declarative macros**.The most narrow visibility is within a logical scope (for example a function). Sometimes, though admittedly rarely, this can be useful for functions that have a lot of internal repetition.`fn example() {
-    macro_rules! helper_macro {
-        () => {};
-    }
-    helper_macro!();
-}
+This showed the value of a cache, but it provided cache *storage*, not cache *logic*. If I wanted to cache a function, I had to write per-function logic for saving values to the cache and retrieving them later. A lot of that code was tricky to test, and broken in subtle ways. I was so unsure of this code that I deleted the cache whenever I built the site for publication.
 
-// You cannot access this macro outside of the function.
-`If the macro is going to be used in multiple items within the same module, you can simply define it in the module itself. This is more visible than within a single function, but it’s still constrained to only the current module and its submodules.`// You cannot use it here, because it's not defined yet.
+I wanted something better, so last week I wrote [funkycache](https://alexwlchan.net/projects/funkycache/), a new library that encapsulates all of my caching logic, and is much easier to use and test. It can store arbitrary Python objects as both inputs and outputs, and the interface is much simpler for the caller.
 
-macro_rules! helper_macro {
-    () => {};
-}
+To cache a function, you create a `FunkyCache` instance and add a decorator to your function:
 
-// Now it can be invoked and used.
-helper_macro!();
+```
+from funkycache import FunkyCache
 
-// It can be used within functions, as one might expect.
-fn within_functions() {
-    helper_macro!();
-}
+cache = FunkyCache(storage="sqlite")
 
-// Works within submodules of any depth as well,
-// which might feel counter-intuitive.
-mod even_within_submodules {
-    helper_macro!();
-}
-`Sometimes it can be beneficial to use a macro from the *parent* module the containing module is defined under.**Modern Rust syntax allows for this better with path-based scoping**, which we’ll learn about in the next section.That said, you may still run into this syntax, so we should cover it.To hoist macros defined in a submodule into the parent’s textual scope, you can attach the `#[macro_use]` attribute on the containing module.`// We still cannot use `helper_macro!` here, it isn't defined yet.
+@cache.register
+def expensive_function(arg1: str, arg2: int, arg3: date) -> tuple[str, date]:
+    ...
+```
 
-// After the module definition completes,
-// it's now defined in the parent's textual scope.
-#[macro_use]
-mod submodule {
-    macro_rules! helper_macro {
-        () => {};
-    }
-    helper_macro!();
-}
+This is modelled after [`functools.cache`](https://docs.python.org/3/library/functools.html#functools.cache) in the standard library. The output of the expensive function is written to an SQLite database, so it’s available after the Python process exits.
 
-// See? Now we can access and use it here even without an import.
-// It acts as-if we had defined it textually after `submodule`.
-helper_macro!();
+The cache tries to be smart about invalidations. If the source file containing `expensive_function` changes, the cache for that function is invalidated and will be rebuilt on the next call.
 
-// Works within submodules of any depth as well,
-// since it's a part of the textual scope.
-mod sibling_submodule {
-    helper_macro!();
-}
-`But note that `#[macro_use]` will not automatically propagate further up the module tree.If you want your macro to continue to be defined all the way up the module tree, you’ll have to continue to attach the `#[macro_use]` attribute on all the parent modules.`#[macro_use] // <- Necessary if you need it...
-mod outer_file {
-    #[macro_use]
-    mod other_file {
-        macro_rules! helper_macro {
-            () => {};
-        }
-        helper_macro!();
-    }
-    helper_macro!();
-}
-helper_macro!(); // <- ... at this location onwards.
-`Historically, `#[macro_use]` was also used to import external macros from other crates into your textual scope.You should not be doing this anymore for macros imported from other crates, however.
+You can also specify a dependency on other files and static values, changes to which will also trigger a cache invalidation:
 
-Path-based scoping for declarative macros allows us to work with macros in a way which feels more idiomatic.The macro works a lot like any other item, and can be invoked before the definition.In order to be used, it needs to be manually imported or resolved from the module tree.This can be accomplished with a small bit of code right after the macro definition:`macro_rules! helper_macro {
-    () => {};
-}
+```
+from funkycache import FunkyCache
 
-// Re-export as an item in the module tree.
-pub(crate) use helper_macro;
-`When you do this, since the macro is now a part of the module tree, order no longer matters.`// Can call here, even if the macro isn't defined yet.
-helper_macro!();
+cache = FunkyCache(storage="sqlite")
 
-macro_rules! helper_macro {
-    () => {};
-}
-pub(crate) use helper_macro;
+@cache.register(
+    files=["data/input.yml", "templates/example.html"],
+    values=[pygments.__version__],
+)
+def expensive_function(arg1: str, arg2: int, arg3: datetime) -> tuple[str, datetime]:
+    ...
+```
 
-// Can obviously still call here.
-helper_macro!();
-`Even though you can refer to macros out of order when they use path-based scoping, you’ll probably still want to define them before they’re used within the same file. Not because it’s necessary, but because it’s readable!The real benefit of this is that other modules can import and use the macro like they would any other item.`mod submodule {
-    macro_rules! helper_macro {
-        () => {};
-    }
-    pub(crate) use helper_macro;
-}
+When writing funkycache, I wanted to spend a week thinking hard about caching logic, test it thoroughly, then not think about it again for months. You should be able to use funkycache without understanding how it works – but if you’d like to, that’s what I’ll explain in the rest of this post.
 
-mod another_submodule {
-    // You can use it like a normal item!
-    use crate::submodule::helper_macro;
-    helper_macro!();
+If you’d like to try it yourself, funkycache is [on PyPI](https://pypi.org/project/funkycache/), and the source code is [on this website](https://alexwlchan.net/projects/funkycache/).
 
-    // Or you can refer to it by a path!
-    crate::submodule::helper_macro!();
-}
-`It’s most common to see this used with `pub(crate)`, but you can really use all item visibilities here (`pub(super)`, `pub(in some::path)`, *empty for private*). `pub` has some strange properties, however - we’ll cover that in the next section.
+## Cache keys are function arguments, hashed and JSON-encoded
 
-If you want a declarative macro to be usable from outside your crate, you have to attach the `#[macro_export]` attribute to it.**Be careful when deciding to export a macro!**After you export a macro, users may grow to depend on it, and it may become difficult to change or maintain. This is why I usually prefer *not* exporting a macro, until I’m *sure* it’s warranted.Still, if you’re sure it’s the right thing to do, you can accomplish it like so:`#[macro_export]
-macro_rules! exported_macro {
-    () => {};
-}
+### Getting a complete set of arguments for a function
 
-mod submodule {
-    use crate::exported_macro;
-    exported_macro!();
-}
-`The observable effects of this attribute are:The root of your crate will publicly export the macro for dependents to use (`use your_crate::exported_macro`).You can privately import the macro using normal path-based scoping (`use crate::exported_macro`).It doesn’t matter whether the macro is in a submodule or not, it will *always* export at the root.`exported_macro!(); // <- Works because of `#[macro_export]`
-mod module {
-    use crate::exported_macro;
+The cache is meant for functions which always produce the same output for a given input, so the inputs are the cache key. When we [decorate a function](https://docs.python.org/3/library/functools.html#functools.wraps), we can see the arguments passed on each call:
 
-    exported_macro!(); // <- Works because of the `use` statement
-    mod submodule {
-        #[macro_export]
-        macro_rules! exported_macro {
-            () => {};
-        }
-    }
-    exported_macro!(); // <- Works because of the `use` statement
-}
-exported_macro!(); // <- Works because of `#[macro_export]`
-`The `#[macro_use]` attribute still has an effect privately within your crate, as one would expect for textual scoping rules. Though, I don’t recommend using it on modules containing exported macros, instead just go through the exported path.`exported_macro!(); // <- Works because of `#[macro_export]`
-mod module {
-    // <- Would not be usable here without a `use` statement
+```
+from functools import wraps
 
-    #[macro_use]
-    mod submodule {
-        #[macro_export]
-        macro_rules! exported_macro {
-            () => {};
-        }
-    }
-    exported_macro!(); // <- Works because of `#[macro_use]`
-}
-exported_macro!(); // <- Works because of `#[macro_export]`
-`If you want to export a macro somewhere *other* than the crate root, there’s a way to allow for that.It would be nice if you could just not use `#[macro_export]`, and instead `pub use exported_macro`, but as for now this doesn’t work. If you try it, you will be met with a compile error that the macro is “only public within the crate, and cannot be re-exported”.So, you *MUST* use `#[macro_export]` on exported macros. Then, you can bind that exported macro to a specific location in the module tree with `pub use exported_macro`.That’s annoying since it’ll publish a macro in the root (which you probably don’t intend), so the general pattern for this is:Hide the publicly exported macro (so folks can’t see it’s actually at the root).Create a public path binding in the module where you want the macro to be accessed from.So, for instance:`pub mod submodule {
-    // Since this is `#[macro_export]`,
-    // it will still wind up at the crate root.
-    //
-    // Because of that, we name this in a way that deters usage.
-    // We'll also hide it, so that it doesn't appear in docs.
-    #[doc(hidden)]
-    #[macro_export]
-    macro_rules! __exported_macro {
-        () => {};
-    }
+def my_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print({"args": args, "kwargs": kwargs})
+        return func(*args, **kwargs)
+    return wrapper
+```
 
-    /// The actual documentation will go here!
-    #[doc(inline)]
-    pub use __exported_macro as exported_macro;
-}
+This doesn’t account for different styles of calling the same function – for example, positional versus keyword arguments, or omitting or overriding default arguments.
 
-// Technically this does export the following macro...
-crate::__exported_macro!();
+To get a complete, consistent set of arguments, I use the `inspect` module:
 
-// However, documentation will only list this version.
-// And, this version will be public for dependents to use.
-crate::submodule::exported_macro!();
-`In future versions of Rust, this cruft around visibility and module tree exporting may get cleaned up.It’s hard to make changes like this to the Rust language that won’t break existing code. So this has remained one of those weird parts of the language which - if you’re not careful - can work in odd, non-idiomatic ways.There’s a pretty in-depth thread about this [here](https://internals.rust-lang.org/t/pub-on-macro-rules/19358) on the Rust internals forum.
+```
+import inspect
 
-Recall from our prior article, when we talked about [macro hygiene](https://sigseis.dev/articles/2026/10/06#what-s-this-macro-hygiene-thing), that Rust uses what’s known as “mixed-site hygiene”.Most items - other than local variables - are resolved from where the macro is invoked (functions, types, traits, etc.). For crate-local macros, you can be a little looser with this and require that the invoking code imports some items as needed to compile. But for crate-exported macros, it’s not a good idea to force the user to do this.Because of that, you should keep the following things in mind:You usually want to avoid using the `crate` keyword directly, because it may not refer to *your* crate.Since you’re in less control over the surrounding code for crate-exported macros, you should not assume anything about what has been imported at the invocation site.For declarative macros, there’s a special, always-present meta-variable called `$crate`, which resolves to the crate that your declarative macro is defined in. So it’s usually prudent to use that as a common reference point for any items needed by your macro’s expansion.`// Example type - pretend we have a full type definition.
-pub struct MyCustomHashMap<K, V> {
-    /*...*/
-}
+sig = inspect.signature(func)
+bound = sig.bind(*args, **kwargs)
+bound.apply_defaults()
+cache_key = bound.arguments  # {"arg1": val1, "arg2": val2, ...}
+```
 
-/// A declarative macro that produces a hash map.
-///
-/// Note: Actually, the standard is attempting to add this!
-///       See: https://doc.rust-lang.org/stable/std/macro.hash_map.html
-#[macro_export]
-macro_rules! hash_map {
-    ( $( $key:expr => $value:expr ),* $(,)? ) => {{
-        // Use our hashmap implementation from our crate.
-        let mut map = $crate::MyCustomHashMap::new();
-        $( map.insert($key, $value); )*
-        map
-    }}
-}
+This gives me a Python dictionary of the complete set of arguments to the function, which is the same regardless of the calling style.
 
-#[test]
-fn example() {
-    let map = hash_map! {
-        "key" => "value",
-    };
-    assert_eq!(map.get("key"), Some(&"value"));
-}
-`In the above example we demonstrate this with a `MyCustomHashMap` which our crate *also* exports. Other standing functions, or other required traits, would also need to be resolved via `$crate`.If your macro depends on items from other crates, it’s often wise to re-export those dependencies in a public module hidden within your crate. We usually name this something like `__private` and mark it `#[doc(hidden)]` to deter usage.`#[doc(hidden)]
-pub mod __private {
-    // Publicly re-export things that your macro uses here.
-}
-`The [`serde`](https://crates.io/crates/serde) crate does this with its own [`__private`](https://docs.rs/serde/1.0.229/src/serde/core/crate_root.rs.html#158-163) module. Though, their instance of it may be more for their procedural macros (`Serialize` and `Deserialize`). After all, this isn’t a problem specific to declarative macros.
+### Converting the arguments to JSON
 
-Macros very often don’t have a specific type they’re bound to, usually they’re general convenience macros.That being the case, I recommend the following organization strategy:For macros which are constrained to a single module or function, **just define them where they’re needed**.For macros which are shared across multiple modules, **define them in a common parent module**.Tip: For smaller crates, this can often be easiest to target the top-most module (`lib.rs`).I don’t like to carelessly slap macros into some parent module (or I have several of them, which becomes unwieldy). So I put them in separate files for each macro that I define, and then re-export them into some organizational parent module.Crate-exported macros fit into this pretty well. In those cases, I just don’t re-export into the parent if the intended way to access the macro is by from the crate root.This harkens back to my [module organization article](https://sigseis.dev/articles/2026/06/26), where I detail methods of using “organizational modules”, and defining types in their own separate files.Please take a look at that if you are having trouble understanding my organization strategy.**mod.rs:** *(organizational module; often `lib.rs`)*`mod macros;
-mod type_a;
-mod type_b;
-mod type_c;
-// etc...
-`**macros/mod.rs:** *(organizational module)*`// Modules:
-mod exported_macro;
-mod helper_macro_a;
-mod helper_macro_b;
-mod helper_macro_c;
-// etc...
+Python dictionaries aren’t hashable, so they can’t be used as the keys in dictionaries, nor can they be used as keys in SQLite databases. We need to serialise them as a string or byte sequence.
 
-// Re-Exports:
-pub(crate) use helper_macro_a::*;
-pub(crate) use helper_macro_b::*;
-pub(crate) use helper_macro_c::*;
-// etc...
-`**macros/exported_macro.rs:**`// In this case, I'm happy to bind it to the root.
-#[macro_export]
-macro_rules! exported_macro {
-    () => {};
-}
-`**macros/helper_macro_a.rs:**`macro_rules! helper_macro_a {
-    () => {};
-}
-pub(crate) use helper_macro_a;
-`**Elsewhere in the crate:**`// Either pull them in for usage:
-use crate::macros::{helper_macro_a, helper_macro_b};
-helper_macro_a!();
-helper_macro_b!();
+I considered two options for this serialisation: [pickle](https://docs.python.org/3/library/pickle.html) and [JSON](https://docs.python.org/32/library/json.html). In my limited testing, JSON was faster than pickle, so that’s what I chose. Using JSON also gave me more flexibility for speeding up the serialisation.
 
-// Or refer to them via absolute paths:
-crate::macros::helper_macro_c!();
-`I know this *seems* like overkill, but the nice thing about this is I can always very easily find a macro. Either the macro is defined near its usage (so it’s within the same file), *or* the file is named the same thing as the macro so it’s easy to open via a command.If a macro is very closely related to another macro, and they’re only split up for ease of maintenance, I usually put them in the same file. But I only do that if they are meant to be implementation details of the main macro intended to be invoked.And, you don’t always need an organizing `macros` module - you could just re-export the macros right into the main organizational module. That’s for each person and project to decide on.
+My initial serialisation was a naive `json.dumps` call, with a couple of options to ensure consistent ordering and handle types that the standard library doesn’t know how to encode:
 
-## Use Cases for Declarative Macros
+```
+json_key = json.dumps(cache_key, sort_keys=True, default=str)
+```
 
-Now that we know how to integrate declarative macros into our project, let’s look at some use cases for them.At the risk of sounding like a broken record - I would like to remind you to try as hard as possible ***NOT*** to export the macro.A crate-local macro, as stated, is really nice because users only depend on the side effects of it. You control the syntax and the places it’s invoked completely. There’s less to worry about with respects to breaking changes, or dependencies on unintended usage of the macro.Only export a macro if you’re *sure* it’s a wise decision.
+When I started using funkycache, this encoding step quickly emerged as the slowest part, so I started “reducing” the arguments to make this step faster. This reduction included:
 
-While developing a crate, you may author types that have some nearly-identically-implemented functions or traits.If the types are semantically closely related, we can reduce duplication using a helper macro. The helper macro will implement the common traits or function, with some information provided to it.Some specific examples of when this is beneficial include:If you need to author several types which are mostly simple wrappers of other types (something like a newtype).If you want to ensure several types have an identical subset of an API (functions and traits).Be careful not to reach for declarative macros at the smallest sign of duplication, though. Instead, you should consider it when things appear to be very cut-and-paste. If you over-generalize, that could make maintenance *more* of a burden, not less.For implementation macros like these, I like to follow a `key = value` pattern.`macro_rules! impl_example {
-    (
-        input_1 = $input_1:literal,
-        input_2 = ($($input_2:tt)*),
-        input_3 = {
-            grouped_input_1 = $grouped_input_1:literal,
-            grouped_input_2 = $grouped_input_2:ident,
-            grouped_input_3 = $grouped_input_3:expr,
-        },
-        input_4 = [$($input_4:expr),* $(,)?],
-    ) => { /*Expansion Here*/ };
-}
+- Recursively walking the function arguments and hashing large strings
+- Using Pydantic to convert Pydantic models and dataclasses into Python objects, rather than doing a string conversion
+- Refactoring my code so each function only takes a minimal set of required data
 
-impl_example! {
-    input_1 = 123,
-    input_2 = (complex; grouped, input),
-    input_3 = {
-        grouped_input_1 = "sample",
-        grouped_input_2 = Sample,
-        grouped_input_3 = concat!("..."),
-        // ...
-    },
-    input_4 = [
-        array_value_1,
-        array_value_2,
-        array_value_3,
-        // ...
-    ],
-    // ... etc ...
-}
-`My reason for preferring this syntax is:You cannot accidentally map a fragment to the wrong input without it being visible at the call site.It uses a different binding syntax from struct initialization to distance itself from appearing to initialize an object.Despite the binding syntax being different, it feels familiar enough to be immediately understood.Though, I’ll admit the last two points aren’t that important. If you feel more comfortable you could use a more “struct field initialization” style format (`key: value`). That’s up to you!**Don’t over-generalize these**, accept them in *one* order - we’re only using these internally after all.I sometimes like to order them alphanumerically by key name, so that the order is at least consistent.**Examples**An example of this in the wild are the integer types in the Rust language itself. Integer types (like [`u8`](https://doc.rust-lang.org/1.99.1/src/core/num/mod.rs.html#586-614)) use a crate-local [`int_impl`](https://doc.rust-lang.org/1.99.1/src/core/num/int_macros.rs.html) macro to implement common functions and traits.It’s also common to use declarative macros to assist in implementing a trait across tuples of different arities. Commonly useful in cases where your trait will just call the same trait on all tuple elements. You can see an example of this in the [`serde`](https://crates.io/crates/serde) crate with the crate-local [`tuple_impls!`](https://docs.rs/serde/1.0.229/src/serde/core/ser/impls.rs.html#404-420) macro.If you’d like a toy example - here’s one using some strongly typed time values. The macro helps us ensure the conversion implementations are consistent between the different types.`#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct OverflowError;
+These are all lossy transformations, but that’s fine for a cache *key* – we never need to retrieve the original value. It’s theoretically possible for different values to get a colliding hash key, but at my scale it’s unlikely. (A clean build of my site only uses 32,000 keys.)
 
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Hours(u32);
+### Hashing for smaller keys
 
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Minutes(u32);
+The functions in my static site generator are processing things like the content of articles, so individual function arguments might be kilobytes in size. You can use multi-kilobytes keys with SQLite, but you probably shouldn’t – you take a performance hit for larger keys.
 
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Seconds(u32);
+I wrote [a small benchmark](https://alexwlchan.net/projects/funkycache/files/tests/bench_sqlite_storage.py) to compare three approaches: storing the JSON-encoded arguments directly, hashing them with MD5, and hashing them with [XXH64](https://xxhash.com/). The results are a wash for small key sizes, but for larger keys XXH64 is significantly faster, and MD5 is slower than storing the keys directly in SQLite:
 
-macro_rules! impl_time_functionality {
-    (
-        from = [$($from:ty),* $(,)?],
-        seconds_per = $seconds_per:expr,
-        try_from = [$($try_from:ty),* $(,)?],
-        type = $type:ty,
-    ) => {
-        // Ensure that we have common functions that we expect all of these time types to have.
-        //
-        // Reminder that you can open multiple impl blocks for a single type, so if there are
-        // functions that don't make sense to be commonly implemented here, then just write them
-        // in a separate impl block for the intended type outside of this macro.
-        impl $type {
-            // Helper constant to facilitate conversion impls.
-            // We don't want to export it publicly from this case.
-            pub(crate) const SECONDS_PER: u32 = $seconds_per;
+Based on this benchmark, funkycache hashes the JSON cache key with XXH64 before inserting it into SQLite.
 
-            pub fn to_u32(self) -> u32 {
-                self.0
-            }
-        }
+The xxHash class of hashing algorithms was a pleasant discovery for me during this project. They are explicitly designed to be fast, not cryptographically secure. Previously I’d used MD5 for this purpose, because it’s widely available and I conflated “weak” with “fast”. Actually running a benchmark revealed my mistake.
 
-        $(
-            impl TryFrom<$try_from> for $type {
-                type Error = OverflowError;
-                fn try_from(value: $try_from) -> Result<Self, Self::Error> {
-                    // This const assert ensures we haven't used the helper macro improperly.
-                    const _: () = assert!(
-                        <$try_from>::SECONDS_PER > $seconds_per,
-                        concat!(stringify!($try_from), " must contain more seconds than ", stringify!($type)),
-                    );
-                    Ok(Self(value.to_u32()
-                        .checked_mul(<$try_from>::SECONDS_PER / Self::SECONDS_PER)
-                        .ok_or(OverflowError)?))
-                }
-            }
-        )*
+## Cache values are JSON-encoded
 
-        $(
-            impl From<$from> for $type {
-                fn from(value: $from) -> Self {
-                    // This const assert ensures we haven't used the helper macro improperly.
-                    const _: () = assert!(
-                        <$from>::SECONDS_PER < $seconds_per,
-                        concat!(stringify!($from), " must contain fewer seconds than ", stringify!($type)),
-                    );
-                    Self(value.to_u32() / (Self::SECONDS_PER / <$from>::SECONDS_PER))
-                }
-            }
-        )*
-    };
-}
+Serialising cache keys can be a one-way operation, but cached values need to be retrievable. For this, I’m using the `inspect` module to get the return type from the cached function, then handing the serialisation to Pydantic.
 
-impl_time_functionality! {
-    from = [],
-    seconds_per = 1,
-    try_from = [ Minutes, Hours ],
-    type = Seconds,
-}
+```
+import inspect
+import pydantic
 
-impl_time_functionality! {
-    from = [ Seconds ],
-    seconds_per = 60,
-    try_from = [ Hours ],
-    type = Minutes,
-}
+# Get the return type of the function.
+sig = inspect.signature(func)
+return_type = sig.ret_annotation
 
-impl_time_functionality! {
-    from = [ Seconds, Minutes ],
-    seconds_per = 60 * 60,
-    try_from = [],
-    type = Hours,
-}
+# Create a Pydantic type adapter
+adapter = TypeAdapter(return_type)
 
-#[test]
-fn test() {
-    assert_eq!(Hours::from(Seconds(60 * 60)), Hours(1));
-    assert_eq!(Minutes::from(Seconds(60 * 60)), Minutes(60));
-    assert_eq!(Seconds::from(Seconds(60 * 60)), Seconds(60 * 60));
-    assert_eq!(Hours::from(Minutes(60)), Hours(1));
-    assert_eq!(Minutes::from(Minutes(60)), Minutes(60));
-    assert_eq!(Seconds::try_from(Minutes(60)), Ok(Seconds(60 * 60)));
-    assert_eq!(Hours::from(Hours(1)), Hours(1));
-    assert_eq!(Minutes::try_from(Hours(1)), Ok(Minutes(60)));
-    assert_eq!(Seconds::try_from(Hours(1)), Ok(Seconds(60 * 60)));
-}
-`Sometimes the deduplication is not worth the obfuscation that it creates, but that’s a case-by-case thing. For simple types like this (and the integer types from the standard library), the benefit is clear, as it produces the obvious intended end result and ensures the APIs are all implemented uniformly.If you find yourself adding a lot of special-casing and splitting your macro into many separate macros, that might be a sign that you’ve attempted to use this pattern in a place where it’s not helpful.In those cases, it’s probably best to just write out all your traits and impls by-hand, even if it results in some duplication.
+# Serialise as JSON
+json_str = adapter.dumper_json(value)
 
-A really popular use for declarative macros is to wrap the [`format!`](https://doc.rust-lang.org/stable/std/macro.format.html) macro from the standard library, adapting the formatting syntax for another related use-case.`// Because we assume the user will call `some_adapter` a lot.
-// To make this easier on them, we have a small helper macro.
-//
-// Instead of a plain function, where the user types:
-//   some_adapter(format!(...))
-//
-// They can import this macro and type:
-//   some_adapter!(...)
-#[macro_export]
-macro_rules! some_adapter {
-    ($($msg:tt)*) => {
-        $crate::__private::some_adapter(format!($($msg)*))
-    }
-}
-`You don’t always need to provide such a macro, sometimes you can just take `impl Into<String>` and let the user format as they please. But it can make things more readable in cases where the user will *always* be formatting a string, or if you want formatting to be conditionally compiled-out when disabling `alloc` support.**Examples**To point at the standard library again, we can look at the [`todo!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#884-891) macro. It’s simple enough that it’s just implemented right there as a declarative macro instead of being a built-in like many other macros (similar to [`assert_eq!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#43-70), [`matches!`](https://doc.rust-lang.org/1.99.1/src/core/macros/mod.rs.html#431-439), and a few others).It’s a bit of a low-hanging fruit, but the [`log`](https://crates.io/crates/log) crate has some pretty obvious examples; [`info!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#252-273), [`warn!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#204-225), and [`error!`](https://docs.rs/log/0.4.34/src/log/macros.rs.html#165-186). In general, anything with a `format!`-like operation benefits from a declarative macro.`assert!`-like macros are another example of this kind of macro. You may not think too much about it, but it can be nice to provide added details about a failure for unit tests. The `assert!` macros all accept format arguments at the end, and you can too if you need some adapter `assert!` macro.`macro_rules! assert_in_range {
-    ($input:expr, $low:expr, $high:expr, $($msg:tt)*) => {{
-        let input = $input;
-        let low = $low;
-        let high = $high;
-        assert!(
-            input >= $low,
-            "{}: range check failed: {input} >= {low}",
-            format_args!($($msg)*),
-        );
-        assert!(
-            input <= $high,
-            "{}: range check failed: {input} <= {high}",
-            format_args!($($msg)*),
-        );
-    }};
-}
+# Deserialise from JSON
+retrieved_value = adapter.validate_json(stored_value)
+```
 
-#[test]
-fn example() {
-    let number = 5;
-    assert_in_range!(number, 50, 100, "formatted example (input={})", number);
-}
-`The failure here looks like this:`thread 'example' (50) panicked at src/lib.rs:22:5:
-formatted example (input=5): range check failed: 5 >= 50
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-`
+I use type hints and type annotations for all of my Python, so this information is guaranteed to be present. This wouldn’t work with untyped Python, but it’s good enough for me.
 
-For many types, you can get away with either the struct initialization format, or using the builder pattern.`#[derive(Default)]
-struct Example {
-    foo: u8,
-    bar: String,
-    baz: bool,
-}
+The alternative is using pickle, which can store arbitrary Python objects. I wouldn’t have to worry about the [security risks](https://docs.python.org/3/library/pickle.html#:~:text=The%20pickle%20module%20is%20not%20secure) because I’d only ever be pickling and unpickling trusted data, but I continued with JSON because I’m already using it for cache keys, and it’s easier to debug.
 
-// Some initialization patterns:
-fn struct_initialization() {
-    let object = Example {
-        foo: 0,
-        bar: format!("example formatted string"),
-        baz: false,
-    };
-}
+### Caching lazy generators
 
-fn struct_initialization_partial() {
-    let object = Example {
-        bar: format!("example formatted string"),
-        ..Example::default()
-    };
-}
+One of the functions I wanted to cache is a lazy generator, which was a little trickier.
 
-fn builder_pattern() {
-    // `ExampleBuilder` type not shown for brevity.
-    let object = ExampleBuilder::default()
-        .with_foo(123)
-        .with_bar(format!("example formatted string"))
-        .finish();
-}
-`But sometimes we want a different syntax than this, for readability reasons.Often custom syntaxes are only beneficial if there’s some common, well-accepted, pre-existing format (e.g. an existing data markup language, like JSON). But occasionally a purely custom syntax can be helpful.Containers are a great example of custom initialization syntax that everyone should have some experience with.It’s true you can (and should) implement [`FromIterator`](https://doc.rust-lang.org/stable/std/iter/trait.FromIterator.html) to initialize from some sequence of elements. But this syntax can be awkward for explicit initialization that isn’t coming from some already constructed values. So for developer convenience we often create small helper macros to improve readability.Like with many things relating to macros, only add them when you’re sure they’re useful. Think about whether the pre-existing methods for initializing objects is good enough.**Examples**It should go without saying, but the [`vec!`](https://doc.rust-lang.org/stable/std/macro.vec.html) macro is a really popular example of this. And soon we will have yet another version of this, with the [`hash_map!`](https://doc.rust-lang.org/stable/std/macro.hash_map.html) macro.The best example of this I can think of for object initialization is the [`json!`](https://docs.rs/serde_json/latest/serde_json/macro.json.html) macro from the `serde_json` crate.This is actually a good example of using declarative macros to do something non-trivial. Specifically, note that they hide the implementation details of the macro by splitting it into multiple macros, [`json!`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#54-59) is the main one you call, and it redirects to another exported macro which is hidden from documentation called [`json_internal`](https://docs.rs/serde_json/1.0.154/src/serde_json/macros.rs.html#68-281).Though, I will admit, `json!` is one of those declarative macros I think is teetering on the edge of “should have been a procedural macro”. Though, it might be hard to safely change it over at this point.
+Using `functools.cache` will cache the generator *object*, so every call gets the same generator instance, and they all step together. This strikes me as potentially confusing:
 
-Sometimes you find yourself writing many similar lines of code within a small set of functions.In most cases, it’s best to just change these into helper functions and let the compiler optimize things. But sometimes you’ll run into situations where you can’t do that.You need to generate a distinct *type* per functional configuration (e.g. not just logic or impls).You’re using it to provide the body of a function that the macro is implementing, and you can’t generalize this function body over any trait bounds.When your macro influences the surrounding control flow (`break`, `continue`, `return`).For optimization reasons (which you have surely bench tested).**Be careful when altering control flow.**It can have some utility for really simple, localized helper macros. But I tend to consider it to be an anti-pattern to *export* such macros. However, used very sparingly, in unique cases to assist in implementing something, it can be helpful.Honestly, I even lean away from it for crate-local macros as well. Obfuscating the control flow negatively impacts readability in my experience.**Examples**One example where this pattern being used for optimization reasons is within the Rust standard library. The `str` type specializes based on string lengths for optimization reasons ([`specialize_for_lengths`](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#81-109); used [here](https://doc.rust-lang.org/1.99.1/src/alloc/str.rs.html#200)).The [`bytes`](https://crates.io/crates/bytes) crate actually uses some macros to reduce code duplication. See the crate-local [`buf_get_impl`](https://docs.rs/bytes/1.12.1/src/bytes/buf/buf_impl.rs.html#72-85) macro. This is a good example of the macro providing a common implementation for a set functions. The functions that are being implemented simply invoke the macro to expand this common implementation.An example of a crate-exported macro used to produce new types can be found in the [`bitflags`](https://crates.io/crates/bitflags) crate. In this case, it uses some custom syntax that looks kind of like regular Rust code, so it’s a good reference for how to use some different fragment specifiers (like `meta` or `vis`).Finally, probably one of the most popular control-flow-impacting macros, is anyhow’s [`bail!`](https://docs.rs/anyhow/latest/anyhow/macro.bail.html) macro. As mentioned, I’m not a fan of these kinds of macros (including this one). But I want to mention it anyway, since it fits within this set of example use-cases, and likely has some popularity. (Another potential example of this is the standard library’s [`ready!`](https://doc.rust-lang.org/nightly/core/task/macro.ready.html) macro for polling futures.)A really simple example of this is constructing a newtype that redirects to the underlying implementation. We may want to ensure that the types are actually distinct from one another, but we may not want to re-implement the functionality the type provides ([`impl_displayable_type`](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/macros/impl_displayable_type.rs.html) - example usage [here](https://docs.rs/typed-ident/0.0.3/src/typed_ident/core/fmt/bounded/as_lower_camel.rs.html#15-54) - is an example of this from one of my own crates, [`typed-ident`](https://crates.io/crates/typed-ident)).`// A simplified form of `impl_displayable_type` to use as an example.
-macro_rules! impl_displayable_type {
-    (
-        name=$name:ident,
-        over=$over:ident,
-        docs=$docs:expr,
-    ) => {
-        #[doc = $docs]
-        pub struct $name($over);
+```
+import functools
 
-        impl core::fmt::Display for $name {
-            #[inline]
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-    };
-}
+@functools.cache
+def even_numbers():
+    for i in range(10):
+        yield i * 2
 
-// We have some displayable types that we don't want to conflate.
+n1 = even_numbers()
+n2 = even_numbers()
+print(next(n1))  # 0
+print(next(n1))  # 2
+print(next(n2))  # 4
+```
 
-impl_displayable_type! {
-    name = ObjectId,
-    over = u64,
-    docs = "Example documentation here",
-}
+funkycache takes a different approach: it materialises the generator into a list, and stores that list. When it’s retrieved, the list is converted back into a generator by wrapping it with [`iter`](https://docs.python.org/3/builtins/functions.html#iter).
 
-impl_displayable_type! {
-    name = GroupId,
-    over = u64,
-    docs = concat!(
-        "`docs` is an expression so you can do things like this.\n",
-        "\n",
-        "Multi-line documentation, for better readability!",
-    ),
-}
+To protect against unbounded memory use from a large or infinite generator, there’s a soft memory budget. If the materialised list exceeds this budget, I stop gathering the output in the list and don’t save anything to the cache. The list and any subsequently generated items are passed directly from the original function to the caller.
 
-// So now, if we have an API like this...
-struct Object;
-impl Object {
-    pub fn object_id(&self) -> ObjectId {
-        todo!()
-    }
-    pub fn group_id(&self) -> GroupId {
-        todo!()
-    }
-}
+## Tracking dependencies
 
-// ... You can't accidentally do something like this.
-fn example_bad_usage_that_no_longer_compiles(object: Object) {
-    let group_id: GroupId = object.object_id(); // Fails to compile!
-}
-`It can be tempting to use declarative macros in places where a `#[derive(...)]` procedural macro would make more sense. Try to avoid creating such macros unless necessary.A common toy example for declarative macros is to create a function on enums so you can get static strings of the enum variant names. But this can be accomplished through a derive macro, and that feels more idiomatic to me (like [`IntoStaticStr`](https://docs.rs/strum/latest/strum/derive.IntoStaticStr.html) from the [`strum`](https://crates.io/crates/strum) crate, or - maybe better - having a custom trait to represent this).**Do what you believe the end-user would find most natural.** If what your macro is doing is implementing a trait - you probably ought to make it a derive macro unless you have good reason not to.We’ll talk more about derive macros when we cover procedural macros in a later article, though.
+### Tracking dependent files
 
-**Thanks for reading!**Macros are a really complex topic, so thanks for sticking with me through these articles as I try to explain them.If you were able to learn something new, and want to show your gratitude, please consider [**sending a donation on Ko-Fi**](https://ko-fi.com/sigseis)!I’d love to be able to work with the community full-time, and support like that will allow me to continue writing articles like these.In this article, we:Learned about macro scoping, and how to export declarative macros.Learned a method for organizing declarative macros for ease of maintenance.Explored a small selection of use cases for declarative macros.Saw some examples of declarative macro usage (some real-world, and other toy examples).I still have a little more to say about declarative macros…The original draft of this article was 7500 words, and that’s too long. The next article will focus on best practices, and common pain points with declarative macros. Please look forward to it!I promise we’ll get to procedural macros eventually. :)
+Some of the functions in my static site generator depend on the contents of template files. When those files change, I want to invalidate the cache and rebuild the pages that use those templates.
+
+When you register a function with funkycache, you can specify a list of files or folders that it depends on:
+
+```
+@cache.register(files=["mosaic/text", "templates"])
+def render_html(content: str, content_vars: dict[str, Any],) -> str:
+    ...
+```
+
+funkycache will read the contents of each of those files, and include them in the cache key. When a file changes, it re-evaluates the list of files and decides whether to keep or invalidate the cache.
+
+I decided not to put any file change tracking in funkycache itself. I already [have code for that](https://alexwlchan.net/2026/watch-files-on-macos/), and I wanted to keep this project small and focused.
+
+### Tracking dependent values
+
+A function’s cache can also be based on static values. I use this to include the version of important libraries, so the cache gets invalidated when I update the library. Here’s a short example:
+
+```
+import pygments
+
+@cache.register(values=[pygments.__version__])
+def apply_syntax_highlighting(src: str, lang: str) -> str:
+    ...
+```
+
+## Reactive aspirations
+
+This project started because I was thinking about [reactive programming](https://en.wikipedia.org/wiki/Reactive_programming).
+
+Reactive programming is a bit like using a spreadsheet. You have input cells where you enter data, and other cells that read that data and automatically update when the inputs change. Those cells can be inputs to other cells, and so on.
+
+Imagine building a static site: your Markdown files act as input cells, and your rendered HTML pages are the dependent cells. Your tasks form a [directed acyclic graph (DAG)](https://en.wikipedia.org/wiki/Directed_acyclic_graph), and updates propagate through the graph.
+
+For example, in the diagram above, when `article1.md` changes, the system knows it needs to rebuild `article1.html` and ripples that update to `list_of_articles.html`. But because there’s been no change in their inputs, the tasks to render articles 2 and 3 don’t run at all.
+
+When done correctly, this can be a very efficient style of programming, because steps only ever run if there’s been a change in their inputs.
+
+There are tools that will do this for you, like [Apache Airflow](https://airflow.apache.org/), but I wanted to build my own. My website is a sandbox where I like building things myself as a learning exercise, rather than using somebody else’s library.
+
+I spent several weeks trying to design an API, but I couldn’t come up with something satisfactory. However, I experimented with a decorator-based API, and that led me to build funkycache, which delivers a lot of the benefits with less fo the complexity.
+
+Building my website with a warm cache now takes about half a second, and a significant chunk of that time is spent traversing the file system for Markdown files. I have ideas for speeding up that step as well, but that’s a task for another day.
+
+funkycache is only [a few hundred lines of code](https://alexwlchan.net/projects/funkycache/), including tests. If this problem sounds interesting, I encourage you to read it, even if it’s not a library you expect to use.

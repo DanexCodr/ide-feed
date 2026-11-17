@@ -1,214 +1,229 @@
-Six months ago, I wrote an [SQLite-backed cache](https://alexwlchan.net/2026/sqlite-cache/) to speed up the build system for this site. A static site generator is an ideal candidate for [caching](https://en.wikipedia.org/wiki/Caching), because there are lots of steps that have deterministic behaviour and no side effects. On a site with hundreds of pages, even a few milliseconds per step adds up to a meaningful improvement.
+I’ve just released [hegel-clj](https://github.com/aphyr/hegel-clj), a Clojure interface for the [Hegel](https://hegel.dev) generative testing library. You can jump right to [the docs](https://cljdoc.org/d/com.aphyr/hegel-clj/0.1.1/doc/readme), but I thought it might be interesting to explain why I want another testing library.
 
-That first cache was fairly basic. It supported getting and setting strings, with a namespace for different functions, and not much else:
-
-```
-from mosaic.cache import SQLiteCache
-
-cache = SQLiteCache("example.db")
-
-cache.set(namespace="fibonacci", key="10", value="55")
-print(cache.get(namespace="fibonacci", key="10"))
-```
-
-This showed the value of a cache, but it provided cache *storage*, not cache *logic*. If I wanted to cache a function, I had to write per-function logic for saving values to the cache and retrieving them later. A lot of that code was tricky to test, and broken in subtle ways. I was so unsure of this code that I deleted the cache whenever I built the site for publication.
-
-I wanted something better, so last week I wrote [funkycache](https://alexwlchan.net/projects/funkycache/), a new library that encapsulates all of my caching logic, and is much easier to use and test. It can store arbitrary Python objects as both inputs and outputs, and the interface is much simpler for the caller.
-
-To cache a function, you create a `FunkyCache` instance and add a decorator to your function:
+I do a lot of generative testing in Clojure with the excellent [test.check](https://github.com/clojure/test.check). However, using test.check can be frustrating! In particular, complex generators can get stuck during shrinking, leaving me trying to prune down a complex data structure by hand. The culprit is usually `bind`. If you’re not familiar with test.check, Quickcheck, or other libraries in this family, `bind` is a generator which draws some random value, then uses that to construct a *new* generator, which in turn is used to draw some other value.
 
 ```
-from funkycache import FunkyCache
-
-cache = FunkyCache(storage="sqlite")
-
-@cache.register
-def expensive_function(arg1: str, arg2: int, arg3: date) -> tuple[str, date]:
-    ...
+(require '[clojure.test.check :as tc]
+         '[clojure.test.check.generators :as tcg]
+         '[clojure.test.check.properties :as tcp])
+(tcg/bind ; Take a number from `nat`, a generator of small positive
+          ; integers.
+          tcg/nat
+          ; Now with that number, construct a generator of vectors, each
+          ; with that many elements.
+          (fn [size]
+            (tcg/vector tcg/large-integer size)))
 ```
 
-This is modelled after [`functools.cache`](https://docs.python.org/3/library/functools.html#functools.cache) in the standard library. The output of the expensive function is written to an SQLite database, so it’s available after the Python process exits.
-
-The cache tries to be smart about invalidations. If the source file containing `expensive_function` changes, the cache for that function is invalidated and will be rebuilt on the next call.
-
-You can also specify a dependency on other files and static values, changes to which will also trigger a cache invalidation:
+We can also write this using test.check’s `let` macro, which expands to a series of nested `bind`s under the hood.
 
 ```
-from funkycache import FunkyCache
-
-cache = FunkyCache(storage="sqlite")
-
-@cache.register(
-    files=["data/input.yml", "templates/example.html"],
-    values=[pygments.__version__],
-)
-def expensive_function(arg1: str, arg2: int, arg3: datetime) -> tuple[str, datetime]:
-    ...
+(tcg/let [size tcg/nat]
+  (tcg/vector tcg/large-integer size))
 ```
 
-When writing funkycache, I wanted to spend a week thinking hard about caching logic, test it thoroughly, then not think about it again for months. You should be able to use funkycache without understanding how it works – but if you’d like to, that’s what I’ll explain in the rest of this post.
-
-If you’d like to try it yourself, funkycache is [on PyPI](https://pypi.org/project/funkycache/), and the source code is [on this website](https://alexwlchan.net/projects/funkycache/).
-
-## Cache keys are function arguments, hashed and JSON-encoded
-
-### Getting a complete set of arguments for a function
-
-The cache is meant for functions which always produce the same output for a given input, so the inputs are the cache key. When we [decorate a function](https://docs.python.org/3/library/functools.html#functools.wraps), we can see the arguments passed on each call:
+This leads to the [canonical example](https://github.com/clojure/test.check/blob/master/doc/growth-and-shrinking.md#gotchas-1) of poor shrinking in test.check. Let’s try to find a vector containing `42`:
 
 ```
-from functools import wraps
+(-> (tc/quick-check 1000
+      (tcp/for-all [xs (tcg/let [size tcg/nat]
+                         (tcg/vector tcg/large-integer size))]
+                   (not-any? #{42} xs))
+      {:seed 1777986545686})
+  :shrunk :smallest first)
 
-def my_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        print({"args": args, "kwargs": kwargs})
-        return func(*args, **kwargs)
-    return wrapper
+[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
 ```
 
-This doesn’t account for different styles of calling the same function – for example, positional versus keyword arguments, or omitting or overriding default arguments.
+That *does* contain 42, but this vector is *enormous*. Why are there all these zeroes? Once test.check found this vector, surely it could have shrunk it to just `[42]`, right?
 
-To get a complete, consistent set of arguments, I use the `inspect` module:
-
-```
-import inspect
-
-sig = inspect.signature(func)
-bound = sig.bind(*args, **kwargs)
-bound.apply_defaults()
-cache_key = bound.arguments  # {"arg1": val1, "arg2": val2, ...}
-```
-
-This gives me a Python dictionary of the complete set of arguments to the function, which is the same regardless of the calling style.
-
-### Converting the arguments to JSON
-
-Python dictionaries aren’t hashable, so they can’t be used as the keys in dictionaries, nor can they be used as keys in SQLite databases. We need to serialise them as a string or byte sequence.
-
-I considered two options for this serialisation: [pickle](https://docs.python.org/3/library/pickle.html) and [JSON](https://docs.python.org/32/library/json.html). In my limited testing, JSON was faster than pickle, so that’s what I chose. Using JSON also gave me more flexibility for speeding up the serialisation.
-
-My initial serialisation was a naive `json.dumps` call, with a couple of options to ensure consistent ordering and handle types that the standard library doesn’t know how to encode:
+The answer has to do with shrink trees. Test.check generators don’t actually return values like `64`. Instead they return a lazily evaluated tree of values: the root might be `64`, and its children might be `[32 48 ... 63]`, and each of *those* children has further children: `32` has children `[16, 24, ... 31]`, and so on. Simplifying a bit, here’s how the tree for large integers [is defined](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L228-L237):
 
 ```
-json_key = json.dumps(cache_key, sort_keys=True, default=str)
+(defn- shrink-long
+  "Given a number x, returns a coll of (x-x, x-x/2, x-x/4, x-x/8, ..., x-1)"
+  [^long x]
+  (core/let [size (- 64 (Long/numberOfLeadingZeros (Math/abs x)))
+             ^longs vals (long-array size)]
+    (loop [i 0 n x]
+      (if (zero? n)
+        vals
+        (do
+          (aset vals i (- x n))
+          (recur (inc i) (quot n 2))))))))
 ```
 
-When I started using funkycache, this encoding step quickly emerged as the slowest part, so I started “reducing” the arguments to make this step faster. This reduction included:
+So, if test.check finds that `64` violates some property we’re testing, it tries the first child of `64`, `32`. Let’s say that passes the test, so test.check tries the next child of `64`: `48`. If `48` fails, test.check tries its first child `24`, and so on. By performing this depth-first search of the tree, and choosing the branches cleverly, test.check can often quickly shrink an integer to a smaller one that still fails the test.
 
-- Recursively walking the function arguments and hashing large strings
-- Using Pydantic to convert Pydantic models and dataclasses into Python objects, rather than doing a string conversion
-- Refactoring my code so each function only takes a minimal set of required data
+A similar strategy applies to fixed-size vectors. The tree for a vector like `[2 2]` has children like `[1 2]` and `[2 1]`, based on the trees for each individual element of the vector. This explains why test.check produced a vector like `[0 0 0 ... 42 0]`: it found something like `[91 23 1034543 ... 42 15]`, then shrank the first element to zero, then the second, and so on. The only element it couldn’t shrink was the one that caused our property to fail: `42`. Because our generator `(tcg/vector tcg/large-integer size)` always used a fixed `size`, the tree for that vector always contained `size` elements—in this case, 39.
 
-These are all lossy transformations, but that’s fine for a cache *key* – we never need to retrieve the original value. It’s theoretically possible for different values to get a colliding hash key, but at my scale it’s unlikely. (A clean build of my site only uses 32,000 keys.)
-
-### Hashing for smaller keys
-
-The functions in my static site generator are processing things like the content of articles, so individual function arguments might be kilobytes in size. You can use multi-kilobytes keys with SQLite, but you probably shouldn’t – you take a performance hit for larger keys.
-
-I wrote [a small benchmark](https://alexwlchan.net/projects/funkycache/files/tests/bench_sqlite_storage.py) to compare three approaches: storing the JSON-encoded arguments directly, hashing them with MD5, and hashing them with [XXH64](https://xxhash.com/). The results are a wash for small key sizes, but for larger keys XXH64 is significantly faster, and MD5 is slower than storing the keys directly in SQLite:
-
-Based on this benchmark, funkycache hashes the JSON cache key with XXH64 before inserting it into SQLite.
-
-The xxHash class of hashing algorithms was a pleasant discovery for me during this project. They are explicitly designed to be fast, not cryptographically secure. Previously I’d used MD5 for this purpose, because it’s widely available and I conflated “weak” with “fast”. Actually running a benchmark revealed my mistake.
-
-## Cache values are JSON-encoded
-
-Serialising cache keys can be a one-way operation, but cached values need to be retrievable. For this, I’m using the `inspect` module to get the return type from the cached function, then handing the serialisation to Pydantic.
+Hang on! We didn’t just generate fixed-size vectors. We used `bind` to draw a size, then built a vector of that size:
 
 ```
-import inspect
-import pydantic
-
-# Get the return type of the function.
-sig = inspect.signature(func)
-return_type = sig.ret_annotation
-
-# Create a Pydantic type adapter
-adapter = TypeAdapter(return_type)
-
-# Serialise as JSON
-json_str = adapter.dumper_json(value)
-
-# Deserialise from JSON
-retrieved_value = adapter.validate_json(stored_value)
+(tcg/bind tcg/nat
+          (fn [size]
+            (tcg/vector tcg/large-integer size)))
 ```
 
-I use type hints and type annotations for all of my Python, so this information is guaranteed to be present. This wouldn’t work with untyped Python, but it’s good enough for me.
+What kind of trees does `bind` produce? The [code](https://github.com/clojure/test.check/blob/5ba3a25b60cf66ff531db8f44d89145abfacfa5c/src/main/clojure/clojure/test/check/generators.cljc#L125-L142) involves some gnarly higher-order functions, but in essence `bind`’s trees can shrink in two ways. They can shrink the outer value (the `size` returned by `tcg/nat`), or they can shrink the inner value (the vector returned by `(tcg/vector ...)`.
 
-The alternative is using pickle, which can store arbitrary Python objects. I wouldn’t have to worry about the [security risks](https://docs.python.org/3/library/pickle.html#:~:text=The%20pickle%20module%20is%20not%20secure) because I’d only ever be pickling and unpickling trusted data, but I continued with JSON because I’m already using it for cache keys, and it’s easier to debug.
+Now imagine `bind` draws a size of `100`, then generates a vector of a hundred elements like `[15 32 42 ...]`. This contains `42`, so test.check begins hunting through the shrink tree. One of the branches it can take shrinks the `size` parameter, starting with `[50, 75, ... 99]`. But if `bind` picks any of those sizes, the vector `[15 32 42 ...]` is useless—it’s the wrong size! So `bind` calls our function with `50` to construct a generator of 50-element vectors, and generates a single vector from that generator. This vector will have *different* random elements, like `[69, 45, 1, ...]`.
 
-### Caching lazy generators
-
-One of the functions I wanted to cache is a lazy generator, which was a little trickier.
-
-Using `functools.cache` will cache the generator *object*, so every call gets the same generator instance, and they all step together. This strikes me as potentially confusing:
+If there’s no `42` in the vector of 50 elements, then test.check abandons that branch and moves on to size `75`. It draws a new vector of 75 elements like `[8 7 42 ...]`, and since that contains `42`, it can continue shrinking. But since `42` is an uncommon integer, and test.check draws new elements for each `size`, it is very likely that most sizes will not produce a vector with `42`, and test.check will get stuck with, say, 39 elements. From there it can shrink each element, producing the comically oversized…
 
 ```
-import functools
-
-@functools.cache
-def even_numbers():
-    for i in range(10):
-        yield i * 2
-
-n1 = even_numbers()
-n2 = even_numbers()
-print(next(n1))  # 0
-print(next(n1))  # 2
-print(next(n2))  # 4
+[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 0]
 ```
 
-funkycache takes a different approach: it materialises the generator into a list, and stores that list. When it’s retrieved, the list is converted back into a generator by wrapping it with [`iter`](https://docs.python.org/3/builtins/functions.html#iter).
+For this vector it’s fairly obvious what’s wrong. But for [nontrivial test.check generators](https://github.com/jepsen-io/particledb/blob/4e911c2d6ebf5ed97becba08c12d754cbbd4da53/src/jepsen/particledb/gen/tc.clj), there might be a dozen nested levels of `bind` with complex downstream consequences. Every one of them offers a place for test.check to get stuck, and the smallest failing case can be devilishly tricky to understand. Experienced test.check users try to avoid `bind` and `let`—but they’re fundamentally inescapable for many problems.
 
-To protect against unbounded memory use from a large or infinite generator, there’s a soft memory budget. If the materialised list exceeds this budget, I stop gathering the output in the list and don’t save anything to the cache. The list and any subsequently generated items are passed directly from the original function to the caller.
+Over in the Python world, the [Hypothesis](https://hypothesis.works/) team took a very different approach to shrinking. Test.check is fundamentally a two-phase system: first it asks a generator to produce a shrink tree. Then, if the root of that tree looks “bad”, it explores the rest of that tree. Instead, Hypothesis generators produce a single value, and if that value looks bad, they re-run the generator and [ask it to produce something similar, but smaller](https://drmaciver.github.io/papers/reduction-via-generation-preview.pdf). This approach, called *internal test-case-reduction*, is the foundation of [Hegel](https://hegel.dev/).
 
-## Tracking dependencies
+## [Hegel-clj](https://aphyr.com/posts/428-announcing-hegel-clj#hegel-clj)
 
-### Tracking dependent files
+Hegel is a new cross-platform library for generative testing. It provides deterministic generators which draw random values from an imperative, structured RNG, as well as a rich family of special values and shrinking tactics. Writing these generators and shrinkers is hard. The idea is that Hegel’s core library will do this hard work once, and simpler wrapper libraries will extend the benefits of that hard work across many languages.
 
-Some of the functions in my static site generator depend on the contents of template files. When those files change, I want to invalidate the cache and rebuild the pages that use those templates.
-
-When you register a function with funkycache, you can specify a list of files or folders that it depends on:
+I’ve been working for a few months on [hegel-clj](https://github.com/aphyr/hegel-clj), which offers Clojure bindings for Hegel, and I think it’s ready for the folks to try it out. To test something, you call `hegel-clj/test!`, draw some values from generators, and throw an exception if the test fails. Hegel searches for values that make that body throw, then shrinks them.
 
 ```
-@cache.register(files=["mosaic/text", "templates"])
-def render_html(content: str, content_vars: dict[str, Any],) -> str:
-    ...
+(require '[hegel-clj [core :as h] [generator :as g]])
+(h/test! {:seed 4}
+  (assert (even? (h/draw! (g/integer)))))
+
+{:passed? false
+ :status :failed
+ :statistics {:total 34
+              :valid 5
+              :invalid 0
+              :overrun 18
+              :interesting 11}
+ :health-check-failed? false
+ :failures ({:draws {"draw_1" 1}
+             :exception
+             #error {:cause "Assert failed: (even? (h/draw! (g/integer)))"
+                     ...}})
+ :reproduce-blob "AAEAAAAACgEAAAAB", :caveat nil}
 ```
 
-funkycache will read the contents of each of those files, and include them in the cache key. When a file changes, it re-evaluates the list of files and decides whether to keep or invalidate the cache.
+The smallest case Hegel found involved a single draw of the number `1`, which caused the assertion `(even? 1)` to throw.
 
-I decided not to put any file change tracking in funkycache itself. I already [have code for that](https://alexwlchan.net/2026/watch-files-on-macos/), and I wanted to keep this project small and focused.
-
-### Tracking dependent values
-
-A function’s cache can also be based on static values. I use this to include the version of important libraries, so the cache gets invalidated when I update the library. Here’s a short example:
+Generators are pure, composable structures, just like in test.check. Here’s a few values drawn from a generator of booleans:
 
 ```
-import pygments
+(h/sample 5 (g/boolean))
 
-@cache.register(values=[pygments.__version__])
-def apply_syntax_highlighting(src: str, lang: str) -> str:
-    ...
+[false false true true false]
 ```
 
-## Reactive aspirations
+Or a map representing a person, with a name generated by a regular expression and an integer age:
 
-This project started because I was thinking about [reactive programming](https://en.wikipedia.org/wiki/Reactive_programming).
+```
+(h/sample 5 (g/hmap {:name (g/regex-str #"[A-Z][a-z]+")
+                     :age  (g/integer 0 101)}))
 
-Reactive programming is a bit like using a spreadsheet. You have input cells where you enter data, and other cells that read that data and automatically update when the inputs change. Those cells can be inputs to other cells, and so on.
+[{:name "Aa", :age 0}
+ {:name "Iyjdklppzxhqdnwmd", :age 89}
+ {:name "Kslvqorm", :age 64}
+ {:name "Fvyybe", :age 45}
+ {:name "Puwppxqag", :age 4}]
+```
 
-Imagine building a static site: your Markdown files act as input cells, and your rendered HTML pages are the dependent cells. Your tasks form a [directed acyclic graph (DAG)](https://en.wikipedia.org/wiki/Directed_acyclic_graph), and updates propagate through the graph.
+The higher-order combinators are all there too. You can transform generated values with `fmap`:
 
-For example, in the diagram above, when `article1.md` changes, the system knows it needs to rebuild `article1.html` and ripples that update to `list_of_articles.html`. But because there’s been no change in their inputs, the tasks to render articles 2 and 3 don’t run at all.
+```
+(h/sample 5 (g/fmap keyword (g/string)))
 
-When done correctly, this can be a very efficient style of programming, because steps only ever run if there’s been a change in their inputs.
+[: :R :👍🏻 :True :çç¦ç¦򜝉ÏÏ򜝉¦¦Ï¦¦ç򜝉Ï¦ç򜝉çÏ򜝉çç¦]
+```
 
-There are tools that will do this for you, like [Apache Airflow](https://airflow.apache.org/), but I wanted to build my own. My website is a sandbox where I like building things myself as a learning exercise, rather than using somebody else’s library.
+Or build one generator out of another using `bind`:
 
-I spent several weeks trying to design an API, but I couldn’t come up with something satisfactory. However, I experimented with a decorator-based API, and that led me to build funkycache, which delivers a lot of the benefits with less fo the complexity.
+```
+(h/sample 2 (g/bind (fn [size]
+                      (g/tuple (g/vector size (g/integer))
+                               (g/vector size (g/boolean))))
+                    (g/integer 0 3)))
 
-Building my website with a warm cache now takes about half a second, and a significant chunk of that time is spent traversing the file system for Markdown files. I have ideas for speeding up that step as well, but that’s a task for another day.
+[[[] []]
+ [[144229 531621 -364 -1569883 8194954 -913 16 -745]
+ [false true false true]]]
+```
 
-funkycache is only [a few hundred lines of code](https://alexwlchan.net/projects/funkycache/), including tests. If this problem sounds interesting, I encourage you to read it, even if it’s not a library you expect to use.
+Like test.check, we offer a `let` macro which lets you bind both regular values or generators to variables; if the right-hand side is a generator, it draws a random value from it. And unlike test.check, these generators shrink well. Instead of thirty-nine elements, Hegel can find the much-shorter “bad” vector, `[42]`.
+
+```
+(-> (h/test! {:test-cases 1000
+              :seed       1777986545686}
+      (h/let [size (g/integer {:min 0, :max 128})
+              xs   (g/vector {:size size} (g/integer))]
+        (assert (not-any? #{42} xs))))
+    :failures first :draws (get "xs"))
+
+[42]
+```
+
+With `test.check`, if you want to thread multiple values through `bind` or `fmap`, you have to build and destructure maps or tuples. Hegel-clj lets you lift arbitrary code into a generator using `composite`, which makes it easier to build complex generators:
+
+```
+(h/sample 2
+  (g/composite
+    (h/let [name      (g/string)
+            cat-count (g/integer 0 2)
+            cats      (g/vector {:size cat-count, :unique? true} (g/string))]
+      {:name name     
+       :cats cats})))
+
+[{:name "",
+  :cats []}
+ {:name "𝐓𝐡𝐞 𝐪𝐮𝐢𝐜𝐤 𝐛𝐫𝐨𝐰𝐧 𝐟𝐨𝐱 𝐣𝐮𝐦𝐩𝐬 𝐨𝐯𝐞𝐫 𝐭𝐡𝐞 𝐥𝐚𝐳𝐲 𝐝𝐨𝐠",
+  :cats ["🇺🇸" "👍🏻"]}]
+```
+
+You can build recursive generators with a promise-style API. The `deferred` generator provides a blank space for a generator, which can be filled in later:
+
+```
+(let [leaf (g/integer 0 9)
+      tree (g/deferred)]
+  (g/set-deferred! tree (g/one-of [leaf (g/vector tree)]))
+  (mapv prn (h/sample 5 tree)))
+
+0
+[[1] 8 [2 []] 5 [] [[4 6 []]]]
+[[1] 2]
+3
+0
+```
+
+And best of all, `hegel-clj` ships with easy-to-use integration for clojure.test, making generative tests as easy as example-based ones:
+
+```
+(require '[clojure.test :refer :all] '[hegel-clj.clojure-test :refer [with]])
+
+(defn bad-add
+  "Adds two integers via floating-point"
+  [x y]
+  (long (+ (float x) (float y))))
+
+(deftest bad-add-test
+  (with {:test-cases 100}
+        [x (g/integer)
+         y (g/integer)]
+    (h/fprn :x x, :y y)
+    (is (= (+ x y) (bad-add x y)))))
+
+(bad-add-test)
+
+:x 0 :y 16777217
+
+FAIL in (bad-add-test) (form-init7301103820420620476.clj:6)
+expected: (= (+ x y) (bad-add x y))
+  actual: (not (= 16777217 16777216))
+```
+
+It’s hard to log debugging output with test.check—you’ll have to sift through thousands of test runs with complex inputs, and many of those runs won’t actually trigger the bug you’re searching for. Hegel has the notion of a “final” test case: after it’s found a counterexample, and shrunk it to a smaller version, it comes back and re-runs that case as a part of the final phase. We can use `(when (h/final?) ...)` to execute some debugging code only during these final cases, or `fprn` and `finfo`, which wrap `clojure.core/prn` and `clojure.tools.logging/info` respectively. I think there’s a [bug in Hegel](https://github.com/hegeldev/hegel-java/issues/32) that causes it to run more final cases than it should, but it’s still a big step up.
+
+Finally, test.check has been around for a while, and like many Clojure projects it has an exceptionally stable API. That’s great for compatibility, but it means some early choices are now fossilized. It’s `(fmap gen f)`, but `(bind f gen)`. If you want an integer you have to remember the difference between `nat`, `int`, `pos-int`, `s-pos-int`, `small-integer`, `large-integer`, `large-integer*`, etc. Common generators require keyword arguments, like `(large-integer* {:min 0, :max 10})`. Some generators like `hash-map` are only callable with varargs, which makes composition tricky. The [properties API](https://clojure.github.io/test.check/clojure.test.check.properties.html) feels a tad fussy. And many of the ergonomic features you want, like generating strings from a regular expression, or integration with clojure.test, require an extra library like [test.chuck](https://github.com/gfredericks/test.chuck). Test.check is *really good*, but with the benefit of hindsight and a fresh canvas, I’ve tried to design a more streamlined, consistent, and approachable API.
+
+I’ve used test.check for over a decade now and it’s one of my favorite things about Clojure. I want to thank Reid Draper, Gary Fredericks, Alex Miller, and everyone else who’s contributed to the library. I’m also indebted to David MacIver, Liam DeVoe, and Esau Rodriguez from the Hegel team at [Antithesis](https://antithesis.com/). They took time to talk me through Hegel’s design, answered endless questions about the protocol, and helped fix a whole slew of issues that we found. Y’all rock.
+
+I’m pleased to announce [hegel-clj 0.1.1](https://github.com/aphyr/hegel-clj), and I’m starting to use it to test my own projects. I hope it will be useful for you too. ❤️

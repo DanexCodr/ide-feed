@@ -1,220 +1,47 @@
-Have you heard about [dynamic derivations](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application)?
+Yesterday I [resigned](https://github.com/swiftlang/swift-org-website/pull/1589) from the [Swift Android workgroup](https://www.swift.org/android-workgroup/). I’ve received a number of inquiries about this, and rather than responding individually to each one, I figured I would just write up a post with my reasoning and submit it to the public record.
 
-They are an experimental-feature in Nix that lets a derivation produce other derivations as its output. Why ? This lets you dynamically create your build graph, instead of having to know it all at evaluation time. It’s Nix’s answer to try and match the build speed of other build systems like [Bazel](https://bazel.build/) or [buck2](https://buck2.build/).
+First off, my resignation was not triggered by any sort of conflict, grievance, or specific incident. Early Swift community efforts got off to a rough start when Swift language creator Chris Lattner quit  due to what he [described](https://mjtsai.com/blog/2022/02/22/why-latter-left-the-swift-core-team/) as a “toxic environment”. This event predates my direct involvement in the project, so I am not privy to the specifics. But I want to be clear that this was in no way my experience: everyone I interacted with, both from Apple and external organizations, both in meetings and in forum discussions and direct messages, have been polite, courteous, and the paragon of civility and professional conduct. Despite Apple having an ancient [blood feud](https://appleinsider.com/articles/11/10/21/steve_jobs_vowed_to_destroy_google_android_called_it_a_stolen_product) with Android, and my own [rather](https://appfair.org/blog/a-future-for-app-stores/) [acrimonious](https://appfair.org/blog/digital-markets-act-workshop/) [relationship](https://appfair.org/blog/fear-and-loathing-in-the-app-stores/) with certain divisions of the company, every single one of my direct interactions with the Swift team has been pleasant and productive. I will miss our meeting and chats, and I harbor zero ill-will towards the project or any of the individual members I’ve worked with.
 
-[![So hot right now meme: Mugatu from Zoolander under the caption "Dynamic derivations", above "So hot right now"](https://fzakaria.com/assets/images/derived/dyn_drv_so_hot_meme-748w.webp)](https://fzakaria.com/assets/images/dyn_drv_so_hot_meme.png)
+So why quit?
 
-There is not much written about dynamic derivations, and the documentation is sparse. I have [written](https://fzakaria.com/2025/03/10/an-early-look-at-nix-dynamic-derivations) [a](https://fzakaria.com/2025/03/11/nix-dynamic-derivations-a-practical-application) [few](https://fzakaria.com/2025/03/12/nix-dynamic-derivations-a-lang2nix-practicum) [posts](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) about them, so I sometimes get questions about them.
+## Computer Languages, Past and Future
 
-Recently, I got a DM from [Evan Porter](https://www.linkedin.com/in/evanwp/) over [LinkedIn](https://www.linkedin.com/), the ultimate bug triaging network, about whether it is possible to query the deriver of a dynamic derivation to get the initial derivation.
+By way of background, I’ve been programming for over 40 years. I started with Basic, then Pascal, on to C, then C++, over to Java, up to Scala, back down to Kotlin, around to Objective-C, before finally landing on Swift. Swift is a delightful language: I loved it from day one and I’ve been [boosting](https://www.prux.org/talks/#2014) it around the world since 2014. Swift really “does what it says on the tin”: it couples the performance of C++ with the ease of Java. And Swift is as developer-friendly as it gets:  an intuitive object-oriented syntax coupled with maximally efficient value types, fabulous tooling (on Apple platforms), and a thoughtfully-designed build system.
 
-> For dynamic derivations let’s say I have a .drv.drv file. This file outputs a derivation.
-> Is it usually possible to query deriver the output derivation to obtain the initial derivation?
+I have *not* soured on Swift: I think it is an excellent language, and it is here to stay. But it is here to stay in that same straight-and-narrow lane shared by all corporate-directed languages, like C# is here to stay for Microsofties and like Kotlin is here to stay for Androidophiles. Which isn’t bad in and of itself: if you want to write software solely for `[CORPORATE PRODUCT]`, then `[CORPORATE LANGUAGE]` will always be well-maintained, supported, and they will *always* provide support for their latest products, with an easy migration path forward. They are the safe and happy path, as long as you stay in your lane and limit your ambitions to writing software for `[CORPORATE PRODUCT]`.
 
-They had tried it and got this:
+But when you stray from that happy path, the rough edges start surfacing, and there is no one getting a paycheck to smooth those out. Swift for Android/Windows/other-non-Apple-platform is in exactly that position: yes, it *technically* works, and yes, the language steering committees are committed to continuing the level of support they promised, but it will never be the same seamless experience as developing for iOS/watchOS/visionOS/whateverOS. This extends beyond the language and into the tooling: [Skip](https://skip.dev) enables you use Xcode to develop your apps in parallel for iOS and Android, but this has only been achieved in the face of Xcode’s constitutional hostility towards doing anything other than optimizing for their own first-party platforms.
 
-```
-$ nix-store --query --deriver \
-    $(nix-store --query --deriver ./result)
-unknown-deriver
-```
+## The Rise of the Clankers
 
-That should work. 🤨 Every path a build registers carries a `deriver`, the `.drv` that produced it, and a `.drv` that came out of a build is still a path a build registered.
+If humanity were destined to continue creating software solely with their monkey brains and meat fingers, Swift would likely be the language I would have stuck with until the day I retired. But that isn’t the trajectory we are currently on. Barring such speculative calamities as “model collapse”, Butlerian Jihad, or Skynet, we have taken a turn in a new direction.
 
-When I tried it, it worked. 🤷
+We software developers have collectively [as/de]cended to a plane where we now direct the computers to write our computer code, and these computers have decided that they really prefer *computery* languages over the *humany* languages. *Humany* languages are those designed to fit inside our wonderful little biological brains. I have grave reservations about all of this from many perspectives: ethical, ecological, political, socio-economical (just to name a few). But it is what it is, and all but the most ardent of refusenik software developers have come around to this view in the past 6—12 months.
 
-You will need `extra-experimental-features = dynamic-derivations ca-derivations recursive-nix` in your `nix.conf` to drive the samples in this post.
+Swift isn’t a *computery* language, it is a developer-friendly *humany* language: it is a better Java, a better C#, and a (much) better Objective-C. Throughout my career I’ve been able to accomplish amazing feats in these languages, disproportionate to my limited intellect and abilities, but that comes at the cost of these languages being hobbled in pursuit of their mission to slice and dice complex problems in such a way as to be tractable for one or more human brains. I speak of object-orientation; I speak of automatic memory management.
 
-```
-$ nix build -f default.nix \
-    --print-out-paths
-/nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
+But there is one **very** *computery* language that until recently has been waiting in the wings…
 
-$ nix-store --query --deriver \
-    /nix/store/v4hkwn8y4m083gsap6523c0m5r985ygr-result
-/nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
+## All roads lead to Rust
 
-$ nix-store --query --deriver \
-    /nix/store/6pniymfhwcyrmkns0np7ap1argjziqq2-result.drv
-/nix/store/m5x261fv29jkn0rvznqj2fzkaql01xiy-result.drv.drv
-```
+In February, Andreas Kling dropped [Swift for Rust](https://ladybird.org/posts/adopting-rust/) for the Ladybird browser, a 180°<sup>[1](https://www.prux.org/posts/goodbye-swift-hello-rust/#user-content-fn-1)</sup> turnabout from their opposite decision from a [year earlier](https://www.youtube.com/watch?v=DSEZ2ZYLdHg). In July, Jarred Sumner ported Bun from [Zig to Rust](https://bun.com/blog/bun-in-rust). In September, David Heinemeier Hansson filicided [Ruby on Rails for Rust](https://www.globalnerdy.com/2026/09/27/dhhs-keynote-at-rails-world-2026-the-most-confusing-funeral-ive-ever-experienced/). And this trend is only accelerating: nearly every week there is some new project converting some massively complex codebase from language X to Rust. [PostgreSQL](https://news.ycombinator.com/item?id=48841676)! The [TypeScript compiler](https://www.theregister.com/devops/2026/10/15/24000-ai-experiment-ports-typescript-compiler-to-rust/5303409)! These projects are coming fast and furious with no sign of slowing down. And for every one of these projects, over 95% of the code was not written by a human.
 
-Turns out, there is a case where you do get `unknown-deriver` if you set `__contentAddressed = true` on the producer. If the producer is content-addressed, its output path is not known until after the build, and Nix does not fill in the `deriver` of a path that already exists.
-I filed [NixOS/nix#16823](https://github.com/NixOS/nix/issues/16823).
+Swift is wonderful. It enabled me to bring iOS development to Android through Skip and share a single codebase between the two dominant mobile platforms. LLMs are quite proficient with Skip: Claude or Codex can one-shot a passable prototype for a new iOS+Android app written in Swift in a matter of minutes and you can have it running side-by-side on emulators or devices and start iterating to your heart’s content. The single shared codebase gives the LLMs the ability to develop and refine features in single codebase, rather than constantly needing one codebase (e.g., in Kotlin and Compose) play catch-up with the other (Swift and SwiftUI) codebase.
 
-The question though made me wonder how far back you can walk the chain of dynamic derivations. I had to try it. 😈
+But I always wanted more from Skip. I wanted to add support for desktop platforms for Mac, Linux, and Windows. I wanted the same codebase to run on the web through webassembly. I wanted to build for emerging mobile platforms like HarmonyOS and anything that might come next. And I wanted to do it all using each platform’s native first-party toolkits rather than the usual web-shell compromise or pixel-painting mimicry, because, like Apple, I believe that [the best apps are built with native SDKs](https://developer.apple.com/videos/play/wwdc2024/102/?time=3849).
 
-Let’s pick a fun example to see how far we can go. Here is a derivation that imitates the classic song *99 bottles of beer* by producing a chain of derivations, each one outputting the next verse.<sup>1</sup>1The builder writes the next derivation by hand in [ATerm](https://fzakaria.com/2025/03/23/nix-derivations-by-hand), so there is no recursive Nix and no `nix-instantiate` involved.
+In addition to supporting a wider range of *target* platforms, I also wanted to bring this power to more development *host* platforms. You can currently only use Skip to develop apps from a macOS host; Windows and Linux users are left out in the cold. And while there is some [impressive work](https://xtool.sh) happening to bring iOS development to non-macOS hosts, those tools will take a while to percolate, and appear to [face the wrath](https://github.com/xtool-org/xtool/issues/55#issuecomment-2898015355) of the platform overlords. For Skip, it is irksome enough that even the Android target of the app cannot be developed on a non-macOS host, but when it comes to expanding the platform targets, it becomes downright absurd if, say, you would be unable use Skip to develop a HarmonyOS app from a Windows host.
 
-```
-export PATH=$busybox/bin
+Swift — both the language as well as the tooling — is simply not equipped to handle those needs yet, and despite its impressive progress with their cross-compilation SDKs, I don’t think it ever will be. It will *always* be an Apple-platforms-first technology, and anything beyond that insular world will be consigned to an eternal Sisyphean uphill grind.
 
-# A content-addressed derivation does not know its output path, so its
-# "out" variable holds this placeholder and Nix swaps in the real path at
-# build time. It is "/" + nix32(sha256("nix-output:out")), the same for
-# every derivation with an output named "out".
-OUT_PLACEHOLDER=/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9
+Rust, on the other hand, wasn’t designed for a single platform, or even a small handful of platforms. They support [300 platforms](https://doc.rust-lang.org/nightly/rustc/platform-support.html). Cross-compilation has been a foundational principle from day one, rather than being a bolted-on afterthought. This leads to an ecosystem that values building for everything and everyone, with no platform bias. When I started out on this journey, I was frankly astonished when the code I was tinkering with for iOS — which included dozens of rando [crates.io](https://crates.io/) dependencies that I yolo’d into my little research project — *just worked* for Android. And Windows. And Linux. And HarmonyOS. And Webassembly.
 
-bottles() {
-  case $1 in
-    0) echo "no more bottles" ;;
-    1) echo "1 bottle" ;;
-    *) echo "$1 bottles" ;;
-  esac
-}
+Then when I discovered that despite its massive power and potential, you still [can’t craft a decent consumer-facing app](https://areweguiyet.com) in Rust, my mission was clear. Escaping the surly bonds of the platform has always been my personal obsession, and in the mere six months since I started down this road, I’ve created the ultimate all-singing-all-dancing omni-platform development tool. More on that in a future post. “Like and subscribe”, as the kids say.
 
-# The last derivation in the chain writes the punchline instead of a .drv.
-if [ "$n" -eq 0 ]; then
-  echo "No more bottles of beer on the wall, no more bottles of beer." >&2
-  echo "Go to the store and buy some more." > $out
-  exit 0
-fi
+But getting back to the point: Swift will be fine. It is here to stay, at least for Apple platform development. And Skip will be fine: it has a growing community of developers and maintainers that will keep the project going strong and keep up with Swift and Xcode updates. Skip will continue to improve the Android side of the coin in step with Apple’s improvement of the iOS side. I am confident that both technologies will keep chugging along indefinitely, powering fabulous apps on Apple and Android platforms alike, well into the future.
 
-next=$((n - 1))
-echo "$(bottles $n) of beer on the wall, $(bottles $n) of beer." >&2
-echo "Take one down, pass it around, $(bottles $next) of beer on the wall." >&2
+But that is not *my* future. Software development is suddenly no longer hard. App development is suddenly no longer hard. And I need to be solving hard problems in order to thrive.
 
-# Input sources must be sorted.
-srcs=$(printf '"%s"\n' "$busybox" "$script" | sort | paste -sd, -)
+## Footnotes
 
-# Write the derivation for the next verse. A .drv is a single line of
-# ATerm, so strip the spaces and newlines that are only here for reading.
-# Nix takes a derivation's name from its store path, so the next name is
-# ours minus one ".drv".
-tr -d ' \n' > $out <<EOF
-Derive(
-  [("out", "", "text:sha256", "")],
-  [],
-  [$srcs],
-  "$system",
-  "$busybox/bin/sh",
-  ["$script"],
-  [
-    ("builder", "$busybox/bin/sh"),
-    ("busybox", "$busybox"),
-    ("n", "$next"),
-    ("name", "${name%.drv}"),
-    ("out", "$OUT_PLACEHOLDER"),
-    ("outputHashAlgo", "sha256"),
-    ("outputHashMode", "text"),
-    ("script", "$script"),
-    ("system", "$system")
-  ]
-)
-EOF
-```
-
-> **Tip**
-> A derivation whose output is a `.drv` must set `outputHashMode = "text"`.
-
-In our example we are using a content-addressed derivation, but the same idea works with an input-addressed one, but it’s more work to compute the output path in the shell, unless you are using `nix-instantiate` to do it for you with recursive Nix.
-
-The Nix side builds the first derivation and then follows `builtins.outputOf` once per bottle.
-
-```
-let
-  pkgs = import (fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/6dadaf4375be35033e1c84395adbd53ff5fded96.tar.gz";
-  }) { };
-  inherit (pkgs) lib;
-
-  # maximum bottles of beer on the wall,
-  # 50 is the most that fits in a store path!?
-  bottles = 50;
-
-  top = derivation {
-    name = "beer" + lib.concatStrings (lib.replicate bottles ".drv");
-    system = builtins.currentSystem;
-    builder = "${pkgs.busybox}/bin/sh";
-    args = [ ./bottles.sh ];
-    script = ./bottles.sh;
-    busybox = pkgs.busybox;
-    n = bottles;
-    __contentAddressed = true;
-    outputHashMode = "text";
-    outputHashAlgo = "sha256";
-  };
-in
-# Follow the chain of outputs down to the last derivation.
-lib.foldl' (drv: _: builtins.outputOf drv "out") top.outPath (lib.range 1 bottles)
-```
-
-While working through this example, I hit a bug in Nix that made me set `__contentAddressed = true` on the top derivation. That is not necessary for a derivation that outputs a `.drv`, but it works around the bug. I filed [NixOS/nix#16830](https://github.com/NixOS/nix/issues/16830).
-
-You might notice that we limit the number of beers to 50. Why 50 and not 99?
-
-Well, 50 is the most that fits in a store path.
-
-```
-error: path '…-beer.drv.drv.drv…' is not a valid store path:
-  name 'beer.drv.drv.drv…' must be no longer than 211 characters
-```
-
-The maximum length of a store path is [211 characters](https://github.com/NixOS/nix/blob/7d83031e0c3c4f7e6767ce94ae81ae93b6c04322/src/libstore/include/nix/store/path.hh#L48). A derivation’s store path must include the `.drv` suffix, and every `.drv` in a chain adds four characters. The top derivation is named `beer` and if you add 51 `.drv`s we get 208 characters. No room for any more beer. 🍻
-
-Let’s <del>build</del> sing it.
-
-```
-$ nix build -f beer.nix \
-    --print-out-paths \
-    --print-build-logs
-building '/nix/store/di5x9yrhh6pfn214c41bnpxh1avya51c-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 50 bottles of beer on the wall, 50 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 49 bottles of beer on the wall.
-building '/nix/store/zg35ykl6qvh6gasy6q4pc6d4kyqcq0sd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 49 bottles of beer on the wall, 49 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 48 bottles of beer on the wall.
-building '/nix/store/g07drgnkmwkbyccwk8vzzibbfdznpqjd-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv'...
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> 48 bottles of beer on the wall, 48 bottles of beer.
-beer.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv.drv> Take one down, pass it around, 47 bottles of beer on the wall.
-...
-building '/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv'...
-beer.drv> 1 bottle of beer on the wall, 1 bottle of beer.
-beer.drv> Take one down, pass it around, no more bottles of beer on the wall.
-building '/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv'...
-beer> No more bottles of beer on the wall, no more bottles of beer.
-/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
-
-$ cat result
-Go to the store and buy some more.
-```
-
-Fifty-one builds, one after another<sup>2</sup>2A single trivial build takes about 1.5 seconds on my laptop, so the cost of building 51 derivations is about 75 seconds largely due to substituter lookups. If you disable substituters `--option substituters ''`, the builds take about 1.3 seconds in total. . Evaluation knows about only the first one. Nix discovers each of the other 50 by building the one before it. 🍺
-
-> **Aside**
-> Hey, didn’t an [earlier post](https://fzakaria.com/2026/09/20/a-build-graph-that-rolls-dice) have dynamic derivation chains 500 deep?!
->
-> Yes! The difference is whether a derivation *outputs* the next one or *depends* on it. A derivation whose output is another derivation gets one more `.drv` appended to the name. The dice chain linked each step to the next as a dependency, and a dependency keeps its own name, so no name ever had more than two `.drv`s in it.
-
-Back to the original question: can we query the deriver of the output derivation to get the initial derivation? Yes, we can.
-
-Let’s put `nix-store --query --deriver` in a loop that walks from the result all the way back to the top.
-
-```
-$ p=$(readlink result)
-$ while [ "$p" != unknown-deriver ]; do
-    echo "$p"
-    p=$(nix-store --query --deriver "$p")
-  done > chain.txt
-
-$ wc -l < chain.txt
-52
-
-$ head -4 chain.txt
-/nix/store/kp2aln1pr2cy4gn9qs8vzkq850blj60i-beer
-/nix/store/kb16larpavss7y26ivyib5mgc23gicn6-beer.drv
-/nix/store/0vr55qvmaswc2vkjvy4i2blcgc6phv85-beer.drv.drv
-/nix/store/flj05chf2yyn5bxsjq41if7mihcjjqkp-beer.drv.drv.drv
-```
-
-We have the result plus 51 derivations. 💪
-
-Since every derivation in the chain was built, every one has a build log, and you can ask any of them to sing its verse again.
-
-```
-$ nix log "$(sed -n 26p chain.txt)"
-24 bottles of beer on the wall, 24 bottles of beer.
-Take one down, pass it around, 23 bottles of beer on the wall.
-```
-
-I’m very excited for the future of dynamic derivations. [tomberek](https://github.com/tomberek) is [leading a working-group](https://discourse.nixos.org/t/dynamic-derivations-dynamic-build-graphs-next-steps/79409/) to finalize the feature and are currently meeting weekly. With dynamic derivations, Nix will be able to compete with other build systems in terms of speed and flexibility and *take over the world*.
+1. The initial revision of this post said “360°” when it meant “180°”. Thank you, internet commentariat, for your gracious corrections. [↩](https://www.prux.org/posts/goodbye-swift-hello-rust/#user-content-fnref-1)

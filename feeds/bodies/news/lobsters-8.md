@@ -1,4 +1,4 @@
-*core* is [a program that I wrote](https://git.citrons.xyz/core) which spills the viscera of other programs onto the screen and allows you to prod them. it could be called an “esoteric debugger” or a “paint program.”
+*core* is [a program that I wrote](https://git.citrons.xyz/core/about) which spills the viscera of other programs onto the screen and allows you to prod them. it could be called an “esoteric debugger” or a “paint program.”
 
 the visual content of the program is constructed as follows:
 

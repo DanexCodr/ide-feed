@@ -1,224 +1,57 @@
-Redox OS is a complete Unix-like general-purpose microkernel-based operating system
-written in Rust. October was a very exciting month for Redox! Here’s all the latest news.
+Earlier this month I found a one-click universal XSS issue with uBlock Origin (the MV2 Firefox version, although a similar but less problematic issue also affected the MV3 version, uBO Lite), where a malicious website could trick the extension into adding arbitrary trusted filters. Trusted filters can inject JavaScript code into pages, and so the malicious website could create a trusted filter on another website and run arbitrary JS in the context of any site. This issue is fixed now; you can read [the GitHub advisory](https://github.com/gorhill/uBlock/security/advisories/GHSA-cmqw-9r2w-6wv2) for some more details.
 
-## Donate to Redox
+GPT-5.6 Sol did most of the hard work of finding the issue. I figured there might be some kind of UXSS from filter injection, so I asked it to take a look, and it found the issue. I then checked and verified the issue it proposed. I wrote all of the prose in this post myself; Claude wrote most of the code for the PoC.
 
-If you would like to support Redox, please consider donating or buying some merch!
+## The issue
 
-## Golang On Redox!
+uBlock Origin has an element picker that you can pull up by right-clicking on the page. You can use this to create a filter rule to block an element on the page without leaving the page.
 
-Wildan Mubarok ported the official Go programming language compiler after months of porting iterations. It supports both cross-compilation and self-hosted compilation of Go programs.
+![uBO element picker](https://iter.ca/ubo-epicker.png)
 
-The Go compiler uses `relibc` and does not require an external compiler (GCC). During porting this compiler, it revealed issues in many parts of the system, such as the `range-tree` library fix mentioned below.
+The element picker is implemented by injecting an iframe to a URL like `moz-extension://76b2331a-894c-4d25-8b89-fcce37e79cc4/web_accessible_resources/epicker-ui.html`. That page can talk to the extension background script and tell it to add filters.
 
-The Go compiler port is currently a fork, as upstreaming will be another effort.
+Basically the attack here is:
 
-## Redox on Cloud Hypervisor!
+1. Figure out the element picker URL
+2. Create our own invisible (opacity 0) iframe that embeds it
+3. Drive the picker to put the filter we want in it
+4. Position the invisible iframe to trick the user into pressing the invisible “Create” button
 
-MJ Pooladkhay was able to boot Redox on [Cloud Hypervisor](https://www.cloudhypervisor.org/), as part of his [NLnet](https://nlnet.nl/)-funded work on Redox virtualization. This is an important step towards Redox as a web server in the cloud. He also added integration to the Redox build system, to simplify testing.
+### Figuring out the element picker URL
 
-He wrote [this](https://www.redox-os.org/news/virtualized-redox/) article about this initial work.
+On Firefox, the only information we needed to figure out was the extension internal UUID which is random per-installation.
 
-Read [this](https://doc.redox-os.org/book/cloud-hypervisor.html) page to learn how to use it.
+On the default setup uBO has a `lootdest.*##+js(no-fetch-if, adsbygoogle, war:googlesyndication_adsbygoogle.js)` filter rule (from uAssets), which hooks `fetch`. From inside the `fetch` hook, it makes an XHR request to `moz-extension://<extension UUID>/web_accessible_resources/googlesyndication_adsbygoogle.js` and returns the response from that as the fetch body, instead of actually making the request. The filter rule is intended to replace a network request for JS from an ad server with a dummy script that has the correct API but doesn’t do anything.
 
-## WebKitGTK3 Video Support
+But the attacker website can itself hook the XHR made from inside the `no-fetch-if` hook to extract the random extension UUID.
 
-Wildan Mubarok fixed the missing codecs in GStreamer using FFmpeg libraries for video playback in WebKit.
-
-- Mozilla Developer Network HTML5 video example
-
-- YouTube
-
-## GIMP On Redox!
-
-Wildan Mubarok ported GIMP after some months of work. As GIMP uses the recent Orbital backend of the GTK port, the experience may not be smooth in this initial port.
-
-## Servo 0.7 Update
-
-Wildan Mubarok updated our Servo fork to version 0.7 after months of work to fix regressions and new bugs.
-
-## Ratatui 3D Showcase
-
-Ribbon tested the Ratatui 3D rendering of [Cornell box](https://en.wikipedia.org/wiki/Cornell_box) demo from [ratatui-3d](https://github.com/limlabs/ratatui-3d) project.
-
-## NUMA Support Testing
-
-The first real hardware NUMA tests on a Dell Poweredge R420 server were done, which confirms that EuclidDivisionLemma’s effort on NUMA support is complete enough to work.
-
-Tests conducted by EuclidDivisionlemma, showed, on average, a 45.2% reduction in time taken on the NPB MG Workload.
-
-## Fixed RISC-V Dynamic Linking
-
-lbecher fixed RISC-V dynamic linking, which is the last CPU architecture using static linking in our build system.
-
-It will allow our application testing in RISC-V to easily scale.
-
-## Initial Rootless Package Installation
-
-Wildan Mubarok finished the first part of rootless package installation code, which allows the creation of system-wide paths mappings to user equivalent paths.
-
-## virtiofs On Redox!
-
-MJ Pooladkhay has completed the `virtiofs` driver and integrated it into the Redox build system. It’s now possible to share any directory on a Linux host with a Redox VM running under QEMU or Cloud Hypervisor.
-
-For example, the `make qemu share=redox` command shares the Redox build system directory on Linux to Redox.
-
-Read [this](https://doc.redox-os.org/book/virtio-fs.html) page to learn how to use it.
-
-## NUMA Information Reporting
-
-EuclidDivisionLemma implemented NUMA hardware information reporting, exposed in `/scheme/sys/numa` resource.
-
-```
-NUMA nodes: 4
-Node 0:
-	CPUs: 0 1 2 3 4 5 6 7 
-	Memory: 8.00 GiB
-Node 1:
-	CPUs: 8 9 10 11 12 13 14 15 
-	Memory: 4.00 GiB
-Node 2:
-	CPUs: 
-	Memory: 8.00 GiB
-Node 3:
-	CPUs: 
-	Memory: 12.00 GiB
+```js
+const origOpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function(m, url, ...a) {
+    const e = /^moz-extension:\/\/[^/]+/.exec(url);
+    if (e) {
+        e[0] // <- has the extension UUID!
+    }
+    return origOpen.call(this, m, url, ...a);
+};
 ```
 
-## Simplified AI Policy
+Then the attacker website can run `fetch('/adsbygoogle.js').catch(() => {});` to trigger the filter, and make their hooked XHR run. Note that there are several ways that the extension internal UUID could be leaked; it’s not just this one filter rule.
 
-Jeremy Soller simplified the AI policy and the Board Of Directors approved, now it is:
+### Creating an iframe
 
-“Redox OS does not accept contributions generated by LLMs ([Large Language Models](https://en.wikipedia.org/wiki/Large_language_model)), sometimes also referred to as “AI”.”
+Then you can use that to iframe the element picker. Given an iframe element in the page, you just set its src to ``moz-extension://${origin}/web_accessible_resources/epicker-ui.html``.
 
-## Ring Buffers Project Summary
+### Sending messages to it
 
-Anhad Singh, Ibuki Omatsu, 4lDO2 and Ron Williams wrote a [technical report](https://www.redox-os.org/news/nlnet-rb-summary/) of the conclusion of the Redox Ring Buffers project.
+Now we can drive the element picker. We can create a MessageChannel and do `iframe.contentWindow.postMessage({ what: 'epickerStart' }, '*', [ch.port2]);` to send it to the picker iframe. Then we talk to it: it sends us a `start` message, we send it a `showDialog` message with a filter and a `resultsetDetails` message<sup>[1](https://iter.ca/post/ubo-uxss/#fn:1)</sup> to enable the create button and set `opt`.
 
-## Bootloader Improvements
+Normally the picker restricts what filters you can enter, and doesn’t let you add scriptlet filters. But there’s a trick we can do to add arbitrary filters. There’s an `opt` field we set in the second message which is normally the type of network request to match (like `image`), and gets appended to the filter with a `$` if set, like `$image`. But since we control it, we can put a newline in it and make it `"image\ngoogle.com##+js(trusted-rpnt, script, ...)"` to inject an arbitrary trusted filter that injects a script.<sup>[2](https://iter.ca/post/ubo-uxss/#fn:2)</sup>
 
-- (boot) MJ Pooladkhay fixed a UEFI exit failure bug due to a stale memory-map key to ExitBootServices
+This is where the main issue is - the element picker shouldn’t accept messages from the attacker. One of the fixes was having a secret password that the real element picker gets from the content script, that the element picker sends in the initial postMessage.
 
-## Kernel Improvements
+### Getting the click
 
-- (kernel) 4lDO2 reduced the x86 kernel binary file size in ~200 KiB by using naturally aligned kernel stacks on x86
-- (kernel) 4lDO2 did a code cleanup
-- (kernel) 4lDO2 fixed some code warnings
-- (kernel) Wildan Mubarok fixed a CPU context-wide deadlock in futex code
-- (kernel) Wildan Mubarok fixed thread lock ordering in futex code, which fixed a hang
-- (kernel) EuclidDivisionLemma implemented wrappers to libredox to ease the manipulation of scheduler CPU affinity.
-- (kernel) EuclidDivisionLemma fixed incorrect APIC ID reading
-- (kernel) EuclidDivisionLemma fixed more NUMA bugs
-- (kernel) EuclidDivisionLemma fixed some code warnings
-- (kernel) EuclidDivisionLemma did some refactoring and cleanup in NUMA code
-- (kernel) Radek Pietruszewski implemented RISC-V CPU information reporting
-- (kernel) bjorn3 fixed some code warnings
-- (kernel) Val Lorentz fixed some code warnings
+I didn’t bother actually implementing this, but malicious websites could overlay stuff on top of the embedded element picker or make it invisible by setting the iframe opacity to 0. So as long as the website can get the user to click on the page, it can add arbitrary trusted filters for arbitrary domains.
 
-## Driver Improvements
-
-- (driver) Jeremy Soller created the audiod library to unify the audio buffer size handling of all sound drivers
-- (driver) MJ Pooladkhay fixed a bug with the device DMA memory lifetime being ended while the device was using it
-- (driver) The “beef” contributor fixed the Intel HD Audio driver’s Function Group Type parameter ID
-- (driver) bjorn3 did some code cleanup
-
-## System Improvements
-
-- (sys) Jeremy Soller added COSMIC Monitor and GTK3 demos to Redox demo variant
-- (sys) bjorn3 moved the Unix domain socket code from the ipcd daemon to a new daemon called udsd because this code was not related to Redox IPC, simplifying the system
-- (sys) bjorn3 did some code deduplication
-- (sys) Ibuki Omatsu replaced/unified the fstat, unlinkat, flink, and frename functions with std_fs_call
-- (sys) Ibuki Omatsu moved the F_SETFD, F_GETFD, and F_DUPFD* fcntl flags from redox_syscall to libredox
-- (sys) Wildan Mubarok fixed a TTY write panic in getty when a CLI application hangs
-
-## Relibc Improvements
-
-- (libc) Wildan Mubarok implemented dladdr and dl_iterate_phdr functions
-- (libc) Wildan Mubarok implemented POLLHUP, POLLERR, EPOLLHUP, and EPOLLER event codes
-- (libc) Wildan Mubarok added a initial link.h function group implementation
-- (libc) Wildan Mubarok added initial locale support: implemented decimal locale support in strtod function, implemented setlocate function and LOCPATH
-- (libc) Wildan Mubarok fixed TLS relocation alignment in LTO compilation
-- (libc) Wildan Mubarok fixed EINTR error handling behavior in futex and kill
-- (libc) Wildan Mubarok fixed the scanf function parsing invalid %d
-- (libc) Wildan Mubarok fixed sigaltstack stack information, SSIZE_MAX type, and stpcpy test on i586
-- (libc) Wildan Mubarok fixed the dl_phdr_info::dlpi_tls_data type
-- (libc) Wildan Mubarok fixed a float_t redefinition error when the same header is used in multiple places
-- (libc) Wildan Mubarok fixed limits.h constant suffixes
-- (libc) Wildan Mubarok fixed the futimens function test
-- (libc) Wildan Mubarok implemented input sanitization in inet_aton function
-- (libc) Wildan Mubarok moved most of unsafe Rust code of poll, epoll, utimensat, futimens, nanosleep, fstat, fstatvfs, and inet_aton functions to leaf functions
-- (libc) Niel D fixed mkdirat function directory permission handling
-- (libc) auronandace implemented __fseterr from Gnulib
-- (libc) auronandace fixed the readv function test
-- (libc) auronandace fixed a typo in POSIX_MADV_DONTNEED constant
-- (libc) auronandace reduced more as casting usage to prevent problems in code refactorings
-- (libc) auronandace enabled some Clippy lints
-- (libc) Konstantin Shabanov fixed and added a getsockopt test
-- (libc) Konstantin Shabanov fixed false-positives when running a single test, due to wrong paths in expected output
-- (libc) Val Lorentz fixed some Clippy warnings
-
-## RedoxFS Improvements
-
-- (rfs) Wildan Mubarok fixed bug in the range-tree library that caused a underflow in fmap implementation
-
-## Packaging Improvements
-
-- (pkg) Wildan Mubarok greatly reduced compressed packaged size when Clang ThinLTO is used
-
-## Programs
-
-- (app) Wildan Mubarok enabled FFMPEG and AAC codec support in GStreamer
-- (app) Wildan Mubarok enabled multi-threading on XZ
-- (app) Wildan Mubarok updated Git version from 2.13.1 to 2.56.0
-- (app) Wildan Mubarok fixed gettext compilation with Clang
-- (app) bjorn3 updated the periodictable and sodium installation paths to comply with Linux FHS
-- (app) auronandace updated rsync from version 3.4.1 to 3.5.1
-
-## Build System Improvements
-
-- (build) Wildan Mubarok fixed Redox toolchain fetch checksum mismatches
-- (build) Wildan Mubarok fixed the build.dev-dependencies recipe data type rule handling difference between cookbook.lock and filesystem configuration
-- (build) Wildan Mubarok added cbindgen to Redoxer image
-- (build) Wildan Mubarok added libunwind to the toolchain
-- (build) Wildan Mubarok changed Clang to use libgcc for runtime consistency
-- (build) Wildan Mubarok implemented dl_iterate_phdr support to libgcc to workaround hangs in recipes compiled with Clang
-- (build) Wildan Mubarok changed toolchain packaging archiver to be deterministic
-- (build) Radek Pietruszewski improved QEMU configuration for NixOS
-
-## Documentation Improvements
-
-- (doc) Wildan Mubarok documented how to do RedoxFS partition manipulation from Linux in dual-boot installation
-- (doc) Wildan Mubarok documented Clang support
-- (doc) Wildan Mubarok improved the self-hosted development documentation
-- (doc) Radek Pietruszewski documented MacOS QEMU instructions
-- (doc) Radek Pietruszewski documented NixOS QEMU instructions
-- (doc) Radek Pietruszewski recommended the livedisk image instead of harddrive image to fix ARM64 and RISC-V boot in QEMU, due to lack of MSI-X support on them
-- (doc) Ribbon documented the driver graphics API migration to Linux DRM API
-- (doc) Ribbon added a introduction to `relibc` function tracing and updated the kernel system call tracing to also mention userspace tracing
-- (doc) Ribbon documented that Orbital hangs don’t stop the mouse cursor when VirtIO-GPU is used, because the cursor is processed on host
-- (doc) Ribbon documented the Redox build system and Redoxer purposes on Developer FAQ
-
-## How To Test The Changes
-
-To test the changes of this month download the `server` or `desktop` variants of the [daily images](https://static.redox-os.org/img/).
-
-Use the `desktop` variant for a graphical interface. If you prefer a terminal-style interface, or if the `desktop` variant doesn’t work, please try the `server` variant.
-
-- If you want to test in a virtual machine use the “harddrive” images
-- If you want to test on real hardware use the “livedisk” images
-
-Read the following pages to learn how to use the images in a virtual machine or real hardware:
-
-Sometimes the daily images are outdated and you need to build Redox from source.
-For instructions on how to do this, read the [Building Redox](https://doc.redox-os.org/book/podman-build.html) page.
-
-### Programs
-
-To test the changes on applications and libraries, see if the wanted program is available in the following lists and run the following command to install them: `sudo pkg install package-name`
-
-There’s also a package web interface if you want detailed package information:
-
-## Join us on Matrix Chat
-
-If you want to contribute, give feedback or just listen in to the conversation,
-join us on [Matrix Chat](https://matrix.to/#/%23redox-join:matrix.org).
+Filters added by the element picker are always treated as trusted (at least until a recompile), which is why it can add a trusted filter. If the user later changes their custom filters it would cause a recompile, clearing the filter trust. But in practice the attacker could just immediately open the victim webpage, so this doesn’t help much.

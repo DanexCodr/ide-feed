@@ -1,45 +1,53 @@
-Humans are intuitive by nature. We can sense meaning beyond the literal words that we encounter. Now, a new artificial intelligence-assisted learning platform developed by MIT engineers is enabling robots to read larger meaning into a human’s natural language commands.
+Today, a scientist who wants to simulate a physical process must pick the right tool for that one job, such as a solver built for flowing water or another designed to model the way a protein folds. Each one is hand-coded around the specific equations that dictate how that process behaves.
 
-In a study to be presented at the annual Conference on Robot Learning this month, researchers from MIT and New York University introduce [FLEX](https://arxiv.org/pdf/2610.28893), a flexible feature-editing pipeline for robot motion-planning.
+Researchers at MIT, the University of British Columbia (UBC), and elsewhere have now replaced that patchwork with a single deep-learning system, called [WorldParticle](https://worldparticle.github.io/WorldParticle_Web/#top), that could help engineers model different physical phenomena, from sliding sand to folding proteins, with one unified artificial intelligence architecture.
 
-With FLEX, humans can interact with a robot by giving it instructions in natural, conversational language. The robot can not only follow the instructions literally but also read into the words to draw larger generalizations that help to improve its motion-planning task.
+Scientists and engineers could use this system to model processes that typically require separate simulators, such as a fluid sloshing against a deformable solid. This could offer a faster, more accurate way to simulate how sloshing oil might impact an elastic valve in a storage tank, for instance. It could also help engineers study where and how granular materials, like sand or soil, could move when a soft robot touches them.
 
-The team demonstrated FLEX in several simulated scenarios, including one in which a robot serves a cup of coffee. In these virtual scenarios, a person interacts with a robotic arm by typing commands in natural language. As the robot moves the coffee cup over a cluttered table, the person might type “Don’t spill on the laptop!” In response, the robot will reason about why it should avoid the laptop. For this, FLEX incorporates a large language model (LLM) — a type of AI system that is trained on enormous libraries of text, including social media posts, video transcriptions, and web content, which the LLM uses to identify larger trends, patterns, and generalizations.
+The system represents every material it simulates, from a dune of sand to a protein molecule, as tiny particles and predicts where those particles will move one step at a time. Because it learns the underlying dynamics rather than being programmed with an equation, the model can adapt to materials, forces, and environments it never encountered during training.
 
-“LLMs have seen so many texts from the internet,” says study author Nathan Dennler, a postdoc in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL). “People might have written about, ‘Oh, my phone dropped in the water and now it doesn’t work,’ or ‘I spilled coffee on my computer and now it doesn’t work.’ So LLMs pick up on the idea that liquids plus devices leads to things not working.”
+In the long term, the researchers hope this work helps scientists discover new materials and explore physical processes they would be unable to effectively study with existing simulation methods.
 
-Through the LLM, the robot reasons that it should also avoid bumping into all electronics. In its updated path, the robot adjusts to avoid both the laptop and a nearby phone, without the person having to explicitly spell this out.
+“We want to have a GPT moment for simulation,” says Peter Yichen Chen, a former MIT postdoc who is now an assistant professor at UBC, and is a co-corresponding author of an open-access [paper](https://arxiv.org/pdf/2605.15305) on this technique. “Every time people want to build a simulator for a particular physical phenomenon, they need to code it up from scratch. Our vision is to have a foundation model that works out of the box for any scenario you want to simulate. This is a first step in that direction.”
 
-“The idea is that there is some higher-level intention behind the words that you say,” Dennler says. “People naturally get this. But you have to carefully explain that to a robot, which takes time and effort. FLEX gives you an interface of communication with a robot to say, ‘When people say this, they mean that.’”
+Chen is joined by co-corresponding and co-lead author Minghao Guo, an MIT postdoc; co-lead authors Caoliwen Wang and Siyuan Chen, UBC graduate students; Wojciech Matusik, an MIT professor of electrical engineering and computer science who leads the Computational Design and Fabrication Group within the Computer Science and Artificial Intelligence Laboratory (CSAIL); and others at UBC, Georgia Tech, Inria, Meta, the University of Pennsylvania, the University of Utah, the University of California at Los Angeles, and the University of Hong Kong. The research will be presented at the ACM SIGGRAPH Conference and Exhibition on Computer Graphics and Interactive Techniques in Asia.
 
-The study was led by Andreea Bobu, assistant professor of aeronautics and astronautics at MIT. Co-authors are Audrey Lee SM ’26 and Ilia Sucholutsky of New York University.
+**Unified simulation**
 
-**Beyond what we say**
+For this work, the researchers drew inspiration from world models. These powerful AI systems learn the rules that govern the physical world so they can predict how objects or environments will change over time in response to certain actions or conditions.
 
-At MIT, Bobu heads up the Collaborative Learning and Autonomy Research (CLEAR) Lab, where her group develops autonomous agents that learn to work for, with, and around people. She is focused on developing assistive and household robots that can carry out physical tasks, and reason and adapt in real-time, in response to a person’s natural, conversational commands.
+The researchers applied these concepts to develop a unified AI architecture that can simulate multiple types of physical phenomena.
 
-“Robots use math to do their trajectory planning. But we can’t expect a consumer to learn to do this math in order to tell a robot what to do,” says Dennler, who is a member of the CLEAR Lab. “Instead of having to get people to learn how to use a robot in a specific way, the goal is to interact with the robot through natural language.”
+“If you study deformable objects and fluids, you would need two simulators — one for each physical regime. But if you unify them into one model, maybe you could couple the physics of these two processes and gain insights into new problems?” Guo says.
 
-There is a large effort in the robotics community to incorporate natural language into robotic learning pipelines. Various strategies include using language to clarify a task’s goal, redirect a robot’s trajectory, and update its understanding of what is a safe path to take. These existing methods use natural language to tell the robot how to physically perform a task. But a robot could potentially learn much more from what we tell it.
+WorldParticle breaks an object into thousands or millions of tiny, three-dimensional dots, or particles, using what is known as a Lagrangian representation. It tracks the movement and velocity of the particles over space and time to simulate the material’s dynamics.
 
-Bobu and her colleagues are expanding what robots can learn from natural language commands. In their new study, they focused on enabling a robot to interpret a person’s underlying, unspecified preference from limited natural language commands.
+Typically, when scientists model materials and physical processes using Lagrangian particles, they use a governing equation that defines the fundamental laws which control how that material behaves over time and space. They must convert that complex equation into a formula a numerical solver can handle, repeating these steps for each material and process they want to model.
 
-**Absorbing common sense**
+Instead, the researchers designed a neural network that learns to solve governing equations in general, eliminating the need to design a new model and solver to handle each one.
 
-The team’s new robot learning platform, FLEX, is a three-step process that helps a robot read more into a natural language command, beyond what it is explicitly told to do.
+Once WorldParticle converts an object into particles, a neural network takes the 3D positions and physical properties of the particles as inputs. It outputs their positions and properties for the next frame of the simulation, predicting the material’s motion over time and space in one-second increments.
 
-The first step, “Add,” instructs a robot to add a feature to its list of things in its environment that matter for the task at hand, based on a user’s natural language command. For instance, as a robot is moving a bowling ball from one location to another, a person might interject with “Don’t drop it on my mug!” The robot would then add the mug to a list of things to avoid in its path. This first step is how previous methods have worked. Every time a person makes a correction, the robot adds to its features list, and updates its trajectory to avoid those features.
+“It is a similar architecture to ChatGPT. But instead of predicting one word at a time to write a piece of text, we are predicting how these particles will move, one step at a time,” Chen says.
 
-“The problem happens when your feature list becomes super long, and some features are no longer relevant because your environment may have changed,” says Dennler, who notes that this approach can grow tiresome if a person has to specify every specific feature to avoid.
+Before each simulation step, WorldParticle separates the external forces that affect the physical system, like impulse forces that affect an ocean wave when it slams into a seawall.
 
-The second step, “Generalize,” is the new solution that FLEX provides. This step incorporates an LLM — in this case, GPT-4o — that considers the mug, along with any other features that the person has so far specified to avoid. The LLM automatically searches through its vast cache of data for patterns and connections among these features, to ultimately make a generalization that it should avoid objects that are fragile, even when the person has not explicitly said so.
+After predicting the initial states of the particles, WorldParticle integrates the external forces back into the simulation, correcting its particle predictions based on how those forces affect the object’s behavior. In this way, the system can generalize to unseen materials, changing environmental conditions, and varied forces.
 
-“LLMs have seen so many texts from the internet, from all sorts of people and places,” Dennler says. “Because they’ve trained so much on those things, some of that common sense gets absorbed into the LLM.”
+**A general, scalable framework**
 
-In the third step, “Mask,” the robot’s standard computer vision system assesses its environment to determine what objects are no longer present, and then deletes those objects from its features list. This entire three-step process takes about five seconds.
+But because a complex object could be broken into millions of particles, the problem quickly becomes too computationally intensive for the model to handle.
 
-The team tested FLEX in simulations of a robot arm carrying out three different tasks: serving a cup of coffee, moving a candle, and carrying a bowling ball. In all three scenarios, volunteers interacted with the virtual robot by typing natural language commands, such as “Don’t spill on my laptop,” “Stay away from the stack of paper,” and “Don’t drop on the mug.” With FLEX, the robot followed all three commands literally and also reasoned at a higher level to not spill on electronics, stay away from flammable objects, and not drop its cargo on fragile things.
+To streamline processing, the researchers employed a merging technique to combine and compress particles while still allowing WorldParticle to capture fine-grained details of their behavior.
 
-“Everyone’s homes are different, and everyone cares about different things, so no robot comes out of the box knowing what matters to you,” Bobu says. “What excites me about FLEX is that it can pick that up from a sentence or two instead of asking you to spell out every rule — and that’s the difference between a robot people put up with and one they actually want in their home.”** **
+“We needed to do a lot of detailed engineering and employ many tweaks to the architecture for it to be truly generalizable and scalable,” Guo says.
 
-This work was partly supported by the MIT Generative AI Impact Consortium and the MIT Schwarzman College of Computing’s Social and Ethical Responsibilities of Computing program.
+They demonstrated WorldParticle by modeling six different physical phenomena, including deformable objects, granular materials, and proteins, with higher accuracy than numerical simulation methods.
+
+For instance, WorldParticle effectively captured how a granular object would collapse into a pile while some baseline methods left sand particles floating in the air. Their method also modeled how protein structures change over time about 100 times faster than numerical simulators, Guo adds.
+
+The general-purpose framework could be applied to many materials and processes, including soft robot manipulation tasks, RNA evolution, and astrophysical phenomena like the merging of galaxies, the researchers say.
+
+Moving forward, they want to adapt WorldParticle to simulate these and other physical systems. They also want to build on this work toward the development of a full, general-purpose simulation pipeline for scientific discovery.
+
+“We see the unification of computation and science giving us new insights and tools to discover physical phenomena or explain some unexplainable physical phenomena,” Guo says. “With a unified model, we could unlock many discoveries that we can’t even imagine.”
