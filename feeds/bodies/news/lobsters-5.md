@@ -1,160 +1,98 @@
-I’m [normal](https://en.wikipedia.org/wiki/Autism).
-This means I have a backlink monitor for this website.
-By pure chance, I was showcasing this to a friend when, suddenly, I got a new backlink:
+Write Rust for long enough, and you are bound to run into `error[E0117]`.Take a simple, everyday scenario. You pull in a serialization library that defines a `ToJson` trait, along with a third-party type library like `uuid`. You want to turn a `uuid::Uuid` into JSON, so you naturally write:`impl ToJson for uuid::Uuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}`And the compiler immediately stops you:`error[E0117]: only traits defined in the current crate can be implemented for types defined outside of the crate`This is Rust's well-known **Orphan Rule**. Once people hit this wall, they usually either complain that the compiler is too rigid or dutifully wrap the type in a NewType. But if you look closely at how the Orphan Rule actually works, it is not a dead end. By design, it leaves a pretty wide door open.What Is the Orphan Rule Actually Protecting Against?Setting the jargon aside, the logic behind the Orphan Rule is simple: **if you want a type to implement a trait, at least one of those two things (the type or the trait) must belong to your own crate.** In plain English, you don't get to make rules for someone else's types.Suppose crate A implements `ToJson` for `uuid::Uuid` and outputs a hyphenated UUID string, while crate B also implements `ToJson` for `uuid::Uuid` and outputs 32 raw hex characters without hyphens. If a project depends on both A and B, the compiler has a problem when it sees `uuid.to_json()`: which implementation should it pick?To prevent this kind of global conflict, Rust enforces **coherence**, and the Orphan Rule is how it gets enforced. There is nothing wrong with the rule itself. It keeps the Rust ecosystem from turning into a mess as dependency trees grow. The catch is that real-world projects constantly run into a very common need: making a third-party type implement a trait from another third-party crate. Neither the type nor the trait is yours, yet gluing libraries together like this happens all the time. So what can you do?Why the Two Usual Workarounds Fall ShortRight now, the Rust ecosystem mostly relies on two workarounds. Both appear to solve the problem on the surface, but because neither addresses the root cause, they get awkward fast.1. Building it into the libraryMany foundational crates take this route: since users can't write the `impl` themselves, the crate provides it internally. Because `ToJson` is defined inside the crate, implementing it for any external type satisfies the Orphan Rule. Open up the `Cargo.toml` of one of these crates, and you will see a long list of feature flags: `with-uuid`, `with-chrono`, `with-time`, `with-jiff`, `with-url`, `with-rust-decimal`, and so on.It looks helpful at first, but **it tries to enumerate an open, constantly changing ecosystem inside a single crate**. That approach has clear limits, and the downsides show up quickly:**You can never support everything.** Today the community favors `chrono`, tomorrow people switch to `jiff`, and next week your team builds its own internal `Money` type. If the library doesn't have built-in support, you are stuck waiting for a release or opening a PR yourself.**Version lock-in.** When a third-party type crate bumps its major version, your whole dependency tree gets stuck until the trait crate publishes a matching update.**Hardcoded behavior.** Maybe the library serializes `DateTime<Utc>` as an ISO-8601 string by default, while your API spec requires an integer timestamp in milliseconds. Because the implementation lives inside the library, you have no way to change it.2. Wrap it in a NewType yourselfWhen the library doesn't have built-in support, or its default behavior doesn't fit your needs, you fall back to the familiar NewType pattern:`pub struct MyUuid(pub uuid::Uuid);
 
-I tap in,<sup>[1](https://jack.cab/blog/siterate.html#user-content-fn-phone)</sup> forgetting that 90% of backlinks I get are spam, and maybe this one could log my IP or
-even contain the [3-day](https://blog.mozilla.org/en/firefox/privacy-security/defending-patch-gap/)<sup>[2](https://jack.cab/blog/siterate.html#user-content-fn-fx)</sup>
-exploit chain of doom. I’m greeted with this:
+impl ToJson for MyUuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self.0)
+    }
+}`Wrapping one or two types is fine. The trouble starts when a moderately complex domain model mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types all at once. Once you wrap everything into `MyUuid`, `MyUrl`, and `MyDateTime`, your business logic gets littered with `.0`, and you spend your time constantly wrapping and unwrapping values. It gets old very quickly.NewType is a genuinely useful pattern in Rust for expressing domain meaning, hiding internals, or enforcing invariants. The problem is that when you only use it to appease the Orphan Rule on types that didn't need a wrapper in the first place, your code bloats quickly.So is there a way to let users decide how third-party types implement a trait, without wrapping everything in NewTypes?Adding a Generic Slot to the TraitLet's go back to the rule: either the type or the trait must belong to the current crate.Many developers assume the compiler only looks at `Trait` and `Type` in `impl Trait for Type`. In fact, under Rust's Orphan Rule (RFC 2451), **the trait's own generic type parameters are also part of the check**.Put simply, in `impl Trait<P> for Type`, as long as a local type appears in the trait's generic parameters, and there are no uncovered type parameters before it, the compiler knows this implementation belongs exclusively to the current crate. No other crate can conflict with it, so the compiler lets it through.Take this example:`impl ToJson<MyApp> for uuid::Uuid {
+    // ...
+}``ToJson` is a foreign trait, and `Uuid` is a foreign type, but `MyApp` is defined in the current crate. Because it sits in the trait's generic parameter position, this `impl` satisfies the Orphan Rule.Following this idea, a library author only needs to take one extra step when designing a trait: **leave a generic parameter on the trait as an extension point for users**.For example:`pub trait ToJson<Ctx = ()> {
+    fn to_json(&self) -> String;
+}`Notice that `Ctx = ()` has a default type. When the library implements `ToJson` for basic types like `i32` and `String`, it makes those implementations generic over any `Ctx`:`impl<Ctx> ToJson<Ctx> for i32 {
+    fn to_json(&self) -> String {
+        self.to_string()
+    }
+}
 
-## Popular Webpages In *.cab
+impl<Ctx> ToJson<Ctx> for String {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}`This way, regular users never even notice `Ctx` exists. Everything works the exact same way as before, with `()` as the default context.When you do need to plug in third-party types, you just define an empty marker struct in your own crate:`pub struct MyApp;`Then you can write implementations for any third-party type you want:`impl ToJson<MyApp> for uuid::Uuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}
 
-| Webpage | Rank |
-| --- | --- |
-| ![](https://www.google.com/s2/favicons?domain_url=http://23win.cab)[23win.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 110100 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://airports.cab)[airports.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 124393 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://pdf.cab)[pdf.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 393627 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://hitclub.cab)[hitclub.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 422929 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://7m.cab)[7m.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 457524 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://max79.cab)[max79.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 712444 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://keonhacai5.cab)[keonhacai5.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 775520 |
-| ![](https://jack.cab/_astro/opengraph.BCs-rOHQ.png)[jack.cab](https://jack.cab/) | 783052 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://vic88.cab)[vic88.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 856609 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://taixiuonline.cab)[taixiuonline.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 874131 |
+impl ToJson<MyApp> for chrono::DateTime<chrono::Utc> {
+    fn to_json(&self) -> String {
+        self.timestamp_millis().to_string()
+    }
+}`The compiler looks at this and sees: `ToJson` is foreign, `Uuid` and `DateTime` are foreign, but `MyApp` is local to your crate. No other crate can write a conflicting implementation using your `MyApp`, so global coherence is completely safe. It compiles right away.You can think of this conversion setup as a web of relationships, with your local `MyApp` type as its root. A handy way to picture it is **a bunch of grapes, where `MyApp` is the stem**. Once you grab that stem, it doesn't matter how many third-party types hang off it (`Uuid`, `Url`, `DateTime`, `HashMap`, and so on). You lift the whole bunch at once, and the compiler accepts all of them as local implementations.Better yet, you can define more than one stem in the same project. For instance, your HTTP API layer can use `ApiCtx` to format timestamps as strings, while an internal RPC layer uses `RpcCtx` to format them as integer timestamps. Both sets of rules live under separate contexts, completely isolated at compile time, with zero conflict.One detail to watch out for: the local type has to be a real, newly defined type. Creating a `type` alias for a foreign type will not work.The Position of the Local Type MattersAt this point, you might think that dropping a local type `MyApp` anywhere into a trait's generic list solves the Orphan Rule for good. Most of the time, it does. But if your trait has more than one generic parameter, or if you want to write a generic `impl`, there is an ordering restriction that is easy to trip over.When the compiler runs its Orphan Rule check, it scans the types in a fixed order: **first the `Self` type, then the trait's 1st generic parameter, then the 2nd, and so on**. The rule comes down to one sentence: **no bare generic type parameter `T` may appear before the first local type.**Code makes this clearest. Suppose an external crate defines `ForeignTrait<A, B>` and `ForeignType`, and you define `MyApp` locally:`// ✅ Allowed: scans ForeignType, then hits local MyApp first; the trailing T is unrestricted
+impl<T> ForeignTrait<MyApp, T> for ForeignType {}
 
-I sent an early draft of this article to [another friend](https://clazite.pages.dev/), who happens to be Vietnamese, and he told me there’s five casino spam sites ahead of me, which I already knew because I’m Faviconese.
-I have the most popular personal website on .cab,<sup>[3](https://jack.cab/blog/siterate.html#user-content-fn-rankings)</sup> but that’s probably because I have the only personal website on .cab.
+// ❌ Error: hits a bare T before seeing MyApp
+impl<T> ForeignTrait<T, MyApp> for ForeignType {}
 
-I try some other TLDs. Rebane has the #1 .horse, synth.download is the 11th .download, whatever.
+// ❌ Error: hits a bare T right away in Self, before MyApp gets a chance
+impl<T> ForeignTrait<MyApp, String> for T {}`The only word to pay attention to here is "bare". In Rust terminology, this is called an **uncovered type parameter**. A plain `T` is uncovered. If it is wrapped inside a non-fundamental concrete type like `Vec<T>` (built-in fundamental types like `&T` and `Box<T>` do not count), it is no longer uncovered, so it will not block a local `MyApp` that comes after it:`// ✅ Allowed: T is covered by Vec, so it is not an uncovered type parameter
+impl<T> ForeignTrait<Vec<T>, MyApp> for ForeignType {}`From a library author's perspective, this means it is not enough to just add a generic slot; you also need to put it in the right place. If your trait has multiple generic parameters and there is no strong reason otherwise, **put the context `Ctx` in the first type parameter position**. That way, downstream users writing generic implementations can avoid most of the surprising Orphan Rule errors.A Truly Standalone `models` CrateOnce this mechanism clicks, you will see that it also solves a stubborn architectural headache in larger Rust codebases.As a project grows, it usually gets split into a Cargo workspace: maybe an API gateway crate, a few business service crates, and a background worker crate. These modules often share the same data structures, so the natural move is to pull those structs out into a standalone `models` crate.Traditionally, doing this in Rust is painful. Suppose `models` defines a `Product` struct with `Uuid`, `Url`, and `DateTime` fields. If your serialization library or ORM expects those field types to already implement its traits inside `models`, you are left with two bad options:Wrap everything in NewTypes inside `models`, and pull in the serialization library, database driver, and other heavy dependencies along with them. A crate that was supposed to hold plain data structures ends up with the heaviest dependency tree in the workspace.Give up on splitting it out, and dump models and business logic into the same crate. It saves time early on, but dependency boundaries and compile times get harder to manage as the project grows.With the generic `Ctx` parameter, that knot comes untied. Inside your standalone `models` crate, you just define your structs with native types:`// crate: models
+pub struct Product {
+    pub id: uuid::Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}`Then you write a generic implementation for `Product` **open to any `Ctx`** (or let a derive macro generate it):`impl<Ctx> ToJson<Ctx> for Product
+    where
+        uuid::Uuid: ToJson<Ctx>,
+        chrono::DateTime<chrono::Utc>: ToJson<Ctx> {
+    fn to_json(&self) -> String {
+        format!(
+            "{{\"id\":{},\"created_at\":{}}}",
+            ToJson::<Ctx>::to_json(&self.id),
+            ToJson::<Ctx>::to_json(&self.created_at),
+        )
+    }
+}`Notice the subtle part here: **inside the `models` crate, `Uuid` and `DateTime` do not implement `ToJson` yet, and this code still compiles.**That is because `models` is only declaring a deferred contract: "whoever uses this later, as long as your context `Ctx` knows how to handle `Uuid` and `DateTime`, `Product` automatically supports `ToJson` under your context." As a result, `models` stays completely lightweight, carries no concrete conversion logic, and compiles very fast. The actual conversions are deferred to the downstream service crates, where each service hooks up what it needs using its own local context.For large workspaces, this keeps dependency boundaries clean. Models can evolve on their own, while different services remain free to pick whatever storage format or API representation they need.Real-World Example: How This Works in KovaThe `ToJson` snippet above is as minimal as it gets. Does this idea still hold up when you bring it into a real, more complex project?When building my own Rust ORM, **[Kova](https://github.com/edvong/kova)**, I applied this pattern across the entire type system. It is a good concrete example of how this plays out in practice.ORMs are where the Orphan Rule hurts the most. A single table often mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types. Kova's core `Encode` and `Decode` traits use the exact generic slot design we just walked through:`pub trait Encode<'a, X = ()> {
+    fn encode(self) -> Result<Value<'a>>;
+}
 
-## Popular Webpages In *.net
+pub trait Decode<X = ()>: Sized {
+    fn decode(value: Value<'_>) -> Result<Self>;
+}`Because Kova hands the extension point to the user, it only needs built-in support for basic database primitives: integers, floats, booleans, strings, and byte arrays. Its `Cargo.toml` does not have to maintain a pile of optional dependencies and feature flags for `uuid`, `chrono`, `jiff`, `url`, and so on.In a real application, the workflow looks just like the earlier example.First, define your table structs with native types in a standalone `models` crate and add `#[derive(Model)]`:`// crate: models (no database driver or codec code needed)
+#[derive(Model)]
+pub struct Product {
+    pub id: Uuid,
+    pub price: Decimal,
+    pub vendor_url: Url,
+    pub created_at: DateTime<Utc>,
+}``#[derive(Model)]` expands into an open contract like `impl<X> Model<Engine, X> for Product where ...`, so `models` compiles completely on its own without tying itself to any concrete codec implementation.Next, in your downstream service crate, define a local marker struct `pub struct AppCodec;` and implement zero-copy conversions matching your storage layout:`pub struct AppCodec;
 
-| Webpage | Rank |
-| --- | --- |
-| ![](https://www.google.com/s2/favicons?domain_url=http://sourceforge.net) [sourceforge.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 83 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://cpanel.net) [cpanel.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 87 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://researchgate.net) [researchgate.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 103 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://php.net) [php.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 106 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://launchpad.net) [launchpad.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 109 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://bugs.launchpad.net) [bugs.launchpad.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 128 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://cloudfront.net) [cloudfront.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 152 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://behance.net) [behance.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 196 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://slideshare.net) [slideshare.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 204 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://themeforest.net) [themeforest.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 333 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://threads.net) [threads.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 388 |
-| [w*****s.net](https://windows.sucks.win) | 432 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://azurewebsites.net) [azurewebsites.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 532 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://doubleclick.net) [doubleclick.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 579 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://earthlink.net) [earthlink.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 626 |
+// Store Uuid as 16 raw bytes, borrowing directly with zero copies
+impl<'a, 'b: 'a> Encode<'a, AppCodec> for &'b Uuid {
+    fn encode(self) -> Result<Value<'a>> {
+        Ok(Value::Blob(Cow::Borrowed(self.as_bytes())))
+    }
+}
 
-Redacted? I hover over it and discover it goes to `windows.net.siterate.org`.<sup>[4](https://jack.cab/blog/siterate.html#user-content-fn-resolve)</sup> Figuring out the pattern of redactions is not the topic of this article.
+// Store DateTime<Utc> as an integer millisecond timestamp
+impl<'a> Encode<'a, AppCodec> for DateTime<Utc> {
+    fn encode(self) -> Result<Value<'a>> {
+        Ok(Value::Int8(self.timestamp_millis()))
+    }
+}`Finally, switch the client's context marker when you need it:`// Default client using the () codec
+let client = Options::from(conn_str).build()?;
 
-I try .com.
+// Switch to the local AppCodec at zero runtime cost
+let client = client.codec::<AppCodec>();`Switching the type carries zero runtime overhead; under the hood, it only swaps a `PhantomData` marker on `Client` from `()` to `AppCodec`. And while building Kova, another nice benefit showed up: once you have a local type like `AppCodec`, you can attach much more to it than just encoding and decoding.For example, suppose you have implemented `Encode` for `url::Url` in an ORM. If you still can't run `LIKE` queries on a `Url` column, or compare a `Url` column directly against a `&str`, that type still feels second-class in queries.So Kova puts the same generic extension slot on its SQL capability traits and type compatibility rules, such as `CanString<X>`, `CanMath<X>`, and `Compatible<Target, X>`. Users can add a couple of short declarations under their own `AppCodec`:`// Give Url string capabilities (enabling methods like `like` and `ilike`)
+impl CanString<AppCodec> for Url {}
 
-## Popular Webpages In *.com
-
-| Webpage | Rank |
-| --- | --- |
-| ![](https://www.google.com/s2/favicons?domain_url=http://google.com) [google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 1 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://facebook.com) [facebook.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 2 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://youtube.com) [youtube.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 3 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://instagram.com) [instagram.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 4 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://linkedin.com) [linkedin.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 5 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://twitter.com) [twitter.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 6 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://apple.com) [apple.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 7 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://w2rt6byl5nf1opmc-a.com) [w2rt6byl5nf1opmc-a.com](https://www.youtube.com/watch?v=l3eww1dnd0k) what the fuck | 8 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://googletagmanager.com) [googletagmanager.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 9 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://microsoft.com) [microsoft.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 10 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://github.com) [github.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 11 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://play.google.com) [play.google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 12 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://apps.apple.com) [apps.apple.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 14 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://x.com) [x.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 16 |
-| ![](https://www.google.com/s2/favicons?domain_url=http://maps.google.com) [maps.google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 21 |
-
-**What the fuck????**
-
-I visited this domain (two days after it was registered, more on that in a second) and Firefox gave me the , dnsNotFound.
-To this day it doesn’t resolve.
-
-I do a web search of “w2rt6byl5nf1opmc-a.com” and I see references to the [Majestic Million](https://majestic.com/reports/majestic-million), a name I haven’t heard in ages. Sure enough, that’s what siterate.org uses:
-
-| Position | Domain | Referring Subnets | Referring IPs |
-| --- | --- | --- | --- |
-| 1 | [google.com](https://majestic.com/reports/site-explorer?q=google.com&IndexDataSource=F) | 504,763 61 ![](https://majestic.com/static/images/icons/arrow_up.png) | 2,177,943 673 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 2 | [facebook.com](https://majestic.com/reports/site-explorer?q=facebook.com&IndexDataSource=F) | 463,877 178 ![](https://majestic.com/static/images/icons/arrow_down.png) | 2,143,213 1,688 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 3 | [youtube.com](https://majestic.com/reports/site-explorer?q=youtube.com&IndexDataSource=F) | 421,041 31 ![](https://majestic.com/static/images/icons/arrow_down.png) | 1,760,838 1,323 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 4 | [instagram.com](https://majestic.com/reports/site-explorer?q=instagram.com&IndexDataSource=F) | 392,625 92 ![](https://majestic.com/static/images/icons/arrow_up.png) | 1,739,231 1,295 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 5 | [linkedin.com](https://majestic.com/reports/site-explorer?q=linkedin.com&IndexDataSource=F) | 353,504 27 ![](https://majestic.com/static/images/icons/arrow_up.png) | 1,372,621 976 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 6 | [twitter.com](https://majestic.com/reports/site-explorer?q=twitter.com&IndexDataSource=F) | 352,472 168 ![](https://majestic.com/static/images/icons/arrow_down.png) | 1,352,034 1,413 ![](https://majestic.com/static/images/icons/arrow_down.png) |
-| 7 | [apple.com](https://majestic.com/reports/site-explorer?q=apple.com&IndexDataSource=F) | 283,697 290 ![](https://majestic.com/static/images/icons/arrow_up.png) | 845,882 607 ![](https://majestic.com/static/images/icons/arrow_up.png) |
-| 8 | [w2rt6byl5nf1opmc-a.com](https://majestic.com/reports/site-explorer?q=w2rt6byl5nf1opmc-a.com&IndexDataSource=F) | 274,833 961 ![](https://majestic.com/static/images/icons/arrow_up.png) | 853,298 4,759 ![](https://majestic.com/static/images/icons/arrow_up.png) |
-| 80 | [ailawandorder.com](https://majestic.com/reports/site-explorer?q=ailawandorder.com&IndexDataSource=F) | 72,898 34 ![](https://majestic.com/static/images/icons/arrow_down.png) | 154,976 66 ![](https://majestic.com/static/images/icons/arrow_up.png) |
-
-The Majestic Million ranks domains based on the number of different subnets linking to them.<sup>[5](https://jack.cab/blog/siterate.html#user-content-fn-cf)</sup> This domain is the fastest growing in the top 100.
-
-Another, maybe unrelated anomaly I saw is ailawandorder.com (registered in 2023) at rank 80, whose “About Us” page says its CEO is serving as a Board Member at Majestic.
-This made me check rank 800 in case there was a pattern, and no, there isn’t, that’s nsw.gov.au.
-
-Before I got rate limited from Majestic, I opened Site Explorer, and it told me w2rt6byl5nf1opmc-a.com has 241,085,378 nofollow backlinks and 6 follow backlinks split across 5,163,708 referring domains.
-Checking Ahrefs, I see just [53 backlinks](https://ahrefs.com/backlink-checker/?input=w2rt6byl5nf1opmc-a.com&mode=subdomains); they read like the ones I’ve been getting since [The Article](https://jack.cab/blog/every-firefox-extension) fell off.
-
-All the backlinks on Majestic are “fresh”, which means in the last 120 days. In fact, the domain was bought (not by me 💔) for the first time (according to Certificate Transparency) on November 11, *after* most of the backlinks.
-I found [an AI-generated PR from 2 weeks ago](https://github.com/zephium-browser/Zephium/pull/385) referencing the domain, and Tranco has data from October 5.
-
-Majestic has indexed 1,267 pages on this domain and crawled 27.
-The site isn’t on the Wayback Machine so I can’t collect its pages.
-
-In the Anchor Text table, the link count adds up to nine. There isn’t an “other” section. Are the remaining 240 million links images? No, they aren’t, it says the links are 100% TextLinks.
-
-Then I downloaded Majestic Million myself and searched for the domain.
-There were six subdomains.
-
-- 5721d0cd26c13f745e1b368a2b5dfb0c.w2rt6byl5nf1opmc-a.com, rank 157
-- c0e3930fedc480e093a7bcad1a83c8a8.w2rt6byl5nf1opmc-a.com, rank 424
-- 8628e302afeb346d191342ca114df068.w2rt6byl5nf1opmc-a.com, rank 554
-- 2b1774347fbd085c628179dd339ddd26.w2rt6byl5nf1opmc-a.com, rank 822
-- e62f444581ce540d3cf5ac627b37c501.w2rt6byl5nf1opmc-a.com, rank 1,111
-- 56aa73e7edd6f4e1fd3975b8b03761c0.w2rt6byl5nf1opmc-a.com, rank 36,933
-
-For comparison, jack.cab, which you’ve clearly heard of, is rank 804,163. What the fuck is going on?
-
-By the way, w2rt6byl5nf1opmc-a.com is at rank 38 on Tranco, which was designed to protect against this but still uses Majestic data.
-
-## <del>Theories</del>
-
-<del>I could probably figure out what’s happening here in 30 seconds by buying a Majestic subscription but I’m lazy.</del>
-
-- *Copyright trap*: maybe it’s fake, injected into the list by Majestic so they can discover who’s using their list. Could w2rt6byl5nf1opmc-a.com and ailawandorder.com be in the top 100 for this reason? Probably not, because if they cared, they’d relicense the list away from CC-BY. Also, the domains are ranking higher in Majestic over time instead of staying static.
-- *Majestic got hacked*, and the hackers for some reason decided to tamper with the DB like this. **No.** [Are you stupid, are you dumb, are you Dario Amodei, are you all three](https://www.tiktok.com/@baghdxddy/video/7694814395293027615)‽
-- *Some loophole/gaming the rankings*: <del>Maybe “subnets” is counted in a stupid way for [IPv6](https://github.com/blechschmidt/freebind). Maybe the millions of domains are ip6.arpa.</del> Majestic counts Class C subnets.
-- *A bunch of hacked websites linking to the domain*: Seems unlikely, considering I’m unable to find a single backlink in the wild that wouldn’t be there for say, my website, and Ahrefs only has 53 backlinks for this domain. They could be [cloaking](https://en.wikipedia.org/wiki/Cloaking).
-
-## Update (November 16): Answer!
-
-> Love the article! I work for Majestic
->
-> Great spot.
->
-> the answer:
->
-> Some internal experimentation. Choose a domain, make it esoteric, do some experiments. However, looks like we forgot to add a filter to avoid reporting it. We will sort that…
-
-Moral of the story: don’t test in production.
-
-> ## AI disclosure
->
-> All prose written by me, with no AI output, including but not limited to agents, chatbots, inline completions, or keyboard autocomplete. I choose not to be a meat proxy.
->
-> I used a chatbot to convert four screenshots to HTML + CSS, to make the article responsive:
->
-> - Removed CSS from `http://siterate.org/css/commons.css` that wasn’t being used in its tables. Then I handcrafted artisan jackslop: I copied and pasted the tables from the site, changed the [domain].siterank.org links to easter eggs since they don’t resolve, and made the favicons have a stable size and load lazily. For the .com ranking, a friend gave me the idea of annotating the table, which I too implemented by hand.
-> - Generated a Discord message component from scratch, using the message’s HTML and computed styles as context. I’m not too satisfied with the result. Besides the corrections I made in the conversation, I wrapped it in a background, then manually added Discord’s .headerText { margin-inline-end: .25rem }, then changed the App tag from height: .9375em to height: 1.1em because it felt wrong.
->
-> An early draft of this article joked about siterate.org being the first site I saw imitating Bootstrap without using Bootstrap, but during the embed process, the chatbot told me commons.css was *actually* bundled Bootstrap, so I removed that joke.
-
-## Footnotes
-
-1. As opposed to clicking it, because I was on a phone at the time [↩](https://jack.cab/blog/siterate.html#user-content-fnref-phone)
-2. I forgot when I last updated Firefox. I mean, I know now because I updated it after I wrote this sentence. My phone hadn’t done it automatically because I had low storage. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-fx)
-3. On both Majestic and Tranco. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-rankings)
-4. Which doesn’t resolve. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-resolve)
-5. Pretty sure ~20% of websites are behind the same set of Cloudflare IPs, so I don’t know how well this works now. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-cf)
+// Allow passing &str directly to a Url column without calling Url::parse() every time
+impl<'a> Compatible<Static<Url>, AppCodec> for Static<&'a str> {}`With that in place, third-party types fit right into the ORM's DSL and behave no differently from built-in types:`client
+    .update::<Product>()
+    .set(Product::vendor_url.set("https://rust-lang.org"))
+    .filter(Product::id.eq(&target_uuid) & Product::vendor_url.ilike("https://%"))
+    .execute()
+    .await?;`Putting this design through a real codebase like Kova confirmed something practical: opening up type conversions and capabilities to a user-defined context does more than just get around the Orphan Rule on paper. Even in a complex framework, it keeps dependency boundaries clean, compile times fast, and day-to-day usage comfortable.Rust's Orphan Rule is not there to make life hard. It exists to prevent global implementation conflicts and stop crates from stepping on each other in the global namespace. Once you stop fighting for a "globally unique" implementation and instead leave a generic slot on the trait to scope uniqueness to a local context, bypassing the Orphan Rule takes no black magic at all. It is just a simple shift in perspective, yet it makes both library design and large workspace boundaries much cleaner.In the next post, I will talk about the problem that immediately follows this design: once your traits and query builders carry a generic context parameter, how do you avoid falling into generic type gymnastics and monomorphization bloat? That brings us to **boundary validation and type erasure**.

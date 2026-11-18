@@ -1,214 +1,135 @@
-Six months ago, I wrote an [SQLite-backed cache](https://alexwlchan.net/2026/sqlite-cache/) to speed up the build system for this site. A static site generator is an ideal candidate for [caching](https://en.wikipedia.org/wiki/Caching), because there are lots of steps that have deterministic behaviour and no side effects. On a site with hundreds of pages, even a few milliseconds per step adds up to a meaningful improvement.
+A squircle is a shape intermediate between a square and a circle.
+There is no single mathematical definition, rather there are a number of curves that fit this shape.
+All general squircles are parametrized, and can vary between circle and square.
 
-That first cache was fairly basic. It supported getting and setting strings, with a namespace for different functions, and not much else:
+Loading the interactive tester…
 
-```
-from mosaic.cache import SQLiteCache
+## Superellipse
 
-cache = SQLiteCache("example.db")
+The best known squircle is the superellipse, popularized by Piet Hein.
+Martin Gardner wrote a detailed narrative of its origin in a [Scientific American column](https://archive.org/details/mathematicalcarn00gard/page/240/mode/2up) in 1977.
+The text is replicated in [https://piethein.com/superellipse/](https://piethein.com/superellipse/) but that’s missing equations and figures.
 
-cache.set(namespace="fibonacci", key="10", value="55")
-print(cache.get(namespace="fibonacci", key="10"))
-```
+The superellipse has the formula $|x|^n + |y|^n = 1$ (we’ll use a unit radius for convenience).
+When $n=2$ it is a circle, and it approaches a square asymptotically as $n \rightarrow \infty$.
 
-This showed the value of a cache, but it provided cache *storage*, not cache *logic*. If I wanted to cache a function, I had to write per-function logic for saving values to the cache and retrieving them later. A lot of that code was tricky to test, and broken in subtle ways. I was so unsure of this code that I deleted the cache whenever I built the site for publication.
+## Measurement
 
-I wanted something better, so last week I wrote [funkycache](https://alexwlchan.net/projects/funkycache/), a new library that encapsulates all of my caching logic, and is much easier to use and test. It can store arbitrary Python objects as both inputs and outputs, and the interface is much simpler for the caller.
+There is no standard measurement for squircles.
+For superellipses, the exponent is the most common parameter.
+A good choice is the coordinates of the midpoint of the quadrant, assuming a unit radius; here $x$ and $y$ are equal.
+The conversion formula is simple and intuitive: $x = 0.5^{1/n}$.
+This measurement is called "gauge" in the interactive demo above, and is the primary parameter; with the exception of some unreachable regions of parameter space, it should be possible to compare different squircle variants with similar gauge.
 
-To cache a function, you create a `FunkyCache` instance and add a decorator to your function:
+## Flat-sided squircles
 
-```
-from funkycache import FunkyCache
+There are two basic approaches to squircle creation.
+One is a single analytic curve, where curvature reaches zero at the poles, but is otherwise nonzero.
+The other is mixing straight line segments with corners.
+A significant advantage of the latter approach is that it can adapt to rectangles of arbitrary aspect ratio without distorting the corner shape.
 
-cache = FunkyCache(storage="sqlite")
+## The Apple squircle shape
 
-@cache.register
-def expensive_function(arg1: str, arg2: int, arg3: date) -> tuple[str, date]:
-    ...
-```
+Squircles received renewed attention when Apple changed the icon shape from rounded rectangle to their own squircle in iOS 7 in 2013.
+There were several blog posts to analyze and recreate the shape.
+An early analysis suggested that it was a superellipse of exponent 5, but when people extracted the Béziers and looked more closely, that was found to be inaccurate.
+Rather, it’s a flat-sided squircle.
 
-This is modelled after [`functools.cache`](https://docs.python.org/3/library/functools.html#functools.cache) in the standard library. The output of the expensive function is written to an SQLite database, so it’s available after the Python process exits.
+For the raw Bézier path data of the Apple shape, the best source is the [PaintCode blog](https://www.paintcodeapp.com/blogpost/code-for-ios-7-rounded-rectangles).
+This blog correctly points out some bugs in that logic, and also has some details on behavior for oval rather than square aspect ratios.
 
-The cache tries to be smart about invalidations. If the source file containing `expensive_function` changes, the cache for that function is invalidated and will be rebuilt on the next call.
+The Apple shape has a number of flaws, including one extraneous straight line segment, and a lack of symmetry.
+However, those flaws are minor, and really only reveal themselves under close analysis.
 
-You can also specify a dependency on other files and static values, changes to which will also trigger a cache invalidation:
+The Apple shape has no additional parameter, so its variation is controlled entirely by the length of the flat side.
+With no flat side, it has a gauge fixed at 0.809.
 
-```
-from funkycache import FunkyCache
+An extremely detailed analysis of the Apple shape is in [The Art of Continuous Corners](https://tsuijunxi.github.io/en/2026/06/23/the-art-of-continuous-corners/).
 
-cache = FunkyCache(storage="sqlite")
+## The Figma squircle
 
-@cache.register(
-    files=["data/input.yml", "templates/example.html"],
-    values=[pygments.__version__],
-)
-def expensive_function(arg1: str, arg2: int, arg3: datetime) -> tuple[str, datetime]:
-    ...
-```
+Figma published a blog post, [Desperately Seeking Squircles](https://www.figma.com/blog/desperately-seeking-squircles/), with an analysis of the Apple squircle and their own approximation.
+It is influential because Figma is an important design tool, because their writeup was compelling, and because there are any number of open source implementations of it, mostly TypeScript/JavaScript.
 
-When writing funkycache, I wanted to spend a week thinking hard about caching logic, test it thoroughly, then not think about it again for months. You should be able to use funkycache without understanding how it works – but if you’d like to, that’s what I’ll explain in the rest of this post.
+- squircle-path-kit from msurguy
+- figma-squircle from phamfoo
+  - corner-smoothing from sanalabs (uses figma-squircle)
+  - squircle-js from bring-shrubbery (uses figma-squircle)
+- figma_squircle from aloisdeniel (Dart/Flutter)
+- Lisse from JaceThings
 
-If you’d like to try it yourself, funkycache is [on PyPI](https://pypi.org/project/funkycache/), and the source code is [on this website](https://alexwlchan.net/projects/funkycache/).
+The Figma blog contains a plot of the Béziers comprising a cleaned up version of iOS 7 rounded rectangle, revealing three Bézier segments per quadrant.
+It fixes the straight-line segment and the asymmetry, so is not an exact match.
+The middle segment is very close to an arc.
+The other segments are more problematic.
+They have zero curvature at the endpoints, so are G2 continuous with flat sides, but there is a curvature discontinuity with the middle (arc) section, and their curvature profile is not especially smooth.
+A reasonable guess is that it was drawn by hand to be approximately smooth.
 
-## Cache keys are function arguments, hashed and JSON-encoded
+Without a flat side, the Figma squircle is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.854.
+Gauges up to 1 are of course attainable by adding the flat side.
 
-### Getting a complete set of arguments for a function
+## Clothoid squircles
 
-The cache is meant for functions which always produce the same output for a given input, so the inputs are the cache key. When we [decorate a function](https://docs.python.org/3/library/functools.html#functools.wraps), we can see the arguments passed on each call:
+The Figma blog suggests “smoothed curvature profiles” which have a piecewise linear relationship between arc length and curvature.
+It then goes on to approximate them with cubic Bézier segments, but their approximation has fairly significant curvature discontinuities when joining to the circular arc.
+The clothoid squircle is worth describing explicitly, as it has G2 continuity (as opposed to G1 for the Figma approximation).
 
-```
-from functools import wraps
+The behavior is generally similar to the Figma variant.
+Without a flat side, it is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.790.
 
-def my_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        print({"args": args, "kwargs": kwargs})
-        return func(*args, **kwargs)
-    return wrapper
-```
+## The box decorations corner-shape spec
 
-This doesn’t account for different styles of calling the same function – for example, positional versus keyword arguments, or omitting or overriding default arguments.
+Squircles got a big boost as they’re now standardized in CSS, as the [corner-shape](https://www.w3.org/TR/css-borders-4/#propdef-corner-shape) property of the [box decorations spec](https://www.w3.org/TR/css-borders-4/).
+These specify real superellipse corners, with additional tweaks and support for animation.
 
-To get a complete, consistent set of arguments, I use the `inspect` module:
+### The Chromium superellipse approximation
 
-```
-import inspect
+While the CSS spec mandates the actual superellipse shape, practical implementations will generally use a Bézier approximation.
+A blog post, [The corner cases of implementing CSS corner-shape in Blink](https://developer.chrome.com/blog/implementing-corner-shape), gives an efficient closed-form approximation, with two Bézier segments per quadrant.
+This formula, determined using symbolic regression, is parametrized, and handles exponents 2 and above well.
+It is exact for placing the midpoint (this is part of the formula), so is well calibrated in that regard.
 
-sig = inspect.signature(func)
-bound = sig.bind(*args, **kwargs)
-bound.apply_defaults()
-cache_key = bound.arguments  # {"arg1": val1, "arg2": val2, ...}
-```
+### Apple-like behavior with the corner-shape spec
 
-This gives me a Python dictionary of the complete set of arguments to the function, which is the same regardless of the calling style.
+The early analysis of the Apple squircle shape as being approximately an exponent 5 superellipse was based on coarse shape only and didn't take into account its flat side.
+A much better match to the Apple shape is attainable using a superellipse with exponent 3 and a corresponding flat side length to match the gauge.
+This has G2 continuity and a similar curvature profile.
+This illustration was made using the Chromium approximation, so it should match the browser.
 
-### Converting the arguments to JSON
+![The Apple squircle beside a superellipse of exponent 3 with flat sides](https://linebender.org/wiki/curves/squircle/apple_vs_superellipse.svg)
 
-Python dictionaries aren’t hashable, so they can’t be used as the keys in dictionaries, nor can they be used as keys in SQLite databases. We need to serialise them as a string or byte sequence.
+Here's the CSS to accomplish the "close to Apple" squircle shape.
+Note that the parameter to the `superellipse()` function is the base-2 log of the exponent, so the value for an exponent of 3 is 1.585.
 
-I considered two options for this serialisation: [pickle](https://docs.python.org/3/library/pickle.html) and [JSON](https://docs.python.org/32/library/json.html). In my limited testing, JSON was faster than pickle, so that’s what I chose. Using JSON also gave me more flexibility for speeding up the serialisation.
-
-My initial serialisation was a naive `json.dumps` call, with a couple of options to ensure consistent ordering and handle types that the standard library doesn’t know how to encode:
-
-```
-json_key = json.dumps(cache_key, sort_keys=True, default=str)
-```
-
-When I started using funkycache, this encoding step quickly emerged as the slowest part, so I started “reducing” the arguments to make this step faster. This reduction included:
-
-- Recursively walking the function arguments and hashing large strings
-- Using Pydantic to convert Pydantic models and dataclasses into Python objects, rather than doing a string conversion
-- Refactoring my code so each function only takes a minimal set of required data
-
-These are all lossy transformations, but that’s fine for a cache *key* – we never need to retrieve the original value. It’s theoretically possible for different values to get a colliding hash key, but at my scale it’s unlikely. (A clean build of my site only uses 32,000 keys.)
-
-### Hashing for smaller keys
-
-The functions in my static site generator are processing things like the content of articles, so individual function arguments might be kilobytes in size. You can use multi-kilobytes keys with SQLite, but you probably shouldn’t – you take a performance hit for larger keys.
-
-I wrote [a small benchmark](https://alexwlchan.net/projects/funkycache/files/tests/bench_sqlite_storage.py) to compare three approaches: storing the JSON-encoded arguments directly, hashing them with MD5, and hashing them with [XXH64](https://xxhash.com/). The results are a wash for small key sizes, but for larger keys XXH64 is significantly faster, and MD5 is slower than storing the keys directly in SQLite:
-
-Based on this benchmark, funkycache hashes the JSON cache key with XXH64 before inserting it into SQLite.
-
-The xxHash class of hashing algorithms was a pleasant discovery for me during this project. They are explicitly designed to be fast, not cryptographically secure. Previously I’d used MD5 for this purpose, because it’s widely available and I conflated “weak” with “fast”. Actually running a benchmark revealed my mistake.
-
-## Cache values are JSON-encoded
-
-Serialising cache keys can be a one-way operation, but cached values need to be retrievable. For this, I’m using the `inspect` module to get the return type from the cached function, then handing the serialisation to Pydantic.
-
-```
-import inspect
-import pydantic
-
-# Get the return type of the function.
-sig = inspect.signature(func)
-return_type = sig.ret_annotation
-
-# Create a Pydantic type adapter
-adapter = TypeAdapter(return_type)
-
-# Serialise as JSON
-json_str = adapter.dumper_json(value)
-
-# Deserialise from JSON
-retrieved_value = adapter.validate_json(stored_value)
+```css
+.icon {
+  aspect-ratio: 1;
+  border-radius: 46.2%;
+  corner-shape: superellipse(1.585);
+}
 ```
 
-I use type hints and type annotations for all of my Python, so this information is guaranteed to be present. This wouldn’t work with untyped Python, but it’s good enough for me.
+## Continuity
 
-The alternative is using pickle, which can store arbitrary Python objects. I wouldn’t have to worry about the [security risks](https://docs.python.org/3/library/pickle.html#:~:text=The%20pickle%20module%20is%20not%20secure) because I’d only ever be pickling and unpickling trusted data, but I continued with JSON because I’m already using it for cache keys, and it’s easier to debug.
+A superellipse of exponent $n$ has continuity $G(\lceil n \rceil - 1)$.
+This includes the flat-sided variants, as, for exponent > 2, the endpoint of the quadrant has zero curvature.
+A perfect circle (and indeed, any even integer exponent) without flat sides is of course the exception, as it has an infinitely high order of continuity.
 
-### Caching lazy generators
+As a general observation, for visual smoothness, the shape should have G2 continuity.
+Of the variants discussed, only the clothoid and superellipse (for n > 2) have this property.
+The Chromium approximation comes close; it doesn't have zero curvature by construction when joining the flat part, but does at the corner join by symmetry (unlike the Figma approximation, which has an additional arc there).
 
-One of the functions I wanted to cache is a lazy generator, which was a little trickier.
+## Other squircles
 
-Using `functools.cache` will cache the generator *object*, so every call gets the same generator instance, and they all step together. This strikes me as potentially confusing:
+Quite a number of other curves can be pressed into service as squircles if need be.
 
-```
-import functools
+- The polynomial spiral (“spiro”) curve can do a reasonable flat-sided squircle with G2 continuity. See the “suitcase corners” section of [Raph's thesis](https://levien.com/phd/phd.html), figure 7.2.
+- Conic sections (hyperbolas). These approximate a sharp corner but are only G1 continuous (if flat sided).
+- Fernández-Guasti squircle, defined by $x^2 + y^2 - s^2x^2y^2 = 1$. This is used in engineering but likely not in graphic design.
+- The [Wikipedia page on squircles](https://en.wikipedia.org/wiki/Squircle) has a “periodic squircle” which has very similar behavior to the Fernández-Guasti one (they are visually near indistinguishable).
 
-@functools.cache
-def even_numbers():
-    for i in range(10):
-        yield i * 2
+## Related topics
 
-n1 = even_numbers()
-n2 = even_numbers()
-print(next(n1))  # 0
-print(next(n1))  # 2
-print(next(n2))  # 4
-```
+The offset curve of a squircle is not a squircle, but (a) it’s close, and (b) concentric squircles might be visually just as appealing or more so; for example a slightly rounded inner corner might look better than a sharp one if the curvature exceeds the stroke half-width.
 
-funkycache takes a different approach: it materialises the generator into a list, and stores that list. When it’s retrieved, the list is converted back into a generator by wrapping it with [`iter`](https://docs.python.org/3/builtins/functions.html#iter).
-
-To protect against unbounded memory use from a large or infinite generator, there’s a soft memory budget. If the materialised list exceeds this budget, I stop gathering the output in the list and don’t save anything to the cache. The list and any subsequently generated items are passed directly from the original function to the caller.
-
-## Tracking dependencies
-
-### Tracking dependent files
-
-Some of the functions in my static site generator depend on the contents of template files. When those files change, I want to invalidate the cache and rebuild the pages that use those templates.
-
-When you register a function with funkycache, you can specify a list of files or folders that it depends on:
-
-```
-@cache.register(files=["mosaic/text", "templates"])
-def render_html(content: str, content_vars: dict[str, Any],) -> str:
-    ...
-```
-
-funkycache will read the contents of each of those files, and include them in the cache key. When a file changes, it re-evaluates the list of files and decides whether to keep or invalidate the cache.
-
-I decided not to put any file change tracking in funkycache itself. I already [have code for that](https://alexwlchan.net/2026/watch-files-on-macos/), and I wanted to keep this project small and focused.
-
-### Tracking dependent values
-
-A function’s cache can also be based on static values. I use this to include the version of important libraries, so the cache gets invalidated when I update the library. Here’s a short example:
-
-```
-import pygments
-
-@cache.register(values=[pygments.__version__])
-def apply_syntax_highlighting(src: str, lang: str) -> str:
-    ...
-```
-
-## Reactive aspirations
-
-This project started because I was thinking about [reactive programming](https://en.wikipedia.org/wiki/Reactive_programming).
-
-Reactive programming is a bit like using a spreadsheet. You have input cells where you enter data, and other cells that read that data and automatically update when the inputs change. Those cells can be inputs to other cells, and so on.
-
-Imagine building a static site: your Markdown files act as input cells, and your rendered HTML pages are the dependent cells. Your tasks form a [directed acyclic graph (DAG)](https://en.wikipedia.org/wiki/Directed_acyclic_graph), and updates propagate through the graph.
-
-For example, in the diagram above, when `article1.md` changes, the system knows it needs to rebuild `article1.html` and ripples that update to `list_of_articles.html`. But because there’s been no change in their inputs, the tasks to render articles 2 and 3 don’t run at all.
-
-When done correctly, this can be a very efficient style of programming, because steps only ever run if there’s been a change in their inputs.
-
-There are tools that will do this for you, like [Apache Airflow](https://airflow.apache.org/), but I wanted to build my own. My website is a sandbox where I like building things myself as a learning exercise, rather than using somebody else’s library.
-
-I spent several weeks trying to design an API, but I couldn’t come up with something satisfactory. However, I experimented with a decorator-based API, and that led me to build funkycache, which delivers a lot of the benefits with less fo the complexity.
-
-Building my website with a warm cache now takes about half a second, and a significant chunk of that time is spent traversing the file system for Markdown files. I have ideas for speeding up that step as well, but that’s a task for another day.
-
-funkycache is only [a few hundred lines of code](https://alexwlchan.net/projects/funkycache/), including tests. If this problem sounds interesting, I encourage you to read it, even if it’s not a library you expect to use.
+The [blurred rounded rectangle approximation](https://raphlinus.github.io/graphics/2020/04/21/blurred-rounded-rects.html) is based on applying shading to a superellipse; each iso-line is in fact a superellipse.

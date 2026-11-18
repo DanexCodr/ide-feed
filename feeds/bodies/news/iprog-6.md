@@ -1,48 +1,105 @@
-This year the Percona Live conference took place from September 9-11 in Amsterdam. We provide an overview of this year's event. Percona Live is a technical conference focused on open source database technologies, data infrastructure and community collaboration among database engineers, DBAs, operators and architects. The event covers the full spectrum of open source database ecosystems,including MySQL, PostgreSQL, MongoDB, MariaDB, Valkey and columnar/analytical engines like ClickHouse and DuckDB. This year the conference focused on several key subjects: **1\. AI and Vector search in data infrastructure**
+Get up to speed on stuff that affects with our weekly digest. It summarizes the week's news together and includes new titles selected for our Book Watch Archive. One of this week's featured articles is an extract from **Programming the ESP32 RISC V in MicroPython** showing you how to work with DC motors**.** The other looks at LEO, a computer that celebrates its 75th anniversary this month. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **November 5 - 11, 2026** | 
 
-  * AI driven operations and autonomous DBAs: Presenters explored the shift toward autonomous database management, such as DBTune's framework for autonomous PostgreSQL and Sixta's AI DBA and examined how AI agents are changing workload patterns, data volume and serverless/ephemeral database requirements.  
+### Featured Articles  
 
-  * Vector search across engines: Sessions highlighted native and self hosted vector search capabilities across open source databases (including PostgreSQL, MongoDB, Valkey, MySQL and MariaDB), featured in panels like The Vector Search Quintet and announcements like Percona Search for MongoDB.
+---  
 
-**2\. Kubernetes, Cloud Native and private DBaaS**
+* * *
 
-  * Database operators at scale: Engineers shared real world architecture patterns, trade offs and lessons from operating 40+ production databases per cluster on Kubernetes, including automated operator tuning and memory/swap management under extreme load.  
+[ ESP32 RISC-V In MicroPython: DC Motors ](<https://www.i-programmer.info/programming/148-hardware/19277-esp32-risc-v-in-micropython-dc-motors.html>)   
+11 Nov  |  Harry Fairhead and Mike James    
+[ ](<https://www.i-programmer.info/programming/148-hardware/19277-esp32-risc-v-in-micropython-dc-motors.html>) Motors are fundamental to IoT probjects This extract from **Programming the ESP32 RISC V in MicroPython,** part of the I Programmer Library, shows you how to work with DC motors. <ASIN:B0GX2TRN6N>  
 
-  * Private DBaaS platforms: Talks evaluated multi database control plane solutions such as Open Everest to manage MySQL, PostgreSQL and MongoDB on Kubernetes as a private DBaaS without vendor lock in.
+* * *
 
-**3\. Open source governance, sovereignty and licensing**
+[ LEO - Lyons Electronic Office ](<https://www.i-programmer.info/history/9-machines/670-leo-lyons-electonic-office.html>)   
+08 Nov  |  Historian    
+[ ](<https://www.i-programmer.info/history/9-machines/670-leo-lyons-electonic-office.html>) One of the most unlikely events in the history of computing is that a UK company, J Lyons and Co, better known for its tea rooms, can claim the first computer designed specifically for business use. The Lyons Electronic Office may not have been a revolutionary machine as far as its computational and logic circuitry was concerned, but it tranformed how businesses operated.  
 
-  * Licensing and Digital Sovereignty: Keynotes addressed changing open source license models, community governance, data sovereignty demands across Europe and building long term trust in open source software.  
+### Programming News and Views  
 
-  * Upstream first and community contributions: Sessions highlighted the importance of upstream contributions (such as AWS's Upstream First initiatives ), community driven projects like reviving the Percona Toolkit and maintaining corporate open source responsibility.
+* * *
 
-**4\. Engine innovations and technical tracks**
+[ The C++ 26 Draft Rejected By ISO ](<https://www.i-programmer.info/news/184-cc/19278-the-c-26-draft-rejected-by-iso.html>)   
+11 Nov  |  Mike James    
+[ ](<https://www.i-programmer.info/news/184-cc/19278-the-c-26-draft-rejected-by-iso.html>) This is something that has never happened before — an ISO draft for C++ 26 has been rejected by a vote of the ISO committee. The divisive issue is a fundamental feature supposed to make C++ safe - contracts. Something the creator of C++ really doesn't like either.  
 
-  * PostgreSQL: Deep dives covered new capabilities in PostgreSQL 19 (including asynchronous I/O improvements, visibility map updates, autovacuum scoring and system observability, performance tuning parameters (random_page_cost, fill factor) and OAuth implementation.  
+* * *
 
-  * MySQL and extensions: Updates included Oracle's initiative to open MySQL innovation, VillageSQL's extension framework for porting PostgreSQL extensions to MySQL using Rust, ProxySQL ecosystem enhancements and binary log server topology management.  
+[ Go and Dart Break Into TIOBE Index ](<https://www.i-programmer.info/news/98-languages/19274-go-and-dart-break-into-tiobe-index.html>)   
+11 Nov  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/98-languages/19274-go-and-dart-break-into-tiobe-index.html>) In November's edition of the TIOBE Index, Rust has dropped out of Top 10, losing its place to Go. At the same time, another Google-originated language, Dart, has entered the top 20 ousting Julia after only one month. At the top of the table, Java is back in the top 3, after over three years in 4th position.  
 
-  * MongoDB, Valkey and MariaDB: Presentations covered agentic era features and zero downtime migrations in MongoDB, Valkey in memory key value operations and Kvrocks on disk compatibility and MariaDB 11.8 protocol security and server plugin extensions.  
+* * *
 
-  * Columnar engines and benchmarking: Analytics tracks showcased columnstore innovations (ClickHouse, DuckDB and VictoriaMetrics for petabyte scale logs) alongside open source database benchmarking standards using HammerDB.
+[ PyTorch 2.15 Adds Flight Recorder ](<https://www.i-programmer.info/news/105-artificial-intelligence/19275-pytorch-215-adds-flight-recorder.html>)   
+10 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19275-pytorch-215-adds-flight-recorder.html>) PyTorch 2.15 has been released, with improvements including the promotion of its rewritten NCCL backend to default status, a new flight recorder for hang diagnostics, and improved hardware support.  
 
-**5\. Observability, reliability and migrations**
+* * *
 
-  * Modern Observability: Discussions focused on real time query analytics in Percona Monitoring and Management (PMM), OpenTelemetry integration and proactive failure detection before incidents occur.  
+[ Keep The Why - Better Decisions For Your Agents ](<https://www.i-programmer.info/news/105-artificial-intelligence/19273-keep-the-why-better-decisions-for-your-agents.html>)   
+10 Nov  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19273-keep-the-why-better-decisions-for-your-agents.html>) The Keep the Why project is a comprehensive framework and coding agent skill designed to capture, structure and preserve the reasoning behind software development decisions.  
 
-  * Migration case studies: Practical war stories detailed complex, zero downtime migrations,such as moving an 800 TB / 6,000 tenant SaaS platform from Oracle to PostgreSQL and transitioning banking workloads from Hadoop NoSQL to MongoDB.
+* * *
 
-Would want to be there but missed it? No worries as you can now watch on demand since the sessions are now available online. Because there's a lot of material to go through, we did a bit of digging to suggest the best to watch first. As such, the following three talks provided particularly unique, contrarian, or highly innovative perspectives compared to the rest of the conference program. VIDEO **1\. "SQL injection is a thing of the past…. and other lies we tell ourselves" , Mackenzie Jackson**  
-The traditional myth is that SQL injection is an outdated problem that was technically solved in 1998 with prepared statements and parameterization. However despite being "solved," initial security scans show that 10% to 20% of applications still contain active SQL injection vulnerabilities. More critically, Jackson highlights how the rise of AI agents introduces an entirely new threat vector: when AI models generate raw SQL queries dynamically from user prompts, standard parameterization no longer offers protection against prompt injection attacks. **2\. "When 3,951x Is Not a Speedup: Measurement Integrity in Database Benchmarking" , Nima Torabi and Vitalii Akimov**  
-If a synthetic benchmark demonstrates a nearly 4,000x performance improvement in dev/test, the optimization will translate to massive gains in production. Torabi and Akimov demonstrate how a 4,000x reported speedup can produce zero actual speedup in production. This measurement illusion happens when test benchmarks warm up on rare parameter values,causing PostgreSQL to generate optimal custom index plans,whereas production queries with uniform or skewed "whale" data fall back to generic sequential scans. **3\. "Tuning PostgreSQL for performance: the role of random_page_cost" , Fernando Cargos**  
-On modern SSD and NVMe storage, DBAs should aggressively drop PostgreSQL’s default random_page_cost from 4.0 down to 1.1 or 1.0 to reflect faster random read speeds. Citing empirical tests, Cargos points out that random page access on SSDs remains 15x to 25x more expensive than sequential reads. Blindly lowering random_page_cost to 1.1 deceives the query planner into forcing inefficient index scans over faster sequential scans when fetching large result sets, ultimately leading to significant performance regressions. While these were the most interesting talks, that's not all as there were many other great sessions. So, take your time and delve into the conference by going through its YouTube playlist. In the end, Percona Live Amsterdam 2026 proved to be highly worthwhile, offering database professionals exceptional technical depth, practical real world solutions and valuable community networking across three days.
+[ Apache Wicket 11 Rebuilds Encryption ](<https://www.i-programmer.info/news/80-java/19271-apache-wicket-11-rebuilds-encryption.html>)   
+09 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/80-java/19271-apache-wicket-11-rebuilds-encryption.html>) Apache Wicket 11 has been released. This is a major new version that lets an application drop jQuery entirely, uses less memory and time per component, moves to Java 21 and Jakarta EE 11, and rebuilds Wicket’s encryption on a single, authenticated API.  
 
-#### More Information
+* * *
 
-[Percona Live 2026 Youtube playlist](<https://www.youtube.com/watch?v=UV7khoro3XQ&list=PLOgsvlaOXz2c>)
+[ A Cable-Driven Robot That Tidies Up ](<https://www.i-programmer.info/news/169-robotics/19270-a-cable-driven-robot-that-tidies-up.html>)   
+08 Nov  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/169-robotics/19270-a-cable-driven-robot-that-tidies-up.html>) Meet Stringman, a cable-driven robot designed for domestic settings. Working from above, a gripper picks up objects from floors too cluttered for any wheeled or legged robot to navigate and effectively results in a self-tidying room.  
 
-#### Related Articles
+* * *
 
-[What happened At PGconf.dev 2026](<https://www.i-programmer.info/news/99-professional/19126-what-happened-at-pgconfdev-2026.html>)  
+[ Microsoft Introduces Pro Badges ](<https://www.i-programmer.info/news/150-training-a-education/19269-microsoft-introduces-pro-badges.html>)   
+06 Nov  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/150-training-a-education/19269-microsoft-introduces-pro-badges.html>) GitHub and Microsoft are introducing a new way to validate technical skills directly through everyday product usage. Starting with GitHub Copilot, the Verified Proficiency Framework recognizes real-world skills demonstrated in everyday development workflows, awarding a Pro Badge to those who qualify.  
 
-__ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+* * *
+
+[ Can AI-Generated Pop Stars Get Pregnant? ](<https://www.i-programmer.info/news/105-artificial-intelligence/19268-can-ai-generated-pop-stars-get-pregnant.html>)   
+06 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19268-can-ai-generated-pop-stars-get-pregnant.html>) Here's a philosophical question for you. Can a pop star generated by AI become pregnant, and if they can, what is the politically correct response? I have to admit that back in the dark ages of my Computer Science degree, while sitting through the module on social implications of computing, this wasn't a topic we were asked to debate, but there you go, times change.  
+
+* * *
+
+[ Superplane 1.0 Released ](<https://www.i-programmer.info/news/105-artificial-intelligence/19266-superplane-10-released.html>)   
+05 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19266-superplane-10-released.html>) SuperPlane is an open source tool that automates routine AI engineering work and coordinates AI coding agents. It gives a way to create a shared, repeatable workflow around coding agents, from ticket to verified pull request.  
+
+* * *
+
+[ Edera Addresses AI Agent Security ](<https://www.i-programmer.info/news/80-java/19265-edera-addresses-ai-agent-security.html>)   
+05 Nov  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/80-java/19265-edera-addresses-ai-agent-security.html>) Edera, a company that specializes in securing software containers, has announced a new approach to securing autonomous AI agents. Called Object Capability Bounded Authority, it enables enterprises to grant agents permission to perform specific actions without exposing the credentials behind them.  
+
+### Book Watch  
+
+* * *
+
+[ Building Resilient Distributed Systems (O'Reilly) ](<https://www.i-programmer.info/book-watch-archive/19279-building-resilient-distributed-systems-oreilly.html>)   
+
+In this book subtitled "Patterns and Practices for Stable Software", Sam Newman offers a modern blueprint for surviving real-world system failures. The book combines lessons from safety-critical systems with proven patterns, giving the reader a practical pathway to building more resilient AI-powered software that adapts and endures. Whether the task is refining an existing system, creating new distributed systems, or simply striving to grasp the essence of resilience, the book shows how to design systems that fail gracefully instead of collapsing. <ASIN:1098163540 >  
+
+* * *
+
+[ Mastering Graphics Programming With Vulkan, 2nd Ed (Packt) ](<https://www.i-programmer.info/book-watch-archive/19272-mastering-graphics-programming-with-vulkan-2nd-ed-packt.html>)   
+
+This book goes beyond basic Vulkan, showing how production-focused rendering systems manage resources, GPU work submission, geometry, and lighting, while incorporating techniques such as GPU-driven rendering, ray tracing, and ReSTIR GI. Marco Castorina and Gabriel Sassone explain how to work with the API using a framework that strips away the boilerplate while preserving Vulkan’s concepts. <ASIN:1806116375 >  
+
+* * *
+
+[ Enshittification (Picador) ](<https://www.i-programmer.info/book-watch-archive/19267-enshittification-picador.html>)   
+
+In this book Cory Doctorow argues that we are all living through the Enshittocene, aka the Great Enshittening, a time in which the services that matter to us, that we rely on, are being turned into giant piles of shit. He says that the once-glorious internet has degenerated into “platforms” that rose to dominance because they delivered convenient and delightful services efficiently and reliably. <ASIN:1250448190 >  
+
+I Programmer has reported news for over 12 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

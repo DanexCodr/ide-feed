@@ -1,47 +1,275 @@
-Yesterday I [resigned](https://github.com/swiftlang/swift-org-website/pull/1589) from the [Swift Android workgroup](https://www.swift.org/android-workgroup/). I’ve received a number of inquiries about this, and rather than responding individually to each one, I figured I would just write up a post with my reasoning and submit it to the public record.
+Github design is pretty good: it gets the job done, it’s clean, has consistent visual language, its design is calm and suitable for everyday use.
 
-First off, my resignation was not triggered by any sort of conflict, grievance, or specific incident. Early Swift community efforts got off to a rough start when Swift language creator Chris Lattner quit  due to what he [described](https://mjtsai.com/blog/2022/02/22/why-latter-left-the-swift-core-team/) as a “toxic environment”. This event predates my direct involvement in the project, so I am not privy to the specifics. But I want to be clear that this was in no way my experience: everyone I interacted with, both from Apple and external organizations, both in meetings and in forum discussions and direct messages, have been polite, courteous, and the paragon of civility and professional conduct. Despite Apple having an ancient [blood feud](https://appleinsider.com/articles/11/10/21/steve_jobs_vowed_to_destroy_google_android_called_it_a_stolen_product) with Android, and my own [rather](https://appfair.org/blog/a-future-for-app-stores/) [acrimonious](https://appfair.org/blog/digital-markets-act-workshop/) [relationship](https://appfair.org/blog/fear-and-loathing-in-the-app-stores/) with certain divisions of the company, every single one of my direct interactions with the Swift team has been pleasant and productive. I will miss our meeting and chats, and I harbor zero ill-will towards the project or any of the individual members I’ve worked with.
+![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
 
-So why quit?
+Given all that, there are still many areas that could be improved. Today we’ll take one interface—repository page—and look what UI problems it has and if we can fix them.
 
-## Computer Languages, Past and Future
+## First problem: nested tabs
 
-By way of background, I’ve been programming for over 40 years. I started with Basic, then Pascal, on to C, then C++, over to Java, up to Scala, back down to Kotlin, around to Objective-C, before finally landing on Swift. Swift is a delightful language: I loved it from day one and I’ve been [boosting](https://www.prux.org/talks/#2014) it around the world since 2014. Swift really “does what it says on the tin”: it couples the performance of C++ with the ease of Java. And Swift is as developer-friendly as it gets:  an intuitive object-oriented syntax coupled with maximally efficient value types, fabulous tooling (on Apple platforms), and a thoughtfully-designed build system.
+Let’s start with the biggest issue right away: information architecture. Take tabs. Currently there’re two levels of tabs, one nested under the other:
 
-I have *not* soured on Swift: I think it is an excellent language, and it is here to stay. But it is here to stay in that same straight-and-narrow lane shared by all corporate-directed languages, like C# is here to stay for Microsofties and like Kotlin is here to stay for Androidophiles. Which isn’t bad in and of itself: if you want to write software solely for `[CORPORATE PRODUCT]`, then `[CORPORATE LANGUAGE]` will always be well-maintained, supported, and they will *always* provide support for their latest products, with an easy migration path forward. They are the safe and happy path, as long as you stay in your lane and limit your ambitions to writing software for `[CORPORATE PRODUCT]`.
+![](https://tonsky.me/blog/github-redesign/20_tabs.png?t=1697319007)
 
-But when you stray from that happy path, the rough edges start surfacing, and there is no one getting a paycheck to smooth those out. Swift for Android/Windows/other-non-Apple-platform is in exactly that position: yes, it *technically* works, and yes, the language steering committees are committed to continuing the level of support they promised, but it will never be the same seamless experience as developing for iOS/watchOS/visionOS/whateverOS. This extends beyond the language and into the tooling: [Skip](https://skip.dev) enables you use Xcode to develop your apps in parallel for iOS and Android, but this has only been achieved in the face of Xcode’s constitutional hostility towards doing anything other than optimizing for their own first-party platforms.
+If you are a programmer, you might be surprised but other people normally don’t like hierarchies. Nested structures are hard to grasp, remember, navigate, and grouping is very often non-intuitive. Nested tabs are one of the worst UI patterns out there.
 
-## The Rise of the Clankers
+Then there’s a plain usability issue: let’s say I’m in Wiki and need to see Releases. What should I do? There’s no Releases tab visible, so I must figure out somehow that Releases are part of the Code (?). That makes almost no sense. Releases are as much part of the Code as Issues or Wiki are.
 
-If humanity were destined to continue creating software solely with their monkey brains and meat fingers, Swift would likely be the language I would have stuck with until the day I retired. But that isn’t the trajectory we are currently on. Barring such speculative calamities as “model collapse”, Butlerian Jihad, or Skynet, we have taken a turn in a new direction.
+Solution here is to flatten all tabs into a single navigational control:
 
-We software developers have collectively [as/de]cended to a plane where we now direct the computers to write our computer code, and these computers have decided that they really prefer *computery* languages over the *humany* languages. *Humany* languages are those designed to fit inside our wonderful little biological brains. I have grave reservations about all of this from many perspectives: ethical, ecological, political, socio-economical (just to name a few). But it is what it is, and all but the most ardent of refusenik software developers have come around to this view in the past 6—12 months.
+![](https://tonsky.me/blog/github-redesign/30_tabs-merged.png?t=1697319007)
 
-Swift isn’t a *computery* language, it is a developer-friendly *humany* language: it is a better Java, a better C#, and a (much) better Objective-C. Throughout my career I’ve been able to accomplish amazing feats in these languages, disproportionate to my limited intellect and abilities, but that comes at the cost of these languages being hobbled in pursuit of their mission to slice and dice complex problems in such a way as to be tractable for one or more human brains. I speak of object-orientation; I speak of automatic memory management.
+Organized that way, tabs are immediately accessible *from anywhere* in the repo. *This is a big deal*.
 
-But there is one **very** *computery* language that until recently has been waiting in the wings…
+As a bonus, we also won quite a bit of vertical space without sacrificing anything! Vertical space is very important, it lets you see more content and get to it faster—all good things.
 
-## All roads lead to Rust
+We still have one problem though: tabs don’t fit. We’re going to solve it by removing icons, but let me build up a case for that first.
 
-In February, Andreas Kling dropped [Swift for Rust](https://ladybird.org/posts/adopting-rust/) for the Ladybird browser, a 180°<sup>[1](https://www.prux.org/posts/goodbye-swift-hello-rust/#user-content-fn-1)</sup> turnabout from their opposite decision from a [year earlier](https://www.youtube.com/watch?v=DSEZ2ZYLdHg). In July, Jarred Sumner ported Bun from [Zig to Rust](https://bun.com/blog/bun-in-rust). In September, David Heinemeier Hansson filicided [Ruby on Rails for Rust](https://www.globalnerdy.com/2026/09/27/dhhs-keynote-at-rails-world-2026-the-most-confusing-funeral-ive-ever-experienced/). And this trend is only accelerating: nearly every week there is some new project converting some massively complex codebase from language X to Rust. [PostgreSQL](https://news.ycombinator.com/item?id=48841676)! The [TypeScript compiler](https://www.theregister.com/devops/2026/10/15/24000-ai-experiment-ports-typescript-compiler-to-rust/5303409)! These projects are coming fast and furious with no sign of slowing down. And for every one of these projects, over 95% of the code was not written by a human.
+## Problem 2: Redundant icons
 
-Swift is wonderful. It enabled me to bring iOS development to Android through Skip and share a single codebase between the two dominant mobile platforms. LLMs are quite proficient with Skip: Claude or Codex can one-shot a passable prototype for a new iOS+Android app written in Swift in a matter of minutes and you can have it running side-by-side on emulators or devices and start iterating to your heart’s content. The single shared codebase gives the LLMs the ability to develop and refine features in single codebase, rather than constantly needing one codebase (e.g., in Kotlin and Compose) play catch-up with the other (Swift and SwiftUI) codebase.
+Icons are visual cues that help you scan the UI quickly. “Quickly” here means faster than reading text labels. If for some reason reading labels is still faster then icons aren’t working.
 
-But I always wanted more from Skip. I wanted to add support for desktop platforms for Mac, Linux, and Windows. I wanted the same codebase to run on the web through webassembly. I wanted to build for emerging mobile platforms like HarmonyOS and anything that might come next. And I wanted to do it all using each platform’s native first-party toolkits rather than the usual web-shell compromise or pixel-painting mimicry, because, like Apple, I believe that [the best apps are built with native SDKs](https://developer.apple.com/videos/play/wwdc2024/102/?time=3849).
+One example of icons misuse: if you put too many icons in a row and they are *all* different, they won’t work.
 
-In addition to supporting a wider range of *target* platforms, I also wanted to bring this power to more development *host* platforms. You can currently only use Skip to develop apps from a macOS host; Windows and Linux users are left out in the cold. And while there is some [impressive work](https://xtool.sh) happening to bring iOS development to non-macOS hosts, those tools will take a while to percolate, and appear to [face the wrath](https://github.com/xtool-org/xtool/issues/55#issuecomment-2898015355) of the platform overlords. For Skip, it is irksome enough that even the Android target of the app cannot be developed on a non-macOS host, but when it comes to expanding the platform targets, it becomes downright absurd if, say, you would be unable use Skip to develop a HarmonyOS app from a Windows host.
+![](https://tonsky.me/blog/github-redesign/35_icons.png?t=1697319007)
 
-Swift — both the language as well as the tooling — is simply not equipped to handle those needs yet, and despite its impressive progress with their cross-compilation SDKs, I don’t think it ever will be. It will *always* be an Apple-platforms-first technology, and anything beyond that insular world will be consigned to an eternal Sisyphean uphill grind.
+Prioritizing, or highlighting, something means deprioritizing everything else. You can’t highlight everything.
 
-Rust, on the other hand, wasn’t designed for a single platform, or even a small handful of platforms. They support [300 platforms](https://doc.rust-lang.org/nightly/rustc/platform-support.html). Cross-compilation has been a foundational principle from day one, rather than being a bolted-on afterthought. This leads to an ecosystem that values building for everything and everyone, with no platform bias. When I started out on this journey, I was frankly astonished when the code I was tinkering with for iOS — which included dozens of rando [crates.io](https://crates.io/) dependencies that I yolo’d into my little research project — *just worked* for Android. And Windows. And Linux. And HarmonyOS. And Webassembly.
+Another way to fail at icons: if you use obscure graphics, people will have to read labels anyways, so, again, not working.
 
-Then when I discovered that despite its massive power and potential, you still [can’t craft a decent consumer-facing app](https://areweguiyet.com) in Rust, my mission was clear. Escaping the surly bonds of the platform has always been my personal obsession, and in the mere six months since I started down this road, I’ve created the ultimate all-singing-all-dancing omni-platform development tool. More on that in a future post. “Like and subscribe”, as the kids say.
+![](https://tonsky.me/blog/github-redesign/37_obscure_icons.jpeg?t=1697319007)
 
-But getting back to the point: Swift will be fine. It is here to stay, at least for Apple platform development. And Skip will be fine: it has a growing community of developers and maintainers that will keep the project going strong and keep up with Swift and Xcode updates. Skip will continue to improve the Android side of the coin in step with Apple’s improvement of the iOS side. I am confident that both technologies will keep chugging along indefinitely, powering fabulous apps on Apple and Android platforms alike, well into the future.
+Now let’s be honest: the domain of repository and project management is pretty abstract. No matter how good you are at design and how hard you try, you won’t come up with a great icon for a commit. Or a release. Or an issue. Or a license. A great icon is something *other* people know and understand. And for repositories, there’s simply none. I mean,
 
-But that is not *my* future. Software development is suddenly no longer hard. App development is suddenly no longer hard. And I need to be solving hard problems in order to thrive.
+![](https://tonsky.me/blog/github-redesign/40_is-this-a-commit.png?t=1697319007)
 
-## Footnotes
+So Github tab icons are purely decorative. If you don’t believe me, look at what Github itself is doing. They dim icons:
 
-1. The initial revision of this post said “360°” when it meant “180°”. Thank you, internet commentariat, for your gracious corrections. [↩](https://www.prux.org/posts/goodbye-swift-hello-rust/#user-content-fnref-1)
+![](https://tonsky.me/blog/github-redesign/45_commits.png?t=1697319007)
+
+That’s a sure sign that they, too, think it’s near impossible to figure out why backward clock means “Commit”. Github knows people will be looking at the labels anyways.
+
+But even being decorative, they’re bad at it. I mean, Icon + Label + Counter make for a symmetric and weak composition:
+
+![](https://tonsky.me/blog/github-redesign/50_composition.png?t=1697319007)
+
+By removing icons we:
+
+1. free up a lot of horizontal space,
+2. make design stronger, and
+3. get rid of visual noize.
+
+Win-win-win! Here’s the result, tabs without icons:
+
+![](https://tonsky.me/blog/github-redesign/60_icons-removed.png?t=1697319007)
+
+Test yourself, see if you can find Releases tab without an icon and if it was harder than before? It wasn’t, was it?
+
+A note on this design: I am using the same limitations Github already uses: English language only, locked page width of 1020px. For different conditions, say, for the adaptive design we might want a different solution.
+
+Another note: I had to remove Contributors tab (which was actually not a tab, but a sub-tab from Insights that was duplicated in Code for some reason) to accommodate for Settings tab. Don’t worry, we’ll get Contributors back later.
+
+## Problem 3: Vanity counters
+
+This is the “vanity menu”:
+
+![](https://tonsky.me/blog/github-redesign/70_vanity.png?t=1697319007)
+
+The thing with vanity metrics is that there should be just one. One metrics is simple to understand and focus. Two or three split attention, making everything weaker.
+
+Luckily for us, both watchers and forks perform poorly as metrics anyways. For watches, people tend not to watch too much. For forks, people tend to fork for no reason.
+
+But stars work. They work because they have no other function but to represent vanity. So let’s keep stars and move them to the left to get more attention:
+
+![](https://tonsky.me/blog/github-redesign/73_vanity.png?t=1697319007)
+
+## Problem 4: “Watch” button ambiguity
+
+In the watch button we have a classic “button or status” UX dilemma. Buttons tell us what can be done but don’t say what the current status is. Status tells current state but it’s not clear what it would change to.
+
+In Github case “Watch” has a button label but it doesn’t act as a button: clicking on it won’t make you watch the repo. It’s not a status either: if you see “Watch” it means you are *not* watching. Same for the other two states: they are neither buttons nor states.
+
+![](https://tonsky.me/blog/github-redesign/75_vanity.png?t=1697319007)
+
+The problem here is that a single button can’t be used to switch between three states. But dropdown can! Dropdowns are a well-established UI component that shows status *and* can be used to change it at the same time.
+
+Funny, but Github is already using a dropdown! We just need to fix it to work as any other dropdown on Earth works: to show current status. Trivial fix, really:
+
+![](https://tonsky.me/blog/github-redesign/77_vanity@2x.png?t=1697319007)
+
+Minor, but annoying: that checkmark is really hard to spot. Let’s highlight the whole row:
+
+![](https://tonsky.me/blog/github-redesign/78_vanity@2x.png?t=1697319007)
+
+All together so far:
+
+![](https://tonsky.me/blog/github-redesign/80_vanity-reorganized.png?t=1697319007)
+
+Uff, we’ve done a lot! If you need a little break, now would be a perfect time for it. Don’t worry, I’ll wait.
+
+Back? Great! Let’s move on.
+
+## Problem 5: Repo description
+
+This is the repository description:
+
+![](https://tonsky.me/blog/github-redesign/90_details.png?t=1697319007)
+
+The problem with it is: why is it located under the Code tab? It’s a description of the whole repository, not just its code, right?
+
+To fix this let’s move it above the tabs, to the area that belongs to the whole repository:
+
+![](https://tonsky.me/blog/github-redesign/100_details-moved.png?t=1697319007)
+
+It still needs a couple of touches.
+
+First, font is neither big nor small (it’s 16px, standing between 18px repository name and 14px tabs). Let’s make it 14px so that there’re only two distinct font sizes. Also I’m sure there’s no need to render “https://” in the URL:
+
+![](https://tonsky.me/blog/github-redesign/112_details.png?t=1697319007)
+
+The second change is to move topics right next to the repository name. There’re usually just a few of those, so it seems wasteful to dedicate a whole line to them:
+
+![](https://tonsky.me/blog/github-redesign/114_details.png?t=1697319007)
+
+Look at us, winning more vertical space again!
+
+## Problem 6: Removing background color
+
+Blue topics on blue background became harder to read. This is because they used to be on #FFF and now they’re on Github’s #FAFBFC “very light dirty blue”.
+
+Let’s change tab’s background to #FFF too:
+
+![](https://tonsky.me/blog/github-redesign/115_details.png?t=1697319007)
+
+But why was that background there in the first place? What did it do?
+
+My guess is Github had to add it because the structure of their menu layers was becoming too complex and they needed visual cues to help you “split” it in order to understand. The black top bar serves the same purpose: to separate. I mean, they were literally spending a good half of 768px screen at navigation alone.
+
+![](https://tonsky.me/blog/github-redesign/116_details.png?t=1697319007)
+
+When split into layers, at least you are not immediately scared by it. Without a background, it would be a mess.
+
+But because we simplified the whole header so much and removed one intermediate layer, we don’t need that color coding anymore. Instead, we can enjoy fresh crisp white:
+
+![](https://tonsky.me/blog/github-redesign/119_details.png?t=1697319007)
+
+And look at all that free space! Finally, we can see some content in the top half of the screen too.
+
+## Problem 7: Description editing
+
+A small touch. If you own the repository, you get to edit both its description and its topics:
+
+![](https://tonsky.me/blog/github-redesign/120_details.png?t=1697319007)
+
+First, the “Edit” button is badly misplaced — too far, easy to miss.
+
+Second, separate edit button for topics is an artifact of topics system being developed at a different time, maybe by a different team. There’s really no need to have two separate buttons.
+
+The solution? How many edit buttons do we need? I say none.
+
+![](https://tonsky.me/blog/github-redesign/122_details.png?t=1697319007)
+
+“But... Where did edit buttons go?” You might ask.
+
+You see, the nature of description and topics is that it’s important to get people to fill them when they first create their repo. After that, people rarely change them at all.
+
+When there is no description or no topics, we will show a button to add one:
+
+![](https://tonsky.me/blog/github-redesign/124_details.png?t=1697319007)
+
+And if description/topics are already filled, go to Settings to change them. Problem solved!
+
+## Problem 8: Files description
+
+The traditional Windows File Explorer, together with macOS Finder, have established a simple pattern for file browsing: files on the left, details on the right.
+
+![](https://tonsky.me/blog/github-redesign/132_file_explorer.png?t=1697319007)
+
+Github decided to copy that pattern, but they put a very unexpected thing as details: a message from the last commit when that particular file was changed.
+
+![](https://tonsky.me/blog/github-redesign/130_code_browser.png?t=1697319007)
+
+Why? I don’t know. Commits often touch files for completely arbitrary reasons, so the last commit tells you almost nothing. I can’t think of any case when somebody would need that particular information.
+
+Maybe they wanted Github to be “about git” more than about traditional file browsing, and this was the only thing they could think of? That’s my speculation, anyway.
+
+The problem with those details is not that such a huge area is filled with something so rarely useful. The problem is that it looks *so much* like file description it confuses me every time. “Tweak layout” is not a description of the “Docs” folder. “Need these debug tools too” for “Tools”—why should I care?
+
+That means we can get rid of the descriptions without really losing anything:
+
+![](https://tonsky.me/blog/github-redesign/135_no_description.png?t=1697319007)
+
+## Problem 9: Repository overview
+
+When you get to the repository, the first page you see should not necessarily be Code. We better call it Overview—something to get a quick idea of what’s going on.
+
+Now, the Github repository is more than just a list of files. It’s also about how those files change over time. What new features were added? Which bugs were fixed? Were there any new releases recently? All those are as important as the files themselves.
+
+That’s why I suggest we add a list of recent commits to the Overview page next to files.
+
+![](https://tonsky.me/blog/github-redesign/140_code_commits.png?t=1697319007)
+
+You can now see if a project is actively developed, maintained or abandoned, if an issue you care about was recently fixed, if a new version was recently published etc (notice tags and branches pills in commit list—I miss this feature on Commits tab SO MUCH).
+
+What about that free space on the right? We can put useful stats there:
+
+![](https://tonsky.me/blog/github-redesign/150_lang_stats.png?t=1697319007)
+
+First, I added contributors. Github is all about people and collaboration, that’s why they put so much emphasis on Fork and PR buttons. Well, people are the face of that collaboration. They put their free time and energy to make that code happen. It’s only fair to see some of their faces.
+
+Activity is a relatively new feature that hasn’t found its place on repository page yet—until now. Helps you see how much momentum the project has.
+
+Language statistics was unfairly hidden away, now it’s front and foremost. I also added code size in lines of code — an obvious addition that Github still doesn’t have for some reason.
+
+Altogether, in my opinion, the new Overview tab is more helpful in everyday use.
+
+## Problem 10: Contextualizing buttons
+
+Both “Create new file”, “Upload files” and “Find files” all relate to files, so it will be reasonable to move them right next to the thing they operate on: Files.
+
+![](https://tonsky.me/blog/github-redesign/160_files_buttons.png?t=1697319007)
+
+## Problem 11: Hidden clone link
+
+Github always used to have clone URL directly on a page. That was pretty useful—when you needed to grab the code, no additional clicks were required.
+
+![](https://tonsky.me/blog/github-redesign/165_clone.png?t=1697319007)
+
+Unfortunately, during one of the redesigns Github hid the clone URL behind a button. My guess is they did it because there was simply not enough space. But people kept looking for it so they had to paint the button green.
+
+Well, after moving file buttons we have enough space to restore full-length Clone link:
+
+![](https://tonsky.me/blog/github-redesign/170_clone.png?t=1697319007)
+
+I also unified all four ways to get the repo into a single control, because semantically they are pretty much the same: a way to get the code on your machine.
+
+## Last problem: dated look
+
+This is how Github [used to look back in 2013](https://blog.github.com/2013-06-17-repository-next/):
+
+![](https://tonsky.me/blog/github-redesign/180_github_2013.jpg?t=1697319007)
+
+And this is [a screenshot from 2015](https://blog.github.com/2015-11-16-a-new-look-for-repositories/):
+
+![](https://tonsky.me/blog/github-redesign/190_github_2015@2x.png?t=1697319007)
+
+Finally, this is how it looks today:
+
+![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
+
+As you can see, the color scheme and main UI elements haven’t changed much since at least 2013. It’s not necessarily bad and mostly proves that the original design was good enough to stand the test of time.
+
+But maybe it’s time to fresh it up a little? Get rid of gradients, dirty washed-out colors, unnecessary separators, add a little more air. Something like this:
+
+![](https://tonsky.me/blog/github-redesign/200_new_look.png?t=1697319007)
+
+If you feel disoriented, give it a minute. Once you are used to it, you might notice it’s actually easier on the eyes and a bit lighter.
+
+## Finally
+
+Current Github design next to my proposal:
+
+![](https://tonsky.me/blog/github-redesign/210_compare.png?t=1697319007)
+
+We’ve added ~4 more files to the screen of the same vertical size, 6 last commits, 3 branches, 10 contributors’ faces, project activity AND expanded language stats WITHOUT losing any information.
+
+If you know someone at Github, send them a link to this article. Maybe someone there will like my ideas and eventually get to implement them—who knows?

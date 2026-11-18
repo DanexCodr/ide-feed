@@ -1,59 +1,131 @@
-For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
+Last year marked the 40th anniversary of Phrack so we went big. We published  
+our anniversary launch release in print at Defcon 33, HOPE, WHY25 and some  
+additional variations at several conferences around the world including  
+AlligatorCon, B-Sides Canberra, Out of the Box, Datenspuren, DistrictCon,  
+OffensiveCon, Recon, and Toorcamp. We included a CTF with exploit challenges  
+and had puzzles and easter eggs included in the zine. We threw parties and  
+had talks at Defcon and WHY25 to celebrate this milestone.
 
-In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
+More importantly, we got new research into people's hands. The point of the  
+relaunch was to get people reading, researching, writing, and contributing  
+again. We wanted the next person picking up Phrack to find something that  
+made them sit down at a computer and start pulling a system apart.
 
-This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
+We owe a huge thanks to the authors, editors, artists, publishing partners,  
+donors, and staff who made it happen. Writing the paper, working through  
+revisions, putting the print editions together, paying the bills, and  
+getting boxes of zines to the right places all take time and effort. Most of  
+that work is invisible when you are holding the finished issue. We  
+appreciate everyone who did it.
 
-This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
+And to the readers: thank you for giving a shit. Seeing someone get excited  
+about an article, connect it to something they are working on, or realize  
+that they could contribute something themselves makes the effort worthwhile.  
+That exchange is how this thing keeps going. The relaunch worked, and this  
+issue is the follow-through.
 
-## Writing code once was never the issue
+### [--[ Present ]](https://phrack.org/issues/73/introduction_md.html#---present-)
 
-Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
+This is the third release curated by the new staff, and we are not slowing  
+down. This issue is larger than last year's, with 23 main papers and eight  
+additional articles in Line Noise. The subjects range from exploitation and  
+reverse engineering to machine learning, hardware, and the history and  
+culture that grew around this work.
 
-The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+We have container escapes through the vDSO, use-after-free exploitation, QNX  
+userland shellcode, Linux kernel research, and a Chromium renderer sandbox  
+escape through Skia. Elsewhere, the issue takes on Windows smart card  
+architecture, static taint analysis in Binary Ninja, and autonomous  
+underwater vehicles.  There is also work examining backdoors in machine  
+learning and what it means to trust an AI system. One paper takes us from  
+PhrackCTF to two WinFSP zero-days, which is a pretty good argument for  
+continuing to put challenges in a zine.
 
-## curl is the result of time
+We also have four more articles in Phrack World History, including the story  
+of the infamous SSH1 CRC32 vulnerability featured in The Matrix Reloaded as  
+well as stories about blue boxing free phone calls, a confession of a hacker  
+who tried to backdoor Linux kernel in 2003, and an early discovery of  
+botnets for hire. Our Prophile features Halvar Flake, whose contributions to  
+reverse engineering and security research are legendary.
 
-curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+### [--[ Future ]](https://phrack.org/issues/73/introduction_md.html#---future-)
 
-## Behind already
+In 2026, we find ourselves in a time of rapid technological change. It is  
+hard to say what vulnerability research or red teaming will look like in  
+another five years. AI has moved well beyond completing a line of code into  
+agentic systems capable of analyzing source code and reverse engineering  
+binaries to find and exploit vulnerabilities.
 
-During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+We can be sure that the future will require us to continue to explore new  
+ideas, create new tools, and push the boundaries of what is possible in the  
+face of new challenges and opportunities created by the advancement of AI  
+and automation systems. As the effort required to put ideas into practice  
+falls, creativity and human intuition forged through experience is valued  
+even higher.
 
-The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+We hope that this release of Phrack will inspire new ideas, discussions, and  
+collaborations that will keep the human side of hacking a critical element  
+in shaping the future of technology and society. We will continue to do our  
+part to support the community and provide a platform for sharing knowledge  
+and ideas. We look forward to seeing what the future holds and we are  
+excited to be a part of it.
 
-That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+Read the papers, try the ideas, and challenge the conclusions. When you find  
+something worth sharing, write it up and send it in. We have another issue  
+to put together, and some of you should be in it!
 
-A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+To those who have supported us the past three years helping to restore  
+vitality to Phrack, we thank you.
 
-## C
+Conferences who funded prints: Defcon, OffensiveCon, Recon, Unprompted[AU],  
+Unprompted[US], BSides Canberra, Alligatorcon, TenguCon
 
-I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+Sponsors & Major Donors - WatchTowr, Elltam, Verichains, BShield,  
+TrustedSec, Binarly, Trenchant, Praetorian (WWSUL), EFF, Blaze, EMX,  
+Mullvad, ToorCon, Hacker Initiative, Endrazine, Dug Song, Napster, halvar,  
+Horizon, Huku, Julio Auto, Gadi, and the rest of the people who stepped up with  
+smaller donations.
 
-A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+Artists - Ian Dash, pinguino, tainted, pepper, mar, xer0, abstrakt, ToscaKaiser,  
+h7, zir, Mick, p0rtL, netspooky, ackmage, digitalis, Tedsig42, and the many  
+others who submitted their work for consideration.
 
-## No rewrites
+Reviewers - barbie, bsdaemon, C, chompie, danielcuthbert, devinc, grugq, joern,  
+jordan9001, K3, richinseattle, roddux, saber, skyper, SSHad0w, TMZ, zh4ck
 
-I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+All the authors past and present who are now bound to the history of phrack.
 
-## Those rewrites
+The unnamed ones who have helped us with logistics and carrying literal tons  
+of paper around conferences to deliver them into the hands of the next  
+generation.
 
-I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+All information in Phrack Magazine is, to the best of the ability of  
+the editors and contributors, truthful and accurate. When possible,  
+all facts are checked, all code is compiled. However, we are not  
+omniscient (hell, we don’t even get paid). It is entirely possible  
+something contained within this publication is incorrect in some way.  
+If this is the case, please drop us some email so that we can correct  
+it in a future issue.
 
-I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+Also, keep in mind that Phrack Magazine accepts no responsibility for  
+the entirely stupid (or illegal) things people may do with the  
+information contained herein. Phrack is a compendium of knowledge,  
+wisdom, wit, and sass. We neither advocate, condone nor participate  
+in any sort of illicit behavior. But we will sit back and watch.
 
-They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+Lastly, it bears mentioning that the opinions that may be expressed in  
+the articles of Phrack Magazine are intellectual property of their authors.  
+These opinions do not necessarily represent those of the Phrack Staff.
 
-I wish them good luck whatever they decide!
+```
 
-## How do I feel about them?
+    <  Editors           : staff[at]phrack{dot}org         >
+    >  Submissions       : submissions[at]phrack{dot}org   <
+    <  /dev/urandom      : loopback[at]phrack{dot}org      >
+    >  Arts & Leisure    : arts[at]phrack{dot}org          <
+    <  Twitter/X         : phrack                          >
+    >  Mastodon          : phrack[at]haunted{dot}computer  <
+    <  BlueSky           : phrack{dot}org                  >
 
-Several people asked me this.
-
-*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
-
-I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
-
-1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27581#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27582#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27583#respond) .comment-body
+ANTISPAM in the subject or face the mighty /dev/null demon!
+```

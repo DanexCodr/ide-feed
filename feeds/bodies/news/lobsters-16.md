@@ -1,89 +1,160 @@
-TL;DR: We are enabling the parallel frontend of the Rust compiler on nightly by default,
-to find remaining issues in preparation for its stabilization.
+I’m [normal](https://en.wikipedia.org/wiki/Autism).
+This means I have a backlink monitor for this website.
+By pure chance, I was showcasing this to a friend when, suddenly, I got a new backlink:
 
-## Context
+I tap in,<sup>[1](https://jack.cab/blog/siterate.html#user-content-fn-phone)</sup> forgetting that 90% of backlinks I get are spam, and maybe this one could log my IP or
+even contain the [3-day](https://blog.mozilla.org/en/firefox/privacy-security/defending-patch-gap/)<sup>[2](https://jack.cab/blog/siterate.html#user-content-fn-fx)</sup>
+exploit chain of doom. I’m greeted with this:
 
-The Rust compiler has been using multiple threads to compile code in its "backend" part (using LLVM) for a long time. However, its "frontend" part (which includes type checking and borrow checking) has been executing sequentially, on a single thread, which of course limits the performance of the compiler. If you are interested in a more in-depth explanation of parallelism in the Rust compiler, see this [previous post](https://blog.rust-lang.org/2023/11/09/parallel-rustc/#existing-intraprocess-parallelism-the-back-end).
+## Popular Webpages In *.cab
 
-The compiler frontend actually had support for running in parallel for a long time, but it was not enabled by default due to various issues. [Three years ago](https://blog.rust-lang.org/2023/11/09/parallel-rustc/), we made it possible to opt into the parallel frontend on the nightly channel, with the plan to stabilize it in 2024. Clearly, we did not achieve that goal, but work on the parallel frontend was still slowly progressing in the meantime.
+| Webpage | Rank |
+| --- | --- |
+| ![](https://www.google.com/s2/favicons?domain_url=http://23win.cab)[23win.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 110100 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://airports.cab)[airports.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 124393 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://pdf.cab)[pdf.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 393627 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://hitclub.cab)[hitclub.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 422929 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://7m.cab)[7m.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 457524 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://max79.cab)[max79.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 712444 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://keonhacai5.cab)[keonhacai5.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 775520 |
+| ![](https://jack.cab/_astro/opengraph.BCs-rOHQ.png)[jack.cab](https://jack.cab/) | 783052 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://vic88.cab)[vic88.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 856609 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://taixiuonline.cab)[taixiuonline.cab](https://en.wikipedia.org/wiki/Cabinet_(file_format)) | 874131 |
 
-Last year, [Vadim Petrochenkov](https://github.com/petrochenkov), together with several other contributors, started a coordinated effort to finally get the parallel frontend over the finish line. Since then, many long-standing issues were fixed, and its performance was improved. Now we are at a point where we would like to make it widely available. But before that, we want to find out if people encounter issues with it in the wild, which is why we are enabling it by default only on the nightly channel. Once we will be confident enough that it is working well, we want to stabilize it.
+I sent an early draft of this article to [another friend](https://clazite.pages.dev/), who happens to be Vietnamese, and he told me there’s five casino spam sites ahead of me, which I already knew because I’m Faviconese.
+I have the most popular personal website on .cab,<sup>[3](https://jack.cab/blog/siterate.html#user-content-fn-rankings)</sup> but that’s probably because I have the only personal website on .cab.
 
-The parallel frontend has been enabled on the nightly channel by default since `nightly-2026-11-14`.
+I try some other TLDs. Rebane has the #1 .horse, synth.download is the 11th .download, whatever.
 
-## Benefits
+## Popular Webpages In *.net
 
-The primary benefit of enabling the parallel frontend is, of course, faster compilation of Rust programs.
+| Webpage | Rank |
+| --- | --- |
+| ![](https://www.google.com/s2/favicons?domain_url=http://sourceforge.net) [sourceforge.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 83 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://cpanel.net) [cpanel.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 87 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://researchgate.net) [researchgate.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 103 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://php.net) [php.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 106 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://launchpad.net) [launchpad.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 109 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://bugs.launchpad.net) [bugs.launchpad.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 128 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://cloudfront.net) [cloudfront.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 152 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://behance.net) [behance.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 196 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://slideshare.net) [slideshare.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 204 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://themeforest.net) [themeforest.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 333 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://threads.net) [threads.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 388 |
+| [w*****s.net](https://windows.sucks.win) | 432 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://azurewebsites.net) [azurewebsites.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 532 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://doubleclick.net) [doubleclick.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 579 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://earthlink.net) [earthlink.net](https://www.youtube.com/watch?v=_cZC67wXUTs) | 626 |
 
-We benchmarked the parallel frontend in our [benchmark suite](https://github.com/rust-lang/rustc-perf), which measures the duration to compile the *leaf* crate in a crate graph. As usual, the results were varied. In some benchmarks, the parallel frontend barely helped. In others, for example when performing a `cargo check` of the `nalgebra`, `cargo` or `diesel` crates, the compilation was almost three times faster, using 8 threads.
+Redacted? I hover over it and discover it goes to `windows.net.siterate.org`.<sup>[4](https://jack.cab/blog/siterate.html#user-content-fn-resolve)</sup> Figuring out the pattern of redactions is not the topic of this article.
 
-In the table below, you can find the aggregated wall-time mean change for the real-world benchmarks in our suite, when building a single crate from scratch across several configurations, compared to the same build using a sequential frontend.
+I try .com.
 
-| Frontend threads / Profile | `check` | `clippy` | `debug` | `opt` |
-| --- | --- | --- | --- | --- |
-| 2 | -21.95 % | -20.74 % | -14.2 % | -12.51 % |
-| 4 | -37.99 % | -36.01 % | -29.14 % | -23.67 % |
-| 8 | -44.23 % | -41.76 % | -36.1 % | -27.88 % |
+## Popular Webpages In *.com
 
-It is clear that the parallelization is not perfect, and we definitely plan to invest more effort into improving its performance. Nevertheless, with 8 threads, it can make the end-to-end compilation time of `cargo check` ~2x faster for several crates that we tested, which is still quite an improvement.
+| Webpage | Rank |
+| --- | --- |
+| ![](https://www.google.com/s2/favicons?domain_url=http://google.com) [google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 1 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://facebook.com) [facebook.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 2 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://youtube.com) [youtube.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 3 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://instagram.com) [instagram.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 4 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://linkedin.com) [linkedin.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 5 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://twitter.com) [twitter.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 6 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://apple.com) [apple.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 7 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://w2rt6byl5nf1opmc-a.com) [w2rt6byl5nf1opmc-a.com](https://www.youtube.com/watch?v=l3eww1dnd0k) what the fuck | 8 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://googletagmanager.com) [googletagmanager.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 9 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://microsoft.com) [microsoft.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 10 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://github.com) [github.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 11 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://play.google.com) [play.google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 12 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://apps.apple.com) [apps.apple.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 14 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://x.com) [x.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 16 |
+| ![](https://www.google.com/s2/favicons?domain_url=http://maps.google.com) [maps.google.com](https://www.youtube.com/watch?v=l3eww1dnd0k) | 21 |
 
-The performance benefits for incremental rebuilds are much more modest, and also very hard to compare, because the performance of rebuilds depends on what was changed and how were the codegen units laid out. In our benchmark suite, we saw a mean improvement of 3-5% for incremental rebuilds. But we currently do not have great benchmarks for this use-case, so your results might vary.
+**What the fuck????**
 
-We can also zoom in on an individual crate. Here is a chart of how the wall-time scales when compiling the `nalgebra 0.33` crate, for a full non-incremental build (`full`), full incremental build (`incr-full`) and an incremental rebuild (`incr-patched`) across several build configurations:
+I visited this domain (two days after it was registered, more on that in a second) and Firefox gave me the , dnsNotFound.
+To this day it doesn’t resolve.
 
-![Nalgebra benchmark results](https://blog.rust-lang.org/2026/11/16/enabling-parallel-frontend-on-nightly/nalgebra-0.33.png)
+I do a web search of “w2rt6byl5nf1opmc-a.com” and I see references to the [Majestic Million](https://majestic.com/reports/majestic-million), a name I haven’t heard in ages. Sure enough, that’s what siterate.org uses:
 
-What is interesting to note is that enabling the parallel frontend can actually also make the backend faster, for reasons explained [here](https://blog.rust-lang.org/2023/11/09/parallel-rustc/#new-intraprocess-parallelism-the-front-end).
+| Position | Domain | Referring Subnets | Referring IPs |
+| --- | --- | --- | --- |
+| 1 | [google.com](https://majestic.com/reports/site-explorer?q=google.com&IndexDataSource=F) | 504,763 61 ![](https://majestic.com/static/images/icons/arrow_up.png) | 2,177,943 673 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 2 | [facebook.com](https://majestic.com/reports/site-explorer?q=facebook.com&IndexDataSource=F) | 463,877 178 ![](https://majestic.com/static/images/icons/arrow_down.png) | 2,143,213 1,688 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 3 | [youtube.com](https://majestic.com/reports/site-explorer?q=youtube.com&IndexDataSource=F) | 421,041 31 ![](https://majestic.com/static/images/icons/arrow_down.png) | 1,760,838 1,323 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 4 | [instagram.com](https://majestic.com/reports/site-explorer?q=instagram.com&IndexDataSource=F) | 392,625 92 ![](https://majestic.com/static/images/icons/arrow_up.png) | 1,739,231 1,295 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 5 | [linkedin.com](https://majestic.com/reports/site-explorer?q=linkedin.com&IndexDataSource=F) | 353,504 27 ![](https://majestic.com/static/images/icons/arrow_up.png) | 1,372,621 976 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 6 | [twitter.com](https://majestic.com/reports/site-explorer?q=twitter.com&IndexDataSource=F) | 352,472 168 ![](https://majestic.com/static/images/icons/arrow_down.png) | 1,352,034 1,413 ![](https://majestic.com/static/images/icons/arrow_down.png) |
+| 7 | [apple.com](https://majestic.com/reports/site-explorer?q=apple.com&IndexDataSource=F) | 283,697 290 ![](https://majestic.com/static/images/icons/arrow_up.png) | 845,882 607 ![](https://majestic.com/static/images/icons/arrow_up.png) |
+| 8 | [w2rt6byl5nf1opmc-a.com](https://majestic.com/reports/site-explorer?q=w2rt6byl5nf1opmc-a.com&IndexDataSource=F) | 274,833 961 ![](https://majestic.com/static/images/icons/arrow_up.png) | 853,298 4,759 ![](https://majestic.com/static/images/icons/arrow_up.png) |
+| 80 | [ailawandorder.com](https://majestic.com/reports/site-explorer?q=ailawandorder.com&IndexDataSource=F) | 72,898 34 ![](https://majestic.com/static/images/icons/arrow_down.png) | 154,976 66 ![](https://majestic.com/static/images/icons/arrow_up.png) |
 
-It is important to note that all benchmark results presented above measured only the compilation of a single crate. When compiling a whole crate graph, your CPU cores might already be saturated because of backend (LLVM) parallelism or by Cargo compiling multiple crates in parallel. So the final performance effect will vary heavily based on the workload that you are running, and on the number of cores that you have available.
+The Majestic Million ranks domains based on the number of different subnets linking to them.<sup>[5](https://jack.cab/blog/siterate.html#user-content-fn-cf)</sup> This domain is the fastest growing in the top 100.
 
-We also benchmarked `cargo check` end-to-end (checking the whole crate graph) on the `cargo` crate itself on a machine with 8 CPU cores. With 8 threads, it resulted in a ~15% end-to-end improvement:
+Another, maybe unrelated anomaly I saw is ailawandorder.com (registered in 2023) at rank 80, whose “About Us” page says its CEO is serving as a Board Member at Majestic.
+This made me check rank 800 in case there was a pattern, and no, there isn’t, that’s nsw.gov.au.
 
-- 36.7s with 1 frontend thread
-- 35.1s with 2 frontend threads
-- 31.9s with 4 frontend threads
-- 30.8s with 8 frontend threads
+Before I got rate limited from Majestic, I opened Site Explorer, and it told me w2rt6byl5nf1opmc-a.com has 241,085,378 nofollow backlinks and 6 follow backlinks split across 5,163,708 referring domains.
+Checking Ahrefs, I see just [53 backlinks](https://ahrefs.com/backlink-checker/?input=w2rt6byl5nf1opmc-a.com&mode=subdomains); they read like the ones I’ve been getting since [The Article](https://jack.cab/blog/every-firefox-extension) fell off.
 
-As can be seen from the results above, when the CPU cores are already saturated with parallel crate compilation and LLVM, the positive effect of the parallel frontend is reduced.
+All the backlinks on Majestic are “fresh”, which means in the last 120 days. In fact, the domain was bought (not by me 💔) for the first time (according to Certificate Transparency) on November 11, *after* most of the backlinks.
+I found [an AI-generated PR from 2 weeks ago](https://github.com/zephium-browser/Zephium/pull/385) referencing the domain, and Tranco has data from October 5.
 
-## Tuning the thread count
+Majestic has indexed 1,267 pages on this domain and crawled 27.
+The site isn’t on the Wayback Machine so I can’t collect its pages.
 
-At the start, the nightly toolchain will default to the parallel frontend using only `2` threads. This is a conservative choice that should still allow us to find potential issues while not increasing memory usage a lot at the same time.
+In the Anchor Text table, the link count adds up to nine. There isn’t an “other” section. Are the remaining 240 million links images? No, they aren’t, it says the links are 100% TextLinks.
 
-If you want to test out the performance with different thread counts, you can override the number of threads used for the frontend using the `--jobs-frontend` compiler flag. It can be specified either in the `RUSTFLAGS` environment variable, or you can put it into a [`.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html) file:
+Then I downloaded Majestic Million myself and searched for the domain.
+There were six subdomains.
 
-```
-[build]
-rustflags = ["-Zunstable-options", "--jobs-frontend=8"]
-```
+- 5721d0cd26c13f745e1b368a2b5dfb0c.w2rt6byl5nf1opmc-a.com, rank 157
+- c0e3930fedc480e093a7bcad1a83c8a8.w2rt6byl5nf1opmc-a.com, rank 424
+- 8628e302afeb346d191342ca114df068.w2rt6byl5nf1opmc-a.com, rank 554
+- 2b1774347fbd085c628179dd339ddd26.w2rt6byl5nf1opmc-a.com, rank 822
+- e62f444581ce540d3cf5ac627b37c501.w2rt6byl5nf1opmc-a.com, rank 1,111
+- 56aa73e7edd6f4e1fd3975b8b03761c0.w2rt6byl5nf1opmc-a.com, rank 36,933
 
-Currently, the performance of the parallel frontend will likely not scale very well above ~8 threads, but you can try it on your workload to test what happens. Note that using higher thread counts will likely lead to higher memory usage of the compiler, and in extreme cases it might cause you to run out of memory.
+For comparison, jack.cab, which you’ve clearly heard of, is rank 804,163. What the fuck is going on?
 
-## Limitations and known issues
+By the way, w2rt6byl5nf1opmc-a.com is at rank 38 on Tranco, which was designed to protect against this but still uses Majestic data.
 
-Due to the used parallelism, the produced order of diagnostics might not be deterministic when using the parallel frontend.
+## <del>Theories</del>
 
-In some situations, the generated binary might also not be reproducible, though we currently consider these cases bugs, and we would like to identify them and fix them.
+<del>I could probably figure out what’s happening here in 30 seconds by buying a Majestic subscription but I’m lazy.</del>
 
-There are currently some [known issues](https://github.com/rust-lang/rust/issues?q=state%3Aopen%20label%3AA-reproducibility%20label%3AA-parallel-compiler) related to the reproducibility of the Rust compiler when using the parallel frontend, which are being worked on.
+- *Copyright trap*: maybe it’s fake, injected into the list by Majestic so they can discover who’s using their list. Could w2rt6byl5nf1opmc-a.com and ailawandorder.com be in the top 100 for this reason? Probably not, because if they cared, they’d relicense the list away from CC-BY. Also, the domains are ranking higher in Majestic over time instead of staying static.
+- *Majestic got hacked*, and the hackers for some reason decided to tamper with the DB like this. **No.** [Are you stupid, are you dumb, are you Dario Amodei, are you all three](https://www.tiktok.com/@baghdxddy/video/7694814395293027615)‽
+- *Some loophole/gaming the rankings*: <del>Maybe “subnets” is counted in a stupid way for [IPv6](https://github.com/blechschmidt/freebind). Maybe the millions of domains are ip6.arpa.</del> Majestic counts Class C subnets.
+- *A bunch of hacked websites linking to the domain*: Seems unlikely, considering I’m unable to find a single backlink in the wild that wouldn’t be there for say, my website, and Ahrefs only has 53 backlinks for this domain. They could be [cloaking](https://en.wikipedia.org/wiki/Cloaking).
 
-## How do I opt out?
+## Update (November 16): Answer!
 
-To reiterate: this is only being enabled on nightly for now. If you are using the stable toolchain, you will still be using the sequential frontend by default.
+> Love the article! I work for Majestic
+>
+> Great spot.
+>
+> the answer:
+>
+> Some internal experimentation. Choose a domain, make it esoteric, do some experiments. However, looks like we forgot to add a filter to avoid reporting it. We will sort that…
 
-If you want to disable the parallel frontend on the nightly channel, pass `-Zunstable-options --jobs-frontend=1` to `rustc`, either via the `RUSTFLAGS` environment variable, or with the [`.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html) configuration file:
+Moral of the story: don’t test in production.
 
-```
-[build]
-rustflags = ["-Zunstable-options", "--jobs-frontend=1"]
-```
+> ## AI disclosure
+>
+> All prose written by me, with no AI output, including but not limited to agents, chatbots, inline completions, or keyboard autocomplete. I choose not to be a meat proxy.
+>
+> I used a chatbot to convert four screenshots to HTML + CSS, to make the article responsive:
+>
+> - Removed CSS from `http://siterate.org/css/commons.css` that wasn’t being used in its tables. Then I handcrafted artisan jackslop: I copied and pasted the tables from the site, changed the [domain].siterank.org links to easter eggs since they don’t resolve, and made the favicons have a stable size and load lazily. For the .com ranking, a friend gave me the idea of annotating the table, which I too implemented by hand.
+> - Generated a Discord message component from scratch, using the message’s HTML and computed styles as context. I’m not too satisfied with the result. Besides the corrections I made in the conversation, I wrapped it in a background, then manually added Discord’s .headerText { margin-inline-end: .25rem }, then changed the App tag from height: .9375em to height: 1.1em because it felt wrong.
+>
+> An early draft of this article joked about siterate.org being the first site I saw imitating Bootstrap without using Bootstrap, but during the embed process, the chatbot told me commons.css was *actually* bundled Bootstrap, so I removed that joke.
 
-If you have to do this for some reason, please do tell us why [on GitHub](https://github.com/rust-lang/rust/issues/113349) or [on Zulip](https://rust-lang.zulipchat.com/#narrow/channel/187679-t-compiler.2Fparallel-rustc/topic/Parallel.20frontend.20issues/with/624551811). We would especially like to know about any compiler crashes that you encounter, or the produced binaries not being reproducible when the parallel frontend is enabled.
+## Footnotes
 
-## What's next?
-
-Over the next few months, we will be monitoring GitHub and Zulip for any reported issues about the parallel frontend. Once we have enough confidence that it is working well, and there are no major issues, we would like to move forward and finally stabilize it.
-
-We would also like to improve its performance, and make more things parallel. So far, a lot of the work on the parallel frontend has been focused on making it work correctly, rather than tuning its performance down to the last percent. We thus expect that we might still be able to make further performance improvements to it.
-
-We would also like to make more parts of the frontend actually parallel, as some parts are currently still sequential even if parallelism is enabled. There is some ongoing work on this. Last year, we had a Google Summer of Code project focused on enabling [parallel macro expansion and name resolution](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#improving-the-rustc-parallel-frontend-parallel-macro-expansion), and there is also an open [pull request](https://github.com/rust-lang/rust/pull/163495) for parallelizing the lowering of the Abstract Syntax Tree (AST) to the High-Level Intermediate Representation (HIR). More work remains to be done on this front.
+1. As opposed to clicking it, because I was on a phone at the time [↩](https://jack.cab/blog/siterate.html#user-content-fnref-phone)
+2. I forgot when I last updated Firefox. I mean, I know now because I updated it after I wrote this sentence. My phone hadn’t done it automatically because I had low storage. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-fx)
+3. On both Majestic and Tranco. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-rankings)
+4. Which doesn’t resolve. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-resolve)
+5. Pretty sure ~20% of websites are behind the same set of Cloudflare IPs, so I don’t know how well this works now. [↩](https://jack.cab/blog/siterate.html#user-content-fnref-cf)
