@@ -1,135 +1,44 @@
-A squircle is a shape intermediate between a square and a circle.
-There is no single mathematical definition, rather there are a number of curves that fit this shape.
-All general squircles are parametrized, and can vary between circle and square.
+A critical flaw in **Red Hat Quay** allows an attacker who can access a Quay registry to read and overwrite private container images in every repository.
 
-Loading the interactive tester…
+Quay enables anonymous access by default, and while it is enabled, the attacker needs no account. When it is off, anyone with a valid account can still exploit the flaw, Red Hat said yesterday. The company has released fixed builds for eight Quay 3 branches.
 
-## Superellipse
+The flaw is tracked as **CVE-2026-123710 **(CVSS score: 9.8).
 
-The best known squircle is the superellipse, popularized by Piet Hein.
-Martin Gardner wrote a detailed narrative of its origin in a [Scientific American column](https://archive.org/details/mathematicalcarn00gard/page/240/mode/2up) in 1977.
-The text is replicated in [https://piethein.com/superellipse/](https://piethein.com/superellipse/) but that’s missing equations and figures.
+Quay uses keys it trusts to sign the access tokens that allow image pushes and pulls. The flaw lets an attacker add their own key to the keys Quay trusts, with no expiry date. Quay then accepts tokens signed with that key for any repository.
 
-The superellipse has the formula $|x|^n + |y|^n = 1$ (we’ll use a unit radius for convenience).
-When $n=2$ it is a circle, and it approaches a square asymptotically as $n \rightarrow \infty$.
+With those tokens, an attacker can retrieve private images and any secrets or credentials stored within them. The attacker can also push or overwrite images, and the change propagates to every system that later pulls those images.
 
-## Measurement
+The planted key survives restarts until someone removes it. It can also be used to delete the keys that running Quay instances use, so normal pushes and pulls start failing with authentication errors.
 
-There is no standard measurement for squircles.
-For superellipses, the exponent is the most common parameter.
-A good choice is the coordinates of the midpoint of the quadrant, assuming a unit radius; here $x$ and $y$ are equal.
-The conversion formula is simple and intuitive: $x = 0.5^{1/n}$.
-This measurement is called "gauge" in the interactive demo above, and is the primary parameter; with the exception of some unreachable regions of parameter space, it should be possible to compare different squircle variants with similar gauge.
+Quay's key server checks that a request to replace a key carries a token signed by a trusted key, with the expected audience and issuer. It does not check whether the token was issued for key rotation. An anonymous token from Quay's /v2/auth endpoint passes: Quay signs it with a trusted key, and the caller chooses its audience.
 
-## Flat-sided squircles
+A second critical flaw, **CVE-2026-110697** (CVSS score: 9.9), was disclosed at the same time. It lets a Quay user who can create a namespace steal other tenants' robot account tokens and use them to read, push, or overwrite those tenants' images.
 
-There are two basic approaches to squircle creation.
-One is a single analytic curve, where curvature reaches zero at the poles, but is otherwise nonzero.
-The other is mixing straight line segments with corners.
-A significant advantage of the latter approach is that it can adapt to rectangles of arbitrary aspect ratio without distorting the corner shape.
+This flaw is in the code that lists robot accounts. It builds an SQL LIKE pattern from the namespace name without escaping wildcard characters, and in SQL LIKE an underscore matches any single character.
 
-## The Apple squircle shape
+So a namespace with an underscore in the right place can match another tenant's namespace and return its robot accounts, with their decrypted tokens. The attacker needs no elevated privileges, and the victim does not have to do anything.
 
-Squircles received renewed attention when Apple changed the icon shape from rounded rectangle to their own squircle in iOS 7 in 2013.
-There were several blog posts to analyze and recreate the shape.
-An early analysis suggested that it was a superellipse of exponent 5, but when people extracted the Béziers and looked more closely, that was found to be inaccurate.
-Rather, it’s a flat-sided squircle.
+Deleting the attacker's namespace also deletes the corresponding robot accounts, which can cut off systems that rely on them. Where Quay is the integrated registry for OpenShift, stolen robot credentials can be used to inject malicious images into CI/CD pipelines, the company says.
 
-For the raw Bézier path data of the Apple shape, the best source is the [PaintCode blog](https://www.paintcodeapp.com/blogpost/code-for-ios-7-rounded-rectangles).
-This blog correctly points out some bugs in that logic, and also has some details on behavior for oval rather than square aspect ratios.
+Red Hat's Dave O'Connor found both flaws. The logic behind CVE-2026-123710 has been in Quay since its first public commit, according to the [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2568072) for that flaw.
 
-The Apple shape has a number of flaws, including one extraneous straight line segment, and a lack of symmetry.
-However, those flaws are minor, and really only reveal themselves under close analysis.
+Red Hat lists every version of Quay 3 and Quay 5 as affected by both flaws. For CVE-2026-123710, its guidance names standalone installs, Quay deployed by the Quay Operator on OpenShift, and the mirror registry for Red Hat OpenShift as affected.
 
-The Apple shape has no additional parameter, so its variation is controlled entirely by the length of the flat side.
-With no flat side, it has a gauge fixed at 0.809.
+Any Quay instance that untrusted clients can reach is exposed, including internal registries, the company says.
 
-An extremely detailed analysis of the Apple shape is in [The Art of Continuous Corners](https://tsuijunxi.github.io/en/2026/06/23/the-art-of-continuous-corners/).
+When checked today, the [CVE entry](https://access.redhat.com/security/cve/cve-2026-123710) for CVE-2026-123710 still showed every Quay package as affected, with no fix, even though each advisory lists the flaw.
 
-## The Figma squircle
+The company recommends these steps:
 
-Figma published a blog post, [Desperately Seeking Squircles](https://www.figma.com/blog/desperately-seeking-squircles/), with an analysis of the Apple squircle and their own approximation.
-It is influential because Figma is an important design tool, because their writeup was compelling, and because there are any number of open source implementations of it, mostly TypeScript/JavaScript.
+1. At the proxy or load balancer, block the /keys endpoint for everything except trusted internal components.
+2. Search the audit logs for service_key_rotate and service_key_delete events where expiration_date is null.
+3. Remove any approved service keys you do not recognize.
+4. Install the fixed release. Until it is running, an attacker can add a new key the same way, so deleting one does not last.
 
-- squircle-path-kit from msurguy
-- figma-squircle from phamfoo
-  - corner-smoothing from sanalabs (uses figma-squircle)
-  - squircle-js from bring-shrubbery (uses figma-squircle)
-- figma_squircle from aloisdeniel (Dart/Flutter)
-- Lisse from JaceThings
+"Turning off anonymous access doesn't protect you," the company says in its [key remediation article](https://access.redhat.com/solutions/7149923). A planted key also continues to work after password resets and changes to the robot token.
 
-The Figma blog contains a plot of the Béziers comprising a cleaned up version of iOS 7 rounded rectangle, revealing three Bézier segments per quadrant.
-It fixes the straight-line segment and the asymmetry, so is not an exact match.
-The middle segment is very close to an arc.
-The other segments are more problematic.
-They have zero curvature at the endpoints, so are G2 continuous with flat sides, but there is a curvature discontinuity with the middle (arc) section, and their curvature profile is not especially smooth.
-A reasonable guess is that it was drawn by hand to be approximately smooth.
+For CVE-2026-110697, the company's [CVE page](https://access.redhat.com/security/cve/cve-2026-110697) names the same eight releases as fixed, calls updating the only complete fix, and says Quay.io is already fixed. But none of the eight advisories list CVE-2026-110697.
 
-Without a flat side, the Figma squircle is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.854.
-Gauges up to 1 are of course attainable by adding the flat side.
+Until an update is in place, the company suggests limiting who can create organizations or namespaces containing an underscore, rotating robot tokens for any namespace that matches an underscore namespace, and watching for pulls or pushes that do not fit normal robot use. These steps reduce the exposure, but the flaw remains.
 
-## Clothoid squircles
-
-The Figma blog suggests “smoothed curvature profiles” which have a piecewise linear relationship between arc length and curvature.
-It then goes on to approximate them with cubic Bézier segments, but their approximation has fairly significant curvature discontinuities when joining to the circular arc.
-The clothoid squircle is worth describing explicitly, as it has G2 continuity (as opposed to G1 for the Figma approximation).
-
-The behavior is generally similar to the Figma variant.
-Without a flat side, it is only capable of a gauge between $\sqrt{0.5}$ (0.707) and 0.790.
-
-## The box decorations corner-shape spec
-
-Squircles got a big boost as they’re now standardized in CSS, as the [corner-shape](https://www.w3.org/TR/css-borders-4/#propdef-corner-shape) property of the [box decorations spec](https://www.w3.org/TR/css-borders-4/).
-These specify real superellipse corners, with additional tweaks and support for animation.
-
-### The Chromium superellipse approximation
-
-While the CSS spec mandates the actual superellipse shape, practical implementations will generally use a Bézier approximation.
-A blog post, [The corner cases of implementing CSS corner-shape in Blink](https://developer.chrome.com/blog/implementing-corner-shape), gives an efficient closed-form approximation, with two Bézier segments per quadrant.
-This formula, determined using symbolic regression, is parametrized, and handles exponents 2 and above well.
-It is exact for placing the midpoint (this is part of the formula), so is well calibrated in that regard.
-
-### Apple-like behavior with the corner-shape spec
-
-The early analysis of the Apple squircle shape as being approximately an exponent 5 superellipse was based on coarse shape only and didn't take into account its flat side.
-A much better match to the Apple shape is attainable using a superellipse with exponent 3 and a corresponding flat side length to match the gauge.
-This has G2 continuity and a similar curvature profile.
-This illustration was made using the Chromium approximation, so it should match the browser.
-
-![The Apple squircle beside a superellipse of exponent 3 with flat sides](https://linebender.org/wiki/curves/squircle/apple_vs_superellipse.svg)
-
-Here's the CSS to accomplish the "close to Apple" squircle shape.
-Note that the parameter to the `superellipse()` function is the base-2 log of the exponent, so the value for an exponent of 3 is 1.585.
-
-```css
-.icon {
-  aspect-ratio: 1;
-  border-radius: 46.2%;
-  corner-shape: superellipse(1.585);
-}
-```
-
-## Continuity
-
-A superellipse of exponent $n$ has continuity $G(\lceil n \rceil - 1)$.
-This includes the flat-sided variants, as, for exponent > 2, the endpoint of the quadrant has zero curvature.
-A perfect circle (and indeed, any even integer exponent) without flat sides is of course the exception, as it has an infinitely high order of continuity.
-
-As a general observation, for visual smoothness, the shape should have G2 continuity.
-Of the variants discussed, only the clothoid and superellipse (for n > 2) have this property.
-The Chromium approximation comes close; it doesn't have zero curvature by construction when joining the flat part, but does at the corner join by symmetry (unlike the Figma approximation, which has an additional arc there).
-
-## Other squircles
-
-Quite a number of other curves can be pressed into service as squircles if need be.
-
-- The polynomial spiral (“spiro”) curve can do a reasonable flat-sided squircle with G2 continuity. See the “suitcase corners” section of [Raph's thesis](https://levien.com/phd/phd.html), figure 7.2.
-- Conic sections (hyperbolas). These approximate a sharp corner but are only G1 continuous (if flat sided).
-- Fernández-Guasti squircle, defined by $x^2 + y^2 - s^2x^2y^2 = 1$. This is used in engineering but likely not in graphic design.
-- The [Wikipedia page on squircles](https://en.wikipedia.org/wiki/Squircle) has a “periodic squircle” which has very similar behavior to the Fernández-Guasti one (they are visually near indistinguishable).
-
-## Related topics
-
-The offset curve of a squircle is not a squircle, but (a) it’s close, and (b) concentric squircles might be visually just as appealing or more so; for example a slightly rounded inner corner might look better than a sharp one if the curvature exceeds the stroke half-width.
-
-The [blurred rounded rectangle approximation](https://raphlinus.github.io/graphics/2020/04/21/blurred-rounded-rects.html) is based on applying shading to a superellipse; each iso-line is in fact a superellipse.
+The [upstream fix](https://github.com/quay/quay/commit/094cfb024f01) adds the missing rotation check, requires keys added through the key server to have an expiry date, and stops callers from choosing a token's audience. The same change fixes the robot account search too.

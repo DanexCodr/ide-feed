@@ -1,44 +1,98 @@
-A critical flaw in **Red Hat Quay** allows an attacker who can access a Quay registry to read and overwrite private container images in every repository.
+Write Rust for long enough, and you are bound to run into `error[E0117]`.Take a simple, everyday scenario. You pull in a serialization library that defines a `ToJson` trait, along with a third-party type library like `uuid`. You want to turn a `uuid::Uuid` into JSON, so you naturally write:`impl ToJson for uuid::Uuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}`And the compiler immediately stops you:`error[E0117]: only traits defined in the current crate can be implemented for types defined outside of the crate`This is Rust's well-known **Orphan Rule**. Once people hit this wall, they usually either complain that the compiler is too rigid or dutifully wrap the type in a NewType. But if you look closely at how the Orphan Rule actually works, it is not a dead end. By design, it leaves a pretty wide door open.What Is the Orphan Rule Actually Protecting Against?Setting the jargon aside, the logic behind the Orphan Rule is simple: **if you want a type to implement a trait, at least one of those two things (the type or the trait) must belong to your own crate.** In plain English, you don't get to make rules for someone else's types.Suppose crate A implements `ToJson` for `uuid::Uuid` and outputs a hyphenated UUID string, while crate B also implements `ToJson` for `uuid::Uuid` and outputs 32 raw hex characters without hyphens. If a project depends on both A and B, the compiler has a problem when it sees `uuid.to_json()`: which implementation should it pick?To prevent this kind of global conflict, Rust enforces **coherence**, and the Orphan Rule is how it gets enforced. There is nothing wrong with the rule itself. It keeps the Rust ecosystem from turning into a mess as dependency trees grow. The catch is that real-world projects constantly run into a very common need: making a third-party type implement a trait from another third-party crate. Neither the type nor the trait is yours, yet gluing libraries together like this happens all the time. So what can you do?Why the Two Usual Workarounds Fall ShortRight now, the Rust ecosystem mostly relies on two workarounds. Both appear to solve the problem on the surface, but because neither addresses the root cause, they get awkward fast.1. Building it into the libraryMany foundational crates take this route: since users can't write the `impl` themselves, the crate provides it internally. Because `ToJson` is defined inside the crate, implementing it for any external type satisfies the Orphan Rule. Open up the `Cargo.toml` of one of these crates, and you will see a long list of feature flags: `with-uuid`, `with-chrono`, `with-time`, `with-jiff`, `with-url`, `with-rust-decimal`, and so on.It looks helpful at first, but **it tries to enumerate an open, constantly changing ecosystem inside a single crate**. That approach has clear limits, and the downsides show up quickly:**You can never support everything.** Today the community favors `chrono`, tomorrow people switch to `jiff`, and next week your team builds its own internal `Money` type. If the library doesn't have built-in support, you are stuck waiting for a release or opening a PR yourself.**Version lock-in.** When a third-party type crate bumps its major version, your whole dependency tree gets stuck until the trait crate publishes a matching update.**Hardcoded behavior.** Maybe the library serializes `DateTime<Utc>` as an ISO-8601 string by default, while your API spec requires an integer timestamp in milliseconds. Because the implementation lives inside the library, you have no way to change it.2. Wrap it in a NewType yourselfWhen the library doesn't have built-in support, or its default behavior doesn't fit your needs, you fall back to the familiar NewType pattern:`pub struct MyUuid(pub uuid::Uuid);
 
-Quay enables anonymous access by default, and while it is enabled, the attacker needs no account. When it is off, anyone with a valid account can still exploit the flaw, Red Hat said yesterday. The company has released fixed builds for eight Quay 3 branches.
+impl ToJson for MyUuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self.0)
+    }
+}`Wrapping one or two types is fine. The trouble starts when a moderately complex domain model mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types all at once. Once you wrap everything into `MyUuid`, `MyUrl`, and `MyDateTime`, your business logic gets littered with `.0`, and you spend your time constantly wrapping and unwrapping values. It gets old very quickly.NewType is a genuinely useful pattern in Rust for expressing domain meaning, hiding internals, or enforcing invariants. The problem is that when you only use it to appease the Orphan Rule on types that didn't need a wrapper in the first place, your code bloats quickly.So is there a way to let users decide how third-party types implement a trait, without wrapping everything in NewTypes?Adding a Generic Slot to the TraitLet's go back to the rule: either the type or the trait must belong to the current crate.Many developers assume the compiler only looks at `Trait` and `Type` in `impl Trait for Type`. In fact, under Rust's Orphan Rule (RFC 2451), **the trait's own generic type parameters are also part of the check**.Put simply, in `impl Trait<P> for Type`, as long as a local type appears in the trait's generic parameters, and there are no uncovered type parameters before it, the compiler knows this implementation belongs exclusively to the current crate. No other crate can conflict with it, so the compiler lets it through.Take this example:`impl ToJson<MyCtx> for uuid::Uuid {
+    // ...
+}``ToJson` is a foreign trait, and `Uuid` is a foreign type, but `MyCtx` is defined in the current crate. Because it sits in the trait's generic parameter position, this `impl` satisfies the Orphan Rule.Following this idea, a library author only needs to take one extra step when designing a trait: **leave a generic parameter on the trait as an extension point for users**.For example:`pub trait ToJson<Ctx = ()> {
+    fn to_json(&self) -> String;
+}`Notice that `Ctx = ()` has a default type. When the library implements `ToJson` for basic types like `i32` and `String`, it makes those implementations generic over any `Ctx`:`impl<Ctx> ToJson<Ctx> for i32 {
+    fn to_json(&self) -> String {
+        self.to_string()
+    }
+}
 
-The flaw is tracked as **CVE-2026-123710 **(CVSS score: 9.8).
+impl<Ctx> ToJson<Ctx> for String {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}`This way, regular users never even notice `Ctx` exists. Everything works the exact same way as before, with `()` as the default context.When you do need to plug in third-party types, you just define an empty marker struct in your own crate:`pub struct MyCtx;`Then you can write implementations for any third-party type you want:`impl ToJson<MyCtx> for uuid::Uuid {
+    fn to_json(&self) -> String {
+        format!("\"{}\"", self)
+    }
+}
 
-Quay uses keys it trusts to sign the access tokens that allow image pushes and pulls. The flaw lets an attacker add their own key to the keys Quay trusts, with no expiry date. Quay then accepts tokens signed with that key for any repository.
+impl ToJson<MyCtx> for chrono::DateTime<chrono::Utc> {
+    fn to_json(&self) -> String {
+        self.timestamp_millis().to_string()
+    }
+}`The compiler looks at this and sees: `ToJson` is foreign, `Uuid` and `DateTime` are foreign, but `MyCtx` is local to your crate. No other crate can write a conflicting implementation using your `MyCtx`, so global coherence is completely safe. It compiles right away.You can think of this conversion setup as a web of relationships, with your local `MyCtx` type as its root. A handy way to picture it is **a bunch of grapes, where `MyCtx` is the stem**. Once you grab that stem, it doesn't matter how many third-party types hang off it (`Uuid`, `Url`, `DateTime`, `HashMap`, and so on). You lift the whole bunch at once, and the compiler accepts all of them as local implementations.Better yet, you can define more than one stem in the same project. For instance, your HTTP API layer can use `ApiCtx` to format timestamps as strings, while an internal RPC layer uses `RpcCtx` to format them as integer timestamps. Both sets of rules live under separate contexts, completely isolated at compile time, with zero conflict.One detail to watch out for: the local type has to be a real, newly defined type. Creating a `type` alias for a foreign type will not work.The Position of the Local Type MattersAt this point, you might think that dropping a local type `MyCtx` anywhere into a trait's generic list solves the Orphan Rule for good. Most of the time, it does. But if your trait has more than one generic parameter, or if you want to write a generic `impl`, there is an ordering restriction that is easy to trip over.When the compiler runs its Orphan Rule check, it scans the types in a fixed order: **first the `Self` type, then the trait's 1st generic parameter, then the 2nd, and so on**. The rule comes down to one sentence: **no bare generic type parameter `T` may appear before the first local type.**Code makes this clearest. Suppose an external crate defines `ForeignTrait<A, B>` and `ForeignType`, and you define `MyCtx` locally:`// ✅ Allowed: scans ForeignType, then hits local MyCtx first; the trailing T is unrestricted
+impl<T> ForeignTrait<MyCtx, T> for ForeignType {}
 
-With those tokens, an attacker can retrieve private images and any secrets or credentials stored within them. The attacker can also push or overwrite images, and the change propagates to every system that later pulls those images.
+// ❌ Error: hits a bare T before seeing MyCtx
+impl<T> ForeignTrait<T, MyCtx> for ForeignType {}
 
-The planted key survives restarts until someone removes it. It can also be used to delete the keys that running Quay instances use, so normal pushes and pulls start failing with authentication errors.
+// ❌ Error: hits a bare T right away in Self, before MyCtx gets a chance
+impl<T> ForeignTrait<MyCtx, String> for T {}`The only word to pay attention to here is "bare". In Rust terminology, this is called an **uncovered type parameter**. A plain `T` is uncovered. If it is wrapped inside a non-fundamental concrete type like `Vec<T>` (built-in fundamental types like `&T` and `Box<T>` do not count), it is no longer uncovered, so it will not block a local `MyCtx` that comes after it:`// ✅ Allowed: T is covered by Vec, so it is not an uncovered type parameter
+impl<T> ForeignTrait<Vec<T>, MyCtx> for ForeignType {}`From a library author's perspective, this means it is not enough to just add a generic slot; you also need to put it in the right place. If your trait has multiple generic parameters and there is no strong reason otherwise, **put the context `Ctx` in the first type parameter position**. That way, downstream users writing generic implementations can avoid most of the surprising Orphan Rule errors.A Truly Standalone `models` CrateOnce this mechanism clicks, you will see that it also solves a stubborn architectural headache in larger Rust codebases.As a project grows, it usually gets split into a Cargo workspace: maybe an API gateway crate, a few business service crates, and a background worker crate. These modules often share the same data structures, so the natural move is to pull those structs out into a standalone `models` crate.Traditionally, doing this in Rust is painful. Suppose `models` defines a `Product` struct with `Uuid`, `Url`, and `DateTime` fields. If your serialization library or ORM expects those field types to already implement its traits inside `models`, you are left with two bad options:Wrap everything in NewTypes inside `models`, and pull in the serialization library, database driver, and other heavy dependencies along with them. A crate that was supposed to hold plain data structures ends up with the heaviest dependency tree in the workspace.Give up on splitting it out, and dump models and business logic into the same crate. It saves time early on, but dependency boundaries and compile times get harder to manage as the project grows.With the generic `Ctx` parameter, that knot comes untied. Inside your standalone `models` crate, you just define your structs with native types:`// crate: models
+pub struct Product {
+    pub id: uuid::Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}`Then you write a generic implementation for `Product` **open to any `Ctx`** (or let a derive macro generate it):`impl<Ctx> ToJson<Ctx> for Product
+    where
+        uuid::Uuid: ToJson<Ctx>,
+        chrono::DateTime<chrono::Utc>: ToJson<Ctx> {
+    fn to_json(&self) -> String {
+        format!(
+            "{{\"id\":{},\"created_at\":{}}}",
+            ToJson::<Ctx>::to_json(&self.id),
+            ToJson::<Ctx>::to_json(&self.created_at),
+        )
+    }
+}`Notice the subtle part here: **inside the `models` crate, `Uuid` and `DateTime` do not implement `ToJson` yet, and this code still compiles.**That is because `models` is only declaring a deferred contract: "whoever uses this later, as long as your context `Ctx` knows how to handle `Uuid` and `DateTime`, `Product` automatically supports `ToJson` under your context." As a result, `models` stays completely lightweight, carries no concrete conversion logic, and compiles very fast. The actual conversions are deferred to the downstream service crates, where each service hooks up what it needs using its own local context.For large workspaces, this keeps dependency boundaries clean. Models can evolve on their own, while different services remain free to pick whatever storage format or API representation they need.Real-World Example: How This Works in KovaThe `ToJson` snippet above is as minimal as it gets. Does this idea still hold up when you bring it into a real, more complex project?When building my own Rust ORM, **[Kova](https://github.com/edvong/kova)**, I applied this pattern across the entire type system. It is a good concrete example of how this plays out in practice.ORMs are where the Orphan Rule hurts the most. A single table often mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types. Kova's core `Encode` and `Decode` traits use the exact generic slot design we just walked through:`pub trait Encode<'a, X = ()> {
+    fn encode(self) -> Result<Value<'a>>;
+}
 
-Quay's key server checks that a request to replace a key carries a token signed by a trusted key, with the expected audience and issuer. It does not check whether the token was issued for key rotation. An anonymous token from Quay's /v2/auth endpoint passes: Quay signs it with a trusted key, and the caller chooses its audience.
+pub trait Decode<X = ()>: Sized {
+    fn decode(value: Value<'_>) -> Result<Self>;
+}`Because Kova hands the extension point to the user, it only needs built-in support for basic database primitives: integers, floats, booleans, strings, and byte arrays. Its `Cargo.toml` does not have to maintain a pile of optional dependencies and feature flags for `uuid`, `chrono`, `jiff`, `url`, and so on.In a real application, the workflow looks just like the earlier example.First, define your table structs with native types in a standalone `models` crate and add `#[derive(Model)]`:`// crate: models (no database driver or codec code needed)
+#[derive(Model)]
+pub struct Product {
+    pub id: Uuid,
+    pub price: Decimal,
+    pub vendor_url: Url,
+    pub created_at: DateTime<Utc>,
+}``#[derive(Model)]` expands into an open contract like `impl<X> Model<Engine, X> for Product where ...`, so `models` compiles completely on its own without tying itself to any concrete codec implementation.Next, in your downstream service crate, define a local marker struct `pub struct AppCodec;` and implement zero-copy conversions matching your storage layout:`pub struct AppCodec;
 
-A second critical flaw, **CVE-2026-110697** (CVSS score: 9.9), was disclosed at the same time. It lets a Quay user who can create a namespace steal other tenants' robot account tokens and use them to read, push, or overwrite those tenants' images.
+// Store Uuid as 16 raw bytes, borrowing directly with zero copies
+impl<'a, 'b: 'a> Encode<'a, AppCodec> for &'b Uuid {
+    fn encode(self) -> Result<Value<'a>> {
+        Ok(Value::Blob(Cow::Borrowed(self.as_bytes())))
+    }
+}
 
-This flaw is in the code that lists robot accounts. It builds an SQL LIKE pattern from the namespace name without escaping wildcard characters, and in SQL LIKE an underscore matches any single character.
+// Store DateTime<Utc> as an integer millisecond timestamp
+impl<'a> Encode<'a, AppCodec> for DateTime<Utc> {
+    fn encode(self) -> Result<Value<'a>> {
+        Ok(Value::Int8(self.timestamp_millis()))
+    }
+}`Finally, switch the client's context marker when you need it:`// Default client using the () codec
+let client = Options::from(conn_str).build()?;
 
-So a namespace with an underscore in the right place can match another tenant's namespace and return its robot accounts, with their decrypted tokens. The attacker needs no elevated privileges, and the victim does not have to do anything.
+// Switch to the local AppCodec at zero runtime cost
+let client = client.codec::<AppCodec>();`Switching the type carries zero runtime overhead; under the hood, it only swaps a `PhantomData` marker on `Client` from `()` to `AppCodec`. And while building Kova, another nice benefit showed up: once you have a local type like `AppCodec`, you can attach much more to it than just encoding and decoding.For example, suppose you have implemented `Encode` for `url::Url` in an ORM. If you still can't run `LIKE` queries on a `Url` column, or compare a `Url` column directly against a `&str`, that type still feels second-class in queries.So Kova puts the same generic extension slot on its SQL capability traits and type compatibility rules, such as `CanString<X>`, `CanMath<X>`, and `Compatible<Target, X>`. Users can add a couple of short declarations under their own `AppCodec`:`// Give Url string capabilities (enabling methods like `like` and `ilike`)
+impl CanString<AppCodec> for Url {}
 
-Deleting the attacker's namespace also deletes the corresponding robot accounts, which can cut off systems that rely on them. Where Quay is the integrated registry for OpenShift, stolen robot credentials can be used to inject malicious images into CI/CD pipelines, the company says.
-
-Red Hat's Dave O'Connor found both flaws. The logic behind CVE-2026-123710 has been in Quay since its first public commit, according to the [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2568072) for that flaw.
-
-Red Hat lists every version of Quay 3 and Quay 5 as affected by both flaws. For CVE-2026-123710, its guidance names standalone installs, Quay deployed by the Quay Operator on OpenShift, and the mirror registry for Red Hat OpenShift as affected.
-
-Any Quay instance that untrusted clients can reach is exposed, including internal registries, the company says.
-
-When checked today, the [CVE entry](https://access.redhat.com/security/cve/cve-2026-123710) for CVE-2026-123710 still showed every Quay package as affected, with no fix, even though each advisory lists the flaw.
-
-The company recommends these steps:
-
-1. At the proxy or load balancer, block the /keys endpoint for everything except trusted internal components.
-2. Search the audit logs for service_key_rotate and service_key_delete events where expiration_date is null.
-3. Remove any approved service keys you do not recognize.
-4. Install the fixed release. Until it is running, an attacker can add a new key the same way, so deleting one does not last.
-
-"Turning off anonymous access doesn't protect you," the company says in its [key remediation article](https://access.redhat.com/solutions/7149923). A planted key also continues to work after password resets and changes to the robot token.
-
-For CVE-2026-110697, the company's [CVE page](https://access.redhat.com/security/cve/cve-2026-110697) names the same eight releases as fixed, calls updating the only complete fix, and says Quay.io is already fixed. But none of the eight advisories list CVE-2026-110697.
-
-Until an update is in place, the company suggests limiting who can create organizations or namespaces containing an underscore, rotating robot tokens for any namespace that matches an underscore namespace, and watching for pulls or pushes that do not fit normal robot use. These steps reduce the exposure, but the flaw remains.
-
-The [upstream fix](https://github.com/quay/quay/commit/094cfb024f01) adds the missing rotation check, requires keys added through the key server to have an expiry date, and stops callers from choosing a token's audience. The same change fixes the robot account search too.
+// Allow passing &str directly to a Url column without calling Url::parse() every time
+impl<'a> Compatible<Static<Url>, AppCodec> for Static<&'a str> {}`With that in place, third-party types fit right into the ORM's DSL and behave no differently from built-in types:`client
+    .update::<Product>()
+    .set(Product::vendor_url.set("https://rust-lang.org"))
+    .filter(Product::id.eq(&target_uuid) & Product::vendor_url.ilike("https://%"))
+    .execute()
+    .await?;`Putting this design through a real codebase like Kova confirmed something practical: opening up type conversions and capabilities to a user-defined context does more than just get around the Orphan Rule on paper. Even in a complex framework, it keeps dependency boundaries clean, compile times fast, and day-to-day usage comfortable.Rust's Orphan Rule is not there to make life hard. It exists to prevent global implementation conflicts and stop crates from stepping on each other in the global namespace. Once you stop fighting for a "globally unique" implementation and instead leave a generic slot on the trait to scope uniqueness to a local context, bypassing the Orphan Rule takes no black magic at all. It is just a simple shift in perspective, yet it makes both library design and large workspace boundaries much cleaner.In the next post, I will walk through the problem that immediately follows this design: once your traits and builders carry a generic context parameter, how do you keep them from spiraling into nested generic types and slow compile times? That brings us to **boundary validation and type erasure**.*(The patterns in this series come from **[Kova](https://github.com/edvong/kova)**, a macro-free PostgreSQL and SQLite ORM for Rust. If you want to see how the full type system fits together, check out the [source and docs on GitHub](https://github.com/edvong/kova).)*

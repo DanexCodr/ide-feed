@@ -1,103 +1,131 @@
-Unpack, put `bin/` on your `PATH`, done — and with
-    `nimony n` you do not even need a C compiler.
-    [Download page](https://nimony.org/download.html) ·
-    [Build from source](https://nimony.org/install.html) ·
-    [Tools](https://nimony.org/tools.html)
+Last year marked the 40th anniversary of Phrack so we went big. We published  
+our anniversary launch release in print at Defcon 33, HOPE, WHY25 and some  
+additional variations at several conferences around the world including  
+AlligatorCon, B-Sides Canberra, Out of the Box, Datenspuren, DistrictCon,  
+OffensiveCon, Recon, and Toorcamp. We included a CTF with exploit challenges  
+and had puzzles and easter eggs included in the zine. We threw parties and  
+had talks at Defcon and WHY25 to celebrate this milestone.
 
-**Nimony** is a new compiler for Nim and the home of the **Nim 3** language: borrow checking, explicit nilability, sum types, checked generics and more, with **incremental** and **parallel** builds from the start. For how it relates to Nim 2, see the [FAQ](https://nimony.org/faq.html).
+More importantly, we got new research into people's hands. The point of the  
+relaunch was to get people reading, researching, writing, and contributing  
+again. We wanted the next person picking up Phrack to find something that  
+made them sit down at a computer and start pulling a system apart.
 
-Nimony for…
+We owe a huge thanks to the authors, editors, artists, publishing partners,  
+donors, and staff who made it happen. Writing the paper, working through  
+revisions, putting the print editions together, paying the bills, and  
+getting boxes of zines to the right places all take time and effort. Most of  
+that work is invisible when you are holding the finished issue. We  
+appreciate everyone who did it.
 
-Embedded development
+And to the readers: thank you for giving a shit. Seeing someone get excited  
+about an article, connect it to something they are working on, or realize  
+that they could contribute something themselves makes the effort worthwhile.  
+That exchange is how this thing keeps going. The relaunch worked, and this  
+issue is the follow-through.
 
-- Native code generation for x86_64, ARM64, ARM32, AVR and RISC-V — independent of LLVM and GCC, so there are fewer surprises from the implicit assumptions about C’s undefined behavior that plague these toolchains.
-- A runtime hardened against heap exhaustion: running out of memory is a condition you handle, not a crash.
-- A structured, typesafe inline assembler that uses Nim’s own syntax.
-- Memory safe thanks to optimized automatic reference counting and a variant of borrow checking that is easy to understand.
-- Provable absence of out-of-bounds indexing. Indexing into arrays, seqs and strings is a requires contract checked at the call site: an index that is provably out of range is a compile-time error, and a module with {.feature: "staticContracts".} must prove every access in bounds — no buffer overruns and no run-time checks left in the binary. Your own routines state their preconditions the same way.
+### [--[ Present ]](https://phrack.org/issues/73/introduction_md.html#---present-)
 
-Game development
+This is the third release curated by the new staff, and we are not slowing  
+down. This issue is larger than last year's, with 23 main papers and eight  
+additional articles in Line Noise. The subjects range from exploitation and  
+reverse engineering to machine learning, hardware, and the history and  
+culture that grew around this work.
 
-- Standalone binaries optimized for your target architecture.
-- .passive procs turn linear code into state machines — ideal for splitting game logic across frames.
-- Mutable state is well supported, not an afterthought.
-- Short feedback loops. Incremental and parallel builds keep the edit–compile–fix cycle fast.
+We have container escapes through the vDSO, use-after-free exploitation, QNX  
+userland shellcode, Linux kernel research, and a Chromium renderer sandbox  
+escape through Skia. Elsewhere, the issue takes on Windows smart card  
+architecture, static taint analysis in Binary Ninja, and autonomous  
+underwater vehicles.  There is also work examining backdoors in machine  
+learning and what it means to trust an AI system. One paper takes us from  
+PhrackCTF to two WinFSP zero-days, which is a pretty good argument for  
+continuing to put challenges in a zine.
 
-Full stack development
+We also have four more articles in Phrack World History, including the story  
+of the infamous SSH1 CRC32 vulnerability featured in The Matrix Reloaded as  
+well as stories about blue boxing free phone calls, a confession of a hacker  
+who tried to backdoor Linux kernel in 2003, and an early discovery of  
+botnets for hire. Our Prophile features Halvar Flake, whose contributions to  
+reverse engineering and security research are legendary.
 
-- A single language for the full stack. No matter how low level or high level your tasks are: get familiar with Nimony and end up with readable, maintainable code. The same code base compiles to C, to native code, to JavaScript and to WebAssembly — from microcontrollers to the browser.
-- Batteries included. The standard library ships what applications need: linear-time regular expressions, sockets with a TLS 1.3 client written in Nim, an HTTP client and server, JSON and a math library.
-- The compiler as a reviewer. Generics are type checked where they are defined, sum types are matched exhaustively, and the borrow checker rejects mutation under active borrows. Whole classes of plausible-looking mistakes become compile errors, pointing at the line that caused them.
-- Little ceremony. Nim’s concise, indentation-based syntax means less code to write and less code to review.
+### [--[ Future ]](https://phrack.org/issues/73/introduction_md.html#---future-)
 
-Compiler and tool developers
+In 2026, we find ourselves in a time of rapid technological change. It is  
+hard to say what vulnerability research or red teaming will look like in  
+another five years. AI has moved well beyond completing a line of code into  
+agentic systems capable of analyzing source code and reverse engineering  
+binaries to find and exploit vulnerabilities.
 
-- Built around [NIF](https://github.com/nim-lang/nifspec), an interchange format that every stage of the pipeline reads and writes. You can inspect, diff and transform the output of any stage — and it is what makes incremental and parallel builds possible.
-- Plugins go far beyond what a macro system can accomplish easily:
-  - Custom validators that look for possible deadlocks, race conditions or risky recursion (embedded targets often have very small stacks).
-  - Custom code generators that compile a subset of Nim to GPUs or target FPGAs.
-  - Custom DSLs, supported more cleanly than in Nim today — for example lexer and parser generators.
+We can be sure that the future will require us to continue to explore new  
+ideas, create new tools, and push the boundaries of what is possible in the  
+face of new challenges and opportunities created by the advancement of AI  
+and automation systems. As the effort required to put ideas into practice  
+falls, creativity and human intuition forged through experience is valued  
+even higher.
 
-Here is a taste of the language.
+We hope that this release of Phrack will inspire new ideas, discussions, and  
+collaborations that will keep the human side of hacking a critical element  
+in shaping the future of technology and society. We will continue to do our  
+part to support the community and provide a platform for sharing knowledge  
+and ideas. We look forward to seeing what the future holds and we are  
+excited to be a part of it.
 
-## Sum types (algebraic data types)
+Read the papers, try the ideas, and challenge the conclusions. When you find  
+something worth sharing, write it up and send it in. We have another issue  
+to put together, and some of you should be in it!
 
-Variant objects no longer need a separate discriminator enum: tags live in the case section, and **`case value of Tag(fields):`** pattern matching binds the fields for that arm — like expressions you’d write in ML-family languages, checked for exhaustiveness.
+To those who have supported us the past three years helping to restore  
+vitality to Phrack, we thank you.
 
-type
-  Expr = ref object
-    case
-    of Lit:
-      value: int
-    of Add, Sub:
-      left, right: Expr
+Conferences who funded prints: Defcon, OffensiveCon, Recon, Unprompted[AU],  
+Unprompted[US], BSides Canberra, Alligatorcon, TenguCon
 
-proc eval(e: Expr): int =
-  case e
-  of Lit(value):
-    result = value
-  of Add(left, right):
-    result = eval(left) + eval(right)
-  of Sub(left, right):
-    result = eval(left) - eval(right)
+Sponsors & Major Donors - WatchTowr, Elltam, Verichains, BShield,  
+TrustedSec, Binarly, Trenchant, Praetorian (WWSUL), EFF, Blaze, EMX,  
+Mullvad, ToorCon, Hacker Initiative, Endrazine, Dug Song, Napster, halvar,  
+Horizon, Huku, Julio Auto, Gadi, and the rest of the people who stepped up with  
+smaller donations.
 
-echo eval(Add(left: Lit(value: 10), right: Lit(value: 32)))  # 42
+Artists - Ian Dash, pinguino, tainted, pepper, mar, xer0, abstrakt, ToscaKaiser,  
+h7, zir, Mick, p0rtL, netspooky, ackmage, digitalis, Tedsig42, and the many  
+others who submitted their work for consideration.
 
-Shared fields can live outside the case, variants can nest (seq[Tree] in a branch), and grouped matchers like {Add, Sub}(left, right) appear where multiple tags share the same shape — see **Case in object** in the [manual](https://nimony.org/language.html).
+Reviewers - barbie, bsdaemon, C, chompie, danielcuthbert, devinc, grugq, joern,  
+jordan9001, K3, richinseattle, roddux, saber, skyper, SSHad0w, TMZ, zh4ck
 
-## Borrow checking — iterator safety and aliasing
+All the authors past and present who are now bound to the history of phrack.
 
-Nimony rejects classic footguns at compile time:
+The unnamed ones who have helped us with logistics and carrying literal tons  
+of paper around conferences to deliver them into the hands of the next  
+generation.
 
-proc grow(s: var seq[int]; use: int) =
-  s.add use
+All information in Phrack Magazine is, to the best of the ability of  
+the editors and contributors, truthful and accurate. When possible,  
+all facts are checked, all code is compiled. However, we are not  
+omniscient (hell, we don’t even get paid). It is entirely possible  
+something contained within this publication is incorrect in some way.  
+If this is the case, please drop us some email so that we can correct  
+it in a future issue.
 
-var s = @[1, 2, 3]
-# for v in s:
-#   grow(s, v)   # Error: `s` is borrowed during iteration — no realloc under active borrows
+Also, keep in mind that Phrack Magazine accepts no responsibility for  
+the entirely stupid (or illegal) things people may do with the  
+information contained herein. Phrack is a compendium of knowledge,  
+wisdom, wit, and sass. We neither advocate, condone nor participate  
+in any sort of illicit behavior. But we will sit back and watch.
 
-This follows **prefix exclusion**: while s (or s.elements) is borrowed, that path cannot be mutated until the borrow ends — sibling fields can still be updated.
+Lastly, it bears mentioning that the opinions that may be expressed in  
+the articles of Phrack Magazine are intellectual property of their authors.  
+These opinions do not necessarily represent those of the Phrack Staff.
 
-## Type checked generics
+```
 
-By default generics are type checked: the code is checked when the generic is **defined**, not only when it is instantiated! Duck typing is still available, you get it via the {.untyped.} pragma.
+    <  Editors           : staff[at]phrack{dot}org         >
+    >  Submissions       : submissions[at]phrack{dot}org   <
+    <  /dev/urandom      : loopback[at]phrack{dot}org      >
+    >  Arts & Leisure    : arts[at]phrack{dot}org          <
+    <  Twitter/X         : phrack                          >
+    >  Mastodon          : phrack[at]haunted{dot}computer  <
+    <  BlueSky           : phrack{dot}org                  >
 
-The required operations are described via concepts:
-
-type
-  Comparable = concept
-    proc `<`(a, b: Self): bool
-
-proc min[T: Comparable](a, b: T): T =
-  if a < b: a else: b
-
-echo min(3, 7)
-echo min("b", "a")
-
-Container-style concepts (e.g. Findable[T]) work the same way with iterators and indexed access — see **Concepts** and **Generics** in the [manual](https://nimony.org/language.html).
-
-# Latest news
-
-**2026-09-08** Nimony **0.6.2** has been released. It ships with a guest report from a user who spent a year porting real projects over. A Vulkan visualiser, a web framework, an embedded server: [Nim, one year in](https://nimony.org/version0_6.html).
-
-Older entries, including the [0.2 release](https://nimony.org/version0_2.html), live on the [News](https://nimony.org/news.html) page.
+ANTISPAM in the subject or face the mighty /dev/null demon!
+```

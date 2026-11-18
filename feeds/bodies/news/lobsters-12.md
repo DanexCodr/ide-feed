@@ -1,343 +1,275 @@
-Sarasa Gothic is a typeface designed for the multilingual programmer in mind. 
-Born from the seamless union of Source Han Sans and Iosevka, 
-it fills a niche in the world of sterotypically limited, boring monospace type.
+Github design is pretty good: it gets the job done, it’s clean, has consistent visual language, its design is calm and suitable for everyday use.
 
-## Features
+![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
 
-- programming ligatures and math symbols
-- true type font hinting designed for pixel-perfect tiny sizes
-- condensed for maximum semantic value
-- *complete* latin, cyrillic, greek, and east asian language support
-- exactly 0.5em set width characters to always perfectly align with 1em width asian characters
-- glyph/language alternates
-- free and open source
-- continuously updated
+Given all that, there are still many areas that could be improved. Today we’ll take one interface—repository page—and look what UI problems it has and if we can fix them.
 
-#### Try it out now!
+## First problem: nested tabs
 
-```python
-# edit me!
-```
+Let’s start with the biggest issue right away: information architecture. Take tabs. Currently there’re two levels of tabs, one nested under the other:
 
-### Latin Character Demo
+![](https://tonsky.me/blog/github-redesign/20_tabs.png?t=1697319007)
 
-```javascript
-console.log("Hello World");
-document.write("Olá Mundo");
-```
+If you are a programmer, you might be surprised but other people normally don’t like hierarchies. Nested structures are hard to grasp, remember, navigate, and grouping is very often non-intuitive. Nested tabs are one of the worst UI patterns out there.
 
-### Cyrillic Character Demo
+Then there’s a plain usability issue: let’s say I’m in Wiki and need to see Releases. What should I do? There’s no Releases tab visible, so I must figure out somehow that Releases are part of the Code (?). That makes almost no sense. Releases are as much part of the Code as Issues or Wiki are.
 
-```php
-print "Привет мир";
-```
+Solution here is to flatten all tabs into a single navigational control:
 
-### East Asian (CJK) Character Demo
+![](https://tonsky.me/blog/github-redesign/30_tabs-merged.png?t=1697319007)
 
-```bash
-echo こんにちは世界
-cat "안녕 세상.sh"
-```
+Organized that way, tabs are immediately accessible *from anywhere* in the repo. *This is a big deal*.
 
-## Programming Language Support
+As a bonus, we also won quite a bit of vertical space without sacrificing anything! Vertical space is very important, it lets you see more content and get to it faster—all good things.
 
-### Programming Ligatures for the following languages:
+We still have one problem though: tabs don’t fit. We’re going to solve it by removing icons, but let me build up a case for that first.
 
-C, C++, C#, JavaScript, PHP, F#, ML, F*, Haskell, Idris, Elm, PureScript, Swift, Coq, Matlab
+## Problem 2: Redundant icons
 
-### Code Block Demos
+Icons are visual cues that help you scan the UI quickly. “Quickly” here means faster than reading text labels. If for some reason reading labels is still faster then icons aren’t working.
 
-#### html
+One example of icons misuse: if you put too many icons in a row and they are *all* different, they won’t work.
 
-```html
-<h1 class="cute home" title="" class="about me">
-    <a href="#about" id="hidem" >Illustration</a>
-</h1>
+![](https://tonsky.me/blog/github-redesign/35_icons.png?t=1697319007)
 
-<img id="search" src="snow-pic-beret.webp"
-         onerror="this.onerror=null; this.src='snow-pic-beret.png'" alt="person with green beret and silly face">
-<h2 class="cute plane"><a href="#projects" id="showp">Projects</a></h2> 
+Prioritizing, or highlighting, something means deprioritizing everything else. You can’t highlight everything.
 
-<h2 class="cute kite"><a href="#gallery" id="showg">Gallery</a></h2>
+Another way to fail at icons: if you use obscure graphics, people will have to read labels anyways, so, again, not working.
 
-<a href="#contact" class="cute bird">Contact Me!</a>
-```
+![](https://tonsky.me/blog/github-redesign/37_obscure_icons.jpeg?t=1697319007)
 
-#### css
+Now let’s be honest: the domain of repository and project management is pretty abstract. No matter how good you are at design and how hard you try, you won’t come up with a great icon for a commit. Or a release. Or an issue. Or a license. A great icon is something *other* people know and understand. And for repositories, there’s simply none. I mean,
 
-```css
-html, body {
-    background-color: #343233;
-    font-family: 'Sarasa Mono HC', 'Sarasa Mono J', 'Sarasa Mono K', monospace;
-    color: #efdabb;
-}
+![](https://tonsky.me/blog/github-redesign/40_is-this-a-commit.png?t=1697319007)
 
-h1 {
-    font-weight: 300;
-    color: #78af9f;
-}
-```
+So Github tab icons are purely decorative. If you don’t believe me, look at what Github itself is doing. They dim icons:
 
-#### javascript
+![](https://tonsky.me/blog/github-redesign/45_commits.png?t=1697319007)
 
-```javascript
-let west = document.querySelectorAll('.west');
-let east = document.querySelectorAll('.east');
+That’s a sure sign that they, too, think it’s near impossible to figure out why backward clock means “Commit”. Github knows people will be looking at the labels anyways.
 
-// let all = [].concat(west, east);
-let all = [...west, ...east];
+But even being decorative, they’re bad at it. I mean, Icon + Label + Counter make for a symmetric and weak composition:
 
-function change() {
-	let weight = document.getElementById("weight").value;
-	for ( i = 0; i < all.length; i++ ) {
-		all[i].style.fontWeight = weight;
-	}
-}
+![](https://tonsky.me/blog/github-redesign/50_composition.png?t=1697319007)
 
-function xLight() {
-	weight.value = 200;
-	change();
-}
-```
+By removing icons we:
 
-## Human Language Support
+1. free up a lot of horizontal space,
+2. make design stronger, and
+3. get rid of visual noize.
 
-### Rock the world in 165 Languages!
+Win-win-win! Here’s the result, tabs without icons:
 
-- Afrikaans
-- Aghem
-- Akan
-- Albanian
-- Asturian
-- Asu
-- Azerbaijani
-- Bafia
-- Bambara
-- Basaa
-- Basque
-- Belarusian
-- Bemba
-- Bena
-- Bosnian
-- Breton
-- Bulgarian
-- Catalan
-- Cebuano
-- Central Atlas Tamazight
-- Chechen
-- Chiga
-- Chinese (Simplified)
-- Chinese (Traditional)
-- Chinese (Hong Kong)
-- Chinese (Classical)
-- Colognian
-- Cornish
-- Croatian
-- Czech
-- Danish
-- Duala
-- Dutch
-- Embu
-- English
-- Esperanto
-- Estonian
-- Ewe
-- Ewondo
-- Faroese
-- Filipino
-- Finnish
-- French
-- Friulian
-- Fulah
-- Galician
-- Ganda
-- German
-- Greek
-- Gusii
-- Hausa
-- Hawaiian
-- Hungarian
-- Icelandic
-- Igbo
-- Inari Sami
-- Indonesian
-- Interlingua
-- Irish
-- Italian
-- Japanese
-- Javanese
-- Jola-Fonyi
-- Kabuverdianu
-- Kabyle
-- Kako
-- Kalaallisut
-- Kalenjin
-- Kamba
-- Kazakh
-- Kikuyu
-- Kinyarwanda
-- Korean
-- Koyra Chiini
-- Koyraboro Senni
-- Kurdish
-- Kwasio
-- Kyrgyz
-- Lakota
-- Langi
-- Latvian
-- Lingala
-- Lithuanian
-- Low German
-- Lower Sorbian
-- Luba-Katanga
-- Luo
-- Luxembourgish
-- Luyia
-- Macedonian
-- Machame
-- Makhuwa-Meetto
-- Makonde
-- Malagasy
-- Malay
-- Maltese
-- Manx
-- Maori
-- Masai
-- Meru
-- Metaʼ
-- Mongolian
-- Morisyen
-- Mundang
-- Nama
-- Ngiemboon
-- North Ndebele
-- Northern Sami
-- Norwegian Bokmål
-- Norwegian Nynorsk
-- Nuer
-- Nyankole
-- Oromo
-- Ossetic
-- Polish
-- Portuguese
-- Prussian
-- Quechua
-- Romanian
-- Romansh
-- Rombo
-- Rundi
-- Russian
-- Rwa
-- Samburu
-- Sango
-- Sangu
-- Scottish Gaelic
-- Sena
-- Serbian
-- Shambala
-- Shona
-- Slovak
-- Slovenian
-- Soga
-- Somali
-- Spanish
-- Swahili
-- Swedish
-- Swiss German
-- Tachelhit (shi_latn)
-- Taita
-- Tajik
-- Tasawaq
-- Tatar
-- Teso
-- Tongan
-- Turkish
-- Turkmen
-- Ukrainian
-- Upper Sorbian
-- Uzbek
-- Vai (vai_latn)
-- Vietnamese
-- Volapük
-- Vunjo
-- Walser
-- Welsh
-- Western Frisian
-- Wolof
-- Xhosa
-- Yangben
-- Yoruba
-- Zarma
-- Zulu
+![](https://tonsky.me/blog/github-redesign/60_icons-removed.png?t=1697319007)
 
-> A user interface is like a joke. If you have to explain it, it’s not that good.
+Test yourself, see if you can find Releases tab without an icon and if it was harder than before? It wasn’t, was it?
 
-## Characters
+A note on this design: I am using the same limitations Github already uses: English language only, locked page width of 1020px. For different conditions, say, for the adaptive design we might want a different solution.
 
-### Latin Alphabet
+Another note: I had to remove Contributors tab (which was actually not a tab, but a sub-tab from Insights that was duplicated in Code for some reason) to accommodate for Settings tab. Don’t worry, we’ll get Contributors back later.
 
-ABCDEFGHIJKLMNOPQRSTUVWXYZ
-abcdefghijklmnopqrstuvwxyz
+## Problem 3: Vanity counters
 
-1234567890‘?’“!”[#]{@}/&<-+÷×=>®©$€£¥¢:;,.*
+This is the “vanity menu”:
 
-### Cyrillic Characters
+![](https://tonsky.me/blog/github-redesign/70_vanity.png?t=1697319007)
 
-АБВГДЂЕЄЖЗЅИІЈКЛЉМНЊОПРСТЋУФХЦЧЏШЩЪЫЬЭЮЯ
-абвгдђеєжзѕиіјклљмнњопрстћуфхцчџшщъыьэюя
+The thing with vanity metrics is that there should be just one. One metrics is simple to understand and focus. Two or three split attention, making everything weaker.
 
-### Greek Alphabet
+Luckily for us, both watchers and forks perform poorly as metrics anyways. For watches, people tend not to watch too much. For forks, people tend to fork for no reason.
 
-ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ
-αβγδεζηθικλμνξοπρσςτυφχψω
+But stars work. They work because they have no other function but to represent vanity. So let’s keep stars and move them to the left to get more attention:
 
-### Japanese
+![](https://tonsky.me/blog/github-redesign/73_vanity.png?t=1697319007)
 
-あいうえおカキクケコさしすせそラリルレロまみむめもワヲンサシスセソ新時代のころを映すタイフ字学校村町森卵ェぃ
+## Problem 4: “Watch” button ambiguity
 
-### Chinese
+In the watch button we have a classic “button or status” UX dilemma. Buttons tell us what can be done but don’t say what the current status is. Status tells current state but it’s not clear what it would change to.
 
-一二三四五六七八九十百千萬上中下冬東金木黑白紅橙黃綠孝仁愛信義和平子曰父母兄哀懼見聞聲貝車雨赤不乃之乎人以為相知石禮稷稻穀絲綱老者而運過非革音
+In Github case “Watch” has a button label but it doesn’t act as a button: clicking on it won’t make you watch the repo. It’s not a status either: if you see “Watch” it means you are *not* watching. Same for the other two states: they are neither buttons nor states.
 
-### Korean
+![](https://tonsky.me/blog/github-redesign/75_vanity.png?t=1697319007)
 
-가개갸거게겨고긔기나내너네녀노뇌놰뇨누뉘눼늬니다대댜더데뎌도되돼됴디라래랴러레려로뢰뢔료루튀퉤튜트틔퍼페펴포푀퐤표푸퓌풰퓨프픠해햐허헤혀호회훼휴흐희히
+The problem here is that a single button can’t be used to switch between three states. But dropdown can! Dropdowns are a well-established UI component that shows status *and* can be used to change it at the same time.
 
-=>  <=  i++  i--  ->  <->  !=  ===  <=>  !==  == >=  <-  ++++  &&
+Funny, but Github is already using a dropdown! We just need to fix it to work as any other dropdown on Earth works: to show current status. Trivial fix, really:
 
-```javascript
-let cityCount = function(cities, minPopulation, maxPopulation) {
-	let count = 0;
-	cities.forEach( object => object.population <= maxPopulation && object.population >= minPopulation ? count++ : count );
-	return count;
-}
-cityCount(allCities, 1234, 1234567);
-```
+![](https://tonsky.me/blog/github-redesign/77_vanity@2x.png?t=1697319007)
 
-## Family info
+Minor, but annoying: that checkmark is really hard to spot. Let’s highlight the whole row:
 
-### The Love Child of
+![](https://tonsky.me/blog/github-redesign/78_vanity@2x.png?t=1697319007)
 
-If a child can inherit nearly 100% of its traits and *rock it* flawlesly
+All together so far:
 
-### Complete Superfamily Features
+![](https://tonsky.me/blog/github-redesign/80_vanity-reorganized.png?t=1697319007)
 
-- Uncountably large number of glyphs
-- 480 individual .tff files or 5 .ttc files
-  - Each font contains complete Latin, Cyrillic, and Greek characters
-- Subfamilies:
-  - 5 weights: ExtraLight, Light, Regular, SemiBold, Bold
-  - 2 styles: Italic, Bold
-  - Stylistic Usage:
-    - Mono, Slab Mono: for code editors, IDE and tables
-    - UI: matching proportional sans serif for display
-    - Term: for terminals, Fixed: Term with no ligatures
-  - Language Orthography:
-    - CL: Classical Chinese
-    - SC: Simplified Chinese
-    - TC: Traditional Chinese
-    - HC: Hong Kong Chinese
-    - J: Japanese
-    - K: Korean
+Uff, we’ve done a lot! If you need a little break, now would be a perfect time for it. Don’t worry, I’ll wait.
 
-> Any fool can write code that a computer can understand. Good programmers write code that humans can understand.
+Back? Great! Let’s move on.
+
+## Problem 5: Repo description
+
+This is the repository description:
+
+![](https://tonsky.me/blog/github-redesign/90_details.png?t=1697319007)
+
+The problem with it is: why is it located under the Code tab? It’s a description of the whole repository, not just its code, right?
+
+To fix this let’s move it above the tabs, to the area that belongs to the whole repository:
+
+![](https://tonsky.me/blog/github-redesign/100_details-moved.png?t=1697319007)
+
+It still needs a couple of touches.
+
+First, font is neither big nor small (it’s 16px, standing between 18px repository name and 14px tabs). Let’s make it 14px so that there’re only two distinct font sizes. Also I’m sure there’s no need to render “https://” in the URL:
+
+![](https://tonsky.me/blog/github-redesign/112_details.png?t=1697319007)
+
+The second change is to move topics right next to the repository name. There’re usually just a few of those, so it seems wasteful to dedicate a whole line to them:
+
+![](https://tonsky.me/blog/github-redesign/114_details.png?t=1697319007)
+
+Look at us, winning more vertical space again!
+
+## Problem 6: Removing background color
+
+Blue topics on blue background became harder to read. This is because they used to be on #FFF and now they’re on Github’s #FAFBFC “very light dirty blue”.
+
+Let’s change tab’s background to #FFF too:
+
+![](https://tonsky.me/blog/github-redesign/115_details.png?t=1697319007)
+
+But why was that background there in the first place? What did it do?
+
+My guess is Github had to add it because the structure of their menu layers was becoming too complex and they needed visual cues to help you “split” it in order to understand. The black top bar serves the same purpose: to separate. I mean, they were literally spending a good half of 768px screen at navigation alone.
+
+![](https://tonsky.me/blog/github-redesign/116_details.png?t=1697319007)
+
+When split into layers, at least you are not immediately scared by it. Without a background, it would be a mess.
+
+But because we simplified the whole header so much and removed one intermediate layer, we don’t need that color coding anymore. Instead, we can enjoy fresh crisp white:
+
+![](https://tonsky.me/blog/github-redesign/119_details.png?t=1697319007)
+
+And look at all that free space! Finally, we can see some content in the top half of the screen too.
+
+## Problem 7: Description editing
+
+A small touch. If you own the repository, you get to edit both its description and its topics:
+
+![](https://tonsky.me/blog/github-redesign/120_details.png?t=1697319007)
+
+First, the “Edit” button is badly misplaced — too far, easy to miss.
+
+Second, separate edit button for topics is an artifact of topics system being developed at a different time, maybe by a different team. There’s really no need to have two separate buttons.
+
+The solution? How many edit buttons do we need? I say none.
+
+![](https://tonsky.me/blog/github-redesign/122_details.png?t=1697319007)
+
+“But... Where did edit buttons go?” You might ask.
+
+You see, the nature of description and topics is that it’s important to get people to fill them when they first create their repo. After that, people rarely change them at all.
+
+When there is no description or no topics, we will show a button to add one:
+
+![](https://tonsky.me/blog/github-redesign/124_details.png?t=1697319007)
+
+And if description/topics are already filled, go to Settings to change them. Problem solved!
+
+## Problem 8: Files description
+
+The traditional Windows File Explorer, together with macOS Finder, have established a simple pattern for file browsing: files on the left, details on the right.
+
+![](https://tonsky.me/blog/github-redesign/132_file_explorer.png?t=1697319007)
+
+Github decided to copy that pattern, but they put a very unexpected thing as details: a message from the last commit when that particular file was changed.
+
+![](https://tonsky.me/blog/github-redesign/130_code_browser.png?t=1697319007)
+
+Why? I don’t know. Commits often touch files for completely arbitrary reasons, so the last commit tells you almost nothing. I can’t think of any case when somebody would need that particular information.
+
+Maybe they wanted Github to be “about git” more than about traditional file browsing, and this was the only thing they could think of? That’s my speculation, anyway.
+
+The problem with those details is not that such a huge area is filled with something so rarely useful. The problem is that it looks *so much* like file description it confuses me every time. “Tweak layout” is not a description of the “Docs” folder. “Need these debug tools too” for “Tools”—why should I care?
+
+That means we can get rid of the descriptions without really losing anything:
+
+![](https://tonsky.me/blog/github-redesign/135_no_description.png?t=1697319007)
+
+## Problem 9: Repository overview
+
+When you get to the repository, the first page you see should not necessarily be Code. We better call it Overview—something to get a quick idea of what’s going on.
+
+Now, the Github repository is more than just a list of files. It’s also about how those files change over time. What new features were added? Which bugs were fixed? Were there any new releases recently? All those are as important as the files themselves.
+
+That’s why I suggest we add a list of recent commits to the Overview page next to files.
+
+![](https://tonsky.me/blog/github-redesign/140_code_commits.png?t=1697319007)
+
+You can now see if a project is actively developed, maintained or abandoned, if an issue you care about was recently fixed, if a new version was recently published etc (notice tags and branches pills in commit list—I miss this feature on Commits tab SO MUCH).
+
+What about that free space on the right? We can put useful stats there:
+
+![](https://tonsky.me/blog/github-redesign/150_lang_stats.png?t=1697319007)
+
+First, I added contributors. Github is all about people and collaboration, that’s why they put so much emphasis on Fork and PR buttons. Well, people are the face of that collaboration. They put their free time and energy to make that code happen. It’s only fair to see some of their faces.
+
+Activity is a relatively new feature that hasn’t found its place on repository page yet—until now. Helps you see how much momentum the project has.
+
+Language statistics was unfairly hidden away, now it’s front and foremost. I also added code size in lines of code — an obvious addition that Github still doesn’t have for some reason.
+
+Altogether, in my opinion, the new Overview tab is more helpful in everyday use.
+
+## Problem 10: Contextualizing buttons
+
+Both “Create new file”, “Upload files” and “Find files” all relate to files, so it will be reasonable to move them right next to the thing they operate on: Files.
+
+![](https://tonsky.me/blog/github-redesign/160_files_buttons.png?t=1697319007)
+
+## Problem 11: Hidden clone link
+
+Github always used to have clone URL directly on a page. That was pretty useful—when you needed to grab the code, no additional clicks were required.
+
+![](https://tonsky.me/blog/github-redesign/165_clone.png?t=1697319007)
+
+Unfortunately, during one of the redesigns Github hid the clone URL behind a button. My guess is they did it because there was simply not enough space. But people kept looking for it so they had to paint the button green.
+
+Well, after moving file buttons we have enough space to restore full-length Clone link:
+
+![](https://tonsky.me/blog/github-redesign/170_clone.png?t=1697319007)
+
+I also unified all four ways to get the repo into a single control, because semantically they are pretty much the same: a way to get the code on your machine.
+
+## Last problem: dated look
+
+This is how Github [used to look back in 2013](https://blog.github.com/2013-06-17-repository-next/):
+
+![](https://tonsky.me/blog/github-redesign/180_github_2013.jpg?t=1697319007)
+
+And this is [a screenshot from 2015](https://blog.github.com/2015-11-16-a-new-look-for-repositories/):
+
+![](https://tonsky.me/blog/github-redesign/190_github_2015@2x.png?t=1697319007)
+
+Finally, this is how it looks today:
+
+![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
+
+As you can see, the color scheme and main UI elements haven’t changed much since at least 2013. It’s not necessarily bad and mostly proves that the original design was good enough to stand the test of time.
+
+But maybe it’s time to fresh it up a little? Get rid of gradients, dirty washed-out colors, unnecessary separators, add a little more air. Something like this:
+
+![](https://tonsky.me/blog/github-redesign/200_new_look.png?t=1697319007)
+
+If you feel disoriented, give it a minute. Once you are used to it, you might notice it’s actually easier on the eyes and a bit lighter.
+
+## Finally
+
+Current Github design next to my proposal:
+
+![](https://tonsky.me/blog/github-redesign/210_compare.png?t=1697319007)
+
+We’ve added ~4 more files to the screen of the same vertical size, 6 last commits, 3 branches, 10 contributors’ faces, project activity AND expanded language stats WITHOUT losing any information.
+
+If you know someone at Github, send them a link to this article. Maybe someone there will like my ideas and eventually get to implement them—who knows?

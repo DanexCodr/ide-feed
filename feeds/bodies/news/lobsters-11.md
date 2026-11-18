@@ -1,19 +1,26 @@
-> Abstract:Many everyday programming tasks resist clean rule-based implementation, such as alerting on important log lines, repairing malformed JSON, or ranking search results by intent, and are increasingly outsourced to large language model APIs at the cost of locality, reproducibility, and price. We propose fuzzy-function programming: compiling such a function from a natural-language specification into a compact, locally executable neural artifact. We instantiate this paradigm with Program-as-Weights (PAW), in which a 4B compiler trained on FuzzyBench, a 10M-example dataset we release, emits parameter-efficient adapters for a frozen, lightweight interpreter. A 0.6B Qwen3 interpreter executing PAW programs matches the performance of direct prompting of Qwen3-32B, while using roughly one fiftieth of the inference memory and running at 30 tokens/s on a MacBook M3. PAW reframes the foundation model from a per-input problem solver into a tool builder: invoked once per function definition, it produces a small reusable artifact whose subsequent calls per function application are cheap and offline.
+I must unfortunately announce that Redict is officially deprecated, and Redict
+7.3.6 is the final release.
 
-### Current browse context:
+I had hoped to rally the Redis diaspora around a copyleft initiative, to
+protect ourselves from future rug-pulls, and made Redict to serve this purpose.
+However, with the valkey project’s success, and Redis’s return to a copyleft
+license, Redict was not able to build a sustainable community.
 
-# Bibliographic and Citation Tools
+We recommend that Redict users switch to [valkey](https://valkey.io/), which
+uses a permissive license but has better long-term prospects. We advise against
+switching back to Redis; though it is once again open source, and copyleft, it
+uses a contributor license agreement which will facilitate another rug-pull when
+Redis has a bad financial quarter.
 
-# Code, Data and Media Associated with this Article
+Switching to valkey is straightforward: if you install from your package
+manager, simply install valkey and move your config file:
 
-# Demos
+```
+# mv /etc/redict.conf /etc/valkey.conf
+```
 
-# Recommenders and Search Tools
+If you use containers, simply pull the valkey container instead and ensure that
+it runs with the appropriate config file.
 
-# arXivLabs: experimental projects with community collaborators
-
-arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
-
-Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
-
-Have an idea for a project that will add value for arXiv's community? [**Learn more about arXivLabs**](https://info.arxiv.org/labs/index.html).
+Thanks to everyone who has contributed to Redict, endorsed the fork as the
+future of Redis, and switched to it on their own machines. We had a good run :)

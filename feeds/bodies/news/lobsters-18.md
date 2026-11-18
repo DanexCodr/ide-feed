@@ -1,80 +1,109 @@
-AI disclosure: this story was written entirely by human hands, with AI doing proof-reading and light edits.
+In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
 
-No, not the rapper Coolio, but rather [Dennis M. Moran](https://en.wikipedia.org/wiki/Dennis_Moran_%28computer_criminal%29).
-No dishonor intended for the real
-[Coolio](https://en.wikipedia.org/wiki/Coolio), the rapper, though arguably
-mine was harder.
+Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
 
-There I was, standing on the couch in my basement, pointing at the TV. Janet Reno is giving a press conference on CNN, vowing to bring these cyber terrorists to justice. My jaw is open, I’m laughing. I can’t believe it. She’s talking about my friend Dennis “Coolio” Moran, a 17-year-old.
+In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
 
-But let’s back up.
+Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
 
-We were the #goonies on EFNet. We broke off from #doom, following our friend chunkk, the [legendary Doom player](https://www.doom2.net/history/history.html) (I still haven’t seen The Goonies movie though). Some of these people are still very close friends and at the time they were much closer friends than anyone I had IRL since they were computer elite and my local friends were all llamas. Above all, we were still very teenage and very dumb.
+Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
 
-They were fond of robotripping, since it was all the drugs teenagers could afford. As a suburban kid from Queens from a loving supportive family I knew drugs were bad and would sit this stuff out. I had a job at a dialup ISP in Manhattan called nyct.net as a FreeBSD sys admin. I was moving up in the world.
+But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
 
-Others, not so much. The most extreme robotripper and psychonaut on #goonies was Coolio. He was also a lot of fun. He basically never spoke ill of anyone. Everyone loved him. Girls would fall for him just watching him say stuff on IRC over my shoulder.
+The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
 
-He was also the poorest friend I’ve ever had. He grew up in Wolfeboro, New Hampshire. His mom wasn’t in his life and his dad was, as far as I knew, a decent fellow, though they struggled to make ends meet and he had lived out of a tent for a period of his life. People mostly sort their friends and they get a picture of the world that’s very curated. Dennis (and indeed the rest of IRC) was my window out of my Queens NY bubble.
+The release out today is an invitation to start making other futures, together.
 
-We did eventually hang out IRL. Dennis came to visit me in NYC and we went to Mindless Self Indulgence shows together, which were insanely fun. After one of them the (freakishly tall) lead singer Little Jimmy Urine was offering kisses for $5 (“VD free”). Dennis offered $20 over the heads of a bunch of clawing girls and he and Jimmy Urine made out.
+## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
 
-When he wasn’t talking about drugs or girls, he was talking about hacking. We were all dabbling in computer stuff. We loved Doom and Quake and we had aspirations about becoming game developers. I bought a book on C and installed DJGPP and was trying my best to learn, but lost interest in games and pivoted to networks and coding on Linux. And also hacking. Though it had been out for years, I had just caught up with that Phrack article about Smashing the Stack for Fun and Profit and was curious about how to apply it. Dennis was interested too, and we thought about how cool it’d be to write a PoC exploit together.
+This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
 
-Dennis found out about a BIND vulnerability with no PoC. We wrote one together. It worked! We were pumped. I thought we should promote internet health by publishing the PoC, since that was how you got people to fix bugs in those days. Dennis goes quiet for a few days. Then he comes back. Bro had been busy, he hacked into all of the vulnerable servers and recruited them into an insane botnet. I was shocked. WTF was he going to do with this? I thought we were just learning and there he goes hacking into half of the DNS servers on the internet! At least he patched BIND for them afterwards.
+### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
 
-Dennis reads about the [CD Universe extortion attempt](https://time.com/archive/6740163/extortion-on-the-internet) and sees a business idea. What if he combines his botnet with [smurfing](https://en.wikipedia.org/wiki/Smurf_attack) to do massive DDoS attacks? Then he could threaten to knock sites offline if they didn’t pay. I thought this sounded crazy but he insisted on trying. His reasoning was you can’t just cold email executives out of nowhere and try to extort them. You gotta build up a reputation first. So he flexed his muscle and took down Yahoo!
+A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
 
-He would say “watch this” and the sites would go down. First Yahoo, then buy.com and eBay, then etrade.com.
+![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
 
-He picked buy.com because it was the day of their IPO. What better way to show his power than ruin a company during the dot com bubble on their IPO day.
+Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
 
-In our teenage chat room this all made sense. Like a lot of teenagers (and adults), Dennis thought wealth was often illegitimately acquired, and that it was only fair to take from the rich in the bullshit days of the dot com bubble. Thug life, kind of. Definitely worked on the girls, which was probably not healthy for him.
+### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
 
-To learn more about his views on wealth maybe we should go back to Wolfeboro. I visited twice, once while he was in jail and once just to hang out and party, and it was absolutely nothing like where I was from in Queens. According to Google it’s a small town of 6,000 known as being full of lakefront summer homes. The part I saw was very much not summer homes. It was houses in the sticks. The rich, such as Mitt Romney, were vacationing in his town while his family was, at times, living in a tent.
+Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
 
-Which brings us back to the basement. I’m standing on the couch, pointing at Janet Reno on the TV, laughing. She says they’ll find whoever did this. I know who did this. I know what he used, too, because I helped write it. Are we all going to jail??
+But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
 
-Dennis wasn’t done though. He had previously rooted DNS servers and defaced [dare.com](https://attrition.org/mirror/attrition/1999/11/14/www.dare.com/) and [cwc.gov](https://attrition.org/mirror/attrition/1999/11/14/www.cwc.gov/), but took the opportunity to deface [rsa.com](https://attrition.org/mirror/attrition/2000/02/12/www.rsa.com/) after the DDoS attacks. He did recruit his friends on IRC to help him write ad copy for the defacements. I am sad to admit some of those are my words.
+As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
 
-He was especially tickled by defacing RSA since they had just put out a press release advertising that they could help defend against his DDoS attacks. Rekt.
+Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
 
-This played out over the course of a couple of days. Being teenagers on IRC, we didn’t exactly all keep his secret.
+Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
 
-We were “infiltrated” by an assistant security officer at Stanford named David Brumley. He came on calling himself “aforce” and he reeked of How Do You Do Fellow Kids energy, but it still took us way too long to kick him out. It was all for naught anyway: he was tapping the ircd at Stanford, an EFNet server, and could read absolutely everything, private messages included. Coming into the channel was probably just to provoke us into revealing even more. Oh, uh, it also didn’t help that Dennis’s RSA defacement specifically taunted aforce, which directly linked someone in #goonies to the crime.
+Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
 
-Once word got out that US digital infrastructure was being brought to its knees by a robotripping 17-year-old, the intensity died down. They ultimately did arrest Dennis, and showed him a thick stack of IRC logs of teenagers bullshitting, which is as hilarious as it sounds. He admitted to defacing the web sites, and to getting into Army and Air Force computers at four military bases, but denied launching the DDoS attacks.
+### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
 
-As it turned out, we were not all going to jail. Nothing happened to me. No FBI visit. No emails from third parties. Nothing. It was as if I had never been in the room.
+Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
 
-Meanwhile, in Canada, a copycat named [Mafiaboy](https://en.wikipedia.org/wiki/Michael_Calce) took credit for all of them. I’m not saying he did none of them. Dennis didn’t launch DDoS attacks against news sites since he thought they would help spread the story about his underworld reputation. So, it’s possible Mafiaboy did do those. No dishonor intended for Mafiaboy either. I’m sure he was a legit cyber criminal in his own way.
+![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
 
-Dennis didn’t exactly get off scot-free. He was sentenced to a year in county jail and was released after nine months. He was also ordered to pay $15,000 in restitution, $5,000 of it to RSA. A security company collecting damages for getting hacked. IMO that situation is a wash.
+### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
 
-When I visited him in jail, the Carroll County House of Corrections, I was expecting him to be depressed but he seemed really upbeat about it. He was almost having fun. He was treating it like a sleepaway camp, and the other inmates seemed to love him. While we were talking I overheard an extremely loud, very powerful toilet flush. He said something nuts like “Oh, yeah. Some kid joined our block the other day. We tried to flush him down that toilet but he wouldn’t fit so we decided he was cool.” (Years later he would tell me another story, this time about prison. Dennis was a not-big white guy, and a very large black man who had just moved to his cell wrapped a towel around his head and yanked it so hard that Dennis flipped off the bed and hit the ground. Terrifying. Dennis got up laughing his ass off, and the guy ended up being his best friend in there.)
+Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
 
-And don’t just take it from his IRC friends that he was lovable. Paul Zimmerman, a local businessman who wrote to Dennis in jail and then visited him there, [told a reporter in 2001](https://www.foxnews.com/story/teen-hacker-coolio-gets-fresh-start-as-head-of-computer-services-company): “I found him to be a most delightful person.” And: “He was not angry or vindictive or mad at the system. He was taking his licks in an honorable way.”
+![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
 
-Anyway, at that age you don’t usually get such an early view of law enforcement, but here it was: they didn’t really care about the truth of the story. They knew full well Dennis did it. The stack of IRC logs printed out screamed that he did it. The FBI has them. They know. But Mafiaboy was already willing to take the rap so why bother indicting Dennis.
+Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
 
-Dennis’s story has not fully been told to this day because he did not have a rehabilitation arc. He didn’t turn it into a career the way Mafiaboy did. Not because he never had chances: Dennis was offered a security engineering gig at a local firm but one day just walked off the job, bored.
+### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
 
-The years after that went in cycles. He’d get straight and hold down an honest job in a sandwich shop for a year or two. Then he’d lose touch with reality and do some nonsensical crime. He’d sober up in jail, which he seemed not too upset about, and then he’d be back to normal.
+You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
 
-One time he dropped LSD and started going through people’s mailboxes. He was convicted of that. Soon after starting his jail sentence he came on IRC, and he told us he had secured work release, helping a local strip club with their web site. Doing his time meant he’d leave jail, go to the strip club, hang out with strippers and smoke weed, then go back to his cell in jail at night. When society needed Dennis to repay his debts this is usually what it had in mind.
+![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
 
-He spent a while bouncing around the country. He had lots of friends from IRC who welcomed him into their homes, often romantically. Ultimately he settled in the Bay Area.
+### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
 
-I wish the story ended there. We thought he’d eventually figure it out.
+Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
 
-This story is a secret we’ve been keeping for Dennis all of this time: he did launch those DDoS attacks, and we watched him do it. There’s really no need anymore. Dennis had a secret of his own: he was addicted to heroin, and he hid that from us for years. It seems he found a community of heroin addicts out there, and it got out of control.
+The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
 
-I have some guilt about all this. Dennis went to jail, which is probably where he learned about heroin. A few of the rest of us on IRC got questioned in person by the FBI. Absolutely nothing happened to me.
+## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
 
-I really loved Dennis. We all did. We tried to help Dennis but couldn’t. He threatened to kill himself if we ever said the word “rehab” around him. He dabbled in dealing research chemicals in the Bay Area, and on the darkweb for Bitcoin, but was eventually busted and the walls began to close in around him as his court date loomed. He became paranoid and started lashing out. He was using all of the time. The last thing that happened between us was that I joined a different chat room I knew he was in. It was on a different platform, so I picked a different nick, as a joke, but one I thought he would easily grok as me. He didn’t recognize the nick and freaked out. He accused me of being a narc. I told him I was sorry and that I wasn’t trying to stress him out, but he just quit in a huff. I never talked to him again. He disappeared from IRC for several weeks. I ended up hearing from mutual IRC friends that he had been found dead in his room, in 2013 of a heroin overdose. Age 30.
+New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
 
-There was never a proper goodbye. On some level I still don’t accept that he’s gone.
+To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
 
-I still have dreams sometimes where Coolio connects to IRC and joins the chat, and we all shoot the shit like nothing had ever happened.
+- Bonfire Networks: general group to share news/discussions/questions about Bonfire
+- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
+- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
+- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
+- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
 
-*Did you know Coolio? Did he DDoS attack you? :P Let’s talk about it on [X](https://x.com/mbacarella/status/2122355335885422599), [Bluesky](https://bsky.app/profile/michael.bacarella.com/post/3n2gutmtxos2f), [Mastodon](https://infosec.exchange/@mbacarella/117626904151960541) or [Hacker News](https://news.ycombinator.com/item?id=50518786).*
+For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
+
+- Testing & Feedback: try new features and tell us what works and what breaks.
+- UX & Design: help shape how Bonfire looks and works.
+- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
+- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
+- Tech support: ask, answer and support each other in building and deploying Bonfire.
+
+And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
+
+## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
+
+As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
+
+> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
+>
+> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
+
+Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
+
+Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
+
+Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
+
+## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
+
+Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
+
+So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.

@@ -1,41 +1,343 @@
-For me, landing changes in Emacs upstream always felt somewhat out of reach, so I kinda postponed it for a long while. Perhaps the biggest hurdle was getting over the process to [assign copyright to the Free Software Foundation](https://www.fsf.org/licensing/assigning.html), which does feel a bit archaic (download, sign, and return a PDF) and slow (mostly waiting for an email response), though hey, I have nothing but sympathy. Open source is unsustainably tricky. As consumers, we often like free as in freedom and free as in beer, but neither pay the bills. We hope some company steps in to fund these projects, but that rarely happens. As a result, most open source projects are starved (even popular ones), run by volunteers working for free.
+Sarasa Gothic is a typeface designed for the multilingual programmer in mind. 
+Born from the seamless union of Source Han Sans and Iosevka, 
+it fills a niche in the world of sterotypically limited, boring monospace type.
 
-All that is to say, if the upstream Emacs contribution/onboarding process seems less than ideal, cut it some slack. The project as a whole primarily runs on the blood, sweat, and tears of unpaid contributors. If you can, fund the maintainers you rely on (or better yet, get your employer to do so).
+## Features
 
-If you've been thinking of contributing to Emacs upstream, don't procrastinate like me and just give it a try. Compared to the typical GitHub pull-request process, your first Emacs contribution may feel a little daunting and dated, but there's a lovely fuzzy light at the end of the tunnel. You see, Emacs has been [around for 50 years](https://www.theregister.com/applications/2026/11/01/mother-of-all-editors-emacs-is-50/5306727). Very few software projects get to live this long. Landing contributions on a project with such a rich history is a real treat!
+- programming ligatures and math symbols
+- true type font hinting designed for pixel-perfect tiny sizes
+- condensed for maximum semantic value
+- *complete* latin, cyrillic, greek, and east asian language support
+- exactly 0.5em set width characters to always perfectly align with 1em width asian characters
+- glyph/language alternates
+- free and open source
+- continuously updated
 
-But I digress… Let's get moving. Once I got over procrastinating, I finally got a handful of small contributions landed on the master branch. Thank you, Eli Zaretskii, Stefan Kangas, and Gerd Möllmann, for your help. From then on, I eagerly waited for them to formally make it to a stable release.
+#### Try it out now!
 
-Emacs 31 shipped the lot.
+```python
+# edit me!
+```
 
-I do enjoy a [visual (and functional) tweak here and there](https://xenodium.com/my-emacs-eye-candy), and a Dired tweak felt small enough to be the perfect candidate for my very first Emacs contribution.
+### Latin Character Demo
 
-With that in mind, I tweaked `dired-hide-details-mode` by adding the `dired-hide-details-hide-absolute-location` user option, which hides the directory's absolute path, typically displayed at the top of Dired buffers ([bug#72272](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=72272), [commit](https://cgit.git.savannah.gnu.org/cgit/emacs.git/commit/?id=7cbca90569472af5643905fca5b7ab2dea67f876)).
+```javascript
+console.log("Hello World");
+document.write("Olá Mundo");
+```
 
-More on this in my [Hide another detail](https://xenodium.com/hide-another-detail) post.
+### Cyrillic Character Demo
 
-![](https://xenodium.github.io/images/hide-another-detail/after.png)
+```php
+print "Привет мир";
+```
 
-At some point, I ran into a snag trying to run [macosrec](https://github.com/xenodium/macosrec) from my beloved `eshell`. The process just crashed with a cryptic `abort trap: 6`, so the issue wasn't super obvious. It turned out the utility required granting an OS permission that can only be requested by the host app (Emacs) if it includes the relevant description in its `Info.plist` file.
+### East Asian (CJK) Character Demo
 
-As of version 31, Emacs includes `NSSpeechRecognitionUsageDescription` in its `Info.plist` ([bug#72827](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=72827), [commit](https://cgit.git.savannah.gnu.org/cgit/emacs.git/commit/?id=c36ff7d8e46c75cfadea6f4c1f4eadb3aef37f2d)).
+```bash
+echo こんにちは世界
+cat "안녕 세상.sh"
+```
 
-## Send to… (aka macOS sharing)
+## Programming Language Support
 
-`context-menu-mode` now includes a "Send to…" item, enabling sending the current file(s) or region text to external apps or services. You can also invoke `M-x send-to` directly. On macOS, it's powered by the native sharing picker (I use it frequently to [AirDrop](https://support.apple.com/en-us/119857) things to my iPhone). Elsewhere, it falls back to `shell-command-do-open` ([bug#76120](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=76120), [commit](https://cgit.git.savannah.gnu.org/cgit/emacs.git/commit/?id=813013691a9997cbdd483e1e5cef39453ac07d6d), [follow-up fix](https://cgit.git.savannah.gnu.org/cgit/emacs.git/commit/?id=bd5b1c6b085b17870415009cbf63171e3d2fc91f)). These two implementations plug into new generic plumbing (`send-to-handlers`), so you could, for instance, add a handler sharing via Android's native share sheet (`android-browse-url` can do the heavy lifting) or KDE Connect on Linux (`kdeconnect-cli --share`).
+### Programming Ligatures for the following languages:
 
-More in my [Emacs send-to (aka macOS sharing) merged upstream](https://xenodium.com/emacs-send-to-aka-macos-sharing-merged-upstream) post.
+C, C++, C#, JavaScript, PHP, F#, ML, F*, Haskell, Idris, Elm, PureScript, Swift, Coq, Matlab
 
-![](https://xenodium.github.io/images/emacs-send-to-aka-macos-sharing-merged-upstream/context-menu.png)
+### Code Block Demos
 
-![](https://xenodium.github.io/images/emacs-send-to-aka-macos-sharing-merged-upstream/send-to.png)
+#### html
 
-Emacs 30 lost macOS dictation when migrating to `NSTextInputClient`. Implementing `selectedRange` in `nsterm.m` brought it back ([bug#79070](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=79070), [commit](https://cgit.git.savannah.gnu.org/cgit/emacs.git/commit/?id=6e64e0bd26b6c0f1c4e90c9bc0df37a2a9ac72da)). With LLMs/agents being a thing these days, dictating into your Emacs buffer may be just the thing to complement your AI workflow.
+```html
+<h1 class="cute home" title="" class="about me">
+    <a href="#about" id="hidem" >Illustration</a>
+</h1>
 
-I covered this in my [macOS dictation returns to Emacs (fix merged)](https://xenodium.com/macos-dictation-returns-to-emacs-fix-merged) post.
+<img id="search" src="snow-pic-beret.webp"
+         onerror="this.onerror=null; this.src='snow-pic-beret.png'" alt="person with green beret and silly face">
+<h2 class="cute plane"><a href="#projects" id="showp">Projects</a></h2> 
 
-![](https://xenodium.github.io/images/macos-dictation-returns-to-emacs-fix-merged/dictation.webp)
+<h2 class="cute kite"><a href="#gallery" id="showg">Gallery</a></h2>
 
-Are you getting value from any of my upstreamed changes or my Emacs packages? Please consider [sponsoring](https://github.com/sponsors/xenodium) to keep the work going. While my patches may seem relatively straightforward, some took [quite a bit of effort to land upstream](https://debbugs.gnu.org/cgi/bugreport.cgi?bug=76120).
+<a href="#contact" class="cute bird">Contact Me!</a>
+```
 
-My Emacs work not your cup of tea? No worries. As mentioned earlier, sponsor the maintainers you rely on instead.
+#### css
+
+```css
+html, body {
+    background-color: #343233;
+    font-family: 'Sarasa Mono HC', 'Sarasa Mono J', 'Sarasa Mono K', monospace;
+    color: #efdabb;
+}
+
+h1 {
+    font-weight: 300;
+    color: #78af9f;
+}
+```
+
+#### javascript
+
+```javascript
+let west = document.querySelectorAll('.west');
+let east = document.querySelectorAll('.east');
+
+// let all = [].concat(west, east);
+let all = [...west, ...east];
+
+function change() {
+	let weight = document.getElementById("weight").value;
+	for ( i = 0; i < all.length; i++ ) {
+		all[i].style.fontWeight = weight;
+	}
+}
+
+function xLight() {
+	weight.value = 200;
+	change();
+}
+```
+
+## Human Language Support
+
+### Rock the world in 165 Languages!
+
+- Afrikaans
+- Aghem
+- Akan
+- Albanian
+- Asturian
+- Asu
+- Azerbaijani
+- Bafia
+- Bambara
+- Basaa
+- Basque
+- Belarusian
+- Bemba
+- Bena
+- Bosnian
+- Breton
+- Bulgarian
+- Catalan
+- Cebuano
+- Central Atlas Tamazight
+- Chechen
+- Chiga
+- Chinese (Simplified)
+- Chinese (Traditional)
+- Chinese (Hong Kong)
+- Chinese (Classical)
+- Colognian
+- Cornish
+- Croatian
+- Czech
+- Danish
+- Duala
+- Dutch
+- Embu
+- English
+- Esperanto
+- Estonian
+- Ewe
+- Ewondo
+- Faroese
+- Filipino
+- Finnish
+- French
+- Friulian
+- Fulah
+- Galician
+- Ganda
+- German
+- Greek
+- Gusii
+- Hausa
+- Hawaiian
+- Hungarian
+- Icelandic
+- Igbo
+- Inari Sami
+- Indonesian
+- Interlingua
+- Irish
+- Italian
+- Japanese
+- Javanese
+- Jola-Fonyi
+- Kabuverdianu
+- Kabyle
+- Kako
+- Kalaallisut
+- Kalenjin
+- Kamba
+- Kazakh
+- Kikuyu
+- Kinyarwanda
+- Korean
+- Koyra Chiini
+- Koyraboro Senni
+- Kurdish
+- Kwasio
+- Kyrgyz
+- Lakota
+- Langi
+- Latvian
+- Lingala
+- Lithuanian
+- Low German
+- Lower Sorbian
+- Luba-Katanga
+- Luo
+- Luxembourgish
+- Luyia
+- Macedonian
+- Machame
+- Makhuwa-Meetto
+- Makonde
+- Malagasy
+- Malay
+- Maltese
+- Manx
+- Maori
+- Masai
+- Meru
+- Metaʼ
+- Mongolian
+- Morisyen
+- Mundang
+- Nama
+- Ngiemboon
+- North Ndebele
+- Northern Sami
+- Norwegian Bokmål
+- Norwegian Nynorsk
+- Nuer
+- Nyankole
+- Oromo
+- Ossetic
+- Polish
+- Portuguese
+- Prussian
+- Quechua
+- Romanian
+- Romansh
+- Rombo
+- Rundi
+- Russian
+- Rwa
+- Samburu
+- Sango
+- Sangu
+- Scottish Gaelic
+- Sena
+- Serbian
+- Shambala
+- Shona
+- Slovak
+- Slovenian
+- Soga
+- Somali
+- Spanish
+- Swahili
+- Swedish
+- Swiss German
+- Tachelhit (shi_latn)
+- Taita
+- Tajik
+- Tasawaq
+- Tatar
+- Teso
+- Tongan
+- Turkish
+- Turkmen
+- Ukrainian
+- Upper Sorbian
+- Uzbek
+- Vai (vai_latn)
+- Vietnamese
+- Volapük
+- Vunjo
+- Walser
+- Welsh
+- Western Frisian
+- Wolof
+- Xhosa
+- Yangben
+- Yoruba
+- Zarma
+- Zulu
+
+> A user interface is like a joke. If you have to explain it, it’s not that good.
+
+## Characters
+
+### Latin Alphabet
+
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
+
+1234567890‘?’“!”[#]{@}/&<-+÷×=>®©$€£¥¢:;,.*
+
+### Cyrillic Characters
+
+АБВГДЂЕЄЖЗЅИІЈКЛЉМНЊОПРСТЋУФХЦЧЏШЩЪЫЬЭЮЯ
+абвгдђеєжзѕиіјклљмнњопрстћуфхцчџшщъыьэюя
+
+### Greek Alphabet
+
+ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ
+αβγδεζηθικλμνξοπρσςτυφχψω
+
+### Japanese
+
+あいうえおカキクケコさしすせそラリルレロまみむめもワヲンサシスセソ新時代のころを映すタイフ字学校村町森卵ェぃ
+
+### Chinese
+
+一二三四五六七八九十百千萬上中下冬東金木黑白紅橙黃綠孝仁愛信義和平子曰父母兄哀懼見聞聲貝車雨赤不乃之乎人以為相知石禮稷稻穀絲綱老者而運過非革音
+
+### Korean
+
+가개갸거게겨고긔기나내너네녀노뇌놰뇨누뉘눼늬니다대댜더데뎌도되돼됴디라래랴러레려로뢰뢔료루튀퉤튜트틔퍼페펴포푀퐤표푸퓌풰퓨프픠해햐허헤혀호회훼휴흐희히
+
+=>  <=  i++  i--  ->  <->  !=  ===  <=>  !==  == >=  <-  ++++  &&
+
+```javascript
+let cityCount = function(cities, minPopulation, maxPopulation) {
+	let count = 0;
+	cities.forEach( object => object.population <= maxPopulation && object.population >= minPopulation ? count++ : count );
+	return count;
+}
+cityCount(allCities, 1234, 1234567);
+```
+
+## Family info
+
+### The Love Child of
+
+If a child can inherit nearly 100% of its traits and *rock it* flawlesly
+
+### Complete Superfamily Features
+
+- Uncountably large number of glyphs
+- 480 individual .tff files or 5 .ttc files
+  - Each font contains complete Latin, Cyrillic, and Greek characters
+- Subfamilies:
+  - 5 weights: ExtraLight, Light, Regular, SemiBold, Bold
+  - 2 styles: Italic, Bold
+  - Stylistic Usage:
+    - Mono, Slab Mono: for code editors, IDE and tables
+    - UI: matching proportional sans serif for display
+    - Term: for terminals, Fixed: Term with no ligatures
+  - Language Orthography:
+    - CL: Classical Chinese
+    - SC: Simplified Chinese
+    - TC: Traditional Chinese
+    - HC: Hong Kong Chinese
+    - J: Japanese
+    - K: Korean
+
+> Any fool can write code that a computer can understand. Good programmers write code that humans can understand.

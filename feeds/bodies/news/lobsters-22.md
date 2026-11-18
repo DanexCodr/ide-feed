@@ -1,463 +1,514 @@
-*During the past year, we have significantly improved the reliability and
-correctness of Aerogramme's IMAP implementation. This is the first part in a
-series of blog posts elaborating on why implementing IMAP correctly is not so easy, and the set of
-techniques we have been using to make our IMAP code as high-quality as
-we can. In this first part, we focus on one challenging aspect of IMAP:
-fine-grained retrieval and querying of emails.*
+The programming language you use affects how you think as a software developer
+<sup>[1](https://blog.startifact.com/posts/how-rust-changed-me/#why)</sup>. That may seem surprising to you; you may have picked up JavaScript
+pretty quickly knowing Python, and it didn't really affect how you think or
+develop. That's because those languages are pretty similar. The more different a
+programming language is from what you're used to, the more it can change you.
+Rust was quite different to me, so it did.
 
-*[Aerogramme](https://aerogramme.deuxfleurs.fr/) is an experimental email server
-(& calendar, contacts), designed to be geo-distributed, hosted outside of
-datacenters, on refurbished hardware, and reliable even in presence of network
-issues and hardware failures. It is built on top of
-[Garage](https://garagehq.deuxfleurs.fr/) and shares the same philosophy.
-Aerogramme is AI-free: we do not wish to use unethical technology and prefer to
-spend effort on careful craftmanship and community-building.*
+I've been developing with Rust for over 6 years; more than 4 years
+[professionally](https://github.com/faassen/xot)
+[now](https://github.com/Paligo/xee). One of the reasons I really wanted to
+become more proficient with Rust is because I knew it would challenge me, and
+hopefully change me for the better as a developer. I think it did.
 
-**Implementing an IMAP server is not easy.** Partly because IMAP is an
-old protocol, with a good number of extensions that has accumulated quite a bit
-of complexity over time. On top of that IMAP provides - for good reasons - two
-classes of features that are fundamentally challenging to implement:
-fine-grained retrieval and querying of email contents and concurrent
-multi-client multi-session access to mailboxes.
+What I learned and am going to discuss here is not exclusive to Rust. You can
+encounter many of these concepts in other contexts, and indeed I had encountered
+quite a few of them already. But in this case, Rust helped bring them into
+better focus.
 
-This is the first part in a series of posts discussing how we have been
-approaching IMAP access. In the past year, we have been
-refining Aerogramme's IMAP implementation to be "more correct", in a context
-where "correctness" is unfortunately not always well specified: IMAP and email are defined in
-documents that are often vague, and furthermore, real-world implementations
-do not always follow specifications.
+We're all familiar with product types, though not usually under that name:
 
-Today, we'll walk you though our work on the **correctness and reliability of
-Aerogramme for retrieving and querying emails**, and explain why your mailbox is,
-in fact, a database...
-
-*This work was funded by [NLNet](https://nlnet.nl) under the "[Aerogramme
-1.0](https://nlnet.nl/project/Aerogramme-1.0/)" grant, and could not have been
-possible without their support.*
-
-*Feel free to join the Aerogramme [matrix
-channel](https://matrix.to/#/#aerogramme:deuxfleurs.fr) for updates or if you
-just want to chat!*
-
-# Your mailbox is a database
-
-One challenge of the IMAP specification is the rich feature-set it provides for
-retrieving mailbox and email contents. We may sometimes think of a mailbox as a
-directory containing plain email files; however, from the point of view of an
-IMAP server (or client), a mailbox is closer to a database, accessed using a
-dedicated query language.
-
-For instance, mobile clients, which have slower and unreliable connectivity,
-benefit from fine-grained querying of a mailbox contents. User experience is
-much better if an email client can selectively fetch the subject of new emails
-(to update the list of emails in the mailbox) without having to first download
-all of their attachments or doing a sync of the entire mailbox.
-
-To facilitate the mobile client use-case, IMAP specifies two key mechanisms for querying and (partial) retrieval of
-emails in a mailbox:
-
-- SEARCH looks up the emails in a mailbox that satisfy a given "search criteria"; it returns their identifiers. Criteria can select emails based on the contents of specific headers, date, text contents, or flags - metadata attached to emails that can be edited by the client. It can also be any combination of those using OR/NOT/AND boolean operators.
-- FETCH queries the contents of an email given its identifier. Extremely versatile. On top of fetching the entire email, it allows querying an email based on its high-level structure (emails have a recursive structure with sub-parts containing e.g. attachments or text+html alternative views of the same contents), its raw byte-level representation, or a combination of both. It is possible to selectively fetch sub-parts of an email (according to its structure), obtain an "abstract syntax tree" (AST) for the email and the value of some of its headers, and also fetch specific byte ranges for sub-parts.
-
-A direct consequence of these features is that **an IMAP server actually needs to parse
-the emails, not just store them**. It then needs to (correctly) interpret the (sometimes
-tricky) query language of SEARCH and FETCH, and internally support a data
-architecture that enable efficiently searching and querying over the emails.
-
-# Email querying in Aerogramme
-
-Our implementation of SEARCH and FETCH is backed by
-the three following components:
-
-*The logic for SEARCH and FETCH is implemented as an interpreter* that takes
-already parsed emails and walks down their AST to evaluate IMAP-specific
-queries<sup>[1](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#compile-queries)</sup>. This separates email structure (email ASTs do not
-depend on IMAP concepts) from IMAP-specific business logic. This layer has been
-*significantly reworked* in the last months, fixing a good number of logic bugs
-and edge cases in our implementation of the SEARCH and FETCH IMAP specification.
-
-*Email parsing is done using the
-[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec) companion library*,
-that we also develop and maintain. The eml-codec library parses emails into a
-rich, structured AST while also giving access to raw input slices that
-correspond to relevant AST nodes; this is required for implementing FETCH. In
-the past year, eml-codec has evolved from an email parsing library with
-IMAP-specific quirks to a robust, well-tested, general-purpose email library
-with support for both parsing and printing of emails. You can read more about
-the library design choices in our work-in-progress [design
-document](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md).
-
-*Aerogramme's internal data architecture splits mailbox state, email metadata,
-and email contents.* It is [briefly
-described](https://aerogramme.deuxfleurs.fr/documentation/internals/mailbox/) in
-Aerogramme's documentation. Mailbox state (emails IDs and flags) and email
-metadata (parsed headers, date, size) are stored in Aerogramme's metadata
-storage using [Garage
-K2V](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#k2v-api-experimental),
-while email contents are stored in blob storage using [Garage
-S3](https://garagehq.deuxfleurs.fr/documentation/reference-manual/features/#s3-api).
-This allows SEARCH to be efficient by only reading pre-computed information in
-metadata storage. At the moment there are no other significant optimizations
-for FETCH/SEARCH; the likely next step would be to add a full-text search
-engine.
-
-These components are all quite non-trivial! Let's now talk about the strategies
-we've deployed to make them as correct as we could.
-
-# Testing Aerogramme's FETCH and SEARCH query interpreter
-
-We ran our implementation of FETCH and SEARCH through
-[ImapTest](https://dovecot.github.io/imaptest/): a testing tool for IMAP servers
-maintained by the Dovecot developers. `ImapTest` was invaluable in surfacing issues
-with FETCH and SEARCH, but is equally useful to test all other aspects of IMAP.
-
-Most relevant for FETCH and SEARCH was the test suite provided with `ImapTest`: a
-collection of hand-crafted test scenarios testing many subtle or "interesting"
-aspects of the IMAP specification. Each scenario consists of IMAP
-commands to send to the server, and a specification of the corresponding
-expected responses.
-
-Running the ImapTest test suite found a small number of bugs in SEARCH, mostly
-in edge-cases of the specification. However, testing FETCH
-revealed that our initial implementation of the `BODY[<section>]` subcommand was
-conceptually wrong in many cases! This subcommand of `FETCH` retrieves a
-sub-part of an email by following its structure, which we implement by walking
-down the email's AST. Our initial implementation was done by reading the IMAP
-specification and interpreting its sometimes vague wording as best as we could;
-only testing with `ImapTest` made us realize that our best-guess interpretation
-was wrong in many cases. More precisely: it did not match ImapTest's reading of
-the spec, which, in doubt, is what we prefer to follow!
-
-`ImapTest` was also relatively pleasant to use to do manual "differential testing"
-for any remaining edge-cases: when we had any doubt, we could easily write
-additional scenarios and compare Aerogramme's output with Dovecot's; treating
-Dovecot as an oracle. After a few rounds of bugfixing, Aerogramme's
-implementation of FETCH and SEARCH is now in much better shape.
-
-**The lesson we learned is that the IMAP specification can leave room for
-interpretation in surprising ways.** In fact, to further illustrate this point,
-let's talk about one `ImapTest` scenario that we haven't "fixed" yet in Aerogramme
-because we just found it very confusing, and we are not sure what to do!
-
-### Example: the confusing case of `SEARCH` and structured fields
-
-He's a tricky case. `SEARCH FROM <string>` returns the list of emails whose `From`
-header "contains" the given string. Now, what does "contains" mean here,
-exactly? When running `SEARCH FROM foo@example.com` on the two following
-headers, which ones should match?
+```rust
+struct Human {
+    first_name: String,
+    last_name: String,
+}
 
 ```
-From: Foo Bar <foo@example.com>
-From: Foo Bar < "foo" (comment) @ example.com>
+
+The fields of the `Human` struct <sup>[2](https://blog.startifact.com/posts/how-rust-changed-me/#struct)</sup> can vary independently from each
+other, and we have to deal with all possible combinations: all possible first
+names and last names, combined. The *product* of their combinations, to to
+speak.
+
+But it turns out there's another type thing that's been around forever but that
+the programming community has mostly been been ignoring <sup>[3](https://blog.startifact.com/posts/how-rust-changed-me/#impoverished)</sup>: the sum
+type. A sum type expresses variants: something is either one thing, or another,
+out of a bunch of variants:
+
+```rust
+enum Person {
+    Human { first_name: String, last_name: String },
+    Cat { name: String, cuteness: Cuteness }
+}
 ```
 
-Some additional context on email syntax is useful here: these two email addresses are
-equivalent. The local-part of the email (before the `@`) allows quoted strings,
-so `"foo"` can be used and simply denotes `foo`. Email syntax also allows
-comments in various places; they are written between parentheses. Comments have
-no formal meaning but are shown by email clients and can be useful; they are
-sometimes used by mailing-list software to indicate the name of the list.
-As an example [SYMPA](https://sympa.community) emits `From` headers of the form `From: Alice (via Super Friends List) <list-address@server.org>`).
+A `Person` is *either* a human or a cat: that's the *sum* of the possiblities.
+Each variant can have data associated with it, and this can be a product type,
+but the `Person` type is just these options (two in this case). In code where
+you need to deal with a person, you need to handle each variant by `match` in on
+the object. The Rust compiler enforces this.
 
-At the moment, Aerogramme implements `SEARCH FROM` as plain substring search on
-the text representation of the header: here, the first header matches, but not
-the second. However, *the ImapTest test suite says that both headers should
-match*! So, what does the specification says?
-
-```
-FROM <string>
-   Messages that contain the specified string in the envelope
-   structure's FROM field.
+```rust
+match some_person {
+    Human { first_name, last_name } => { 
+	    // do a thing with first_name and last_name
+    },
+    Cat { name, cuteness } => {
+	   // do a thing with name and cutenes
+    }
+}
 ```
 
-Hmm, so, what is this "envelope structure"? Reading further:
+When you handle the human variant, you only need to worry about `first_name` and
+`last_name`. You don't have to worry about `name` or `cuteness` at all. These
+cases are distinct from each other.
+
+It turns out that it's really helpful to model stuff using sum types. People
+using functional programming languages already knew this. You can model
+optionality (`null`) this way: you got either some value, or nothing. You can
+also model errors: it's either okay (with whatever value you return in case of
+success), or an error (with a value describing the error).
+
+Any language without sum types now feels impoverished to me. I know I can
+simulate it with some type field, but the job of a programming language is to
+help me handle basic stuff, and this is basic stuff.
+
+In an object oriented programming language, you handle variants using dynamic
+dispatch and an interface (or inheritance). You do this:
 
 ```
-An envelope structure is a parsed representation of the [RFC5322] 
-header of the message. [...] The from, sender, reply-to, to, cc, 
-and bcc fields are parenthesized lists of address structures. [...]
-An address structure is a parenthesized list that describes an 
-electronic mail address. The fields of an address structure are in 
-the following order: display name, [SMTP] at-domain-list [...], 
-mailbox name (local-part ABNF production from [RFC5322]), and hostname.
+interface Person {
+    def do_one_thing()
+    def do_another_thing
+}
+
+class Human implements Person {
+    ...
+}
+
+class Cat implements Person {
+   ...
+}
 ```
 
-So the FROM field of an email's "envelope structure" contains a *structured* representation of *parsed* email addresses.
-Regarding our two headers above, they are both represented in the envelope structure as:
+The idea is that you can now use `Person` anywhere without worrying about the
+details inside: it's loosely coupled. You only use their interface.
+
+This is indeed a great idea, but Rust taught me that this has tradeoffs I may
+not want to pay for. You pay two things: performance, and the need to create the
+interface.
+
+Let's talk about the need to create the interface. You need to devise an
+interface that actually makes sense for your application: *how* are you using
+humans and cats everywhere? Doing this work of abstraction may be extremely
+worthwhile to do, especially if you anticipate unknown future persons that you
+need to be able to plug in later without having to modify the code that uses
+them -- you want your code use the [open/closed
+principle](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle).
+
+But what if you are developing a single domain, and inside that you just want to
+be able to handle cats and humans and that's it? There's just no need to plug in
+other types of persons, and certainly not from outside.
+
+Or let's say you do want to add a new variant once every while. Say you want to
+add `Dog`. Maybe you're actually okay going through the code that handles
+`Human` and `Cat` and add handling for dogs too? Maybe it actually is helpful to
+see those other handlers right there too when you do so? The compiler is going
+to ensure you don't miss any spots!
+
+Or what if the abstraction you are trying to devise *is* the variance and that's
+more or less what you can say about it? For error handling, the abstraction is
+either okay with some value, *or* some error value.
+
+In this case you may be paying the price of creating an interface without it
+being worthwhile.
+
+`enum` may be all you actually need -- low ceremony, and statically checked.
+Finally I'll note that enums don't lock you out from creating that abstraction -
+you can add methods to an enum too, just like on a struct.
+
+**Enums made me a better programmer as now I have another elementary, simple,
+easy to understand language construct for abstraction in my mental toolbox.**
+
+In many languages there are two types of dispatch: dynamic dispatch, which we've
+discussed in case of our `Person` interface, and conditional dispatch, like
+this:
 
 ```
-("Foo Bar" NIL "foo" "example.com")
+if something {
+   do_this_thing()
+} else
+   do_another()
+}
 ```
 
-What does it mean for this structured value to "contain" the string
-`foo@example.com`? Clearly none of the strings in the structure contain
-`foo@example.com`, so perhaps instead we should re-print the structure as an
-email address and do a substring search on that? However, *there is not a unique
-way of printing a given email address*, and the IMAP specification does not
-define any...
+Rust has dynamic dispatch, if you ask for it. It also has the powered up version
+of conditional dispatch I already discussed: match on enums. It has conditional
+dispatch too - that's just [a special
+case][https://docs.rs/bool/latest/bool/enum.Boolean.html].
 
-We are quite curious to know if IMAP experts have more to say on this point!
+There's another type of dispatch that Rust makes you think about: dispatch
+that's statically compiled.
 
-In the meantime, our bugfixes for FETCH and SEARCH have been shipped in
-[Aerogramme 0.5.1](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.5.1)
-(see the release notes for more details), with the exception of [two extra
-fixes](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/pulls/195) shipped in
-[Aerogramme 0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
+What if you're dealing *either* with groups of humans *or* groups of cats, and
+you want to do some operations on them, and those operations have common
+behavior (say, you want to count them). The group, or collection, doesn't really
+care about what's in it, as long as every item fulfills certain basic
+properties.
 
-# Improving email parsing in Aerogramme
+You could create an enum `Person`; either an enum or an interface with multiple
+implementations, and then dispatch during runtime to every member of the group
+based on whether that entry is a human or a cat. But this means you have to
+account for mixed groups of humans and cats, even though we just said those
+don't actually exist.
 
-FETCH and SEARCH operate on the *parsed* email ASTs produced by
-[eml-codec](https://git.deuxfleurs.fr/deuxfleurs/eml-codec). How do we
-ensure that we have correctly implemented all the subtleties of the email format
-in eml-codec, which is itself described in an old and tricky set of
-specifications? As often, the answer is: more testing.
+Instead, you can express this differently in Rust. You still have a `Person`
+interface (trait), but you compose your individual type of `Person` (`Human` or
+`Cat`) during compile time.
 
-## Property-Based Testing for eml-codec
+```rust
+struct Group<T> {
+   // some fields	
+}
 
-To ensure our implementation is correct, we performed fuzzer-guided Property-Based Testing (PBT) of the email parser and
-printer in eml-codec. Specifically, [we tested the following "roundtrip"
-property](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/commit/a317094811edaadbbd77657c0da05e3e771c1af6/fuzz/fuzz_targets/message_print_parse.rs#L8):
-
-> “for an arbitrary email value in eml-codec's internal AST, printing it then
-> parsing the printed output must yield an equivalent AST”
-
-The starting AST is generated by a fuzzer as a structured value using the
-`Arbitrary` trait; the [cargo-fuzz tutorial](https://rust-fuzz.github.io/book/cargo-fuzz.html) calls this
-"Structure-Aware Fuzzing". A roundtrip in the other direction, i.e.
-"parse then print then test for string equality" would not generally hold, as
-there are many equivalent ways of printing the same email, for instance because
-of line folding...
-
-While it may seem that any reasonable implementation would satisfy our roundtrip
-property, in practice, this methodology immediately surfaced a lot
-of bugs and edge cases.
-
-The recurring theme was that the fuzzer would generate "exotic" AST values
-breaking the roundtrip property, for which we had to clarify:
-
-- if these revealed an inconsistency/confusion between parser and printer, where the value, after printing, could result in invalid syntax or syntax that parsed into a different AST;
-- if these values should in fact be considered invalid; this means strengthening the AST invariants and fixing the fuzzer-based generator accordingly;
-- or whether the "equivalence checking" function for AST values needed to be relaxed (in some cases, syntactically different values represent the "same" conceptual value up to implementation details).
-
-In the first case, this fixed bugs or potential security issues for users of the
-parser (like Aerogramme) or printer. In the second case, it improved the
-definition of internal AST types, which is relevant when using eml-codec to
-programatically compose emails, not something we use in Aerogramme itself, but relevant for an
-experimental mailing-list server project in Deuxfleurs using the same library.
-
-To illustrate the kind of issues that we are talking about here, let's look at
-an tricky example that was found using our fuzzing methodology.
-
-### Example: encoded words shenanigans
-
-The ["MIME Part Three" specification
-(RFC2047)](https://datatracker.ietf.org/doc/html/rfc2047) specifies a way of
-using non-ASCII text in selected places of email headers. (Full support for
-UTF-8 in headers, which eml-codec also supports, was only [introduced
-later](https://datatracker.ietf.org/doc/html/rfc6532).) Where allowed by the
-specification, ASCII text can be replaced by an "encoded word": an ASCII
-encoding of non-ASCII text using special syntax introduced by the specification.
-
-As an example, the UTF-8 word `aérogramme` can be encoded as follows:
-
-```
-=?utf-8?q?a=C3=A9rogramme?=
+// compile time assembly, 
+// then runtime creation of the assembled group of cats
+let cat_group: Group<Cat> = Group::new();
 ```
 
-More generally, a MIME encoded word has the following structure:
+Rust now refuses to compile if you use non-cat operations on items in the group,
+That's an invariant you now do not need to worry about anymore. This will be
+familiar to you with generics in other languages like TypeScript or Python.
 
-```
-=? <charset> ? <encoding> ? <encoded-text> ?=
-```
+In Rust, when you process your group of cats, there *is* no individual check
+somewhere whether an entry is a human or a cat, as it already knows it's all
+cats before the program even ran. Rust directly dispatches to the cat code, and
+the human code is not play. You avoid indirect dispatch for every group member,
+which can matter in situations where performance is important.
 
-When using the `q` encoding like above, *most* ASCII characters can be used
-directly in the encoded text, and other bytes must be encoded as `=` followed by
-their hexadecimal code.
+**Rust made me a better programmer as I now better understand the connection
+between dispatch and performance.**
 
-Now, let us consider the following `From` header:
+## Type driven development
 
-```
-From: =?utf-8?q?@[?= X]
-```
+When I discovered Python coming from C++ back in the late 1990s, dynamic typing
+was a revelation. You could so much with so little ceremony. For the last decade
+or so I have been on a long winding road back to types (far more ergonomic
+types) and more ceremony. I have the impression many have been on this journey
+along with me <sup>[4](https://blog.startifact.com/posts/how-rust-changed-me/#if_types_anyway)</sup>.
 
-This looks like an encoded word followed by some extra junk; is this a valid
-`From` header? Perhaps surprisingly, *there is no encoded word in this header,
-and it is a valid email address!* The email address is `=?utf-8?q?` @ `[?= X]`
-(it is technically valid!), where the part after the '@' uses the uncommon
-"domain-literal" syntax.
+Types can statically check your code before it runs. In Rust, they can help the
+compiler compile stuff down to really high performance code. Both are great. But
+types can also have more subtle benefits. Let me get into this by analogy.
 
-Now, consider the following `Subject` header with the same byte representation:
+Why create automated tests?
 
-```
-Subject: =?utf-8?q?@[?= X]
-```
+**Obvious**: Automated tests ensure various properties of your code work and
+remain working.
 
-This time, the first part of the header *is an encoded word*, and the whole
-header tells us that the subject is the string `@[ X]`!
+**Subtle**: Writing tests forces you to think about the architecture and APIs
+you're implementing more carefully. Making code testable can lead to better
+architecture. This is the insight of test driven development.
 
-The explanation for this behavior follows from the specification (which is
-[fairly clear on this
-aspect](https://datatracker.ietf.org/doc/html/rfc2047#section-5)): the set of
-ASCII characters that can be used *unescaped* in `<encoded-text>` **depends on
-the context in which the encoded word appears**.
+Why write documentation?
 
-Encoded words *can appear* in `From` headers (for example `From: =?utf-8?q?a=C3=A9rogramme?= <aerogramme@deuxfleurs.fr>` is valid), but in that
-context they cannot use `@` or `[` unescaped, which is why the first example
-does not in fact contain a valid encoded word. In the context of a `Subject`
-header, the set of valid unescaped characters is broader and includes both `@`
-and `[`, making `=?utf-8?q?@[?=` is a valid encoded word representing the string
-`@[`.
+**Obvious**: People (and now machines) can understand <sup>[5](https://blog.startifact.com/posts/how-rust-changed-me/#understand)</sup> the why and
+what of your software by reading the documentation.
 
-To implement this behavior, we needed to correctly track the context in which we
-parse encoded words, "tokenize" them according to that context, and also track
-context sensitivity in our email AST and during printing. Getting every detail
-to align properly between parsing, our internal AST, and printing took us
-several attempts! In that process, our property-testing setup was *extremely
-useful*, as it could quickly come up with new convoluted examples like the one
-above that revealed bugs in edge cases of our code.
+**Subtle**: The act of writing the documentation can force you think about the
+architecture and APIs of your software. If you can't write about it, maybe you
+haven't gotten it right yet? That's documentation driven development.
 
-The lesson here is that email specifications can be *quite complicated and
-tricky to implement*, even when they are clear! And, in our experience, without
-automatic test generation (like our fuzzer setup), it is very hard to manually
-come up with examples that actually cover edge cases...
+Why write types?
 
-If you want to see more details, the bulk of our PBT/fuzzing work on eml-codec
-was done in [eml-codec
-0.3](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3) and
-shipped in [Aerogramme
-0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0), with
-some [additional
-improvements](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/pulls/84) shipped
-in [Aerogramme
-0.6](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.6.0).
+**Obvious**: Statically check your code before it runs! Prevent runtime errors!
+Performance!
 
-## Testing eml-codec on real-world emails
+**Subtle**: You model the domain model using types, trying to make sure it hangs
+together. Enums are really valuable here. You express [parse, don't
+validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+in them. The types guide the architecture and APIs of your software.
 
-We tested eml-codec on collections of real-world emails (more than 100k emails)
-to evaluate and improve the *recovery strategies* of eml-codec's parser on
-invalid or broken syntax.
+This perhaps sounds like big design up front processes where people write all
+the tests, or all the docs, or all the types, in advance, and *then* do the
+implementation. <sup>[6](https://blog.startifact.com/posts/how-rust-changed-me/#big_design)</sup> I'm not talking about this -- I'm talking about
+iterative development where you keep going back to tests, docs and types as you
+learn.
 
-Many legitimate emails found in the real world are, indeed, incorrect with
-respect to [email
-specifications](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/#rfc-and-iana-references).
-Often, the use of invalid or broken syntax is local (to specific headers, or
-parts of a header); in some cases, it is "only" a minor deviation from the
-specification.
+Rust brought into focus how types are yet another tool to help me think while I
+develop.
 
-### Example: the many shapes of message IDs
+**Rust made me a better programmer as it let me fully embrace type driven
+development.**
 
-The case of "message IDs" can be taken as an example. Emails can be given an
-identifier (specified using the `Message-ID` header) so that later emails can
-reference it (using the `In-Reply-To` and `References` headers). This is useful
-to display email "threads" in email clients, for example. The message ID syntax
-is also used to identify attachments with the `Content-ID` header.
+## The Biggest Surprise
 
-Reading the
-[specification](https://datatracker.ietf.org/doc/html/rfc5322#section-3.6.4), a
-message ID is of the form:
+Here is the biggest surprise I had coming to Rust. Much of the behavior I
+associated with dynamic interpreted languages with a rich runtime like Python
+can actually be done statically in Rust using macros.
 
-```
-<foo.bar@baz.com>
-```
+Let's talk about magic.
 
-and a list of message IDs as used by `In-Reply-To` and `References` separates message IDs with whitespace:
+Say you want to dump the state of a Python object -- you inspect all its fields,
+look at their type, turn each into a string, combine all the strings together
+into a big one. Now you can store it somewhere. Later on you restore that string
+back into an object. You can save and load any objects: magic! Python calls this
+[pickle](https://docs.python.org/3/library/pickle.html).
 
-```
-<msg1@foo.com> <msg2@bar.eu> <msg3@baz.fr>
-```
+What if you need to serialize to JSON? Python has a type system, and a library
+like [Pydantic](https://pydantic.dev) inspects the type objects during runtime
+and then uses this information to let you automatically serialize a Python
+object to JSON, or parse it back into Python again. More magic!
 
-The specification also documents that, for the list syntax, "obsolete" syntax
-(that we must support) can include extra text surrounding message IDs...
+Rust is a compiled language. Types aren't runtime objects. Without reflection,
+which [takes special effort](https://facet.rs/), runtime introspection of types
+is not a thing in Rust.
 
-Now, what do we find in our sample of real-world emails?
+But Rust can still do what Pickle and Pydantic do, at compile time.
 
-```
-Content-ID: <1855BC2C-077C-406B-AEA4-CAF088755676>
+With [serde](https://serde.rs/), Rust's answer to pickle and Pydantic, you use a
+normal Rust type, annotate it with a few declarations, and then you can
+serialize it to JSON, or toml config format, and many other formats, and load it
+back again. The annotation looks like this:
+
+```rust
+#[derive(Serialize, Deserialize)]
+struct Human {
+    first_name: String,
+    last_name: String
+}
 ```
 
--> Emitted by apple-mail, and *invalid*: no `@`!
+With [clap](https://docs.rs/clap/latest/clap/), you create the type that
+expresses exactly what command line arguments you expect (with `enum`s too!),
+document it using the normal way you document any API in Rust, and boom, you
+have a CLI with built in help. The code that handles the various cases gets
+well-typed data - at that point it's been parsed correctly already, using the
+same type you used to express the CLI.
 
+Like this:
+
+```rust
+/// My first CLI
+#[derive(Parser)]
+struct MyFirstCli {
+    /// How many cats do you want?
+    #[arg(long, short)]
+    amount_of_cats: usize
+}
 ```
-Content-ID: text-body
-Message-ID: foo@bar.com
+
+Again declarative `#[]` stuff going on. It looks a lot like decorators in
+Python. But Python decorators are executed during runtime, and we just said Rust
+doesn't normally let you do that.
+
+How does that work in Rust? Macros! Macros lets you write code that generates
+code during compile time. With serde, the macro generates a whole bunch of
+serialization code and deserialization code for the types annotated with it.
+This generated code gets compiled along with the rest of your code. The compiler
+can optimize it just like any other code.
+
+Code generation is scary. Macros are scary. Doing introspection in a dynamically
+typed language is a lot easier than using Rust macros, where code is parsed and
+generated. Macros shouldn't be randomly mixed with application code; macros
+belong in frameworks. That said, something being easy doesn't mean it should be
+used casually: in Python you typically want to carefully encapsulate your magic
+in a declarative framework too.
+
+**Rust made me a better programmer as I learned about a new class of framework
+patterns.**
+
+Rust famously lets you write code without memory leaks that doesn't use a
+garbage collector. It also stops you from mutating data you're also reading
+elsewhere, making it impossible to stumble into whole classes of weird undefined
+behavior, especially with code that runs in parallel.
+
+Rust's ownership system is one of the main things that makes learning Rust hard.
+Python, JavaScript, Java and many other languages have mutable references
+everywhere, and you can just create cyclic data structures. Rust won't let you
+do either out of the box.
+
+The equivalent of this does not compile in Rust:
+
+```python
+class Item:
+    def __init__(self, value):
+        self.value = value
+
+class Container:
+    def __init__(self, items):
+        self.items = items
+
+my_item = Item()
+my_container = Container()
+my_container.items.append(my_item)
+my_item.value = "I change you!"
 ```
 
--> *Invalid*: no angle brackets `<`/`>`!
+This also doesn't compile:
 
+```python
+class Node:
+   def __init__(self, parent, value):
+       self.parent = parent
+       self.value = value
+       self.children = []
+
+   def add_child(self, node):
+       node.parent = self
+       self.children.append(node)
 ```
-In-Reply-To: <3DE2736D.F4FCC064@orcaware.com>; from redacted@orcaware.com on Mon, Nov 25, 2002 at 11:01:01AM -0800
-In-Reply-To: Your message of Thu, 18 Mar 1993 22:28:19 GMT.\n             <8280.9303182228@damsay.dcs.ed.ac.uk> 
-```
 
--> *Valid*: an instance of the "obsolete" syntax documented by the specification.
+Rust won't just let you have circular references, in this case both children
+*and* a parent reference.
 
-```
-References: <abc@def>,<foo\n\tbar@outlook.com>,<baz@outlook.com>
-```
+This feels very limiting at first! What do you do instead? For mutating stuff,
+you learn how to separate mutation (often during construction) from using your
+data. That is a thing that's good to do in many contexts -- less invariants
+makes it's easier to reason about, but it takes a bit of getting used to Rust
+strictly enforcing it.
 
--> Commas are valid as part of the obsolete syntax, but the second message-id is malformed because of incorrect line folding (`\n\t`) in the middle of a word.
+For circular references it's trickier. I will go into it next, when I discuss
+arenas.
 
-### Engineering eml-codec for real-world emails
+A weird thing happens: if you lean into this friction it can improve the
+architecture of your codebase. Code becomes less coupled. It's hard to create
+weird backchannels with action at a distance that makes code difficult to
+understand, test and debug <sup>[7](https://blog.startifact.com/posts/how-rust-changed-me/#not_impossible)</sup>.
 
-The consequence is that eml-codec needs to be able to *recover from
-broken syntax*: on an email containing invalid syntax, it should be able to
-discard the broken parts and parse as much as it can from the rest of the email,
-instead of simply returning an error. It should also ideally be
-able to *parse invalid but common deviations from the specifications* in order
-to recover information instead of discarding them.
+Rust code locally can be difficult to understand. But how the data flows, what
+does what, in the larger codebase, tends to be cleaner.
 
-We first extended eml-codec with coarse-grained recovery strategies, such as
-discarding an entire header field if we couldn't parse it. This allowed us to
-quickly reach a state where the eml-codec parser is a *total function*: for any
-input bytes, it always returns an email AST representing an RFC-compliant
-email<sup>[3](https://aerogramme.deuxfleurs.fr/blog/2026-quality-imap-part-1/#email-ast-compliant)</sup>, discarding any part of the input it does not
-understand.
+**Rust made me a better programmer as I now think about ownership more
+carefully, which has a positive impact on architecture.**
 
-We then instrumented the parser to *log each time it discards broken input* when
-recovering, and ran the instrumented parser on the email that we collected. This
-gave us a lot of examples of legitimate emails with broken syntax. In each case,
-then, we manually looked at the piece of broken syntax, see if we could make
-some sense of it, and decide whether:
+A few years ago I analyzed a bunch of XML tree libraries in Rust. The best I
+found, [roxmltrree](https://docs.rs/roxmltree), has an immutable tree. But I
+needed a mutable tree. I found quite a few libraries that did support
+mutability, but many did not support parent references. You couldn't walk up the
+ancestor chain of a node. This, along with missing support for some XML
+features, is why I created my own in the form of
+[Xot](https://docs.rs/xot/latest/xot/).
 
-1. we could reasonably extend our parser to parse it;
-2. we could discard it more selectively (e.g. only discard a broken element in a list instead of discarding the entire list);
-3. our existing discarding strategy was the best we could do.
+The reason for this surprising lack of parent references is the ownership
+limitation I discussed before: Rust makes circular references difficult. You can
+get around it using reference counted types and internal mutability, but in a
+lot of cases this pattern isn't really optimal -- it's verbose, less performant,
+and reference count cycles risk memory leaks. What you do instead is store nodes
+in an array and you use the array indexes to node as your reference. You can
+then have an index referencing your parent, and use index references to your
+children, or any other circular reference.
 
-This whole process was particularly interesting because it made us face the many
-subtleties of real-world emails (sometimes far from the "truth" of
-specifications); eml-codec is now much more robust operating on real-world emails!
+A fancy word for this pattern is an 'arena' and in Rust they show up everywhere.
 
-This methodology involves a lot of
-tradeoffs and judgment calls: there is a limit to the amount of parsing hacks
-that we can add in terms of code quality but also parsing ambiguity; and some
-classes of emails are more critical than others (e.g. we should not spend too
-much effort supporting spam emails). A strong design constraint of
-eml-codec is that, up to a few exceptions, we want its internal AST to only
-represent RFC-compliant emails, so we did not want to pollute it to include
-random broken syntax just for the sake of "recovering more". The whole process,
-in particular, helped us clarify the
-[design](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/src/branch/main/doc/DESIGN.md)
-of eml-codec as a library.
+In an arena, you store a lot of objects together in the same region of memory
+(in an array). What does it let you do?
 
-For more details, you can look at the release notes of [eml-codec
-0.3.1](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.3.1) where
-the bulk of the work is done, building on [eml-codec
-0.2](https://git.deuxfleurs.fr/Deuxfleurs/eml-codec/releases/tag/0.2) for the
-initial setup of parsing recovery. Both shipped with [Aerogramme
-0.4](https://git.deuxfleurs.fr/Deuxfleurs/aerogramme/releases/tag/0.4.0).
+- iterate fast over its contents. Objects being in the same memory region means the CPU can use its cache effectively. This is *much* faster than arbitrary main memory access and loops really benefit.
+- fast allocation. The arena is allocated from the heap as a block, and after that your allocations may just be a few increments.
+- interning: you store something once in the arena and use it in many places, so you don't duplicate data.
+- the arena owns its stuff. Everything in the arena has the same lifetime. Indexes between objects in an arena can be circular without worrying.
 
-IMAP's search and retrieval features are essential because they allow clients to
-have a snappy UX while handling mailboxes with thousands of emails. This post
-focused on getting those basic features right. But, more broadly, we think that
-the "mailbox as database" perspective is useful because it raises the question:
-which end-user workflows can we enable and support? Which features should we
-prioritize or optimize to best support the workflows of day-to-day email users?
+Rust pushes you to use arenas. This involves more ceremony than just using a
+direct reference, but it also means Rust pushes you to write code that computers
+can execute really efficiently.
 
-*Stay tuned for the next blogpost in the series where we discuss the other big
-challenge for an IMAP server: mailbox concurrency!*
+I mentioned performance a number of times. But what about [premature
+optimization](https://blog.startifact.com/posts/is-premature-optimization-the-root-of-all-evil/)? The
+great irony of this quote is that it comes from a paper where the author, Knuth,
+argues in favor of keeping the `goto` statement around, as it's essential for
+writing efficient software.
 
-Following the database analogy, the logical next step could be to optimize this by first "pre-compiling" queries before running them on emails. Right now we don't know if this optimization would actually matter in practice...
+Rust lets you know what you pay for. Reference counting? Dynamic dispatch? You
+can do it, but it's going to be visible in your code. Rust *also* often lets you
+know when you *don't* want to pay for it: just look at [tower
+middleware](https://docs.rs/tower/) and despair about all the generic types and
+type constraints that get piled onto a relatively simple abstraction.
 
-This links to IMAP4rev1 but the more recent IMAP4rev2 isn't more specific on this subject
+When you have these tools available, need to develop new wisdom about tradeoffs
+that never seemed to matter. If you write Python code you're not too worried
+about hash tables being a performance bottle neck, but in Rust code they
+certainly can be. You can get lost along the way into hyper optimization land.
+Often you need to just get go <sup>[8](https://blog.startifact.com/posts/how-rust-changed-me/#clone_and_own)</sup>. Many patterns that are just
+plain readable Rust code anyway happen to also be friendly to the CPU executing
+it.
 
-The current eml-codec AST has a few selected exceptions to this rule, where it allows representing non-compliant data in well identified cases. One of such cases is non-compliant message IDs, such as message IDs without `@`...
+But Rust overwhelming you with details you may not want to think about is not
+the whole story, because performance is not just quantitative: if your code can
+truly be more performance, it can access new qualities. When you can write code
+that uses no memory and no CPU time <sup>[9](https://blog.startifact.com/posts/how-rust-changed-me/#exaggeration)</sup>, it changes how you
+think. It changes what's possible.
+
+Sometimes the quality of performance is obvious: if you write numerical code, or
+a simulation, of course you don't want to wait for the answer. Being able to do
+many computations really fast is key to making AI possible.
+
+But it's more subtle that that: modern computers are *really* powerful, and
+*ridicously* fast, and we generally ignore that and just throw more resources at
+our problems. There are good reasons [why this
+happens](https://blog.startifact.com/posts/bloat-retrofuturism/). But if we open our eyes a little,
+there are new architectural possibilities we can explore.
+
+While the power of macros were the biggest language surprise, I think this is
+the biggest shift in my thinking: access to performance unlocks possibilities I
+hadn't considered before. Take my experiment
+[Colchis](https://github.com/faassen/colchis): a library can store vast amounts
+of JSON in memory, while retaining full access, even indexed access (I still
+hope to add jsonpath one day!), to JSON data. Before Rust, this was a
+possibility that wasn't even on my radar.
+
+**Rust made me a better programmer because I can make the computer do more with
+less, opening up new areas of opportunity.**
+
+Rust is one of the most difficult programming languages I've learned -- and thus
+one of the languages that changed me the most. There's a simple part of Rust
+that isn't much harder to manage than any language, and in some cases may
+actually make your life easier -- `enum`s, declarative type-driven frameworks,
+and the excellent dev tooling come to mind. Even arenas are fundamentally not
+that difficult to understand. The complexity is in unlearning some habits and
+learning new ones. And then there's a more challenging complex Rust, mostly, but
+not always under the surface, there when you need it.
+
+Rust expands the reach of what I can build. That's what makes me happy I
+went on this journey. <sup>[10](https://blog.startifact.com/posts/how-rust-changed-me/#all_the_tradeoffs)</sup>
+
+AI agents write a lot of code. They know the programming language, so do
+you need to know it? Does the language still affect the developer? If you share
+my belief it's good [to look at the code](https://blog.startifact.com/posts/sigh-coding/), then it helps
+if you understand the code you're reading. I also think it's never been more
+important to think about how the systems you use affect the way you think and
+behave.
+
+If you don't know what a struct is, just call it a class in your
+head, and you're good.
+
+You have them in many languages but in impoverished forms, like
+`true`/`false`, or C's `enum`.
+
+If you're going to do static type checking anyway for the
+guarantees it brings, perhaps use a language designed around it (enums!) that
+also gives you performance benefits?
+
+Does AI truly understand? Do you want to have a philosophical
+debate? What do we mean by *understand*? Natural language is [inherently
+stretchable](https://en.wikipedia.org/wiki/Pragmatics).
+
+With AI we've seen the return of big design up front. I may be
+wrong, but I'm still skeptical of this approach, and still a fan of iterative
+development and incremental learning and theory building.
+
+Not impossible. I've seen it. People can do it if they really
+try, and it still makes life harder; it makes it much harder to test. But at
+least it's more obvious and more difficult to do.
+
+Clone and own all the stuff! Which incidentally can also lead
+to more contiguous memory layouts...
+
+No memory and no CPU time is an exaggeration, but little Rust
+programs sometimes feel that way.
+
+AI development is shifting all the tradeoffs in software
+development - they're not gone, but they have shifted. The AI can write Rust,
+even if you don't know it. But I trust plenty of contexts remain where my Rust
+experience plus AI leads to a better outcome than AI by itself.

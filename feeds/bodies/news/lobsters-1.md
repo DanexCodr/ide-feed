@@ -99,8 +99,6 @@ AggregatorHost.exe            1500 MissionControlAggregator.dll
 
 The process IDs connect the pieces: DiagTrack runs in process `10148`, which is the parent of `AggregatorHost.exe`, process `1500`; the module listing places `MissionControlAggregator.dll` inside that child.
 
-The public ISO’s baseline VM had the coding-agent feature disabled by image default, so the evidence does not support saying that it is active on every Windows installation. On my ARM64 VM, however, the relevant feature and service were active before the test.
-
 ## Testing it in practice
 
 To test the finding in practice, I copied `cmd.exe` to a file named `codex.exe` and ran it in the interactive Windows session. The name alone was enough for the component to recognize it as Codex.
@@ -169,5 +167,3 @@ I checked this with a clean installation of Windows 11 Home ARM64 using the late
 ![Windows setup with United States region: Diagnostic data defaults to Include Optional](https://xusheng.dev/posts/windows-coding-agent-telemetry/us-optional-diagnostics-default.png)
 
 Optional diagnostic data is therefore enabled by default, at least in the US setup I tested. If you did not opt out of it during installation or disable optional diagnostic data later, it is still enabled and your coding agent usage data is being uploaded. You can decline optional diagnostics during setup or turn off **Send optional diagnostic data** later under **Settings → Privacy & security → Diagnostics & feedback**. Microsoft’s [diagnostics and privacy guide](https://support.microsoft.com/en-us/windows/privacy/diagnostics-feedback-and-privacy-in-windows) explains how to change it.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50524736)
