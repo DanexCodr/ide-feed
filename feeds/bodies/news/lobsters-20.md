@@ -1,91 +1,79 @@
-I was inspired to create my first Fibonacci LED piece after seeing [this video](https://www.youtube.com/watch?v=_rt1cqsU8fo) by [Jim Bumgardner](https://krazydad.com/about) in 2015. I credit him for starting my Fibonacci obsession.
+Android’s source code is big – the Android 17 open source release has **1,084** [Git](https://git-scm.com/) repositories, **1.62 million** files, and takes **300 GB** for a built workspace. Additionally, in a typical Android source tree with hardware vendor code and first-party applications, the size increases by **2-3x**.  
 
-Fast forward to 2026. I’ve made dozens of Fibonacci designs. Recently, I saw [this brilliant post](https://www.instagram.com/p/DbYfgifReFx) by Nick Pisarro explaining the use of the golden angle in creating his beautiful [Halo Pixel](https://desert-ember.square.site/product/halo-pixel/2HSIGXSPGI5TLV2RCXBHFCMY). It got me thinking about how to explain the techniques I use.
+ Traditionally, it took over 30 minutes to fetch Android Open Source Project (AOSP) source code and well over an hour to build on even highly capable developer workstations. As software development evolved over the last 2 years, modern coding harnesses and LLMs have accelerated the development of many projects. These tools are used today for Android operating system development, but the long sync and build times make them less efficient. Both human developers and agents need quick setup, parallel workspaces, and fast build-and-test iteration times.
 
-Every Fibonacci board I make, from the tiny [One Inch Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64) to the [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024), puts its LEDs on a Fermat spiral, the same pattern as the seeds in a sunflower. It’s different from the [“Fibonacci spiral”](https://en.wikipedia.org/wiki/Fibonacci_sequence) drawn from squares, which is a single curve. The Fibonacci section shows where the name comes from.
+We built Another Build File Service (ABFS) to address these bottlenecks. ABFS is a full suite of software across a Linux kernel filesystem module, user-space daemons, and server-side infrastructure. ABFS uses content-addressability across the entire stack to lazy-load and cache source code, developer workspaces, intermediate build files, and build results.
 
-## The rules
+Today, we are excited to announce that [ABFS is open source on GitHub](https://github.com/google/abfs).  
 
-Start at the center. Then repeat:
+The impact of ABFS to Android is:
 
-1. Increase the radius a little.
-2. Add an LED.
-3. Turn 137.508°.
+ABFS already powers parallel workflows for developers and agents in Android, but it is designed to scale to other massive Git-based projects.
 
-Every LED on every¹ Fibonacci board is placed by those rules. LED *n* sits *n* × 137.508° around from the first, and about √*n* out from the center. The next two sections explain those two numbers.
+In the Android build system, developers define build rules in Blueprint files (`Android.bp`), Soong compiles them into Ninja files, and [Ninja](https://ninja-build.org/) executes the final build graph (see the [Android build overview](https://source.android.com/docs/setup/build)). Similar to the [Make build tool](https://www.gnu.org/software/make/), Ninja is **timestamp-based**. If a build step’s input file is newer than the existing output file, Ninja rebuilds the output file.
 
-<small>
-¹ There are exceptions to the √*n* rule, of course, like [Fibonacci64 Flower](https://www.evilgeniuslabs.org/fibonacci64-flower) and [Fibonacci256 Expanding](https://www.evilgeniuslabs.org/fibonacci256-expanding-hdr-pixelblaze).
-</small>
+### **Code Size**
 
-## The golden angle
+Analyzing the [AOSP code](https://android.googlesource.com/) for Android 17 shows the sheer disk footprint and file count involved in a single checkout and build.
 
-Any simple fraction of a turn makes spokes. At 90° (a quarter turn), every 4th LED lands on the same line. 120° makes 3 spokes, and 135° (3/8 of a turn) makes 8.
+In a typical Android tree that includes hardware-specific repositories, board support packages, first-party applications, form-factor-specific code, etc., the code size is 2–3 times the size of AOSP **(over 3,000 Git repositories),** compounded across multiple active SKU and legacy maintenance branches.
 
-At 137° the LEDs still bunch into arms with gaps between them. 137.5° is exactly 55/144 of a turn, so the edge starts to crowd. It takes about 400 LEDs for that to show, though. With 256, 137.5° scores the same as the golden angle.
+Building the Cuttlefish emulator target executes a build graph with **192,249** Ninja actions. While local incremental builds are fast once a tree is already built, every new workspace, branch switch, or ephemeral agent session starts cold.  
 
-The golden angle, 360° ÷ φ² ≈ 137.508°, can’t be written as a fraction at all, so the LEDs never line up. The animation measures how close the two nearest of 600 LEDs get, as a percentage of the spacing in a perfect honeycomb.
+Even though typical developer changes touch only 1-10 different Git projects, someone building locally without any remote execution might waste up to **80 minutes on a 64-core** machine repeating work their CI system already built. Even if a developer edits a core library like `system/libbase`, **97%** of the build graph is identical to the CI build.
 
-| angle | closest two LEDs |
-| --- | --- |
-| 90° | 4% |
-| 135° | 9% |
-| 137° | 55% |
-| 137.5° | 82% |
-| 137.508° (golden) | 87% |
+Sharing cached build outputs across CI and local machines is also tricky in a codebase of Android's age and rate of change. Build rules occasionally introduce **hidden dependencies** (such as passing an undeclared schema file inside raw compiler flags), **over-declared inputs**, or **undeclared outputs**. In timestamp-based builds, hidden dependencies silently produce stale incremental artifacts, forcing developers to wipe output directories and run clean builds.
 
-The golden angle’s digits never end, but a board only needs a few of them. Each extra digit buys a lot more LEDs before arms start to show:
+ABFS makes building Android fast by replacing massive local source checkouts with a virtual, content-addressable filesystem (CASFS). ABFS streams files on demand only when a build actually touches them and utilizes shared build caching to help eliminate redundant downloads and compilation.
 
-| angle | as good as the golden angle up to | off by (degrees) |
-| --- | --- | --- |
-| 137.5° | 400 LEDs | 0.0078 |
-| 137.51° | 1,100 LEDs | 0.0022 |
-| 137.508° | 7,800 LEDs | 0.00024 |
-| 137.5078° | 53,000 LEDs | 0.000036 |
-| 137.50776° | 820,000 LEDs | 4.1 × 10⁻⁶ |
-| 137.507764° | 43 million LEDs | 5.0 × 10⁻⁸ |
-| 137.5077641° | 21 million LEDs² | 5.0 × 10⁻⁸ |
-| 137.50776405° | 85 billion LEDs | 3.8 × 10⁻¹¹ |
-| 137.50776405004° | 1.5 trillion LEDs | 2.2 × 10⁻¹² |
+On the server side, **Git-pushers** continuously ingest new Git objects from Gerrit or other Git hosts into a horizontally scalable gRPC **ABFS Content-Addressable Storage (CAS) Server** that indexes Git content, workspace snapshots, and build step results. On the developer host, a local Least Recently Used (LRU) **Cacheman** daemon, **Mount Daemon**, and **Tap** utility connect user-space build tools to the kernel filesystem so checkouts and builds stream only what they need. See the [full ABFS architecture on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md).
 
-Two digits are plenty for the [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024).
+### **Filesystem**
 
-<small>
-² The seventh digit actually makes things worse: 137.5077641° is just as far from the golden angle as 137.507764°, but on the other side.
-</small>
+At the core of the client is a virtual filesystem called [Content-Addressable Storage Filesystem (CASFS)](https://github.com/google/abfs-casfs), a Linux kernel module that exposes Git SHA content hashes via extended attributes. When a file's hash is set, CASFS populates its metadata immediately and downloads file bytes via Cacheman only when needed:
 
-The golden angle isn’t the only angle that scores well, though. Other “noble” angles, like 99.5°, come close. The golden angle is the one that’s furthest from every fraction.
+```shell
+$ touch hello
+$ abfs hash --set cc628ccd10742baea8241c5924df992b5c019f71 hello   # metadata only
+$ ls -l hello      # name and size are available; content is not downloaded yet
+-rw-r----- 1 user primarygroup 6 Nov  3 00:11 hello
+$ cat hello        # content is lazy-loaded on first read
+world
+```
 
-Angles past 180° just mirror these: 222.492° (360° − 137.508°) makes the same spiral, flipped. That’s why you’ll sometimes see the golden angle given as about 222.5°.
+Initial checkouts download only lightweight directory metadata prepopulated with Git hashes. CASFS uses Git's object model natively, allowing standard `git` and [repo](https://source.android.com/docs/setup/download/source-control-tools#repo) operations to work transparently.
 
-## The √n radius
+CASFS can also *tap* build processes. *Tapping* records every file actually read, written, or deleted into lists called *patches*, which are stored alongside cached build outputs. [Ninja-go](https://github.com/google/ninja-go) replaces timestamp checks with two-phase content-addressable caching:
 
-With the angle set, the next question is the radius: how far from the center each LED sits. Each cell in the animation is the part of the board that’s closer to its LED than to any other. The dashed circles go through LEDs 64, 128, 192 and 256, so each ring between them holds 64 LEDs.
+Ninja-go accelerates Ninja-based builds like Android and Chrome; other build systems can integrate with ABFS's caching APIs using the same model (see the [two-phase caching walkthrough on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md)).
 
-If LED *n* goes at radius *n*, LED 128 is twice as far from the center as LED 64, and LED 256 is four times as far. The circles are evenly spaced, but the outer rings are much bigger than the inner ones and get no more LEDs. The LEDs end up crowded in the middle and far apart at the edge. The biggest cell is about 150 times the smallest.
+Each mounted checkout attaches to a persistent *workspace* that eagerly syncs modified files, `git` state, and `repo` state through Cacheman to the ABFS CAS Server—keeping mounts synchronized across sessions or across multiple developer hosts.
 
-A disc’s area grows with the square of its radius. Putting LED *n* at radius √*n* means LED 256 is only twice as far out as LED 64, and every ring gets the same area. The circles get closer together toward the edge, every LED gets the same share of the board, and the biggest cell is only 1.3 times the smallest. If the radius grows more slowly than √*n*, it flips: the LEDs are far apart in the middle and crowded at the edge.
+## Results
 
-With equal area for every LED, the pixel density is the same all the way across the board.
+The benchmarks below show the mean time of 3 Android runs on a GCE `n2d-standard-64` VM with 64 vCPUs and 256 GB of RAM. The ABFS remote server was running in the same cloud network as the client.
 
-## You can always add one more
+### **Build**
 
-A square grid only looks tidy at square numbers, rings only when every ring is full, and a hex grid only at 7, 19, 37, 61… The faint outlines in the animation show the spots each layout still needs to fill before it looks right again.
+Because ABFS does lazy loading and local cache deduplication, developers and their agents can now mount multiple concurrent Android workspaces on a single machine, benefit from a shared local build cache, and achieve massive scale in development time.
 
-The spiral is an even, round disc at every count, and adding an LED never moves any of the others. The [Fibonacci32](https://www.evilgeniuslabs.org/one-inch-fibonacci32), [Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64), [Fibonacci128](https://www.evilgeniuslabs.org/one-inch-fibonacci128), [Fibonacci256](https://www.evilgeniuslabs.org/fibonacci256-hdr-pixelblaze), [Fibonacci512](https://www.evilgeniuslabs.org/fibonacci512-hdr-pixelblaze) and [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024) all use the same layout, with differently sized LEDs and different spacings, each stopped at a different count.
+```shell
+# Mount 5 distinct Android release branches side-by-side in under 8 seconds each
+$ abfs mount -b android-latest-release   /ws/a17
+$ abfs mount -b android16-qpr2-release   /ws/a16qpr2
+$ abfs mount -b android16-release        /ws/a16
+$ abfs mount -b android15-release        /ws/a15
+$ abfs mount -b android14-release        /ws/a14
+```
 
-## Where the Fibonacci numbers come from
+An agent can check out a full Android tree in **under 10 seconds** and perform a full build** in under 10 minutes**. Agent swarms are empowered to iterate, review, and test in parallel, which can lead to higher quality solutions and speed.  
 
-Look closely at any of the boards and you’ll see spiral arms. Connect every 3rd LED and you get 3 arms, because the golden angle is close to 1/3 of a turn. Every 5th LED makes 5 arms curving the other way, every 8th makes 8, and so on. Each of those fractions (2/5, 3/8, 5/13, 8/21…) is a little closer to the golden angle than the last, so each set of arms is a little straighter.
+In the demo below, an agent makes a `system/libbase` fix on the latest AOSP release, then 4 parallel agents simultaneously backport, build, and test the fix across 4 more AOSP releases on a single VM.
 
-Any other count, like 4 or 30, zigzags or wobbles across the board instead.
+We released [ABFS as open source](https://github.com/google/abfs) because we want developers, Android partners, and any large-scale Git-based project to benefit from what we have learned and be able to scale.
 
-The arm counts are 3, 5, 8, 13, 21 and 34. Put 1, 1 and 2 in front and each number is the sum of the two before it. They’re the Fibonacci numbers, which is where the boards get their name. Count the spirals in a sunflower head and you’ll find Fibonacci numbers there too.
+While Android’s Soong/Ninja pipeline was the first acceleration target, ABFS was built to be extensible to other build systems. Content-addressable build systems like Bazel map naturally onto CASFS and there is already a [proof-of-concept integration with Bazel](https://github.com/google/abfs/tree/main/cmd/abfs-bazel-daemon). Chromium, the Android Common Kernel, and other Google projects are exploring ABFS compatibility.
 
-## Real boards
+Explore [ABFS](https://github.com/google/abfs), [CASFS](https://github.com/google/abfs-casfs), and [Ninja-go](https://github.com/google/ninja-go) on GitHub, and reach out to us at abfs@google.com.
 
-The video shows a real [Fibonacci256](https://www.evilgeniuslabs.org/fibonacci256), then the [One Inch Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64), [One Inch Fibonacci128](https://www.evilgeniuslabs.org/one-inch-fibonacci128), [Fibonacci512](https://www.evilgeniuslabs.org/fibonacci512-hdr-pixelblaze) and [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024). All of them follow the same rules.
-
-More on Wikipedia: [Fermat’s spiral](https://en.wikipedia.org/wiki/Fermat%27s_spiral), the [golden angle](https://en.wikipedia.org/wiki/Golden_angle), and [phyllotaxis](https://en.wikipedia.org/wiki/Phyllotaxis), the way plants arrange their leaves and seeds.
-
-<small>The animations and videos in this post are © Evil Genius Labs LLC, licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You’re welcome to share and adapt them with credit, but not commercially.</small>
+For help with the Google Cloud server-side, infrastructure-as-code, and CASFS for Cloud Workstations and Kubernetes, please reach out to abfs-gcp@google.com.

@@ -1,55 +1,386 @@
-5 years is a long time to work on anything. It took 5 years from my first commit of Solid to 1.0, and it's been another 5 since then.
+There are certain ideas in software that are simply beautiful. It doesn't matter if they have any practical use. It doesn't matter that you will never convince your coworkers to consider them. There is just something captivating about the way some computational systems work.
 
-A lot changes in 5 years. Solid 1.0 made a bet that fine-grained reactivity, signals, was the right foundation for building user interfaces. Back then it was an unusual position. Today signals are everywhere. In Angular, in Svelte's runes, in Vue Vapor, and in a proposal before TC39 to put them in the language itself. It even pushed the conversation into React's compiler.
+For me, the most beautiful pieces of software are those that reveal something about the nature of programming languages. Programming languages are my obsession. I have never met a problem that couldn't be solved by introducing yet another programming language. Solving a problem at the programming language level is about solving the meta problem. Instead of trying to solve a particular problem, we take a step back and ask how we can solve a whole class of problems at once.
 
-More recently that conversation has shifted to AI, arguably an even larger change in how we build. But Solid has always been about building the right things; the performant things. So for us the mission hasn't really changed all that much. The things that we identified as standout about our approach still stand out now. But instead of living in the shadow of more popular solutions Solid 2.0 carves out a path that others can follow. Deliberately this time.
+So when I find something that makes me rethink the nature of programming languages, I start rethinking computation as a whole. One of these incredibly beautiful but tricky concepts goes by the name partial evaluation. If you are fascinated by interpreters and compilers, partial evaluation will teach you how they are related, and how you can get a compiler for free.
 
-Today that solution reaches stable.
+## Partial Evaluation Easy Mode[#](https://jimmyhmiller.com/magic-of-partial-evaluation#partial-evaluation-easy-mode)
 
-If fine-grained reactivity's greatest strength is knowing the shape of our application, that knowledge shouldn't end with the process, or the machine the code is running on. Real applications are distributed. Real applications are born from data that lives on a server. The coordination of these pieces should be intentional and by design.
+Partial evaluation has been a fascination of mine for a while. But this whole thing came up when [James Long announced he had revived](https://x.com/jlongster/status/2118465154354385010) Meta's partial evaluator for JavaScript called prepack. When I first heard about prepack, I had some high hopes and expectations for the project, but was sadly let down. This revival brought to light those same dreams. But sadly, just as with the original aim, prepack was not designed for beauty, but for practicality. So I figured it was time to renew my own efforts.
 
-This starts with bringing async into the graph. A computation can return a Promise or an async iterator, and everything downstream just understands:
+Yes, in some ways this is a post repping my own library I'm releasing. But I'm not doing this because I want it to be used. I'm doing this because it lets you play with the idea I find so beautiful. That is what this post is about.
 
-This allows authoring by affordance while automating the handling of race conditions. The introduction of async doesn't cause an app refactor. Speculative state is automatically rolled back without manually written processes ensuring the server remains the authority on truth.
+### Doing Partial Evaluation by Hand[#](https://jimmyhmiller.com/magic-of-partial-evaluation#doing-partial-evaluation-by-hand)
 
-SolidStart introduce the world to server functions in early 2022, and now they have found their way home to Solid's core, better than ever. Not only do they support highly capable RPC calls over Request/Response but persistent connections over Server Sent Events. And consuming it remains as simple as the code below.
+Consider the following code:
 
-This is only the beginning of what can be done with Server Functions and we will be announcing some new features (like reactive Server Components) in coming weeks that leverage this capability.
+```
+function factorial(n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
 
-"But, we aren't writing the code anymore!" We hear you. A system built on constraints by construction ends up with less code to maintain and less edge cases. What used to be considered a DX shortcoming of reactive frameworks are now their greatest strength. And Solid 2.0 goes all in.
+factorial(5);
+```
 
-Every framework now says it "works great with AI", and usually that means models have seen a lot of it. That's a statement about training data, not about the framework. The question that matters is what happens when the agent gets it wrong.
+As a person who reads code, you can think about how this code computes and what answer it will give. But you can do more than just give the answer. You can see the expanded form of this particular code for these particular calls. This code is spiritually the same as the following expression, once we expand it out.
 
-In most frameworks a reactive mistake is silent. The app runs, it's just wrong, and the framework can't tell you, because it can't see it either. Solid can. A fine-grained graph knows exactly what was read, where, and what will update. So Solid 2.0's development builds report mistakes as they happen, with a stable code, the location in your source, and the fix:
+```
+5 * (4 * (3 * (2 * 1)))
+```
 
-These handle everything from strict errors to helpful heuristics. Thanks to async in the graph we can detect waterfalls, poorly constructed effect loops, poorly scaling graph shapes like wide graph fanouts and fan-ins. Today along with linting rules we can provide the best in class direction for agents at compile and at runtime.
+In this case, there is really nothing at all that this code needs to do at runtime. A sufficiently smart compiler will just run this code directly at compile time and give the answer. But this is a bit less clear if things come in at runtime.
 
-This area is still evolving as we learn more about how agents build applications with Solid. The hard part, defining the primitives and semantics, is done. We've integrated with new dev tooling, and Chrome's Performance Tracks. And this capability goes beyond development as this observability powers things like our updated Sentry plugin so you can get the same information on your production builds.
+```
+function power(base, exponent) {
+  if (exponent === 0) return 1;
+  return base * power(base, exponent - 1);
+}
 
-We've also been looking at alternative syntax. Solid 2.0 adds experimental support for [ReactiveScript](https://reactivescript.dev) and [TSRX](https://tsrx.dev), both aiming to use compilation to further improve agent authoring.
+power(process.argv[2], 5)
+```
 
-I've always been a big believer that React's super power is its composability. That it allowed the ecosystem to build on its humble pieces. However, we've learned a lot since 2013. At that point composable state, async patterns, and server rendering lacked the primitives to build upon and the ecosystem came up with their own solutions. This was fine for a while but tied React's hands and fractured their ecosystem. Something only a framework as popular as React could survive.
+It might seem like we can't do anything here, but again, if you are used to thinking about how programs run, you can trace this out and realize this is just the same as:
 
-Newer frameworks have taken more on themselves and tend to only have one metaframework, or one router. We respect React's original positioning but have updated it for 2026. It isn't about restricting the solution but giving developers the primitives to build upon in the way React originally did. Server functions are example of this. Supporting any router, and cache solution for Single-Flight Mutation is another.
+```
+process.argv[2] * (process.argv[2] * (process.argv[2] * (process.argv[2] * (process.argv[2] * 1))))
+```
 
-We retired our metaframework SolidStart, since every primitive needed to build a Solid Metaframework is now provided by the core or by framework agnostic Vite plugins. We believe that building an opinionated layer like a metaframework shouldn't have you needing to re-implement everything again. We've taken care of the hard parts so you can focus on what you care about. And these days a lot of that work is going to be taken on by your agent. This means less to maintain but no loss in capability.
+What we have done in both of these cases is called partial evaluation. In the first, it was a trivial case because everything was statically known. But in this latter case, we have reduced a program down into the essentials of its dynamic structure. There are no recursive function calls left. All of this has been expanded as far as it could till we get just the dynamic parts of the code remaining.
 
-And this makes it easier for the ecosystem. Solid 2.0 only requires one Clerk or Sentry plugin since we provide the primitives for Request/Response (built on web standards) and the hooks for observability that work across any library. We've already seen success with TanStack Query and Router being as capable as anything we've built first party, bringing in Tanner's impeccable attention to detail for the APIs people love to use.
+## The Big Idea[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-big-idea)
 
-Somehow even though Solid 2.0 brings more capability to Solid, we've collapsed the surface area at almost every point. There are less primitives needed to be learnt, less ceremony around handling async. `createResource`, `batch`, `startTransition`, `on`, `produce`, `createComputed`, `createMutable` are all gone, because we no longer need them.
+This intuitive notion of partial evaluation is all you need to know to appreciate the beauty here. Partial evaluation just evaluates the part of the program we can evaluate at build time and leaves all the rest. When we do this with certain programs in certain combinations, we get some quite surprising, incredible behavior.
 
-The equivalent code written for Solid 2.0 is shorter and clearer on intent. It informs our ability observe the runtime, provide better compiler errors, and removes the need for as many escape hatches (like `createEffect`) that can get us in trouble. This is something we believe important in an age of AI. Safe by construction rather than by exhaustion. Reduce complexity by deriving(reducing) state rather than putting it in a reducer.
+```
+function calculate(expr) {
+  if (typeof expr === "number") return expr;
+  switch (expr[0]) {
+    case "+": return calculate(expr[1]) + calculate(expr[2]);
+    case "-": return calculate(expr[1]) - calculate(expr[2]);
+    case "*": return calculate(expr[1]) * calculate(expr[2]);
+    case "/": return calculate(expr[1]) / calculate(expr[2]);
+    default: throw new Error("Unknown operator");
+  }
+}
 
-When the framework carries the guarantees, all loading state, race conditions, and cancellation logic disappears and what you are left with is the UI.
+calculate(["+", 1, ["*", 2, 3]]);
+```
 
-The first discussions of what a Solid 2.0 would look like started at the moment 1.0 was released. We saught feedback from the community on [new reactivity ideas](https://github.com/solidjs/solid-workgroup/discussions/2). The real effort started in late 2024. We announced the [road to 2.0](https://github.com/solidjs/solid/discussions/2425) in February 2025. Over a year of experiments followed, rewriting the reactive core from scratch until the async model held up to everything we threw at it. The [beta](https://github.com/solidjs/solid/discussions/2596) landed in March, and the [Release Candidate](https://github.com/solidjs/solid/discussions/2995) in August, with the API frozen.
+Here we have a very simple interpreter for a language that just supports arithmetic. For the above expression, you should be able to think about how we could start "partially" evaluating it. (In this case, it can be a full evaluation.) If this kind of partial evaluation isn't quite clicking for you, I've put the steps below to hopefully help it make sense.
 
-Then 23 release candidates in 14 weeks. In that time alone, 971 pull requests were merged and 753 issues closed. We set one bar for stable. A full week with no regression in ordinary app code, and no crash or hang anywhere. It took a while to get there. By the end, the bug reports coming in were from people(agents) deliberately hunting edge cases in the deepest corners of the scheduler, and finding them.
+```
+calculate(["+", 1, ["*", 2, 3]])
+→ calculate(1) + calculate(["*", 2, 3])
+→ 1 + calculate(["*", 2, 3])
+→ 1 + (calculate(2) * calculate(3))
+→ 1 + (2 * calculate(3))
+→ 1 + (2 * 3)
+→ 1 + 6
+→ 7
+```
 
-So many people have touched the project over the past 5 years, from working on the initial reactivity prototypes, to testing the latest RC builds on their production apps. I've tried to thank as many of you as I can and attached hundreds of handles in the RC announcement. There are so many. There are also the many great organizations that have sponsored our development over the years: Sentry, Netlify, Google Chrome, JetBrains, Anomaly, Cursor, Code Rabbit, Anthropic, Tembo and so many more.
+This is a simple evaluation of the code.  But what happens if we throw a value we don't know into the expression?
 
-But mostly I want to thank everyone who has believed in the project. We've accomplished great things and there is much more to come. That isn't possible without all of you. Personally, the past 2 and half years have been some of the most difficult of my life, but knowing what we are building that impacts so many people leaves me with a sense of fulfillment. Solid has always been bigger than its core team, and 2.0 is the clearest proof of that yet.
+```
+calculate(["+", Number(process.argv[2]), ["*", 2, 3]])
+→ calculate(Number(process.argv[2])) + calculate(["*", 2, 3])
+→ Number(process.argv[2]) + calculate(["*", 2, 3])
+→ Number(process.argv[2]) + (calculate(2) * calculate(3))
+→ Number(process.argv[2]) + (2 * calculate(3))
+→ Number(process.argv[2]) + (2 * 3)
+→ Number(process.argv[2]) + 6
+```
 
-Solid 2.0 is here. Let's build.
+Here we can see that clear partial evaluation difference. We don't know how to evaluate `Number(process.argv[2])`. We have no idea what the answer to that will be. But as part of this process, we do know some partial information about it. For example, when we get to
 
-> The Long Hold refers to [a diagnostic warning](https://docs.solidjs.com/reference/solid-js/diagnostics/long-hold) in Solid 2.0. It fires when a hold has been shown(`isPending`) but sufficient time has passed since the last input. Holds were at the heart of our async work for 2.0, and we acknowledge it took a while for this all to land.
+```
+if (typeof expr === "number") return expr;
+```
+
+we know that `Number(process.argv[2])` is indeed a number. So we can partially evaluate it further. Hopefully this is all making sense. But if you are like me, this all might seem a bit trivial and uninteresting. So let's look at a more complicated example.
+
+```
+function brainfuck(code, input = "") {
+  const tape = new Uint8Array(30000);
+  const jumps = {}, stack = [];
+  let pointer = 0, inputPointer = 0, output = "";
+  for (let i = 0; i < code.length; i++) {
+    if (code[i] === "[") stack.push(i);
+    if (code[i] === "]") {
+      const start = stack.pop();
+      jumps[start] = i;
+      jumps[i] = start;
+    }
+  }
+  for (let i = 0; i < code.length; i++) {
+    switch (code[i]) {
+      case ">": pointer++; break;
+      case "<": pointer--; break;
+      case "+": tape[pointer]++; break;
+      case "-": tape[pointer]--; break;
+      case ".": output += String.fromCharCode(tape[pointer]); break;
+      case ",":
+        tape[pointer] = inputPointer < input.length
+          ? input.charCodeAt(inputPointer++)
+          : 0;
+        break;
+      case "[": if (!tape[pointer]) i = jumps[i]; break;
+      case "]": if (tape[pointer]) i = jumps[i]; break;
+    }
+  }
+  return output;
+}
+
+brainfuck("++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.");
+```
+
+Here we have a brainfuck interpreter. And the example program we want to partially evaluate does not require any input at all (in brainfuck `,` is the way you get input). So when we go to partially evaluate this, we will just get an answer. In this case, this program is actually brainfuck's "hello world". But what about a program with input?
+
+```
+function main() {
+	return brainfuck(",>++[>+++[>++++[<<<+>>>-]<-]<-]<.", process.argv[2])
+}
+```
+
+When we do our partial evaluation, we get the following:
+
+```
+function main(b) {
+  let a;
+  a: {
+    a = process.argv[2];
+    a = a === void 0 ? "" : a;
+    if (0 < a.length) {
+      a = a.charCodeAt(0);
+      break a;
+    }
+    a = 0;
+  }
+  a = (a & 255) + 24 & 255;
+  return String.fromCharCode(a);
+}
+```
+
+What is this? A compiled brainfuck program! This is the first incredible fact: when you take an interpreter and partially evaluate it with a program, you get the compiled program out! Now this particular exact form is an artifact of how my partial evaluator works. You could imagine slightly different code. But the key is that what we've done is remove the interpreter completely.
+
+## The Projections[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-projections)
+
+What we've discovered here is the first of three so-called Futamura Projections. Our partial evaluator, when applied to an interpreter and given a program, can give us a compiled version of that program. Or to put it in pseudocode.
+
+Depending on your exposure to interpreters and compilers, this might seem miraculous or mundane. Writing an interpreter and writing a compiler can seem like significantly different undertakings. In the age of AI, perhaps less so, but I think even then many things still hold. It is quite easy to instrument an interpreter, quite a bit harder to do so for a compiler. Changing an interpreter to support new features is quite easy, less so for a compiler. But more than that, there are all sorts of things that can be thought of as interpreters, that we'd almost never write a compiler for.
+
+```
+function validate(schema, value) {
+  switch (schema.type) {
+    case "string":
+      return typeof value === "string" &&
+        (schema.minLength === undefined || value.length >= schema.minLength);
+    case "number":
+      return typeof value === "number" && Number.isFinite(value) &&
+        (schema.min === undefined || value >= schema.min);
+    case "boolean":
+      return typeof value === "boolean";
+    case "array":
+      if (!Array.isArray(value)) return false;
+      const length = value.length;
+      for (let i = 0; i < length; i++) {
+        if (i in value && !validate(schema.items, value[i])) return false;
+      }
+      return true;
+    case "object":
+      return value !== null && typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.keys(schema.properties).every(key =>
+          Object.hasOwn(value, key) &&
+          validate(schema.properties[key], value[key]));
+    default:
+      throw new Error("Unknown schema type: " + schema.type);
+  }
+}
+
+const userSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 1 },
+    age: { type: "number", min: 0 },
+    tags: { type: "array", items: { type: "string" } }
+  }
+};
+
+function validateUser(value) {
+  return validate(userSchema, value);
+}
+```
+
+Consider this simple schema setup. This is code that can easily be partially evaled into something where we have created specialized functions for our particular schema. While not the most crucial code, this can give us a 5x performance boost when our objects start getting more complicated. You may think that we should just hand-write those functions. Or hand-write a compiler for these schemas. But what about those schemas that exist only at runtime? Now we either need to compile those on the fly, or we have to keep both a compiler and interpreter. Having a way to partial eval lowers this burden quite a bit.
+
+## Mind Bending[#](https://jimmyhmiller.com/magic-of-partial-evaluation#mind-bending)
+
+But if the Futamura projections stopped here, they would be exciting, but not quite the craziness they are. To understand how this can go further, we are going to take this a step beyond your raw intuition of what it means to partially evaluate something and give a different frame. We can think of partial evaluation as a process of "specializing" a program.
+
+What exactly is specializing a program? Well, it is taking a program that is generic and making a version that instead works for a single program. Let's think about a simple pattern matcher program like an overly simplified regex.
+
+```
+function matches(pattern, text) {
+  if (pattern.length === 0) {
+    return text.length === 0;
+  }
+
+  const firstCharacterMatches =
+    text.length > 0 && pattern[0] === text[0];
+  const allowsRepetition = pattern[1] === "*";
+
+  if (allowsRepetition) {
+    const remainingPattern = pattern.slice(2);
+
+    if (matches(remainingPattern, text)) {
+      return true;
+    }
+
+    if (!firstCharacterMatches) {
+      return false;
+    }
+
+    const remainingText = text.slice(1);
+    return matches(pattern, remainingText);
+  }
+
+  if (!firstCharacterMatches) {
+    return false;
+  }
+
+  const remainingPattern = pattern.slice(1);
+  const remainingText = text.slice(1);
+  return matches(remainingPattern, remainingText);
+}
+
+matches("a*b*c", "aaabbc");
+```
+
+This program is generic. It lets you match on many different patterns. That can be great if we need that flexibility. But if you don't have a bunch of patterns, it might be worth it to just make specialized code. Now, exactly what kind of specialized code? It might be that you only have this literal pattern; then you want to specialize very particularly.
+
+```
+function matchesAStarBStarC(text) {
+  let i = 0;
+  while (text[i] === "a") i++;
+  while (text[i] === "b") i++;
+  return text[i] === "c" && i + 1 === text.length;
+}
+
+matchesAStarBStarC("aaabbc");
+```
+
+Or  you just have `<x>*<y>*<z>*` as a pattern.
+
+```
+function matchesXStarYStarZStar(x, y, z, text) {
+  let i = 0;
+  while (i < text.length && text[i] === x) i++;
+  while (i < text.length && text[i] === y) i++;
+  while (i < text.length && text[i] === z) i++;
+  return i === text.length;
+}
+
+matchesXStarYStarZStar("a", "b", "c", "aaabbc");
+```
+
+For any bit of generic code, we can think of how to move our code to a more specialized form.
+
+### Specializing the Specializer[#](https://jimmyhmiller.com/magic-of-partial-evaluation#specializing-the-specializer)
+
+Partial evaluation is a form of specialization that figures out what it should specialize on based on what input is static and what is dynamic. In many ways, a partial evaluator is a generic specializer. Given any program, we can make a specialized version of it for any input. What happens if we specialize an interpreter for a given input? We get back that interpreter for only exactly that one program. But what do we need then? Do we need all this generic dispatch? No, we know the full program. We don't need any operations we don't actually use. We can fully get rid of all the generic interpreter mechanism.
+
+But if the specializer can specialize any program, can it specialize itself?
+
+This leads us to the second Futamura projection. Put in our pseudo-code format, we get:
+
+Or, to put it in our specializer language, what if we make a special version of our generic specializer? What is it specialized for? A particular interpreter. Now we have a function that, given any program, will spit out newly specialized interpreters just for that program. Or, in Java speak, we have a specialized interpreter factory.
+
+Let's see a real example of one of these compilers to make this concrete. Here is the interpreter we are going to specialize.
+
+```
+function interp(program, io) {
+  var value = null;
+  while (program.length > 0) {
+    var instruction = program[0];
+
+    if (instruction === "prompt") {
+      value = io.prompt();
+    } else if (instruction === "print") {
+      io.print(value);
+    } else {
+      throw new Error("Unknown instruction: " + instruction);
+    }
+
+    program = program.slice(1);
+  }
+  return value;
+}
+```
+
+When we apply our second projection, we get out the following compiler:
+
+```
+function compile(program) {
+  const lines = codegen.buffer();
+  const literalSource = codegen.literal(null).source;
+  let remaining = program;
+  let value = literalSource;
+
+  while (remaining.length > 0) {
+    const remainingItem = remaining[0];
+    if (remainingItem === "prompt") {
+      const ioReference = codegen.reference("io");
+      const callSource = codegen.call(lines, ioReference, "prompt", []).source;
+      remaining = remaining.slice(1);
+      value = callSource;
+      continue;
+    }
+    if (remainingItem === "print") {
+      const ioReference2 = codegen.reference("io");
+      const args = [codegen.reference(value)];
+      codegen.call(lines, ioReference2, "print", args);
+      remaining = remaining.slice(1);
+      continue;
+    }
+    const text = "Unknown instruction: " + remainingItem;
+    throw new Error(text);
+  }
+
+  const valueReference = codegen.reference(value);
+  return codegen.finish(lines, valueReference);
+}
+
+```
+
+And if we compile one of these very simple programs, we can see the output:
+
+```
+compile(["prompt", "print"])
+
+// returns as a string
+function run(io) {
+	var v0 = io.prompt();
+	var v1 = io.print(v0);
+	return v0;
+}
+```
+
+Now, of course, this is not a very interesting language. But hopefully you can see this general idea. Given an interpreter, we automatically derive a compiler! Pretty incredible.
+
+### The Third Projection[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-third-projection)
+
+But we can't stop at the second projection. We have to push on and get to the final mind-bending projection. If you apply our specializer to itself as input, you get a compiler generator.
+
+```
+partial_eval(partial_eval, partial_eval) -> compiler_generator
+```
+
+So now we have a generic function that will spit out compilers for any interpreter we give it!
+
+## Playing With It[#](https://jimmyhmiller.com/magic-of-partial-evaluation#playing-with-it)
+
+I [have implemented](https://github.com/jimmyhmiller/split-shot) a reasonable, but still very limited partial evaluator for JavaScript in Rust. I have taken it further to try to make it work quite well for a number of different interpreters and interpreter-like programs in JavaScript. I've also tried to get limited versions of the second and third projections working. Go play with it, see what works, what doesn't, file issues, or better, use some of your tokens to help me make more cases work.
+
+But most of all, explore. This is such a rich space. Below are some papers, blogs, and projects about partial evaluation in some way, shape, or form. There has never been a better time to play with these kinds of crazy techniques for programming languages. Don't let what is practical stop you from exploring the cool, interesting aspects of programming.

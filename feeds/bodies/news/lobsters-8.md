@@ -1,259 +1,55 @@
-A memory-corruption vulnerability in OpenJDK's Base64 decoder. A remote attacker with no credentials can overwrite heap memory, read it in the style of Heartbleed, and reach remote code execution.
+5 years is a long time to work on anything. It took 5 years from my first commit of Solid to 1.0, and it's been another 5 since then.
 
-![Java4Shell poster](https://calif.io/java4shell/poster.jpg)
+A lot changes in 5 years. Solid 1.0 made a bet that fine-grained reactivity, signals, was the right foundation for building user interfaces. Back then it was an unusual position. Today signals are everywhere. In Angular, in Svelte's runes, in Vue Vapor, and in a proposal before TC39 to put them in the language itself. It even pushed the conversation into React's compiler.
 
-After we disclosed [PHP2Shell](https://calif.io/php2shell), we realized many people didn't know what PHP was. So we decided to go after something a little more familiar: Java.
+More recently that conversation has shifted to AI, arguably an even larger change in how we build. But Solid has always been about building the right things; the performant things. So for us the mission hasn't really changed all that much. The things that we identified as standout about our approach still stand out now. But instead of living in the shadow of more popular solutions Solid 2.0 carves out a path that others can follow. Deliberately this time.
 
-Today, we are disclosing Java4Shell (CVE-2026-114938), a memory-corruption vulnerability in OpenJDK's Base64 decoder. OpenJDK is the most popular Java runtime. Under CVSS 4.0, this vulnerability scores 9.2 out of 10 (CRITICAL).
+Today that solution reaches stable.
 
-While PHP is a high-level web technology, Java sits much deeper. Java is the world's [third most popular programming language](https://www.tiobe.com/tiobe-index/), powering [90% of Fortune 500 companies](https://www.ibm.com/new/announcements/java-at-30-and-beyond-how-ibm-is-securing-the-future-of-java). It is the beating heart of the modern economy. Banking, aviation, telecommunications, nearly every critical sector runs on Java, including national security systems.
+If fine-grained reactivity's greatest strength is knowing the shape of our application, that knowledge shouldn't end with the process, or the machine the code is running on. Real applications are distributed. Real applications are born from data that lives on a server. The coordination of these pieces should be intentional and by design.
 
-Base64 is a very common way of representing binary data as text. It is used in authentication protocols, to encode file uploads, and to deliver network messages. To decode Base64 faster, OpenJDK uses specialized x86-64 CPU instructions to process many bytes at once. We discovered a bug in that optimized machine-level code that lets malformed input overwrite neighboring memory. With careful exploitation, the corruption can reveal sensitive memory, as [Heartbleed](https://www.heartbleed.com/) did, or lead to remote code execution. The corruption itself can be triggered by just 64 `A` characters followed by a single `=`:
+This starts with bringing async into the graph. A computation can return a Promise or an async iterator, and everything downstream just understands:
 
-In older OpenJDK 17, the trigger input is 128 of `A` followed by `=`.
+This allows authoring by affordance while automating the handling of race conditions. The introduction of async doesn't cause an app refactor. Speculative state is automatically rolled back without manually written processes ensuring the server remains the authority on truth.
 
-## Write once, RCE everywhere
+SolidStart introduce the world to server functions in early 2022, and now they have found their way home to Solid's core, better than ever. Not only do they support highly capable RPC calls over Request/Response but persistent connections over Server Sent Events. And consuming it remains as simple as the code below.
 
-Our initial testing demonstrated remote code execution in the following widely deployed Java applications, in their default configs.
+This is only the beginning of what can be done with Server Functions and we will be announcing some new features (like reactive Server Components) in coming weeks that leverage this capability.
 
-Pre-auth RCE:
+"But, we aren't writing the code anymore!" We hear you. A system built on constraints by construction ends up with less code to maintain and less edge cases. What used to be considered a DX shortcoming of reactive frameworks are now their greatest strength. And Solid 2.0 goes all in.
 
-- Keycloak
-- Atlassian Jira
-- Atlassian Confluence
-- JFrog Artifactory
-- Jenkins
-- PingFederate
+Every framework now says it "works great with AI", and usually that means models have seen a lot of it. That's a statement about training data, not about the framework. The question that matters is what happens when the agent gets it wrong.
 
-Post-auth RCE:
+In most frameworks a reactive mistake is silent. The app runs, it's just wrong, and the framework can't tell you, because it can't see it either. Solid can. A fine-grained graph knows exactly what was read, where, and what will update. So Solid 2.0's development builds report mistakes as they happen, with a stable code, the location in your source, and the fix:
 
-- Apache Kafka Broker
-- Apache Solr
-- Elasticsearch
-- Gerrit
-- Spinnaker
+These handle everything from strict errors to helpful heuristics. Thanks to async in the graph we can detect waterfalls, poorly constructed effect loops, poorly scaling graph shapes like wide graph fanouts and fan-ins. Today along with linting rules we can provide the best in class direction for agents at compile and at runtime.
 
-The lists are non-exhaustive. We also demonstrated RCE in sample applications built on widely used frameworks, including Apache Struts and Spring Boot. Ordinary features such as authentication and file uploads can expose the vulnerable Base64 decoder, extending the potential impact far beyond the products we tested. [samczsun](https://x.com/samczsun) also shared a client-side exploit with us. A Java program that opens a TLS connection to a malicious server can be compromised, even if it exposes no service of its own.
+This area is still evolving as we learn more about how agents build applications with Solid. The hard part, defining the primitives and semantics, is done. We've integrated with new dev tooling, and Chrome's Performance Tracks. And this capability goes beyond development as this observability powers things like our updated Sentry plugin so you can get the same information on your production builds.
 
-Here are a demo video of the exploits running:
+We've also been looking at alternative syntax. Solid 2.0 adds experimental support for [ReactiveScript](https://reactivescript.dev) and [TSRX](https://tsrx.dev), both aiming to use compilation to further improve agent authoring.
 
-## Wait, Java has a memory-corruption vulnerability, in Base64?!
+I've always been a big believer that React's super power is its composability. That it allowed the ecosystem to build on its humble pieces. However, we've learned a lot since 2013. At that point composable state, async patterns, and server rendering lacked the primitives to build upon and the ecosystem came up with their own solutions. This was fine for a while but tied React's hands and fractured their ecosystem. Something only a framework as popular as React could survive.
 
-Yes. First time?
+Newer frameworks have taken more on themselves and tend to only have one metaframework, or one router. We respect React's original positioning but have updated it for 2026. It isn't about restricting the solution but giving developers the primitives to build upon in the way React originally did. Server functions are example of this. Supporting any router, and cache solution for Single-Flight Mutation is another.
 
-Memory corruption is the most common class of vulnerability on the Internet. But one of Java's biggest selling points is memory safety. Java manages memory on developers' behalf and checks memory accesses, protecting applications from the memory-corruption bugs common in other software.
+We retired our metaframework SolidStart, since every primitive needed to build a Solid Metaframework is now provided by the core or by framework agnostic Vite plugins. We believe that building an opinionated layer like a metaframework shouldn't have you needing to re-implement everything again. We've taken care of the hard parts so you can focus on what you care about. And these days a lot of that work is going to be taken on by your agent. This means less to maintain but no loss in capability.
 
-But like PHP and many other technologies, much of Java itself is written in low-level languages like C, C++, and, in this case, assembly, where memory corruption is still a part of life.
+And this makes it easier for the ecosystem. Solid 2.0 only requires one Clerk or Sentry plugin since we provide the primitives for Request/Response (built on web standards) and the hooks for observability that work across any library. We've already seen success with TanStack Query and Router being as capable as anything we've built first party, bringing in Tanner's impeccable attention to detail for the APIs people love to use.
 
-To speed up Base64 decoding, OpenJDK uses specialized AVX-512 VBMI instructions on supported x86-64 processors. The bug sits in the hand-rolled assembly code that handles the final few characters. For the 65-character input above, OpenJDK allocates a 50-byte result array. After decoding the first 64 characters, the routine mishandles the stray `=` and calculates a negative output length. That invalid length becomes a full 64-byte write, sending 62 bytes past the end of the array. Java eventually rejects the input, but by then neighboring objects may already be corrupted.
+Somehow even though Solid 2.0 brings more capability to Solid, we've collapsed the surface area at almost every point. There are less primitives needed to be learnt, less ceremony around handling async. `createResource`, `batch`, `startTransition`, `on`, `produce`, `createComputed`, `createMutable` are all gone, because we no longer need them.
 
-## Era of the centaur hacker
+The equivalent code written for Solid 2.0 is shorter and clearer on intent. It informs our ability observe the runtime, provide better compiler errors, and removes the need for as many escape hatches (like `createEffect`) that can get us in trouble. This is something we believe important in an age of AI. Safe by construction rather than by exhaustion. Reduce complexity by deriving(reducing) state rather than putting it in a reducer.
 
-As with PHP2Shell, Calif used AI to find and weaponize Java4Shell. AI brings the horsepower. Our researchers bring the context. The best hacker today is neither AI nor human. It is the *centaur hacker*, part human, part AI.
+When the framework carries the guarantees, all loading state, race conditions, and cancellation logic disappears and what you are left with is the UI.
 
-![The centaur hacker, part human, part AI](https://calif.io/java4shell/centaur.jpg)
+The first discussions of what a Solid 2.0 would look like started at the moment 1.0 was released. We saught feedback from the community on [new reactivity ideas](https://github.com/solidjs/solid-workgroup/discussions/2). The real effort started in late 2024. We announced the [road to 2.0](https://github.com/solidjs/solid/discussions/2425) in February 2025. Over a year of experiments followed, rewriting the reactive core from scratch until the async model held up to everything we threw at it. The [beta](https://github.com/solidjs/solid/discussions/2596) landed in March, and the [Release Candidate](https://github.com/solidjs/solid/discussions/2995) in August, with the API frozen.
 
-It took our own Quang Luong an hour to discover the vulnerability, and two more hours to develop the first working exploit. The total token cost was less than $200.
+Then 23 release candidates in 14 weeks. In that time alone, 971 pull requests were merged and 753 issues closed. We set one bar for stable. A full week with no regression in ordinary app code, and no crash or hang anywhere. It took a while to get there. By the end, the bug reports coming in were from people(agents) deliberately hunting edge cases in the deepest corners of the scheduler, and finding them.
 
-One thing to note about this vulnerability is that there is no universal exploit. Depending on how Base64 is used and how the application works, different steps may be required for exploitation. Calif was able to accelerate the exploit development by spending initial effort building pipelines and strategies, then directing AI agents to use those for initial exploitation. Afterwards, most of the later chains are built almost autonomously with AI.
+So many people have touched the project over the past 5 years, from working on the initial reactivity prototypes, to testing the latest RC builds on their production apps. I've tried to thank as many of you as I can and attached hundreds of handles in the RC announcement. There are so many. There are also the many great organizations that have sponsored our development over the years: Sentry, Netlify, Google Chrome, JetBrains, Anomaly, Cursor, Code Rabbit, Anthropic, Tembo and so many more.
 
-## The tragedy of the commons
+But mostly I want to thank everyone who has believed in the project. We've accomplished great things and there is much more to come. That isn't possible without all of you. Personally, the past 2 and half years have been some of the most difficult of my life, but knowing what we are building that impacts so many people leaves me with a sense of fulfillment. Solid has always been bigger than its core team, and 2.0 is the clearest proof of that yet.
 
-Java is one of many shared software stacks we all rely on. Over the years, it has grown to serve many different needs. Each feature request may make sense on its own, but everyone inherits the added complexity. Those who need a feature get the benefit. Everyone else carries the code and its risks, even if they never use it.
+Solid 2.0 is here. Let's build.
 
-Java4Shell is a concrete example. The Base64 optimization helps applications that decode enormous amounts of data. But the code ships to everyone else too, including applications that gain little from it. On affected systems, an optimization few applications needed became a serious security risk.
-
-Features can be useful, and most bugs can be fixed. But why do we have to worry about code we never needed in the first place?
-
-## A call for vibe-uncoding
-
-If you don't need something, there is little reason to keep it running in your systems. Do you need that hand-rolled assembly Base64 decoder to process a few hundred bytes? Probably not.
-
-Earlier this year we found [Squidbleed](https://calif.io/research/squidbleed), an older cousin of Heartbleed, hiding in the Squid proxy since 1997. The bug was in Squid's FTP module. But who uses FTP anymore? It's a dead protocol and should be removed.
-
-Removing code is harder than it sounds. An apparently unused feature may have hidden dependencies. Someone has to understand what can be removed, make the change, and test what remains.
-
-This is where AI can help to make that work practical at a scale we could not previously afford.
-
-The same centaur hacker that discovered PHP2Shell and Java4Shell can comb a large codebase and flag dead code, bloated features, and needless optimizations. We call this *vibe-uncoding*: identify the parts a system actually needs, then remove everything else to reduce its attack surface.
-
-With AI, everyone is asking, “What can we build?” But maybe the right question for security is, “What can we delete?”
-
-## The Tail of Base64
-
-By Quang Luong
-
-On affected OpenJDK builds, malformed Base64 data can cause a constant-value overwrite of allocated heap memory. Through remote Heap Feng Shui, we turn that overwrite into a heap leak and remote code execution.
-
-### Discovery
-
-A few months back, I was developing a 0-click exploit on a certain phone vendor. The bug was constrained: it is a linear out-of-bounds write and we have no way to bypass ASLR. I almost considered it unexploitable until I audited the Android Runtime. Turns out, it has some predictable memory allocation pattern and if you align the registers from the starting memory corruption just right you can make the runtime interpret attacker's bytecode.
-
-After completing that exploit chain, inspired (and bored), I decided to look into some thing completely different. So I pulled the official JVM implementation (OpenJDK HotSpot) and started auditing. Java is a mature platform, so I was aware that having a "good" bug here would be hard, but I wanted to give it my best attempt anyway.
-
-Recalling my earlier lesson that complex systems and code crossing multiple boundaries are difficult to get right, I focused the audit on the JIT compiler, intrinsics, widely accessible APIs, and cryptography. Well, more precisely, I told Codex to look at those areas like any serious security researcher in 2026. To be honest, I didn't expect to find anything trivially exploitable, perhaps only some logic flaws or side-channel issues.
-
-Most early results Codex brought me were slops, either unreachable or the requirement of exploitation is not realistic at all. This looks like a gamble I am going to lose. But you know what, fortune favors the bold. So I just prompted harder...
-
-Eventually, Codex brought me a finding for a memory corruption in the Base64 decoder itself. I came looking for copper and found gold, through sheer persistence. But wait, is it really gold, or just fool's gold?
-
-### The vulnerability
-
-The issue lies in OpenJDK HotSpot's x86-64 Base64 intrinsic. C2 is the most aggressive JIT compiler in the Java Virtual Machine. Specifically, if you trigger a function repeatedly, then it will compile that function into native code. Even then, ordinary native code itself is not fast enough. Modern CPUs have specialized instructions that allow processing data even faster. HotSpot uses them in optimized routines called intrinsics. The x86-64 Base64 intrinsic miscalculated the padded tail's store mask, causing an out-of-bounds write.
-
-The x86-64 Base64 intrinsic iterates through the input in 256-byte blocks; if it is less than 256, then it will do so in 64-byte blocks. When the input is less than 64 bytes, it uses `evmovdqub`, the intrinsic for the `VMOVDQU8` instruction. This instruction takes a 64-bit mask that decides which bytes are read from or written to memory. The mask is first calculated from the input and output length, then updated to reflect the number of padding bytes (`'='`) in the Base64-encoded string. This is shown in the following (pseudocode):
-
-```python
-// Zero High Bits Starting with Specified Bit Position
-input_mask := bzhiq(-1, input_length)
-output_len := (input_length / 4) * 3
-
-// handle padding
-if input[input_length - 1] == '=':
-    output_len -= 1
-    input_mask >>= 1
-    if input[input_length - 2] == '=':
-        output_len -= 1
-        input_mask >>= 1
-
-output_mask := bzhiq(-1, output_len)
-```
-
-In the above code, if the remaining `input` is of the form `=, ==, X=, X==, XY=`, or `===`, then `output_len` will be computed as zero. However, since there is padding, `output_len` is decremented, resulting in an underflowed value of `-1` or `-2`. Since `bzhiq(-1, output_len)` doesn’t change any bits if `output_len >= 64`, this results in `output_mask == -1u64`.
-
-Later the code uses `evmovdqub` to read and write multiple bytes at a time. For a write, if the mask bit is `1`, the byte at that index in the vector register is written to memory. So when `output_mask == -1u64`, all `64` bytes are written during the following operation:
-
-The generated stub returns the number of bytes it successfully decoded, and returns early when it detects invalid input. The remaining bytes are handled by the Java code, which throws `IllegalArgumentException` if the input is invalid.
-
-At runtime, the decoded buffer length is calculated as `(ceil(inp_len / 4) * 3) - padding`. When the bug is triggered, with `65` bytes (`[64 bytes] + '='`) as input, that calculation allocates a `50`-byte buffer. During decoding the bug makes `output_mask == -1` for `evmovdqub`, so `64` bytes are written starting at offset `48`, an out-of-bounds write past the end of the buffer.
-
-On OpenJDK 17, the trigger input is `'A' * 128 + '='` instead of `'A' * 64 + '='`, because the length threshold to reach the code path is higher.
-
-### Exploitation strategy
-
-The Base64 bug was gold, but not the type that sits on the riverbed waiting to be panned out. It was the type that was deep, dark, and hard to access. While we had memory corruption, exploiting it looked difficult, perhaps even borderline unexploitable, since it only wrote fixed bytes to the heap. Only the landing position of the out-of-bounds write is controllable.
-
-We get the following 64 bytes write starting from the position in buffer where the remaining sets of Base64 decoded bytes would have been written to:
-
-- Full controlled write to byte 0 (in bound)
-- 4-bit controlled write to byte 1 (in bound)
-- Uncontrolled write to bytes [2, 63]. For bytes 48..63, the value will always be 0x9a.
-
-The uncontrolled out-of-bounds write turned out not to be a big problem. We reused a common JavaScript engine exploitation primitive, the classic technique of overwriting a buffer length.
-
-We call the buffer whose length we overwrite the `writer`. Once its length is corrupted, it keeps accepting our chosen bytes, so if we place another array or object after it, we can corrupt that neighbor with all of our chosen values. That upgrades the fixed write into a bounded, chosen-value linear write.
-
-If we then corrupt another array's length and its data is copied back into the response, we have built a heap disclosure primitive, the `reader`, from the out-of-bounds read. At this point, before any code execution, we already had JavaBleed, the ability to leak contents from the Java heap, which may hold PII, private keys, other secret keys, and tokens.
-
-From the `writer` and `reader`, the rest of this write-up builds the full attack. We repair the objects the linear write damaged to keep the JVM running, mount data-only attacks on application logic, and escalate the bounded write into arbitrary writes that reach the Code Cache and JVM hooks for code execution.
-
-But first things first, we need to align the heap to our advantage.
-
-HotSpot normally gives each Java thread a [thread-local allocation buffer (TLAB)](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html#advanced-garbage-collection-options-for-java), a private slice of Eden. Objects created by different request threads advance different cursors, which gives us no useful order between a Base64 decoder in one TLAB and a writer in another.
-
-The first grooming layer controls the allocation route. The critical array's size and the space left in the worker's TLAB decide whether HotSpot refills that TLAB or takes the attacker-preferred [outside-TLAB allocation path](https://github.com/openjdk/jdk/blob/jdk-21%2B35/src/hotspot/share/gc/shared/memAllocator.cpp#L268-L360).
-
-The second layer controls the layout. However, we do not choose how G1 allocates memory, and we don't know the current heap state. To approach this limitation, Calif used the tried and tested method of Spray and Pray.
-
-Object sizes and padding fix offsets inside region-sized spans. We spray several live writer and reader pairs to give the decoder output several possible neighbors. When its region lands immediately below a writer region, the widened reader produces a larger application response. We discard misses and retry until successful.
-
-One early challenge during exploit development was that the AI would get stuck during heap grooming primitive development. In order to save tokens and time, Calif wrote a small heap tracer and visualizer to give the agent information about the heap state, combined with our expertise on specific cases.
-
-### Remote Heap Feng Shui
-
-In order to perform remote grooming, each request data would be sent up until the critical heap allocation would occur. By ensuring the data that was previously sent had a TCP acknowledgement, the exploit would have control over the allocations up to date. Once we were confident our data so far is buffered on the target, we then sent the rest, completing the http request. This allows both heap allocation control and more precise schedule as delivering small network packets is more stable than big ones.
-
-The exact allocation and free order schedule belongs to the targeted application profile, while we are able to control the adding, writer, reader, and decoder pieces.
-
-The current attack is sensitive to network conditions, like RTT and jitter. Low, stable round-trip times are preferred for a more reliable attack. In our controlled environment, we performed this attack over the internet through public IP addresses instead of just assuming perfect laboratory conditions. For the current attack path to achieve optimal stability and reliability in exploitation, Calif turned to physics and utilized money to solve the problem, rather than experimenting with TCP/IP stack configuration. In other words, Calif rented another VM in the same region as our target.
-
-### Warm-up, rehearsal, and retries
-
-To summarize the chain so far, we will warm up the Base64 decoder to C2 tier. We can rehearse the exploit run to calibrate timing and responses against the target before causing corruption to occur. Once the required information has been obtained, we can trigger the vulnerability. Incorrect placement could cause the JVM to crash, but in many instances, we can simply try again.
-
-### Limitations
-
-**Request streaming.** Some current grooming profiles need partial request bodies to reach the application. A proxy that waits for the complete body removes their release timing. [nginx buffers request bodies by default](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_request_buffering).
-
-Request buffering is not a general mitigation. Elasticsearch runs from one complete request, so this setting does not stop that chain. After a configured [WebSocket upgrade](https://nginx.org/en/docs/http/websocket.html), later frames pass through a tunnel and request-body buffering no longer applies to them.
-
-**Application profiles.** There is no universal payload. Each chain needs a decoder route, a live writer, a returned reader or another feedback path, a heap layout, and an application action. Every target needs a bespoke profile. The exploit is not a universal point-and-shoot.
-
-### PoC
-
-Here is a self-contained proof of concept. It warms the Base64 decoder until the vulnerable intrinsic is used, then decodes the malformed `64 × "A" + "="` input into a 4096-byte array. On an affected JDK it prints `REPRODUCED`: the decoder rejects the input, but 62 bytes (offsets 50 to 111) past the decoded output have already been overwritten. Every write lands inside a real array, so the trigger is safe to run.
-
-```java
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Base64;
-
-/** Bounded standalone trigger: every write stays inside a real 4096-byte array. */
-public final class Base64Trigger {
-    private static volatile int sink;
-
-    public static void main(String[] args) {
-        Base64.Decoder decoder = Base64.getDecoder();
-        byte[] valid = "A".repeat(64).getBytes(StandardCharsets.US_ASCII);
-        byte[] malformed = ("A".repeat(64) + "=").getBytes(StandardCharsets.US_ASCII);
-        byte[] target = new byte[4096];
-
-        for (int i = 0; i < 200_000; i++) {
-            sink += decoder.decode(valid, target);
-        }
-
-        Arrays.fill(target, (byte) 0x5a);
-        boolean rejected = false;
-        try {
-            decoder.decode(malformed, target);
-        } catch (IllegalArgumentException expected) {
-            rejected = true;
-        }
-
-        int changed = 0;
-        int first = -1;
-        int last = -1;
-        for (int i = 50; i < target.length; i++) {
-            if (target[i] != (byte) 0x5a) {
-                changed++;
-                if (first < 0) first = i;
-                last = i;
-            }
-        }
-
-        System.out.println("runtime=" + System.getProperty("java.runtime.version"));
-        System.out.println("vm=" + System.getProperty("java.vm.name"));
-        System.out.printf("rejected=%s changed=%d first=%d last=%d%n",
-            rejected, changed, first, last);
-
-        if (!rejected || changed != 62 || first != 50 || last != 111) {
-            System.err.println("NOT REPRODUCED");
-            System.exit(1);
-        }
-        System.out.println("REPRODUCED");
-    }
-}
-```
-
-We are holding back the application-specific exploits for now. This write-up covers the vulnerability and the general exploitation technique. The weaponized chains for individual products stay private until everyone has had a chance to upgrade. We will publish them later.
-
-### Affected products
-
-Java4Shell affects OpenJDK from version 17.0.6 or newer.
-
-Because they are built from OpenJDK, the following Java distributions are also vulnerable:
-
-- Amazon Corretto
-- Eclipse Temurin
-- Microsoft Build of OpenJDK
-- Azul Zulu
-- BellSoft Liberica
-- SAP SapMachine
-- Red Hat OpenJDK
-- Oracle OpenJDK
-- Oracle Java SE
-- Oracle GraalVM for JDK
-
-According to Oracle, the following Oracle Java SE versions are vulnerable: 8u511b33-perf, 17.0.21.0.3, 21.0.13.0.3, 25.0.5.0.3, 27.0.1.0.3. We thank Oracle for providing this information ahead of publication time.
-
-Because the vulnerable code is hardware-specific, Java4Shell also requires an x86-64 processor with AVX-512 VBMI support. ARM64 CPUs are not affected.
+> The Long Hold refers to [a diagnostic warning](https://docs.solidjs.com/reference/solid-js/diagnostics/long-hold) in Solid 2.0. It fires when a hold has been shown(`isPending`) but sufficient time has passed since the last input. Holds were at the heart of our async work for 2.0, and we acknowledge it took a while for this all to land.

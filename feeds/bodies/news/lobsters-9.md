@@ -1,72 +1,92 @@
-For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
+Over the past few months, PyPI has added some additional checks that
+can reject uploaded source distributions ("sdists") and built
+distributions ("bdists" or "wheels").
 
-In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
+These checks are part of a larger initiative to make the Python packaging
+ecosystem more resistant to parser differentials, and will be followed
+by additional checks that aim to make PyPI's handling of distributions
+less permissive and more strictly conformant to their respective specifications.
 
-This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
+For downstream users (package consumers), there are **no breaking implications**
+to these changes. Package maintainers who see failures should ensure that
+they're using [non-EOL versions of Python](https://devguide.python.org/versions/#versions) as well as build backends
+that produce distributions that properly conform to the packaging
+standards.
 
-This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
+## Background[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#background)
 
-## Writing code once was never the issue
+Python packaging has two primary distribution formats:
 
-Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
+- Source distributions, or sdists. These are distributed as compressed tar archives ("tarballs") with the suffix .tar.gz.
+- Built distributions, or bdists (or wheels). These are distributed as ZIP archives with the suffix .whl.
 
-The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+Neither tar nor ZIP was designed for the role it serves in Python packaging<sup>[1](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#fn:packaging)</sup>: both represent
+metadata that is irrelevant to Python package distribution, and
+are surrounded by [an ecosystem of parsers that are permissive](https://astral.sh/blog/tar-codec#tarchaeology) in their interpretation of inputs.
 
-## curl is the result of time
+This laxity is often correct in a local user setting, where users often want to recover important data from
+corrupted or otherwise slightly incorrect archives.
 
-curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+However, it's **incorrect** in a networked setting,
+particularly a packaging one: even small differences in parsing between [separately permissive implementations](https://alexgaynor.net/2025/mar/25/postels-law-and-the-three-ring-circus/)
+can result in parser differentials that can result in identical inputs extracting
+differently on different platforms and with different tools.
 
-## Behind already
+In principle, an attacker can use differentials to violate many of the properties that Python
+packaging (and end users) assume, including:
 
-During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+- That PyPI's own parse of each uploaded distribution (including important metadata like dependencies) is consistent with what each installer sees;
+- That third-parties (like mirrors and security scanners) "see" the same distribution contents as PyPI does;
+- That invocations like pip install ... and uv add ... produce the same installation state.
 
-The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+Violations of these properties can result in users installing distributions that look legitimate
+but are actually malicious, even when the distribution's own integrity (e.g. via hashing) is established.
 
-That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+## Changes[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#changes)
 
-A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+Over the last few weeks, PyPI has begun rejecting:
 
-## C
+- Source distributions that use "V7"-style tar archives. V7 is a legacy and mostly unspecified tar format that comes from UNIX V7 and was never produced by Python's own `tarfile` module.
+- Built distributions that include archive-level ZIP comments that could be misinterpreted as ZIP control structures.
 
-I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+These changes built on top of [earlier work performed by Seth Larson](https://blog.pypi.org/posts/2025-08-07-wheel-archive-confusion-attacks/) last August aimed specifically
+at ZIP differential reduction.
 
-A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+## What does this mean for me?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#what-does-this-mean-for-me)
 
-## No rewrites
+If you're a downstream user of Python packaging: **nothing**! These changes **will not directly affect you**,
+and any distributions that you already depend on (through `pip install` or `uv add`) will continue to
+work.
 
-I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+If you're a package maintainer: **nothing, probably**. The overwhelming majority of source distributions on PyPI
+are **not affected** by these changes, because they were already conforming with the pax requirement.
 
-## Those rewrites
+If you're a maintainer and you *do* encounter an upload rejection for archive format reasons,
+please consult PyPI's [archives documentation](https://docs.pypi.org/archives/). PyPI will endeavor to keep that page up-to-date as we
+ratchet down on malformed or non-conforming uploads.
 
-I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+For many maintainers, the fix will be straightforward:
 
-I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+- Make sure that your distributions (both sdists and bdists) are built with a Python build backend, and *not* by manually packing an archive with `tar`, `zip`, or similar. Popular build backends generally conform to both the distribution format specifications and to PyPI's additional archive restrictions.
+- If you're unable to migrate away from a manual packing step, make sure that you're manually conforming to the archive requirements, namely:
+  - [Source distributions](https://packaging.python.org/en/latest/specifications/source-distribution-format/) **must** be POSIX pax-style tar archives. If you're using GNU `tar`, you'll need to pass `--format=pax` to override the default.
+    - Moreover, source distributions must avoid certain tar features, even if they can be framed within a pax-conforming tar. These include "sparse" members and pax vendor extensions.
+  - [Built distributions](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) **must** be valid ZIP archives.
+  - Both formats require UTF-8 encoded filenames for their members.
 
-They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+## What's next?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#whats-next)
 
-I wish them good luck whatever they decide!
+This is an ongoing initiative, one that involves multiple facets of the Python ecosystem.
+We aim to align this work with Python itself (by reducing the number of differentials
+in Python's own `zipfile` and `tarfile`), as well as Python packaging's standards (by further
+constraining and improving the precision of the distribution specifications).
 
-## How do I feel about them?
+Going forwards, PyPI will continue to identify new restrictions that it can apply to uploaded
+distributions. Our goal is to identify **minimally disruptive** restrictions, i.e. ones that can be made
+without breaking (almost) any users. Archive differentials overwhelmingly take advantage of
+obscure or unused aspects of archive formats, so this is frequently possible.
 
-Several people asked me this.
+In the near term, PyPI will be evaluating the following additional restrictions:
 
-*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
-
-I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
-
-1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27581#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27582#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27583#respond) .comment-body .children
-    1. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 18, 2026 at 10:55](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27596) .comment-metadata .comment-meta Isn’t a programming language just another development tool? We can talk about language capabilities just like any other. Types and tests go together as a pair of tools. Types can be validated incrementally in less than a second (eg in rust-analyzer), tests take seconds, minutes, sometimes hours for feedback. Tests can show the presence but not the absence of bugs, types prove the absence of whole classes of bugs but not their presence. Tests tell you about a specific execution, types reason about all possible executions. Test can validate any behaviour while types can only exclude bugs provable in its logic. The progress in programming languages has generally been towards stronger types, including lifetimes in Rust’s case. I don’t think its fair to say they have no advantages over tests. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27596#respond) .comment-body .children
-      1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 11:30](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27597) .comment-metadata .comment-meta @Jesse: different languages have different advantages and quirks, sure. I just meant that I don’t think the choice of language holds us back. .comment-content .comment-body
-  2. ![](https://secure.gravatar.com/avatar/7af2556d70ebdec658363896fcc23a2b17aeb51da7c5e5cb440e59af5c96788a?s=68&d=monsterid&r=g) **[grayhatter](https://gr.ht)** says: .comment-author [November 17, 2026 at 19:38](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27589) .comment-metadata .comment-meta > Nice, that sounds like very good motivation for a Rust rewrite. I agree; it is a good reason! But I feel like you’ve missed the forest for the single tree. This whole post is describing the value in curl being the maintainers that are willing to put in the time. A single observation doesn’t outweigh the reality that code is (and always has been) cheap. But maintainer time and effort is the important part. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27589#respond) .comment-body
-3. ![](https://secure.gravatar.com/avatar/dba025f411eb5dea75b2ac9d89b8299ba8ded7551da0ec0af415857312de2f7f?s=68&d=monsterid&r=g) **Jack** says: .comment-author [November 17, 2026 at 16:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27584) .comment-metadata .comment-meta cURL is one of the greatest examples of a project, C or otherwise, done right. It’s a stalwart of computing. It’s literally everywhere. It’s probably even in my toaster too, which is kind of scary now that I think about it. Jokes aside, you should really just ignore the people clamoring to rewrite it in Rust or Zig or whatever. I’m a huge Rust fan. I mainly program in Rust and a bit of C. This has nothing to do with rust per se and more to do with the internet being annoying. An AI powered rewrite or even a rewrite by hand misses what actually makes cURL so good. It’s that there is a talented team of maintainers who understand the code, understand the domain, and are dedicated to writing and maintaining curl. Rewrites lose all of this for temporary benefits, or worse it doesn’t have any benefits at all. There are AI and hand rolled postgres rewrites in Rust that are “faster” but it turns out they’re buggy messes that aren’t even durable. They’re faster because they’re broken. 🙂 So, I say this as a huge Rust fan who contributes to a plethora or open source Rust projects. Please ignore the “riir” in Rust crowd. It doesn’t represent most of us. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27584#respond) .comment-body
-4. ![](https://secure.gravatar.com/avatar/89c0c2a3cd1d8d2e7ae262a8b2967c5a214b80cb8f14d913519dcec0ac6ced68?s=68&d=monsterid&r=g) **Joonas Kuorilehto** says: .comment-author [November 17, 2026 at 16:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27585) .comment-metadata .comment-meta ” This latter one claims to have spent 8,600 USD to make it happen”. This is a wrong reading. They claim that amount in estimated API cost equivalent, but based on them running out of quota they use a subscription, which is a lot less cost. Not that it changes anything you said though. Thanks for keeping cURL going all these years. I doubt any of the clones are committed to similar maintainance quality and long term. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27585#respond) .comment-body
-5. ![](https://secure.gravatar.com/avatar/c4cb559cac461ae04977a38bc7c7e1779430589c4cae02e432f275fd7964fee6?s=68&d=monsterid&r=g) **[Vishal Pawar](https://vishalpawar.dev/utm?src=daniel_haxx)** says: .comment-author [November 17, 2026 at 18:00](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27587) .comment-metadata .comment-meta I really like what this post is talking about everyone can make a copy but who can maintain and keep on adding features in long term that is what makes it competing and survival of the copied software. Everyone knows how Cloudflare made a copy of Next.js and everyone started posting about it for few weeks and it is dead or it is copying features from Next.js to keep up with the Next.js as it’s replacement .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27587#respond) .comment-body
-6. ![](https://secure.gravatar.com/avatar/56be1d4b72a7e714a306e1894594615c37419ba7fab85792c32ff6b603f70b6f?s=68&d=monsterid&r=g) **Dàmian Lusq** says: .comment-author [November 17, 2026 at 19:05](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27588) .comment-metadata .comment-meta @Joonas The artifact mentions weekly limit only on 28/10, one week after the start of the rewrite, and not until the end of the experience, so it surely started with some heavy subscription, it may switched to token billing after to keep up with the work. “If the work ran on a subscription plan, this is what it would have cost on the API, not what was billed.” So yes, for sure, it at least been partially subsidized, and once Anthropic will switch to token billed usage (like OpenAI will do next month, because money), it would certainly cost $8.6k for any clone, except if some “super agents” becomes the new hype and would burn way more tokens… Again, “humans made computers for humans” is still a thing nowadays, and AI will not replacing communities tomorrow. It would have been interesting to see a clean C ? Rust ? C rewrite just to compare how the C could have been rewritten, just out of curiosity. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27588#respond) .comment-body
-7. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://tactica.xyz)** says: .comment-author [November 17, 2026 at 19:47](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27590) .comment-metadata .comment-meta It is november 2026. You can use formal verification with Verus to get rid of other 67 logic bugs and then use it continuously to avoid bugs at all! [https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/](https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/) No other language yet provide such an ecosystem for error prevention. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27590#respond) .comment-body
-8. ![](https://secure.gravatar.com/avatar/490f7fcfee38ddde609f8110024f5c8ba08f6e755beedb3c50b4235521e154f5?s=68&d=monsterid&r=g) **[Eser](https://www.techmedya.com/)** says: .comment-author [November 17, 2026 at 20:49](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27591) .comment-metadata .comment-meta This is such a wonderfully grounded perspective! It’s a great reminder that a software’s true strength lies in its community, history, and endless iterations—not just the language it’s written in. Thank you for everything you do for curl! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27591#respond) .comment-body
-9. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/tactica.xyz)** says: .comment-author [November 17, 2026 at 21:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27592) .comment-metadata .comment-meta AI + Verus tool allows you to automatically write formal proofs on your code and get rid of rest 67 issues. Rust has single best ecosystem to get rid of bugs! Happy to help is you ever decide to try and collect metrics on quality improvement! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27592#respond) .comment-body
-10. ![](https://secure.gravatar.com/avatar/59b98429498dc9d91e7c181d67441c6070887f50fc663b51c6cff64e6f0efdb0?s=68&d=monsterid&r=g) **Enne** says: .comment-author [November 17, 2026 at 22:19](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27593) .comment-metadata .comment-meta Similarly-shaped things used to happen at a much smaller scale on web 1.0. How many times I or my peers would share tarballs of our funny little webapps, only to be shown a few weeks later some proto-reactionary teenager trying so hard to impress his two or three followers with the website he “built” all on his lonesome in a day, and soon after that it’d be gone again in a fit of pique. Maybe these are the same people all aged up. Similarly-shaped things and all. But even those kids would have the sense to not brag that they gambled away thousands of dollars to put a Pyongyang Hotel in the metaverse. That’s just sad. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27593#respond) .comment-body
-11. ![](https://secure.gravatar.com/avatar/d26584a90e6abfffb1d8da05fbf6a44015692f85da05cf3bfd6581514220289b?s=68&d=monsterid&r=g) **Félix** says: .comment-author [November 18, 2026 at 08:28](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27594) .comment-metadata .comment-meta I you don’t know Rust well, what makes you confident about the exact number of issues that Rust would have prevented? C is a barebone language, Rust brings much more to the table than memory safety only: – Sane type system, especially with sum types – Better error handling (mostly consequence of the previous point) – Trait-based polymorphism (no such abstraction in C) – RAII – Async (especially useful for curl) Even users’ misusage can be prevented with a good set of types: make invalid states unrepresentable. BTW, we talk about Rust, but any functional language would do. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27594#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 08:34](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27595) .comment-metadata .comment-meta @Felix No one can know any exact number of problems curl would have had if written in another language. Not you, not I. What I do know though, and this is verifiable because all the details and data is public, is how many of the past curl vulnerabilities that were “C mistakes”. I think everything else in terms what other languages could do or not is mostly a distraction and “language religious talk”. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27595#respond) .comment-body
+- Rejecting GNU-style tar archives entirely. These are already forbidden by the source distribution specification, but are currently allowed because of non-trivial use by maintainers. See [#21012](https://github.com/pypi/warehouse/issues/21012) for our initial plans on this.
+- Rejecting ZIP comments entirely. PyPI already rejects many forms of these, but allows a small subset for compatibility with ZIP encoders that put innocuous messages (like their version number) in archive comments. See [#20934](https://github.com/pypi/warehouse/issues/20934) for our initial plans on this.

@@ -1,242 +1,109 @@
-Here at Close, our primary backend service has automated tests. Quite a lot of
-them, nearly 58,000. While some things are easy
-to test in pure Python, the tests that actually give us the most confidence generally
-are API or service-level integration tests that avoid mocking and typically *do*
-actually hit datastores.
+In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
 
-How long do all 58,000 integration tests take to run in CI?
+Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
 
-*About 2 and a half minutes.*
+In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
 
-Yes, 58,000 integration tests, most of which do IO across multiple datastores,
-in under 3 minutes.
+Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
 
-[![alt text](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/ca790/image-4.webp)](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/4e9ad/image-4.png)
+Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
 
-How? Let's go on a journey together...
+But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
 
-# Learning to Crawl...
+The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
 
-Close launched in 2013, but our test suite is actually even older! Tests in CI
-were introduced in 2012, with a Jenkins build script and the
-[nose](https://nose.readthedocs.io/en/latest/) testing library. We've since
-migrated to CircleCI then GitHub Actions, swapping to pytest along the way. But
-a lot of the same concepts are still relevant today. The general shape of a
-test run is:
+The release out today is an invitation to start making other futures, together.
 
-![A single runner sets up backends, starts the app, collects tests, and runs them sequentially.](https://making.close.com/90d537fc70efb9ac6c1693112ad68ff2/single-runner.svg)
+## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
 
-For simple applications with only a handful of tests, this setup works great! But
-as the application starts growing, slowly the "run tests" step inflates to the
-point where you start waiting tens of minutes for a green checkmark to appear.
-While working on features you're subject to intrusive voices of gremlins
-whispering "but what if it was faster? Surely it could go faster"
+This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
 
-# Crawl to Walk...
+### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
 
-The natural next step is... parallelism! There's a few common ways to do this,
-but the most straightforward options are either multiprocessing parallelism
-(something like [`pytest-xdist`](https://pytest-xdist.readthedocs.io/en/stable/index.html))
-that fans out work across multiple CPUs, or deterministically splitting work
-across multiple machines (something like [`pytest-split`](https://jerry-git.github.io/pytest-split/)).
+A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
 
-Multi-CPU parallelism doesn't really help us, because most of our tests
-rely on external databases. Running multiple tests at the same time on the same
-database can lead to logical conflicts where tests end up reading each other's
-data. While it's *possible* to configure things like dynamic database creation,
-practically it's both hard to do correctly across many datastores and is even
-harder to do performantly.
+![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
 
-Deterministic work splitting was a much more attractive option for us, since many
-CI providers started offering matrix'd builds where you could easily specify
-different parameters for each of them (i.e. run the `pytest` with parallelism
-of `4`, where each runner knows which number it is). This strategy just added a
-little bit of CI configuration, but ultimately only required installing a plugin
-and adding a few flags to the CI command. Today it would look something like:
+Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
 
-```bash
-pytest --splits 4 --group 1
-```
+### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
 
-Some version of this logic has been relatively easy to set up for a long time,
-and we introduced it to Close in late 2014. With this version of test splitting,
-our full test run now looks like:
+Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
 
-![Independent runners each set up backends, collect the full suite, select a fixed subset, run it, and save results for merging.](https://making.close.com/ad475443c963e1b06e57f1c04bb8ce45/fixed-shards.svg)
+But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
 
-# Walk to Run...
+As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
 
-Early versions of test splitting logic relied on file names to split tests up,
-leading to unbalanced workloads. Eventually we were able to tweak the splitting
-logic a bit, so that we tracked main-branch test timings and bin packed them
-instead of splitting pseudo-randomly.
+Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
 
-And this rough setup actually lasted us about **12** years! Over this time we
-didn't *ignore* CI speed, but we were mostly able to improve it through
-relatively minor / incremental changes:
+Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
 
-- refactor unittest-style tests to pytest
-- refactor pytest fixtures to make it easier to rely only on what the test needs
-- architecturally refactor to avoid global state and avoid API overhead when testing edge cases
-- keep global imports out of shared fixtures
-- avoid pytest assertion rewrites in ci
-- increase the level of parallelization (number of runners)
-- upgrade Github Actions runner node instance types
+Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
 
-But ultimately we hit a wall. The gremlins continued whispering, but there
-was no low-hanging fruit left. For a long time we were able to stabilize
-our test suite under around 10 minutes, but eventually even at 17x
-parallelization our CI times grew longer. The fixed-cost steps became very hard
-to optimize and scale out of.
+### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
 
-*What do you mean, "fixed cost"?*
+Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
 
-Well, the part of the test run that `pytest-split` parallelizes is actually
-*running* the test cases. When the application gets big enough, just running
-things like test *collection* could take up to a minute to resolve. It's not
-technically "fixed" cost, but these operations scale with the size of the *entire*
-app/test suite rather than just the selected test subset. So even as
-we scale up the number of runners, a lot of our runtime still goes
-to an ever-growing setup cost:
+![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
 
-- pulling images and starting datastores could take a minute
-- the app container couldn't start until datastores were ready
-- test collection couldn't start until the app container was ready
-- test collection always needed to collect the full suite before it could deterministically split (which took over a minute even without pytest's assertion rewriting enabled)
+### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
 
-![Each runner repeats backend setup, app startup, full-suite collection, and subset selection; only assigned test work is divided among runners.](https://making.close.com/b5974fe41ebb03ab23cf7cb857d23009/fixed-costs.svg)
+Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
 
-Despite our best efforts, the best performance we could get out of this
-setup was around 12 minutes of wall clock runtime. About half of that was eaten
-up by either fixed-cost steps, or by imperfect test balancing that resulted in
-some runners taking multiple minutes longer than others. We're already
-self-hosting our GitHub Actions runners to squeeze better performance out of
-them, but at some point you have diminishing returns turning the `N` knob
-higher. And that's just for tests! There's also unparallelizable build and
-deploy steps that continued to add up end to end runtime.
+![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
 
-# Run to ... Fly?
+Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
 
-So where do we go from here? Well... while looking at something related to our
-end to end Playwright tests, I stumbled across [currents.dev](https://currents.dev/).
+### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
 
-What currents.dev does for Playwright is that they maintain a centralized
-queue of work and tweak the test runner logic to consume from that queue instead
-of from a deterministic `-split` of work. They present two major unlocks:
+You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
 
-1. **Smart Orchestration:** Work is split dynamically so workloads are always split evenly
-2. **Spot instance support:** If a worker's node gets yoinked by AWS, its work gets redistributed
+![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
 
-Those features are really neat, but there's also a more subtle opportunity this architecture unlocks:
+### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
 
-**We can *much* more effectively parallelize our fixed-cost setup steps.**
+Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
 
-What if we applied these concepts to pytest? Let's visualize how a shared
-orchestrator changes our testing setup:
+The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
 
-![One orchestrator discovers files and queues batches while workers start their backends, then workers repeatedly pull batches, collect and run assigned files, and report results.](https://making.close.com/a7a2278b20e4637c330f23bdb4942f8a/orchestrated-tests.svg)
+## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
 
-A few things worth calling out:
+New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
 
-- The orchestrator doesn't need to run datastores at all
-- The orchestrator only needs to collect files, which allows us to skip a huge portion of pytest's collection runtime
-- Workers only collect what they run, which means their collection runtime scales down to their workload
-- The orchestrator can collect and split tests in parallel to workers starting their backends
+To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
 
-So now we're running one extra job (to orchestrate), but virtually all of our
-test workers' steps scale in runtime with the number of tests they're asked to
-run. What's next?
+- Bonfire Networks: general group to share news/discussions/questions about Bonfire
+- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
+- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
+- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
+- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
 
-**Spot instances.**
+For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
 
-Actually implementing spot instance support in GitHub Actions was hairy enough
-to deserve its own post, so we'll have to leave it on a cliffhanger for now. But
-with the amount of savings they offer, we were able to turn 17 on-demand runners
-into 2 on-demand runners + 54 spot instances for about the same dollar cost. That's
-one orchestrator and on-demand worker (for yoink insurance), plus 54 spot
-instance workers. We did end up keeping `main` on-demand though to keep it
-predictable.
+- Testing & Feedback: try new features and tell us what works and what breaks.
+- UX & Design: help shape how Bonfire looks and works.
+- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
+- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
+- Tech support: ask, answer and support each other in building and deploying Bonfire.
 
-With that type of parallelism and our improved scaling mechanism, our CI speed is
-good enough ... for now.
+And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
 
-## The devil's in the details
+## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
 
-If you're trying to reproduce this type of setup, here's a bit more detail to
-help.
+As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
 
-### How do the workers talk to the orchestrator?
+> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
+>
+> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
 
-Even with self-hosted runners, workers need some way to communicate back to
-the orchestrator server. But GitHub Actions runners aren't externally
-addressable. We worked around this by having the `pytest-orchestrator` CI step
-work more like a k8s operator that creates a temporary, deterministically
-named namespace / pod in the same CI/CD Kubernetes cluster.
+Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
 
-Each worker knows what namespace to look for based on run-specific identifiers,
-and has a connection grace period where it waits for them to come up.
+Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
 
-### Rerun on Failure
+Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
 
-With a `pytest-split` type of setup, rerunning just a subset of workers would
-rerun the same subset of tests. Now that tests are distributed dynamically, it's
-not trivial to rerun just the failing tests. If only one worker fails, rerunning
-failed jobs essentially amounts to running the full test suite with just a
-single worker. Slow.
+## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
 
-Instead of always rerunning all jobs, we've set each worker to wait until *all*
-batches are finished, then let the orchestrator decide if the run was clean or
-not. If it wasn't, then *all* workers fail. All test failures / stack traces
-show up in the orchestrator's outputs, so you don't need to inspect every
-individual worker for failures. But now since they all fail, rerunning failed
-jobs starts up the right number of workers for the test suite.
+Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
 
-### Speeding up test collection
-
-To avoid drift between pytest config and CI logic, we've opted to keep pytest
-responsible for test collection (as opposed to basic file globbing
-`tests/**/*.py`). The plugin only activates if explicitly enabled, and
-if no other collection-related args are passed (e.g. `-k`, `-m`, `--lf`, etc).
-While collecting, it skips descending into files and writes out discovered files
-to a given location as JSON.
-
-### Balancing Batches
-
-Initially we noticed that some runners still took noticeably longer than others,
-even though we aimed for batches of 20s of test runtime. It turned out to be a
-subtle issue with a simple fix: not all files themselves fit into that 20s
-target, and during batching we ended up with a somewhat random batch ordering.
-So, often an oversized batch would be the last one for a worker to claim and
-everything else would just wait on it. The fix was to sort batches in descending
-order before assigning them out. That way towards the end we have slightly
-better bin packing / runtime distribution.
-
-### Scaling Our Self-Hosted GitHub Actions Runners
-
-Just because we now request dozens of workers all at the same time doesn't mean
-we actually get them. When looking at CI runs, it's not always obvious how long
-was spent waiting in a queue for a runner to come up, and with this type of
-coordinated workload it can make a big difference in end to end runtime.
-
-We bumped our idle runner count and had to scale the max node pool sizing to
-better account for bursty demand during the day.
-
-### Measuring CI Timings
-
-The GitHub Actions UI can be very misleading about how long something *actually*
-took to run. The timings of each step don't well communicate how long it took
-a job to start, and how long in wall-clock time it fully took end to end. And
-it's really hard to get a true sense of this in aggregate if you can only look
-at cherry picked CI runs.
-
-Our CI setup has a post-action job that for every CI run inspects the step
-timings and converts it into trace data. That trace data then feeds into our
-OTel stack, making it easy to aggregate and report on with ClickHouse in
-Grafana. We end up with nice aggregate stats, and can drill down into specific
-jobs if needed:
-
-[![alt text](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/33eb4/image-1.webp)](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/0d368/image-1.png)
-
-*Note: Average build time here includes all actions queueing, uncached image*
-*builds from dependency bumps, deploy, and post-deploy steps. It also reflects*
-*GitHub Actions degradations.*
+So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.

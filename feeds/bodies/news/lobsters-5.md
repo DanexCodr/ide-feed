@@ -1,4 +1,4 @@
-For quite a long time, I've been working on a puzzle game called Satelital, a rule-discovery game about learning alien logic.
+Seven years ago I decided to start learning how to make a game from scratch. And Last week I released Satelital, a rule-discovery game about learning alien logic.
 
 As a solo developer, I decided to start this project from scratch. My motivation was to learn the actual fundamentals behind the technology of videogames. This meant I had to build most of the tools I would need myself, including the game engine, renderer, puzzles, editors, UX, design, art and music.
 
@@ -14,7 +14,7 @@ I remember hearing about shaders and parallel programming. The concept always fe
 
 I finally decided to jump into the swimming pool and actually learn C⁠+⁠+. I had to learn how to manage memory and how not to shoot myself in the foot with the wrong tools. I started using SDL2 while trying to use the C⁠+⁠+ standard library as little as possible.
 
-Before getting too deep into the engine, I actually finished a prototype of the game quite early. It had very early versions of four kinds of puzzles that mostly survived until the final game. It was made entirely with SDL2, but I soon realised that if I wanted to have more interesting graphics, I would need to use shaders and decided to switch to OpenGL.
+Before getting too deep into the engine, I actually finished a prototype of the puzzles not long after learning how to draw some simple graphics with C⁠+⁠+. It had very early versions of four kinds of puzzles that mostly survived until the final game. It was made entirely with SDL2, but I soon realised that if I wanted more interesting graphics, I would need to use shaders and decided to switch to OpenGL.
 
 With the help of [LearnOpenGL](https://learnopengl.com/) I quickly had a triangle on the screen. From there, learning things like lighting, tonemapping, normal maps, shader effects and everything else opened up a whole new way of looking at computers for me. Before, my idea of how a computer actually draws to the screen was quite naive. When I started learning graphics I just wanted to be able to manually change the color of each pixel individually, but in the end the idea of running a program in parallel for every pixel clicked for me.
 

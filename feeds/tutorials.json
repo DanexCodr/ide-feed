@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-19T00:01:03Z",
+  "updated": "2026-11-19T07:11:37Z",
   "items": [
     {
       "id": "devto-5060452",
@@ -74,24 +74,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978154",
-      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
-      "desc": "By Randal L. Schwartz | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T00:02:44Z",
-      "order": 7,
-      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4958335",
       "title": "One Markdown File Can Hijack Your AI Coding Agent: The Hidden Cost of Blindly Trusting AGENTS.md",
       "desc": "By 𝗝𝗼𝗵𝗻 | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-05T15:30:00Z",
-      "order": 8,
+      "order": 7,
       "url": "https://dev.to/johnnylemonny/one-markdown-file-can-hijack-your-ai-coding-agent-the-hidden-cost-of-blindly-trusting-agentsmd-167n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgp9mzlfxjcl32v27828r.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhtFIicf/EABkQAAEFAAAAAAAAAAAAAAAAABAAARESIf/aAAgBAQABBQJVwy5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwIaq//EABsQAQADAQADAAAAAAAAAAAAAAEAESExEHGR/9oACAEBAAE/ITkprPsAFoj3Crh2NVXkDfH/2gAMAwEAAgADAAAAECx//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QR//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAgEBPxC4r//EABsQAAMBAQADAAAAAAAAAAAAAAABESExYXGB/9oACAEBAAE/EEXuZ0dTbI8ILJyJyYo6kokon408n//Z",
@@ -103,10 +91,22 @@
       "desc": "By Ken W Alger | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T14:54:25Z",
-      "order": 9,
+      "order": 8,
       "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5069884",
+      "title": "Stratagems #36: They Finished Their Coffee. The AI Still Has No Answer.",
+      "desc": "By xulingfeng | 11 min read",
+      "tag": "tutorial",
+      "published": "2026-11-19T03:35:10Z",
+      "order": 9,
+      "url": "https://dev.to/xulingfeng/stratagems-36-they-finished-their-coffee-the-ai-still-has-no-answer-4igh",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6v4hhay53j7anx0qrai8.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQADAQAAAAAAAAAAAAAAAQACERIy/9oACAEBAAEFAgLkZx3IaMrCfXSX/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPwEJv//EABoQAAAHAAAAAAAAAAAAAAAAAAABECAhMUH/2gAIAQEABj8C1JFG3//EABoQAAIDAQEAAAAAAAAAAAAAAAABESExQbH/2gAIAQEAAT8hb4Esom74JbVQtGpIHTHhZa6GtwyLD//aAAwDAQACAAMAAAAQqU//xAAWEQEBAQAAAAAAAAAAAAAAAAABADH/2gAIAQMBAT8QQkcv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAECAQE/EAYBt//EAB4QAQEAAgEFAQAAAAAAAAAAAAERACFBMVFhcYHR/9oACAEBAAE/EFdjrcktwS7RUY0ao0DFm5WIEMAVyS6TzhiAFcn5lYBUs94oXnROH5n/2Q==",
       "color": "#3B49DF"
     },
     {

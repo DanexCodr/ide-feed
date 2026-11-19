@@ -1,92 +1,74 @@
-Over the past few months, PyPI has added some additional checks that
-can reject uploaded source distributions ("sdists") and built
-distributions ("bdists" or "wheels").
+This was a big week for IT incidents making it into the news. I wanted to take a moment and capture links on what’s been reported on each of these so far.
 
-These checks are part of a larger initiative to make the Python packaging
-ecosystem more resistant to parser differentials, and will be followed
-by additional checks that aim to make PyPI's handling of distributions
-less permissive and more strictly conformant to their respective specifications.
+1. Microsoft 365 (Thu Nov 12)
+2. FAA ground stop (Fri Nov 13)
+3. Workday (Fri Nov 13)
+4. Anthropic (Fri Nov 13)
+5. United (Mon Nov 16)
+6. JPMorgan Chase (Mon Nov 16)
+7. National Security Agency (Tue Nov 17)
+8. Apple services (Tue Nov 17)
+9. Marriott (Tue Nov 17)
 
-For downstream users (package consumers), there are **no breaking implications**
-to these changes. Package maintainers who see failures should ensure that
-they're using [non-EOL versions of Python](https://devguide.python.org/versions/#versions) as well as build backends
-that produce distributions that properly conform to the packaging
-standards.
+Note that none of these incidents involved cybersecurity attacks, according to the reporting. While there is reporting that Wall Street executives and the National Security Agency are telling congress that [the outages are related to fixing vulnerabilities](https://www.washingtonsun.com/technology/bank-ceos-nsa-tell-congress-ai-driven-patches-behind-outages), the NSA incident is the only one where there is explicit reporting that it involved vulnerability patching work.
 
-## Background[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#background)
+## Microsoft 365 (Thu Nov 12)
 
-Python packaging has two primary distribution formats:
+[Charles Lamanna](https://www.linkedin.com/in/charleslamanna/) of Microsoft posted an abridged version of Microsoft’s preliminary post-incident report on Twitter. There’s a ton of detail there, and I’m not even going to try to summarize. I’ll write a separate blog post about this one after the final report lands.
 
-- Source distributions, or sdists. These are distributed as compressed tar archives ("tarballs") with the suffix .tar.gz.
-- Built distributions, or bdists (or wheels). These are distributed as ZIP archives with the suffix .whl.
+The actually report seems to be only accessible to Microsoft customers, but it looks like somebody posted it to Reddit: [Microsoft Post-Incident Report is up for the Exchange Online Outage](https://www.reddit.com/r/sysadmin/comments/1xxiasy/microsoft_postincident_report_is_up_for_the/)
 
-Neither tar nor ZIP was designed for the role it serves in Python packaging<sup>[1](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#fn:packaging)</sup>: both represent
-metadata that is irrelevant to Python package distribution, and
-are surrounded by [an ecosystem of parsers that are permissive](https://astral.sh/blog/tar-codec#tarchaeology) in their interpretation of inputs.
+## FAA ground stop (Fri Nov 13)
 
-This laxity is often correct in a local user setting, where users often want to recover important data from
-corrupted or otherwise slightly incorrect archives.
+The FAA Telecommunications Infrastructure (FTI) network became saturated (1,000 connection attempts every 4-5 seconds). The current hypothesis is that this was triggered by the deployment of a new router at a site in El Dorado, Arkansas.
 
-However, it's **incorrect** in a networked setting,
-particularly a packaging one: even small differences in parsing between [separately permissive implementations](https://alexgaynor.net/2025/mar/25/postels-law-and-the-three-ring-circus/)
-can result in parser differentials that can result in identical inputs extracting
-differently on different platforms and with different tools.
+FAA website: [Nationwide Ground Stop: Questions and Answers](https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers)
 
-In principle, an attacker can use differentials to violate many of the properties that Python
-packaging (and end users) assume, including:
+## Workday (Fri Nov 13)
 
-- That PyPI's own parse of each uploaded distribution (including important metadata like dependencies) is consistent with what each installer sees;
-- That third-parties (like mirrors and security scanners) "see" the same distribution contents as PyPI does;
-- That invocations like pip install ... and uv add ... produce the same installation state.
+Services in Workday’s disaster recovery site unexpectedly wrote to production databases, leading to data consistency problems.
 
-Violations of these properties can result in users installing distributions that look legitimate
-but are actually malicious, even when the distribution's own integrity (e.g. via hashing) is established.
+Unfortunately, I couldn’t find a publicly available report from Workday. Here are some reports from other parties that were reporting on what Workday told them:
 
-## Changes[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#changes)
+- People: Workday Suffers Massive Outage, 1 Day After Microsoft Faced Similar Disruption That Impacted Thousands of Companies
+- UC Today: Workday’s Backup Test Took Payroll and Timekeeping Offline
+- Florida Atlantic University: UPDATE – Workday Production Service Disruption
 
-Over the last few weeks, PyPI has begun rejecting:
+## Anthropic (Fri Nov 13)
 
-- Source distributions that use "V7"-style tar archives. V7 is a legacy and mostly unspecified tar format that comes from UNIX V7 and was never produced by Python's own `tarfile` module.
-- Built distributions that include archive-level ZIP comments that could be misinterpreted as ZIP control structures.
+I couldn’t find any details about the nature of the failure mode for the incident(s) that Anthropic experienced on Friday. Here are the official reports:
 
-These changes built on top of [earlier work performed by Seth Larson](https://blog.pypi.org/posts/2025-08-07-wheel-archive-confusion-attacks/) last August aimed specifically
-at ZIP differential reduction.
+- Elevated errors on claude.ai, the Claude API, and Claude Code
+- Elevated errors on claude.ai, Claude Code, and platform.claude.com
 
-## What does this mean for me?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#what-does-this-mean-for-me)
+## United (Mon Nov 16)
 
-If you're a downstream user of Python packaging: **nothing**! These changes **will not directly affect you**,
-and any distributions that you already depend on (through `pip install` or `uv add`) will continue to
-work.
+The United outage is described in the press as a systemwide operational outage that affected pilot applications, including crew communications, messaging systems, and the ability to provide final aircraft weight information for departing flights. Beyond that, I couldn’t find any details about the nature of the failure mode.
 
-If you're a package maintainer: **nothing, probably**. The overwhelming majority of source distributions on PyPI
-are **not affected** by these changes, because they were already conforming with the pax requirement.
+While there is nothing official  from United, there are United statements reported in the media, as well as statements from [the union that represents United pilots](https://ual.alpa.org/):
 
-If you're a maintainer and you *do* encounter an upload rejection for archive format reasons,
-please consult PyPI's [archives documentation](https://docs.pypi.org/archives/). PyPI will endeavor to keep that page up-to-date as we
-ratchet down on malformed or non-conforming uploads.
+- NBC 5 Chicago: United Airlines responds to ‘widespread system outage.’ Read the statement here
+- AP: 1.5-hour-long system outage forces United Airlines to delay departing flights
+- ABC News: United Airlines briefly has ‘systemwide’ disruption to departing flights
+- Reuters: United Airlines says technology outage that delayed departures has been resolved
 
-For many maintainers, the fix will be straightforward:
+## JPMorgan Chase (Mon Nov 16)
 
-- Make sure that your distributions (both sdists and bdists) are built with a Python build backend, and *not* by manually packing an archive with `tar`, `zip`, or similar. Popular build backends generally conform to both the distribution format specifications and to PyPI's additional archive restrictions.
-- If you're unable to migrate away from a manual packing step, make sure that you're manually conforming to the archive requirements, namely:
-  - [Source distributions](https://packaging.python.org/en/latest/specifications/source-distribution-format/) **must** be POSIX pax-style tar archives. If you're using GNU `tar`, you'll need to pass `--format=pax` to override the default.
-    - Moreover, source distributions must avoid certain tar features, even if they can be framed within a pax-conforming tar. These include "sparse" members and pax vendor extensions.
-  - [Built distributions](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) **must** be valid ZIP archives.
-  - Both formats require UTF-8 encoded filenames for their members.
+The JPMorgan Chase incident delayed [Zelle](https://www.zelle.com/) transactions. The tweet below mentions a software bug in on-premise hardware systems. Beyond that, I couldn’t find any details.
 
-## What's next?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#whats-next)
+## National Security Agency (Tue Nov 17)
 
-This is an ongoing initiative, one that involves multiple facets of the Python ecosystem.
-We aim to align this work with Python itself (by reducing the number of differentials
-in Python's own `zipfile` and `tarfile`), as well as Python packaging's standards (by further
-constraining and improving the precision of the distribution specifications).
+Performance on the NSA’s classified internal communication network (NSA Net) degraded during this incident. According to the reporting, it was triggered by a software patch intended to fix PHP vulnerabilities that were discovered last month.
 
-Going forwards, PyPI will continue to identify new restrictions that it can apply to uploaded
-distributions. Our goal is to identify **minimally disruptive** restrictions, i.e. ones that can be made
-without breaking (almost) any users. Archive differentials overwhelmingly take advantage of
-obscure or unused aspects of archive formats, so this is frequently possible.
+- NSA statement on network issues
+- The Record: Update: Disruptions in NSA’s internal network caused by software patch, DNI says
 
-In the near term, PyPI will be evaluating the following additional restrictions:
+## Apple services (Tue Nov 17)
 
-- Rejecting GNU-style tar archives entirely. These are already forbidden by the source distribution specification, but are currently allowed because of non-trivial use by maintainers. See [#21012](https://github.com/pypi/warehouse/issues/21012) for our initial plans on this.
-- Rejecting ZIP comments entirely. PyPI already rejects many forms of these, but allows a small subset for compatibility with ZIP encoders that put innocuous messages (like their version number) in archive comments. See [#20934](https://github.com/pypi/warehouse/issues/20934) for our initial plans on this.
+Several Apple services experienced an outage, including iCloud and Apple Pay. I couldn’t find anything directly from Apple. According to a statement from Apple reported by the press, it was triggered by an internal update.
+
+## Marriott (Tue Nov 17)
+
+Marriott experienced sign-in issues on their website (marriott.com) and their app (Marriott Bonvoy). Beyond that, I couldn’t find any additional details. Nothing official from Marriott, here’s reporting that includes a statement from them.
+
+1. ![Ezra SF's avatar](https://1.gravatar.com/avatar/a9414a1ea745b9abce3d779bed96313fcdf02d3dc277a7540277eb6299cd7466?s=192&d=identicon&r=G) **[Ezra SF](https://ezrasf.com/)** says: .comment-author [November 18, 2026 at 7:11 pm](https://surfingcomplexity.blog/2026/11/18/incidents-in-the-news/#comment-9989) .comment-metadata .comment-meta Word is new PHP critical vulnerabilities publish tomorrow. The adventures in patching continue. .comment-content [Reply](https://surfingcomplexity.blog/2026/11/18/incidents-in-the-news/?replytocom=9989#respond) .comment-body

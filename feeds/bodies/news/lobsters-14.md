@@ -1,109 +1,144 @@
-In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
+Introducing *sysdeck*, a command center for Linux and the BSDs that searches
+applications, files, the clipboard history and more from a single hotkey, and
+that only runs when you call it.
 
-Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
+In August I started working on a tool that I had been missing on my Linux
+desktop for a while, and for which I tried to build a somewhat glued-together
+mess of scripts that used [bemenu](https://github.com/cloudef/bemenu) to do what I wanted. At some point, though, I
+figured that I should probably try to put together an actual program, ideally
+using Zig and GTK.
 
-In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
+I wanted something that, just like bemenu (or rofi, or wofi, or whatnot), is
+basically a single popup that I can open with a hotkey and type a few letters
+into, to start an application, find a file, paste something I copied an hour
+ago, or convert a currency without opening a browser. Now, roughly three months
+later, I think I got it to a point where it’s worth publishing for others to
+try. It’s called *sysdeck*, and the way I describe it is *the less bloated
+Linux/BSD equivalent of Raycast on macOS*.
 
-Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
+Yes, I’m aware that the title of this post is clickbait. *sysdeck* isn’t a port
+of [Raycast](https://www.raycast.com), it doesn’t share a single line of code with it, and it
+doesn’t come with an extension store or a subscription plan. However, Raycast is
+the name that probably most people know for this kind of tool, and considering
+that you’re here, reading this post, the title has obviously done its job. :-)
 
-Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
+## Overview
 
-But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
+*sysdeck* is supposed to be bound to a hotkey in your window manager. When you
+press it, a window appears in which you start typing, and *sysdeck* shows the
+matching entries from your applications, command-line executables, files and
+folders, browser bookmarks, clipboard history, open Sway windows, SSH hosts,
+Podman containers, text snippets and emoji. *Return* acts on the selected entry
+depending on its kind, meaning it launches an application, opens a file or
+copies a clipboard entry back. Holding *Alt* opens a context menu with further
+actions. Selected images are shown along with their EXIF data, and executables
+show their manual page underneath the list unless the `man` extension is
+disabled in the config.
 
-The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
+Besides searching, *sysdeck* calculates and converts units and currencies using
+the library behind [`whats`](https://xn--gckvb8fzb.com/whats-1-21-gigawatts-in-watts/). It also controls running media players
+via MPRIS, connects and disconnects NetworkManager connections, and takes
+screenshots of a region, a window or the whole screen. If you configure a
+Gemini, OpenAI or Anthropic model, or any OpenAI-compatible server, it also
+sends your questions to an LLM. It keeps track of what you pick and ranks its
+suggestions accordingly so that it can show you recommendations that matter to
+your personal workflow.
 
-The release out today is an invitation to start making other futures, together.
+Oh, and its `--dmenu` mode can replace `dmenu` in scripts, just like a single
+line in your Sway configuration lets it replace clipboard managers like
+`cliphist`.
 
-## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
+What I’d like *sysdeck* to become is the one *command center* from which you
+start, find and control everything on a Linux or BSD desktop, instead of the
+collection of single-purpose tools and scripts that a typical tiling window
+manager setup combines for launching programs, managing the clipboard, picking
+emoji and taking screenshots. As mentioned before, *sysdeck* is written in Zig,
+uses GTK4 for its interface and keeps its indexes in SQLite.
 
-This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
+## On demand
 
-### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
+One part of *sysdeck*’s design that differs from most launchers that come with
+more advanced features is that *sysdeck* doesn’t use a background service. This
+is deliberate and will stay that way for the foreseeable future.
 
-A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
+Raycast, for example, keeps running at all times, so that its window can appear
+the instant you press the hotkey. *sysdeck*, however, only runs when you ask for
+it. Every press of the hotkey starts a new process that shows the window, does
+what you asked it to do, and exits as soon as you pick an entry, press *Escape*
+or switch to another window. Whenever one of its indexes is older than its
+configured maximum age, *sysdeck* rebuilds it on a separate thread while the
+window is open, and searches the existing index in the meantime.
 
-![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
+Similarly, even the clipboard history works without a resident process of its
+own, because `wl-paste` starts a lightweight *sysdeck* process (that only loads
+the absolute necessary bits) for every copy. That run records the entry and
+exits again, all within 10 to 20 milliseconds. The price for all of this is a
+start time of about a tenth of a second on my machine, most of which GTK spends
+on building and presenting the window. In my opinion this *“slight delay”* is a
+fair trade over running a background service, because RAM has become expensive
+and hard to get, as I’ve outlined in my posts on
+[holding on to your hardware](https://xn--gckvb8fzb.com/hold-on-to-your-hardware/) and on
+[dealing with faulty RAM](https://xn--gckvb8fzb.com/hold-on-to-your-hardware-badram/), and I believe that a program that is on
+screen for only a few seconds at a time shouldn’t occupy memory and eat up CPU
+cycles for the rest of the day.
 
-Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
+## What it looks like
 
-### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
+### Conversions
 
-Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
+*sysdeck* uses the [`whats`](https://tty.fail/mrus/whats) library for conversions and can convert
+various units and currencies.
 
-But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck02.gif)
 
-As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
+### Web search
 
-Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
+You can configure custom web search engines and search them directly from
+*sysdeck*, which then opens your default browser with the results.
 
-Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck03.gif)
 
-Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
+### Disk search
 
-### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
+*sysdeck* can be configured to index specific folders and include their contents
+in its search results. In disk mode it shows only those items.
 
-Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck04.gif)
 
-![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
+### Media controls
 
-### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
+Using MPRIS, *sysdeck* can control media players and trigger actions such as
+play, pause, skip the current track or go back to the previous one, and it can
+also show what is currently playing from within its UI.
 
-Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck05.gif)
 
-![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
+### Emoji
 
-Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
+*sysdeck* builds an index of all available emoji and lets you search for
+individual ones using keywords that make sense, so that you find the one you’re
+looking for, which it then copies to your clipboard on *Return*.
 
-### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck06.gif)
 
-You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
+### Containers
 
-![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
+Podman containers can be started and stopped from within *sysdeck*, which also
+shows the current status of each individual container.
 
-### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
+![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck07.gif)
 
-Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
+## Get it
 
-The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
+Anyway, *sysdeck* is open source under the [SEGV License](https://xn--gckvb8fzb.com/segv/) and its primary
+repository is on [tty.fail](https://tty.fail/mrus/sysdeck), with a [mirror on GitHub](https://github.com/mrusme/sysdeck) that also
+publishes pre-built binaries. The [latest release](https://github.com/mrusme/sysdeck/releases/latest) includes builds for
+Linux on `x86_64`, `aarch64`, `riscv64`, `powerpc64le` and `s390x`, each for
+glibc as well as musl, a musl build for `loongarch64`, and `x86_64` builds for
+FreeBSD, NetBSD and OpenBSD. The binaries use your system’s GTK4 libraries. If
+you’d rather build *sysdeck* yourself, the README lists the packages you need on
+each of these systems.
 
-## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
-
-New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
-
-To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
-
-- Bonfire Networks: general group to share news/discussions/questions about Bonfire
-- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
-- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
-- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
-- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
-
-For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
-
-- Testing & Feedback: try new features and tell us what works and what breaks.
-- UX & Design: help shape how Bonfire looks and works.
-- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
-- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
-- Tech support: ask, answer and support each other in building and deploying Bonfire.
-
-And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
-
-## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
-
-As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
-
-> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
->
-> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
-
-Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
-
-Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
-
-Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
-
-## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
-
-Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
-
-So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.
+If a keyboard-driven command center that only runs when you need it sounds like
+your kind of thing, give *sysdeck* a try, and let me know how it works for you
+in the [community channel](https://xn--gckvb8fzb.com/contact/#xmpp).

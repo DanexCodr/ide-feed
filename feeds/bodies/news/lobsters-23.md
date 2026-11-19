@@ -1,159 +1,242 @@
-> For women, the need and desire to nurture each other is not
-> pathological but redemptive, and it is within that knowledge that
-> our real power I rediscovered. It is this real connection which is
-> so feared by a patriarchal world. Only within a patriarchal structure
-> is maternity the only social power open to women.
+Here at Close, our primary backend service has automated tests. Quite a lot of
+them, nearly 58,000. While some things are easy
+to test in pure Python, the tests that actually give us the most confidence generally
+are API or service-level integration tests that avoid mocking and typically *do*
+actually hit datastores.
 
-The open software ecosystem is not in a good way. We’ve seen escalating
-abuse of our commons by the very entities we were trying to provide
-an alternative to. Our default tool against this, copyleft, is repeatedly
-showing itself incapable of rising to these challenges. understandably,
-many find it difficult to see a path forward. In this context, many are
-attempting to [double down on copyleft](https://ploum.net/2024-07-01-opensource_sustainability.html),
-with some even going as far as [making their work proprietary](https://acadia.engineering/license/faq)
-in an attempt to maintain control of how it’s used. Herein I hope to share
-a different vision.
+How long do all 58,000 integration tests take to run in CI?
 
-## some context on copyright
+*About 2 and a half minutes.*
 
-A comprehensive history of copyright is out of scope for essay, but I think
-it worth highlighting a critical point in its conception:
+Yes, 58,000 integration tests, most of which do IO across multiple datastores,
+in under 3 minutes.
 
-The Licensing of the Press Act 1662 in England was drafted in the wake of the
-printing press to provide publishers with a monopoly on printing registered
-books. Its purpose was to protect publishers from competition, ensuring their
-profitability, and to provide a means for censorship. Notably unrepresented in
-this consideration are authors, who could not register books themselves. The act
-was temporary, and in 1694, unable to secure a continuation from parliament,
-publishers were in need of a new approach. It was only then that they chose to
-highlight authors’ rights, to make the proposed legislation palatable to a
-public tiring of their greed. Yet, they did this knowing that even with authors
-holding these rights, they could do little with them other than sell them
-straight back to the publishers from a disadvantaged bargaining position.
+[![alt text](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/ca790/image-4.webp)](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/4e9ad/image-4.png)
 
-The publishers have spent the centuries since clawing back as much as they can
-from this small concession. Authors have hardly noticed the change. Before
-copyright, creative workers primarily made their living by commission and
-patronage. Today, creative workers continue to primarily make our living by
-commission and patronage.
+How? Let's go on a journey together...
 
-That’s not to say we haven’t had our wins. Copyleft was a big one. But I’m
-reminded of Lorde’s wisdom:
+# Learning to Crawl...
 
-> Those of us who stand outside the circle of this society’s definition of
-> acceptable women; those of us who have been forged in the crucibles of
-> difference—those of us who are poor, who are lesbians, who are Black, who are
-> older—know that survival is not an academic skill. It is learning how to take
-> our differences and make them strengths. For the master’s tools will never
-> dismantle the master’s house. They may allow us temporarily to beat him at his
-> own game, but they will never enable us to bring about genuine change. And
-> this fact is only threatening to those women who still define the master’s
-> house as their only source of support.
+Close launched in 2013, but our test suite is actually even older! Tests in CI
+were introduced in 2012, with a Jenkins build script and the
+[nose](https://nose.readthedocs.io/en/latest/) testing library. We've since
+migrated to CircleCI then GitHub Actions, swapping to pytest along the way. But
+a lot of the same concepts are still relevant today. The general shape of a
+test run is:
 
-Copyright is one of the master’s tools, that’s carved into its bones. It
-was intended to protect power and capital, yes, but more importantly for us the
-means by which it does that protecting is also power and capital. One enforces
-one’s copyright by making threats, and hiring lawyers to back up those threats,
-ideally very expensive lawyers. Under that superficial enforcement lies the
-state, setting the legal framework. The state is made up of politicians and
-bureaucrats who can be plied, bought, or blackmailed, and derives its power
-from its ability to imprison or do violence to you. In the long term, I don’t
-think it possible to use such a tool without perpetuating the logic of power
-and control it’s built on.
+![A single runner sets up backends, starts the app, collects tests, and runs them sequentially.](https://making.close.com/90d537fc70efb9ac6c1693112ad68ff2/single-runner.svg)
 
-## the form of our work
+For simple applications with only a handful of tests, this setup works great! But
+as the application starts growing, slowly the "run tests" step inflates to the
+point where you start waiting tens of minutes for a green checkmark to appear.
+While working on features you're subject to intrusive voices of gremlins
+whispering "but what if it was faster? Surely it could go faster"
 
-Lorde’s advice is to take our differences and make them strengths. I think
-there’s more to that I haven’t seen how to apply to our trade yet, but I can
-at least take a superficial reading:
+# Crawl to Walk...
 
-I remember as a child my parents were paranoid that my sister or I might get
-tattoos or unconventional piercings. This wasn’t because they had any
-particular dislike or prejudice toward such things, or even that they were
-worried about discrimintation or prejudice from individuals. Their worry instead
-was that it might make us “unemployable”. We routinely cut off parts of
-ourselves, to make us generic and palatable enough to be fed into the maw
-of industry, and we advise others to do the same. I’m not sure I can advise
-everyone to stop cold turkey in good conscience, as most of us do still rely
-on an employer to make sure we’re fed and housed, but I’m not willing to do it
-to myself outside that context, and even within it I find it necessary to push
-back on some of the conventions of professionalism. I’m definitely not willing
-to do it to others.
+The natural next step is... parallelism! There's a few common ways to do this,
+but the most straightforward options are either multiprocessing parallelism
+(something like [`pytest-xdist`](https://pytest-xdist.readthedocs.io/en/stable/index.html))
+that fans out work across multiple CPUs, or deterministically splitting work
+across multiple machines (something like [`pytest-split`](https://jerry-git.github.io/pytest-split/)).
 
-I’d like to praise [Soatok](https://soatok.blog/) for the example he’s set for
-me on this front. He’s talked before about regularly getting complaints that
-his blog is too “unprofessional” to share at work and, like, good. Fuck your
-company.
+Multi-CPU parallelism doesn't really help us, because most of our tests
+rely on external databases. Running multiple tests at the same time on the same
+database can lead to logical conflicts where tests end up reading each other's
+data. While it's *possible* to configure things like dynamic database creation,
+practically it's both hard to do correctly across many datastores and is even
+harder to do performantly.
 
-If you don’t want your project used by a company, filling it with personality
-seem a more promising way to achieve that than a license. Of course it’s not
-perfect, your work can always be whitewashed, but if the roots go deep
-enough those stains can be hard to shake. In any case, it’s more work
-for the company downstream, especially if they want to track your changes.
+Deterministic work splitting was a much more attractive option for us, since many
+CI providers started offering matrix'd builds where you could easily specify
+different parameters for each of them (i.e. run the `pytest` with parallelism
+of `4`, where each runner knows which number it is). This strategy just added a
+little bit of CI configuration, but ultimately only required installing a plugin
+and adding a few flags to the CI command. Today it would look something like:
 
-Who would have guessed a decade ago that sarcastic commenters on Reddit would
-be such a big stumbling block for LLM training.
+```bash
+pytest --splits 4 --group 1
+```
 
-## the structure of a technology
+Some version of this logic has been relatively easy to set up for a long time,
+and we introduced it to Close in late 2014. With this version of test splitting,
+our full test run now looks like:
 
-I recently had to implement OIDC auth in a Rust service at work, and so had the
-pleasure of dealing with the trait soup that is the `openidconnect` crate. It
-crossed my mind that I could write a better version of this crate, or at the
-very least some more serviceable documentation. Judging by what others have to
-say in the crate’s issues, there’s demand for it, so I’d be scratching my own
-itch and helping other programmers out. Myself of even a couple of years ago
-would have done it. What I wouldn’t have stopped to consider then is why we’re
-being asked to implement this protocol, and who is served by the protocol
-becoming easier to implement. It’s a tool for centralisation, lock-in, and
-surveillance, and I really don’t need to do Google’s legwork for them. Every
-bit of extra friction in using it is a good thing, in hindsight even my
-struggles were good. The extra implementation time is a cost my employer paid
-for making a bad decision, and the compile time burden of all those traits is
-another cost they will continue to pay until they rip the feature out. If the
-`openidconnect` crate didn’t exist, they probably would have given up on the
-feature entirely.
+![Independent runners each set up backends, collect the full suite, select a fixed subset, run it, and save results for merging.](https://making.close.com/ad475443c963e1b06e57f1c04bb8ce45/fixed-shards.svg)
 
-It’s not always possible to know how a technology will be used before it
-exists, but we can make some pretty good guesses. A technology like BitTorrent
-functions to advance freedom of information, and because that purpose is set so
-clearly in it’s structure, it has proved resistant to subversion. Indeed it
-seems resistant to attempts to do anything else but share information,
-including its creator’s attempts to monetise it.
+# Walk to Run...
 
-## mutual aid
+Early versions of test splitting logic relied on file names to split tests up,
+leading to unbalanced workloads. Eventually we were able to tweak the splitting
+logic a bit, so that we tracked main-branch test timings and bin packed them
+instead of splitting pseudo-randomly.
 
-This is not a only a hobby for most of us, but also how we sustain ourselves.
-An undercurrent in the complaints about the state of open software is that it’s
-hard to make a living writing open software, but I think that’s somewhat by
-design. The thing we came here to oppose was the control companies exert on the
-use and development of their software, and the externalities that exerts on the
-users; they do this mostly as a means to extract money. If we were to turn our
-goal towards extracting money, it would indeed make sense to start exerting
-more control on the use and development of our software, but at that point we
-have to question why we’re here and not in a startup lab.
+And this rough setup actually lasted us about **12** years! Over this time we
+didn't *ignore* CI speed, but we were mostly able to improve it through
+relatively minor / incremental changes:
 
-The old advice to have a day job and do this on the side still carries weight,
-but I dream of a world where sustenance is not synonymous with profit. I don’t
-see why I shouldn’t be able to write software that benefits others, and have
-others do work that benefits me, without either feeling the need to control and
-capture. We have achieved that within software, but I can’t eat software.
+- refactor unittest-style tests to pytest
+- refactor pytest fixtures to make it easier to rely only on what the test needs
+- architecturally refactor to avoid global state and avoid API overhead when testing edge cases
+- keep global imports out of shared fixtures
+- avoid pytest assertion rewrites in ci
+- increase the level of parallelization (number of runners)
+- upgrade Github Actions runner node instance types
 
-When most people today hear “mutual aid”, they think of charity, and charity is
-often an ugly thing. Those with many resources “giving” some away to those with
-few, to ease the suffering caused by their lack of resources, while ignoring
-the reality that the lack of resources is often solely due to enclosure of the
-resources by those with many. It offers no real answer to the injustice it
-purports to address, and instead primarily functions to assuage the guilt of
-the perpetrators, and give them an excuse to avoid having to contend with the
-root of the problem. We can do better.
+But ultimately we hit a wall. The gremlins continued whispering, but there
+was no low-hanging fruit left. For a long time we were able to stabilize
+our test suite under around 10 minutes, but eventually even at 17x
+parallelization our CI times grew longer. The fixed-cost steps became very hard
+to optimize and scale out of.
 
-Mutual aid is about seeing systems that produce bad outcomes and working
-together, whether we are directly affected by those systems or not, to address
-those outcomes systemically. It is about involving those “in need” (which
-includes you and your need to eat) in how those needs are met. There are people
-out there doing things you need, with expertise you don’t have, who would
-benefit from some software help. The connections you build with this kind of
-work often turn out to be worth more than a paycheck, and it gives you a chance
-to practice making software that molds to its users’ needs rather than the
-reverse, which has given me a needed ray of sunshine amid the bleak outlook
-this industry engenders on our profession.
+*What do you mean, "fixed cost"?*
+
+Well, the part of the test run that `pytest-split` parallelizes is actually
+*running* the test cases. When the application gets big enough, just running
+things like test *collection* could take up to a minute to resolve. It's not
+technically "fixed" cost, but these operations scale with the size of the *entire*
+app/test suite rather than just the selected test subset. So even as
+we scale up the number of runners, a lot of our runtime still goes
+to an ever-growing setup cost:
+
+- pulling images and starting datastores could take a minute
+- the app container couldn't start until datastores were ready
+- test collection couldn't start until the app container was ready
+- test collection always needed to collect the full suite before it could deterministically split (which took over a minute even without pytest's assertion rewriting enabled)
+
+![Each runner repeats backend setup, app startup, full-suite collection, and subset selection; only assigned test work is divided among runners.](https://making.close.com/b5974fe41ebb03ab23cf7cb857d23009/fixed-costs.svg)
+
+Despite our best efforts, the best performance we could get out of this
+setup was around 12 minutes of wall clock runtime. About half of that was eaten
+up by either fixed-cost steps, or by imperfect test balancing that resulted in
+some runners taking multiple minutes longer than others. We're already
+self-hosting our GitHub Actions runners to squeeze better performance out of
+them, but at some point you have diminishing returns turning the `N` knob
+higher. And that's just for tests! There's also unparallelizable build and
+deploy steps that continued to add up end to end runtime.
+
+# Run to ... Fly?
+
+So where do we go from here? Well... while looking at something related to our
+end to end Playwright tests, I stumbled across [currents.dev](https://currents.dev/).
+
+What currents.dev does for Playwright is that they maintain a centralized
+queue of work and tweak the test runner logic to consume from that queue instead
+of from a deterministic `-split` of work. They present two major unlocks:
+
+1. **Smart Orchestration:** Work is split dynamically so workloads are always split evenly
+2. **Spot instance support:** If a worker's node gets yoinked by AWS, its work gets redistributed
+
+Those features are really neat, but there's also a more subtle opportunity this architecture unlocks:
+
+**We can *much* more effectively parallelize our fixed-cost setup steps.**
+
+What if we applied these concepts to pytest? Let's visualize how a shared
+orchestrator changes our testing setup:
+
+![One orchestrator discovers files and queues batches while workers start their backends, then workers repeatedly pull batches, collect and run assigned files, and report results.](https://making.close.com/a7a2278b20e4637c330f23bdb4942f8a/orchestrated-tests.svg)
+
+A few things worth calling out:
+
+- The orchestrator doesn't need to run datastores at all
+- The orchestrator only needs to collect files, which allows us to skip a huge portion of pytest's collection runtime
+- Workers only collect what they run, which means their collection runtime scales down to their workload
+- The orchestrator can collect and split tests in parallel to workers starting their backends
+
+So now we're running one extra job (to orchestrate), but virtually all of our
+test workers' steps scale in runtime with the number of tests they're asked to
+run. What's next?
+
+**Spot instances.**
+
+Actually implementing spot instance support in GitHub Actions was hairy enough
+to deserve its own post, so we'll have to leave it on a cliffhanger for now. But
+with the amount of savings they offer, we were able to turn 17 on-demand runners
+into 2 on-demand runners + 54 spot instances for about the same dollar cost. That's
+one orchestrator and on-demand worker (for yoink insurance), plus 54 spot
+instance workers. We did end up keeping `main` on-demand though to keep it
+predictable.
+
+With that type of parallelism and our improved scaling mechanism, our CI speed is
+good enough ... for now.
+
+## The devil's in the details
+
+If you're trying to reproduce this type of setup, here's a bit more detail to
+help.
+
+### How do the workers talk to the orchestrator?
+
+Even with self-hosted runners, workers need some way to communicate back to
+the orchestrator server. But GitHub Actions runners aren't externally
+addressable. We worked around this by having the `pytest-orchestrator` CI step
+work more like a k8s operator that creates a temporary, deterministically
+named namespace / pod in the same CI/CD Kubernetes cluster.
+
+Each worker knows what namespace to look for based on run-specific identifiers,
+and has a connection grace period where it waits for them to come up.
+
+### Rerun on Failure
+
+With a `pytest-split` type of setup, rerunning just a subset of workers would
+rerun the same subset of tests. Now that tests are distributed dynamically, it's
+not trivial to rerun just the failing tests. If only one worker fails, rerunning
+failed jobs essentially amounts to running the full test suite with just a
+single worker. Slow.
+
+Instead of always rerunning all jobs, we've set each worker to wait until *all*
+batches are finished, then let the orchestrator decide if the run was clean or
+not. If it wasn't, then *all* workers fail. All test failures / stack traces
+show up in the orchestrator's outputs, so you don't need to inspect every
+individual worker for failures. But now since they all fail, rerunning failed
+jobs starts up the right number of workers for the test suite.
+
+### Speeding up test collection
+
+To avoid drift between pytest config and CI logic, we've opted to keep pytest
+responsible for test collection (as opposed to basic file globbing
+`tests/**/*.py`). The plugin only activates if explicitly enabled, and
+if no other collection-related args are passed (e.g. `-k`, `-m`, `--lf`, etc).
+While collecting, it skips descending into files and writes out discovered files
+to a given location as JSON.
+
+### Balancing Batches
+
+Initially we noticed that some runners still took noticeably longer than others,
+even though we aimed for batches of 20s of test runtime. It turned out to be a
+subtle issue with a simple fix: not all files themselves fit into that 20s
+target, and during batching we ended up with a somewhat random batch ordering.
+So, often an oversized batch would be the last one for a worker to claim and
+everything else would just wait on it. The fix was to sort batches in descending
+order before assigning them out. That way towards the end we have slightly
+better bin packing / runtime distribution.
+
+### Scaling Our Self-Hosted GitHub Actions Runners
+
+Just because we now request dozens of workers all at the same time doesn't mean
+we actually get them. When looking at CI runs, it's not always obvious how long
+was spent waiting in a queue for a runner to come up, and with this type of
+coordinated workload it can make a big difference in end to end runtime.
+
+We bumped our idle runner count and had to scale the max node pool sizing to
+better account for bursty demand during the day.
+
+### Measuring CI Timings
+
+The GitHub Actions UI can be very misleading about how long something *actually*
+took to run. The timings of each step don't well communicate how long it took
+a job to start, and how long in wall-clock time it fully took end to end. And
+it's really hard to get a true sense of this in aggregate if you can only look
+at cherry picked CI runs.
+
+Our CI setup has a post-action job that for every CI run inspects the step
+timings and converts it into trace data. That trace data then feeds into our
+OTel stack, making it easy to aggregate and report on with ClickHouse in
+Grafana. We end up with nice aggregate stats, and can drill down into specific
+jobs if needed:
+
+[![alt text](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/33eb4/image-1.webp)](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/0d368/image-1.png)
+
+*Note: Average build time here includes all actions queueing, uncached image*
+*builds from dependency bumps, deploy, and post-deploy steps. It also reflects*
+*GitHub Actions degradations.*
