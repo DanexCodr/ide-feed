@@ -1,109 +1,92 @@
-In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
+Over the past few months, PyPI has added some additional checks that
+can reject uploaded source distributions ("sdists") and built
+distributions ("bdists" or "wheels").
 
-Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
+These checks are part of a larger initiative to make the Python packaging
+ecosystem more resistant to parser differentials, and will be followed
+by additional checks that aim to make PyPI's handling of distributions
+less permissive and more strictly conformant to their respective specifications.
 
-In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
+For downstream users (package consumers), there are **no breaking implications**
+to these changes. Package maintainers who see failures should ensure that
+they're using [non-EOL versions of Python](https://devguide.python.org/versions/#versions) as well as build backends
+that produce distributions that properly conform to the packaging
+standards.
 
-Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
+## Background[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#background)
 
-Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
+Python packaging has two primary distribution formats:
 
-But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
+- Source distributions, or sdists. These are distributed as compressed tar archives ("tarballs") with the suffix .tar.gz.
+- Built distributions, or bdists (or wheels). These are distributed as ZIP archives with the suffix .whl.
 
-The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
+Neither tar nor ZIP was designed for the role it serves in Python packaging<sup>[1](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#fn:packaging)</sup>: both represent
+metadata that is irrelevant to Python package distribution, and
+are surrounded by [an ecosystem of parsers that are permissive](https://astral.sh/blog/tar-codec#tarchaeology) in their interpretation of inputs.
 
-The release out today is an invitation to start making other futures, together.
+This laxity is often correct in a local user setting, where users often want to recover important data from
+corrupted or otherwise slightly incorrect archives.
 
-## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
+However, it's **incorrect** in a networked setting,
+particularly a packaging one: even small differences in parsing between [separately permissive implementations](https://alexgaynor.net/2025/mar/25/postels-law-and-the-three-ring-circus/)
+can result in parser differentials that can result in identical inputs extracting
+differently on different platforms and with different tools.
 
-This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
+In principle, an attacker can use differentials to violate many of the properties that Python
+packaging (and end users) assume, including:
 
-### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
+- That PyPI's own parse of each uploaded distribution (including important metadata like dependencies) is consistent with what each installer sees;
+- That third-parties (like mirrors and security scanners) "see" the same distribution contents as PyPI does;
+- That invocations like pip install ... and uv add ... produce the same installation state.
 
-A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
+Violations of these properties can result in users installing distributions that look legitimate
+but are actually malicious, even when the distribution's own integrity (e.g. via hashing) is established.
 
-![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
+## Changes[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#changes)
 
-Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
+Over the last few weeks, PyPI has begun rejecting:
 
-### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
+- Source distributions that use "V7"-style tar archives. V7 is a legacy and mostly unspecified tar format that comes from UNIX V7 and was never produced by Python's own `tarfile` module.
+- Built distributions that include archive-level ZIP comments that could be misinterpreted as ZIP control structures.
 
-Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
+These changes built on top of [earlier work performed by Seth Larson](https://blog.pypi.org/posts/2025-08-07-wheel-archive-confusion-attacks/) last August aimed specifically
+at ZIP differential reduction.
 
-But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
+## What does this mean for me?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#what-does-this-mean-for-me)
 
-As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
+If you're a downstream user of Python packaging: **nothing**! These changes **will not directly affect you**,
+and any distributions that you already depend on (through `pip install` or `uv add`) will continue to
+work.
 
-Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
+If you're a package maintainer: **nothing, probably**. The overwhelming majority of source distributions on PyPI
+are **not affected** by these changes, because they were already conforming with the pax requirement.
 
-Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
+If you're a maintainer and you *do* encounter an upload rejection for archive format reasons,
+please consult PyPI's [archives documentation](https://docs.pypi.org/archives/). PyPI will endeavor to keep that page up-to-date as we
+ratchet down on malformed or non-conforming uploads.
 
-Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
+For many maintainers, the fix will be straightforward:
 
-### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
+- Make sure that your distributions (both sdists and bdists) are built with a Python build backend, and *not* by manually packing an archive with `tar`, `zip`, or similar. Popular build backends generally conform to both the distribution format specifications and to PyPI's additional archive restrictions.
+- If you're unable to migrate away from a manual packing step, make sure that you're manually conforming to the archive requirements, namely:
+  - [Source distributions](https://packaging.python.org/en/latest/specifications/source-distribution-format/) **must** be POSIX pax-style tar archives. If you're using GNU `tar`, you'll need to pass `--format=pax` to override the default.
+    - Moreover, source distributions must avoid certain tar features, even if they can be framed within a pax-conforming tar. These include "sparse" members and pax vendor extensions.
+  - [Built distributions](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) **must** be valid ZIP archives.
+  - Both formats require UTF-8 encoded filenames for their members.
 
-Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
+## What's next?[¶](https://blog.pypi.org/posts/2026-11-18-stricter-checks-for-uploaded-sdists/#whats-next)
 
-![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
+This is an ongoing initiative, one that involves multiple facets of the Python ecosystem.
+We aim to align this work with Python itself (by reducing the number of differentials
+in Python's own `zipfile` and `tarfile`), as well as Python packaging's standards (by further
+constraining and improving the precision of the distribution specifications).
 
-### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
+Going forwards, PyPI will continue to identify new restrictions that it can apply to uploaded
+distributions. Our goal is to identify **minimally disruptive** restrictions, i.e. ones that can be made
+without breaking (almost) any users. Archive differentials overwhelmingly take advantage of
+obscure or unused aspects of archive formats, so this is frequently possible.
 
-Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
+In the near term, PyPI will be evaluating the following additional restrictions:
 
-![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
-
-Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
-
-### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
-
-You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
-
-![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
-
-### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
-
-Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
-
-The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
-
-## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
-
-New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
-
-To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
-
-- Bonfire Networks: general group to share news/discussions/questions about Bonfire
-- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
-- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
-- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
-- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
-
-For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
-
-- Testing & Feedback: try new features and tell us what works and what breaks.
-- UX & Design: help shape how Bonfire looks and works.
-- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
-- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
-- Tech support: ask, answer and support each other in building and deploying Bonfire.
-
-And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
-
-## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
-
-As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
-
-> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
->
-> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
-
-Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
-
-Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
-
-Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
-
-## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
-
-Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
-
-So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.
+- Rejecting GNU-style tar archives entirely. These are already forbidden by the source distribution specification, but are currently allowed because of non-trivial use by maintainers. See [#21012](https://github.com/pypi/warehouse/issues/21012) for our initial plans on this.
+- Rejecting ZIP comments entirely. PyPI already rejects many forms of these, but allows a small subset for compatibility with ZIP encoders that put innocuous messages (like their version number) in archive comments. See [#20934](https://github.com/pypi/warehouse/issues/20934) for our initial plans on this.

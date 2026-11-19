@@ -1,70 +1,169 @@
-For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
+I recently asked AI to help me look through the latest Windows binaries for undocumented features and functionality. Among the leads it turned up, one list immediately caught my attention: coding agents such as `codex.exe`, `claude.exe`, `copilot.exe`, and `cursor.exe`, alongside familiar developer tools such as `python.exe`, `dotnet.exe`, `gcc.exe`, and `code.exe`.
 
-In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
+Why would a Windows system DLL need a list of coding agents and developer tools?
 
-This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
+The names were in `MissionControlAggregator.dll`. I asked the agent to follow the references and dig into what the DLL actually does. That led from a handful of string comparisons to a running Windows component that records which coding agents and developer tools have been used, saves that information locally, and reports it to Windows Diagnostics. And unless you have opted out of the “optional” diagnostic data (which is enabled by default), the data is uploaded to Microsoft.
 
-This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
+I [shared the initial finding on X](https://x.com/CrackmesOne/status/2122147747390468384). This post includes more details about the investigation behind it.
 
-## Writing code once was never the issue
+## Following the names
 
-Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
+Opening the DLL in [Binary Ninja](https://binary.ninja/) made the first lead easy to see. These were explicit executable names embedded in a Windows component:
 
-The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+![Binary Ninja showing coding-agent executable names embedded in MissionControlAggregator.dll](https://xusheng.dev/posts/windows-coding-agent-telemetry/agent-names.jpeg)
 
-## curl is the result of time
+Following the references showed that the names were used in comparisons. There are four CLI-agent slots checking `copilot.exe`, `claude.exe`, `codex.exe`, and `agy.exe`, with extensionless equivalents on the WSL route. Five desktop-agent slots check `github.exe`, `claude.exe`, `codex.exe`, `cursor.exe`, and `antigravity.exe`.
 
-curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+Here is one of the comparisons against `codex.exe`:
 
-## Behind already
+![Binary Ninja showing an exact comparison with codex.exe inside a matcher](https://xusheng.dev/posts/windows-coding-agent-telemetry/codex-matcher.jpeg)
 
-During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+The compiler-generated C++ names are unwieldy, so I will call these functions **executable-name matchers**. For reference, one related matcher is `std::_Func_impl_no_alloc<<lambda_340dfe7e962ab225b6ac33bc664bd54f>, bool, std::basic_string_view<wchar_t, std::char_traits<wchar_t>> const&, Microsoft::Diagnostics::MissionControlAggregator::Utils::AppType>::_Do_call`. The screenshot shows another lambda instantiation performing the same kind of name comparison.
 
-The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+The feature guarding the new agent checks has a particularly direct name: `CLICodingAgentUsage`, feature ID `62580080`.
 
-That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+And the list extends beyond AI agents. The same component checks for `node.exe`, `python.exe`, `dotnet.exe`, `gcc.exe`, `clang.exe`, `gdb.exe`, `javac.exe`, `devenv.exe`, and `code.exe`, among others. Those checks feed broader developer-tool categories. Some of these checks also verify the publisher: the Node.js slot expects `Node.js Foundation`, Python expects `Python Software Foundation`, and the .NET and Visual Studio slots expect `Microsoft Corporation`. The compiler/debugger group containing GCC and Clang has no additional publisher check in this path.
 
-A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+## Where does the DLL get this information?
 
-## C
+The next question was whether the component scans running processes itself. Following `Aggregator::OnLoad` revealed that it subscribes to existing Windows events instead.
 
-I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+For Windows programs, it consumes `KernelProcess.AppStateChangeSummary` and `Win32kTraceLogging.AppInteractivitySummary`. These provide application identities that its handlers parse and pass to the matchers. For WSL, it consumes `Microsoft.Windows.Lxss.Manager.Exec` and `ExecCritical`, using the `imageName` field. A regular Windows `codex.exe` can therefore reach the CLI-agent checks through the app-state summary route; this is not limited to Linux programs running inside WSL.
 
-A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+The relevant flow looks like this:
 
-## No rewrites
+```text
+Aggregator::OnLoad
+├─ WSL Exec / ExecCritical
+│  └─ ProcessWslExecEvent → CLI agent matchers
+├─ KernelProcess.AppStateChangeSummary
+│  └─ ProcessAppStateChangeSummaryEvent → CLI agent matchers
+└─ Win32kTraceLogging.AppInteractivitySummary
+   └─ ProcessAppInteractivitySummaryEvent → desktop agent matchers
 
-I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+Aggregator::OnRelativeTimerExpire
+└─ MissionControlAggregatorLogging::ReportCohorts<12,4,5>
+   └─ Segments.SubCohorts ETW report
 
-## Those rewrites
+Aggregator::OnUnload / intermediate timer
+└─ PersistentState::SaveToDisk
+```
 
-I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+A successful match sets a slot in the aggregator’s state. Later, `ReportCohorts<12,4,5>` turns those slots into bitsets and emits a report named `Segments.SubCohorts`. The numbers correspond to twelve broader tool categories, four CLI agents, and five desktop agents.
 
-I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+[ETW (Event Tracing for Windows)](https://learn.microsoft.com/en-us/windows/win32/etw/event-tracing-portal) is the mechanism carrying that report. In this case, it is a self-describing TraceLogging event. Rather than writing the executable names into every report, the component assigns each category a bit. A set Codex bit means the matching tool was observed during the reporting window.
 
-They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+The source events also include runtime, time in focus, interaction counters, and resource usage. This component appears to discard those details and record only a bitmap of which agents were observed. The report’s timestamps describe the collection window, not how long each agent was used.
 
-I wish them good luck whatever they decide!
+Although I found no prompt text or source code in this report, collecting which agents and developer tools someone uses already has significant privacy implications.
 
-## How do I feel about them?
+## Is it actually running on a normal machine?
 
-Several people asked me this.
+Strings and code are a useful lead, but I wanted to see the component running. I checked my Parallels Windows 11 ARM64 VM, build `26200.9974`. Its `MissionControlAggregator.dll` was version `10.0.26100.9818`, and `CLICodingAgentUsage` was already enabled as a service experiment. I had not manually enabled the feature.
 
-*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
+DiagTrack, the **Connected User Experiences and Telemetry** service, was also already running with its startup type set to `Automatic`. It starts a separate `AggregatorHost.exe` process, and that process loads the DLL. The following administrative PowerShell commands show the service, its child process, and the loaded module:
 
-I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
+```powershell
+PS> Get-Service DiagTrack | Format-Table Name,Status,StartType -AutoSize
 
-1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27581#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27582#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27583#respond) .comment-body .children
-    1. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 18, 2026 at 10:55](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27596) .comment-metadata .comment-meta Isn’t a programming language just another development tool? We can talk about language capabilities just like any other. Types and tests go together as a pair of tools. Types can be validated incrementally in less than a second (eg in rust-analyzer), tests take seconds, minutes, sometimes hours for feedback. Tests can show the presence but not the absence of bugs, types prove the absence of whole classes of bugs but not their presence. Tests tell you about a specific execution, types reason about all possible executions. Test can validate any behaviour while types can only exclude bugs provable in its logic. The progress in programming languages has generally been towards stronger types, including lifetimes in Rust’s case. I don’t think its fair to say they have no advantages over tests. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27596#respond) .comment-body .children
-      1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 11:30](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27597) .comment-metadata .comment-meta @Jesse: different languages have different advantages and quirks, sure. I just meant that I don’t think the choice of language holds us back. .comment-content .comment-body
-  2. ![](https://secure.gravatar.com/avatar/7af2556d70ebdec658363896fcc23a2b17aeb51da7c5e5cb440e59af5c96788a?s=68&d=monsterid&r=g) **[grayhatter](https://gr.ht)** says: .comment-author [November 17, 2026 at 19:38](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27589) .comment-metadata .comment-meta > Nice, that sounds like very good motivation for a Rust rewrite. I agree; it is a good reason! But I feel like you’ve missed the forest for the single tree. This whole post is describing the value in curl being the maintainers that are willing to put in the time. A single observation doesn’t outweigh the reality that code is (and always has been) cheap. But maintainer time and effort is the important part. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27589#respond) .comment-body
-3. ![](https://secure.gravatar.com/avatar/89c0c2a3cd1d8d2e7ae262a8b2967c5a214b80cb8f14d913519dcec0ac6ced68?s=68&d=monsterid&r=g) **Joonas Kuorilehto** says: .comment-author [November 17, 2026 at 16:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27585) .comment-metadata .comment-meta ” This latter one claims to have spent 8,600 USD to make it happen”. This is a wrong reading. They claim that amount in estimated API cost equivalent, but based on them running out of quota they use a subscription, which is a lot less cost. Not that it changes anything you said though. Thanks for keeping cURL going all these years. I doubt any of the clones are committed to similar maintainance quality and long term. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27585#respond) .comment-body
-4. ![](https://secure.gravatar.com/avatar/c4cb559cac461ae04977a38bc7c7e1779430589c4cae02e432f275fd7964fee6?s=68&d=monsterid&r=g) **[Vishal Pawar](https://vishalpawar.dev/utm?src=daniel_haxx)** says: .comment-author [November 17, 2026 at 18:00](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27587) .comment-metadata .comment-meta I really like what this post is talking about everyone can make a copy but who can maintain and keep on adding features in long term that is what makes it competing and survival of the copied software. Everyone knows how Cloudflare made a copy of Next.js and everyone started posting about it for few weeks and it is dead or it is copying features from Next.js to keep up with the Next.js as it’s replacement .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27587#respond) .comment-body
-5. ![](https://secure.gravatar.com/avatar/56be1d4b72a7e714a306e1894594615c37419ba7fab85792c32ff6b603f70b6f?s=68&d=monsterid&r=g) **Dàmian Lusq** says: .comment-author [November 17, 2026 at 19:05](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27588) .comment-metadata .comment-meta @Joonas The artifact mentions weekly limit only on 28/10, one week after the start of the rewrite, and not until the end of the experience, so it surely started with some heavy subscription, it may switched to token billing after to keep up with the work. “If the work ran on a subscription plan, this is what it would have cost on the API, not what was billed.” So yes, for sure, it at least been partially subsidized, and once Anthropic will switch to token billed usage (like OpenAI will do next month, because money), it would certainly cost $8.6k for any clone, except if some “super agents” becomes the new hype and would burn way more tokens… Again, “humans made computers for humans” is still a thing nowadays, and AI will not replacing communities tomorrow. It would have been interesting to see a clean C ? Rust ? C rewrite just to compare how the C could have been rewritten, just out of curiosity. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27588#respond) .comment-body
-6. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://tactica.xyz)** says: .comment-author [November 17, 2026 at 19:47](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27590) .comment-metadata .comment-meta It is november 2026. You can use formal verification with Verus to get rid of other 67 logic bugs and then use it continuously to avoid bugs at all! [https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/](https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/) No other language yet provide such an ecosystem for error prevention. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27590#respond) .comment-body
-7. ![](https://secure.gravatar.com/avatar/490f7fcfee38ddde609f8110024f5c8ba08f6e755beedb3c50b4235521e154f5?s=68&d=monsterid&r=g) **[Eser](https://www.techmedya.com/)** says: .comment-author [November 17, 2026 at 20:49](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27591) .comment-metadata .comment-meta This is such a wonderfully grounded perspective! It’s a great reminder that a software’s true strength lies in its community, history, and endless iterations—not just the language it’s written in. Thank you for everything you do for curl! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27591#respond) .comment-body
-8. ![](https://secure.gravatar.com/avatar/59b98429498dc9d91e7c181d67441c6070887f50fc663b51c6cff64e6f0efdb0?s=68&d=monsterid&r=g) **Enne** says: .comment-author [November 17, 2026 at 22:19](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27593) .comment-metadata .comment-meta Similarly-shaped things used to happen at a much smaller scale on web 1.0. How many times I or my peers would share tarballs of our funny little webapps, only to be shown a few weeks later some proto-reactionary teenager trying so hard to impress his two or three followers with the website he “built” all on his lonesome in a day, and soon after that it’d be gone again in a fit of pique. Maybe these are the same people all aged up. Similarly-shaped things and all. But even those kids would have the sense to not brag that they gambled away thousands of dollars to put a Pyongyang Hotel in the metaverse. That’s just sad. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27593#respond) .comment-body
-9. ![](https://secure.gravatar.com/avatar/d26584a90e6abfffb1d8da05fbf6a44015692f85da05cf3bfd6581514220289b?s=68&d=monsterid&r=g) **Félix** says: .comment-author [November 18, 2026 at 08:28](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27594) .comment-metadata .comment-meta I you don’t know Rust well, what makes you confident about the exact number of issues that Rust would have prevented? C is a barebone language, Rust brings much more to the table than memory safety only: – Sane type system, especially with sum types – Better error handling (mostly consequence of the previous point) – Trait-based polymorphism (no such abstraction in C) – RAII – Async (especially useful for curl) Even users’ misusage can be prevented with a good set of types: make invalid states unrepresentable. BTW, we talk about Rust, but any functional language would do. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27594#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 08:34](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27595) .comment-metadata .comment-meta @Felix No one can know any exact number of problems curl would have had if written in another language. Not you, not I. What I do know though, and this is verifiable because all the details and data is public, is how many of the past curl vulnerabilities that were “C mistakes”. I think everything else in terms what other languages could do or not is mostly a distraction and “language religious talk”. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27595#respond) .comment-body
+Name       Status StartType
+----       ------ ---------
+DiagTrack Running Automatic
+
+PS> Get-Process AggregatorHost | Format-Table ProcessName,Id -AutoSize
+
+ProcessName      Id
+-----------      --
+AggregatorHost 1500
+
+PS> Get-CimInstance Win32_Service -Filter "Name='DiagTrack'" |
+       Format-List Name,State,StartMode,ProcessId
+
+Name      : DiagTrack
+State     : Running
+StartMode : Auto
+ProcessId : 10148
+
+PS> Get-CimInstance Win32_Process -Filter "Name='AggregatorHost.exe'" |
+       Format-List ProcessId,ParentProcessId
+
+ProcessId       : 1500
+ParentProcessId : 10148
+
+PS> tasklist /m MissionControlAggregator.dll
+
+Image Name                     PID Modules
+========================= ======== ============================================
+AggregatorHost.exe            1500 MissionControlAggregator.dll
+```
+
+The process IDs connect the pieces: DiagTrack runs in process `10148`, which is the parent of `AggregatorHost.exe`, process `1500`; the module listing places `MissionControlAggregator.dll` inside that child.
+
+## Testing it in practice
+
+To test the finding in practice, I copied `cmd.exe` to a file named `codex.exe` and ran it in the interactive Windows session. The name alone was enough for the component to recognize it as Codex.
+
+I captured an `AppStateChangeSummary` for the running process from the `KernelProcess` provider (`{2839ff94-8f12-4e1b-82e3-af7af77a450f}`), with `LaunchCount=1` and `TerminateCount=0`. The aggregator’s saved state contained the value `2` in CLI slot 2, the Codex slot. A separate run without an additional ETW trace also set that slot, confirming that detection worked through Windows’ existing diagnostic collection.
+
+That state is persisted in:
+
+```text
+C:\ProgramData\Microsoft\Diagnosis\AggregatorStorage\MissionControlAggregator$
+```
+
+The report normally follows a roughly daily boundary. To capture it immediately, I temporarily moved the saved reporting-window start 25 hours into the past and restarted DiagTrack with a trace listening for the aggregator. The resulting `Segments.SubCohorts` event contained:
+
+```text
+Provider: Microsoft.Windows.MissionControlAggregator
+Time:     2026-11-16T12:34:29.125116Z
+Version:  0.1.5
+
+CliAgentSubCohorts:     4
+DesktopAgentSubCohorts: 0
+FlushedFromSave:       true
+```
+
+The value `4` is `1 << 2`: the Codex CLI bit. The name had made it through the input summary, the matcher, the persisted state, and the emitted report.
+
+I also tested the developer-tool path separately, using a copy of `cmd.exe` named `gcc.exe`. It set developer-tool slot 3. With optional diagnostic data allowed, I found the resulting `Segments.SubCohorts` event in DiagTrack’s upload queue with `SubCohorts: [8]` (`1 << 3`). This is the compiler/debugger category shared by GCC, Clang, and related tools, rather than a separate bit for each executable.
+
+## Following the report toward Microsoft
+
+An ETW event by itself would not establish that anything leaves the machine. ETW is used for plenty of local diagnostics. The more revealing question was who was listening to this particular report.
+
+The VM already had a `Diagtrack-Listener` session subscribed to both ends of the path. These PowerShell queries showed its subscriptions:
+
+```powershell
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{2839ff94-8f12-4e1b-82e3-af7af77a450f}'
+
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{00de11a2-ec06-58e5-1a2b-21bb21dbee4b}'
+```
+
+The first subscription, for `KernelProcess`, had `MatchAnyKeyword=0x400000000002`, which includes the summary’s `0x400000000000` keyword. The second, for `Microsoft.Windows.MissionControlAggregator`, had `MatchAnyKeyword=0xe00000000000`, which includes the report’s `0x800000000000` keyword. Both had level `255`.
+
+The subscription showed where the report could go. To check whether Windows actually queued it for transmission, I inspected DiagTrack’s `EventStore.db` and decompressed the JSON batches in its `AsimovEvents` table. This revealed an important condition: the agent-usage report is treated as **optional diagnostic data**.
+
+**When optional diagnostic data is allowed (enabled by default in the US setup I tested), Windows queues the coding-agent usage report for upload to Microsoft.** I verified this by finding the agent event itself in DiagTrack’s upload queue:
+
+```json
+{
+  "name": "Microsoft.Windows.MissionControlAggregator.Segments.SubCohorts",
+  "ext": {
+    "privacy": { "isRequired": false }
+  },
+  "data": {
+    "Version": "0.1.5",
+    "CliAgentSubCohorts": [4],
+    "DesktopAgentSubCohorts": [0],
+    "FlushedFromSave": true
+  }
+}
+```
+
+I checked this with a clean installation of Windows 11 Home ARM64 using the latest official ISO, with the region set to the United States. Before changing any privacy settings, the **Diagnostic data** toggle was already enabled and labeled **Include Optional**. After completing setup with those defaults, `AllowTelemetry` was `3`, confirming that optional diagnostic data was enabled.
+
+![Windows setup with United States region: Diagnostic data defaults to Include Optional](https://xusheng.dev/posts/windows-coding-agent-telemetry/us-optional-diagnostics-default.png)
+
+Optional diagnostic data is therefore enabled by default, at least in the US setup I tested. If you did not opt out of it during installation or disable optional diagnostic data later, it is still enabled and your coding agent usage data is being uploaded. You can decline optional diagnostics during setup or turn off **Send optional diagnostic data** later under **Settings → Privacy & security → Diagnostics & feedback**. Microsoft’s [diagnostics and privacy guide](https://support.microsoft.com/en-us/windows/privacy/diagnostics-feedback-and-privacy-in-windows) explains how to change it.

@@ -1,28 +1,28 @@
 {
-  "updated": "2026-11-18T15:18:34Z",
+  "updated": "2026-11-19T00:01:03Z",
   "items": [
-    {
-      "id": "devto-4985077",
-      "title": "An AI Testing Presentation Became the Final Push for Organizational Change at My Company",
-      "desc": "By xulingfeng | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-06T01:27:32Z",
-      "order": 1,
-      "url": "https://dev.to/xulingfeng/an-ai-testing-presentation-became-the-final-push-for-organizational-change-at-my-company-12ag",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fixx20m4903kd4gqasfhz.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIEA//EABUBAQEAAAAAAAAAAAAAAAAAAAED/9oADAMBAAIQAxAAAAGRkNJ7mQp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAAERIRAiMf/aAAgBAQABBQKjUomHiWdf/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BqP/EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/AYr/xAAXEAADAQAAAAAAAAAAAAAAAAABECAx/9oACAEBAAY/AmMn/8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFRgfD/2gAIAQEAAT8hCowPjKJKI9ZDqXs2NlvLP//aAAwDAQACAAMAAAAQ/wA//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxBi9p//xAAWEQEBAQAAAAAAAAAAAAAAAAAAAVH/2gAIAQIBAT8QlMv/xAAeEAACAwABBQAAAAAAAAAAAAABEQAhMXFRYZHB8P/aAAgBAQABPxB+JoNlX5jVL5zBRBlMB0TCiDGhwh4g6ZDYEKqEGhV6gXEgGKHbJ//Z",
-      "color": "#3B49DF"
-    },
     {
       "id": "devto-5060452",
       "title": "Is Coding with AI Actually Faster and Cheaper?",
       "desc": "By Sylwia Laskowska | 6 min read",
       "tag": "tutorial",
       "published": "2026-11-18T08:32:45Z",
-      "order": 2,
+      "order": 1,
       "url": "https://dev.to/sylwia-lask/is-coding-with-ai-actually-faster-and-cheaper-2810",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fh2u8fbzz30f3587urp83.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAFx6SRF5D//xAAYEAADAQEAAAAAAAAAAAAAAAAAARESAv/aAAgBAQABBQJ9Z53TZasqPmCVMn//xAAXEQEAAwAAAAAAAAAAAAAAAAAAARES/9oACAEDAQE/Aall/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8BV//EABkQAAEFAAAAAAAAAAAAAAAAAAAQESAxof/aAAgBAQAGPwIrUeP/xAAcEAACAgIDAAAAAAAAAAAAAAAAAREhMUFRYZH/2gAIAQEAAT8hsOB0yg3UKF2JKHgnCpD0TskMH//aAAwDAQACAAMAAAAQFV//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBoV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QqwY//8QAHhABAAIBBQEBAAAAAAAAAAAAAQARITFBUWFxsZH/2gAIAQEAAT8QFaGgM1+u0NUvmXyUsH5K89dQCqrhcpTAS97v7CYwcgl4KPAlJro3n//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4985077",
+      "title": "An AI Testing Presentation Became the Final Push for Organizational Change at My Company",
+      "desc": "By xulingfeng | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-06T01:27:32Z",
+      "order": 2,
+      "url": "https://dev.to/xulingfeng/an-ai-testing-presentation-became-the-final-push-for-organizational-change-at-my-company-12ag",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fixx20m4903kd4gqasfhz.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIEA//EABUBAQEAAAAAAAAAAAAAAAAAAAED/9oADAMBAAIQAxAAAAGRkNJ7mQp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAAERIRAiMf/aAAgBAQABBQKjUomHiWdf/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BqP/EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/AYr/xAAXEAADAQAAAAAAAAAAAAAAAAABECAx/9oACAEBAAY/AmMn/8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFRgfD/2gAIAQEAAT8hCowPjKJKI9ZDqXs2NlvLP//aAAwDAQACAAMAAAAQ/wA//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxBi9p//xAAWEQEBAQAAAAAAAAAAAAAAAAAAAVH/2gAIAQIBAT8QlMv/xAAeEAACAwABBQAAAAAAAAAAAAABEQAhMXFRYZHB8P/aAAgBAQABPxB+JoNlX5jVL5zBRBlMB0TCiDGhwh4g6ZDYEKqEGhV6gXEgGKHbJ//Z",
       "color": "#3B49DF"
     },
     {
@@ -62,27 +62,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978154",
-      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
-      "desc": "By Randal L. Schwartz | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T00:02:44Z",
-      "order": 6,
-      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5015822",
       "title": "Could I Still Do This From Scratch?",
       "desc": "By Daniel Nwaneri | 3 min read",
       "tag": "tutorial",
       "published": "2026-11-17T11:26:15Z",
-      "order": 7,
+      "order": 6,
       "url": "https://dev.to/dannwaneri/could-i-still-do-this-from-scratch-427h",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6sw7q891msu9qonbawld.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAMC/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAUQsdNIDcv/EABwQAQABBAMAAAAAAAAAAAAAAAIBAAMEERIhQv/aAAgBAQABBQJxtXGgrV1pGFy9ZEzWPPYjS//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABsQAAICAwEAAAAAAAAAAAAAAAABETECEiFB/9oACAEBAAY/Ama41AkdGXwaImvT/8QAGhABAAMBAQEAAAAAAAAAAAAAAQARMUEhUf/aAAgBAQABPyFblPNmPwKKjNSkeShUD33ZTtute18mS3VRva0k+7KP/9oADAMBAAIAAwAAABAHv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/EFf/xAAdEAEAAgMAAwEAAAAAAAAAAAABESEAMUFRYXGh/9oACAEBAAE/EAGE01grZ5ww5SA885pZgiaKwGlUCgXYccRhMqdhLrAwZl39iPmLODWmxO/uOgUPS0eetZ//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4978154",
+      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
+      "desc": "By Randal L. Schwartz | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T00:02:44Z",
+      "order": 7,
+      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -278,6 +278,30 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4986713",
+      "title": "When an AI Agent Says 'Done,' What Exactly Has Finished?",
+      "desc": "By asagiman | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-11-06T07:29:45Z",
+      "order": 24,
+      "url": "https://dev.to/suirindo/when-an-ai-agent-says-done-what-exactly-has-finished-5h3p",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn2w315486nmzhh85n8wo.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAerFrDMJrKu8NGX/xAAcEAABBAMBAAAAAAAAAAAAAAAAAQIRIRASICL/2gAIAQEAAQUCg1aQg6sUeR8Lz//EABcRAAMBAAAAAAAAAAAAAAAAAAABAhD/2gAIAQMBAT8BE8o//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwJwjk//xAAeEAEAAgEEAwAAAAAAAAAAAAABABFBEDFxkSFRYf/aAAgBAQABPyEKK2nwZXh7nhEd5dHpOb1BOb5IgDDV0//aAAwDAQACAAMAAAAQSDcd/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARITH/2gAIAQMBAT8QBCwO4u7/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QVGdZi//EAB4QAQADAAICAwAAAAAAAAAAAAEAESFh8BBBMVGB/9oACAEBAAE/EL2UZQxXb/2Hp/XMqlIk2GwabXeK9Qa6fXEU1dH1PhUTlV4fBn//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5047181",
+      "title": "The Agentic Loop Explained: Step Through the Plan, Build, Judge and Repeat Loop Behind AI Coding Agents",
+      "desc": "By DevOps Daily | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-11-16T10:52:54Z",
+      "order": 25,
+      "url": "https://dev.to/devopsdaily/the-agentic-loop-explained-step-through-the-plan-build-judge-and-repeat-loop-behind-ai-coding-36g2",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdevops-daily.com%2Fimages%2Fsimulator-posts%2F8e36552e-c946-5827-ae26-513c678d96d2-cover.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABz4SEP//EABcQAAMBAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCzSr/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAZEAEBAAMBAAAAAAAAAAAAAAAAARFhcTH/2gAIAQEAAT8hnjERUunDhbp//9oADAMBAAIAAwAAABBhT//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQACAgMBAAAAAAAAAAAAAAEAESFxMVGRgf/aAAgBAQABPxACIIOIBckAXKSqO7lOvrNPrBTgfWf/2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-5045304",
       "title": "Your AI Agent Retried the Tool Call. The First One Had Already Succeeded.",
       "desc": "By Rudratosh Shastri | 21 min read",
@@ -287,18 +311,6 @@
       "url": "https://dev.to/rudratosh/your-ai-agent-retried-the-tool-call-the-first-one-had-already-succeeded-3pke",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Frudratoshs.github.io%2Fassets%2Fai-agent-retry-idempotency%2Fcover.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAIB/9oADAMBAAIQAxAAAAHI0xGihF//xAAYEAEBAQEBAAAAAAAAAAAAAAABAgAREv/aAAgBAQABBQIF1HNMetUojvS6bo1Pd//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAbEAACAgMBAAAAAAAAAAAAAAAAIQERAjFB0f/aAAgBAQAGPwLVjxg4eCGxFyf/xAAbEAEBAQACAwAAAAAAAAAAAAABEQAhUUFhgf/aAAgBAQABPyFmBT3l4iXrJUBO3RUOPOINSOUVfWo3L6yOtd//2gAMAwEAAgADAAAAEJUP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oACAEDAQE/EIw//8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EKyv/8QAHBABAQEAAgMBAAAAAAAAAAAAAREAITFBkaHB/9oACAEBAAE/ECnMgUk+58KFKv7iVxQwwbxXkNHVeRxyqEO8NFCVUhz1DkvR6N//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4986713",
-      "title": "When an AI Agent Says 'Done,' What Exactly Has Finished?",
-      "desc": "By asagiman | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-11-06T07:29:45Z",
-      "order": 25,
-      "url": "https://dev.to/suirindo/when-an-ai-agent-says-done-what-exactly-has-finished-5h3p",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn2w315486nmzhh85n8wo.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAerFrDMJrKu8NGX/xAAcEAABBAMBAAAAAAAAAAAAAAAAAQIRIRASICL/2gAIAQEAAQUCg1aQg6sUeR8Lz//EABcRAAMBAAAAAAAAAAAAAAAAAAABAhD/2gAIAQMBAT8BE8o//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwJwjk//xAAeEAEAAgEEAwAAAAAAAAAAAAABABFBEDFxkSFRYf/aAAgBAQABPyEKK2nwZXh7nhEd5dHpOb1BOb5IgDDV0//aAAwDAQACAAMAAAAQSDcd/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARITH/2gAIAQMBAT8QBCwO4u7/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QVGdZi//EAB4QAQADAAICAwAAAAAAAAAAAAEAESFh8BBBMVGB/9oACAEBAAE/EL2UZQxXb/2Hp/XMqlIk2GwabXeK9Qa6fXEU1dH1PhUTlV4fBn//2Q==",
       "color": "#3B49DF"
     },
     {

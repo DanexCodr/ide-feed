@@ -1,195 +1,101 @@
-FreeBSD has a pretty neat safe memory reclamation scheme (something akin to RCU), that's also been adopted by XNU that hasn't really been well-documented outside of code comments, and I thought it would've been interesting to write about it.
+For quite a long time, I've been working on a puzzle game called Satelital, a rule-discovery game about learning alien logic.
 
-## What safe memory reclamation is all about
+As a solo developer, I decided to start this project from scratch. My motivation was to learn the actual fundamentals behind the technology of videogames. This meant I had to build most of the tools I would need myself, including the game engine, renderer, puzzles, editors, UX, design, art and music.
 
-The problem of *safe memory reclamation* (SMR) shows up notably when working with lock-free data structures. Lock-free data structures are the bread and butter of modern scalability in operating systems, and they often allow much higher throughput than their finely grained locked counterparts, but they come with their own issues.
+Now that I've finally managed to release the game, I think it's a good moment to share how I built it.
 
-Lock-free data structure code in unmanaged languages needs to carefully manage the liveness of the objects it manages, i.e it must guarantee that memory is freed if and only if no one is able to access it. This arises because there is no synchronization around the access of the data structure, so an object that is removed can still be visible concurrently by another CPU (who might have made a local copy).
+The main reason I got into programming was the idea of eventually working on games. I spent many years working on web and building mobile apps. It was fun, but I felt like I wasn't going in the direction I really wanted to.
 
-More broadly, SMR schemes can also be used for other things than memory reclamation, I like to think of them as providing barriers ensuring that all participants (read: CPUs or threads) have passed through a certain point.
+So one day, after listening to every Jonathan Blow talk I could find and playing too much The Witness, I decided to finally give it a try.
 
-## Prior art
+I spent many days and countless hours looking for the best tool I could use to make a game, but nothing left me satisfied. The closest I got to having fun with gamedev was with the [LÖVE framework](https://love2d.org/) making a few jam games. But even with that, it felt quite limiting to not really know what was happening behind the graphics I somehow managed to animate on my screen.
 
-SMR schemes broadly fall in two families: *Epoch-based reclamation* (EBR) and *Quiescent-state based reclamation* (QSBR). You might have also heard of *Hazard Pointers* (HP), which are useful on their own but are seldom seen in operating systems (at least, that I know of!).
+I remember hearing about shaders and parallel programming. The concept always felt very arcane and mysterious to me, but now writing them is the thing I enjoy the most while coding.
 
-QSBR is notable because you might've heard of it called a different name by the Linux project, *RCU* (Read-Copy-Update)! RCU's author, Paul McKenney, actually invented QSBR for the DYNIX operating system.
+I finally decided to jump into the swimming pool and actually learn C⁠+⁠+. I had to learn how to manage memory and how not to shoot myself in the foot with the wrong tools. I started using SDL2 while trying to use the C⁠+⁠+ standard library as little as possible.
 
-RCU has been described extensively, and I would recommend reading McKenney's excellent [LWN Articles](https://lwn.net/Articles/262464/) to learn more. The TL;DR is that there are three operations: `rcu_read_lock`, `rcu_read_unlock` and `rcu_synchronize`, the `read` operations are used to guard reads around potentially-freed memory (i.e to enter a *read section*) and the `synchronize` function waits until there is no CPU in a read section (this could be used to wait until memory is safe to be freed).
+Before getting too deep into the engine, I actually finished a prototype of the game quite early. It had very early versions of four kinds of puzzles that mostly survived until the final game. It was made entirely with SDL2, but I soon realised that if I wanted to have more interesting graphics, I would need to use shaders and decided to switch to OpenGL.
 
-The gist of the algorithm is that memory is known to be safe to free when all CPUs have gone through at least one *quiescent point* ever since the object was removed from its data structure (a *grace period*), and read section operations block those quiescent points from ever happening.
+With the help of [LearnOpenGL](https://learnopengl.com/) I quickly had a triangle on the screen. From there, learning things like lighting, tonemapping, normal maps, shader effects and everything else opened up a whole new way of looking at computers for me. Before, my idea of how a computer actually draws to the screen was quite naive. When I started learning graphics I just wanted to be able to manually change the color of each pixel individually, but in the end the idea of running a program in parallel for every pixel clicked for me.
 
-In practice, this can be implemented by having a quiescent point on context switches and inhibiting preemption during read operations. The core of the algorithm is actually pretty simple, and much of the complexity of the Linux code stems from making this scalable (Tree RCU) and handling other RCU flavors (e.g preemptible RCU).
+One thing that made a huge difference while working on shaders was having code reloading. Before that, I had a complex system that stored constant values in config files, which would later get passed through uniforms into shaders. Then a custom development menu would provide some UI to tweak those values at runtime. With that I stopped having to reload and compile everything for every little change I wanted to make.
 
-FreeBSD's safe memory reclamation scheme is called *GUS* and is part of the EBR family.
+It worked, but having to maintain all this extra scaffolding was slowing me down. Another unexpected downside of this setup was that, in some cases, the shader compiler couldn't optimize the code as well as it otherwise could, since knowing constant values ahead of time helps it make better decisions.
 
-## Epoch-based reclamation
+Having shader reloading made a huge difference. Being able to change some code, save the file and immediately see the result on screen was very useful. Iterating on shaders became much faster and more fun. This was probably my biggest regret about not having it from day one.
 
-Epoch-based reclamation was first described by Keir Fraser in his now-famous thesis titled *Practical Lock-freedom* ([link](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf)). The way it works is that there is a global *epoch* which moves through 0, 1 and 2. When a thread enters a read section, it pins itself by reading the global epoch and copying it into its local slot.
+For a big part of the development I was using SDL2, mainly to create a window, read input and get a surface to draw on. But it felt wrong to depend on a library that was several times bigger than my entire game just to handle a few seemingly simple tasks. I decided to drop that dependency and make my own platform layer that I could understand and maintain. I wouldn't have to wait for someone else to fix a bug anymore because now I could just change it myself. It wasn't that hard to end up with a single file with a few thousand lines of code that supported both macOS and Windows. I'm now looking forward to working on mobile and console ports, it feels like it might be a fun thing to work on.
 
-When a writer retires an object, it goes into a "limbo" bag tagged with the current epoch (really, the epoch is used as an index into an array of three linked lists). The global epoch is advanced by *polling* all other threads and checking whether or not they have acknowledged the current epoch by reading their local slot; if it so happens that they have, then the global epoch is advanced and memory that was retired two epochs ago can now be freed.
+At some point during development, compile times were getting longer, so I decided to look into what was going on. I checked where all that time was going, and to my surprise a lot of it was spent compiling standard library things. Stuff like `std::function` was particularly slow for example.
 
-The main issues that arise:
+Eventually I realised that I wasn't actually forced to use the standard library just because it was there, and the subset I needed wasn't that hard to implement myself. It took me a month to replace it with my own base library, but it was so worth it. Not only did compile times get faster, but I also learned how a lot of things I had always taken for granted in other languages actually worked.
 
-1. Epochs are bounded, i.e they always cycle through 0, 1 and 2, this means that writers have to synchronize with epoch advancement before retiring more objects; and
-2. Doing an O(n) scan touching remote memory is very expensive!
+At some point I started looking into Vulkan because I wanted HDR. I couldn't get it working on macOS through OpenGL and I was worried about OpenGL being deprecated in the future. Also I didn't really want to build the whole engine around an API that might become deprecated.
 
-It is now time to reveal that GUS really means *Global Unbounded Sequences*, and it tackles on issue #1 by making epochs unbounded (hence the name) and issue #2 is somewhat mitigated by clever integration with the broader system.
+Moving to Vulkan was rough at the beginning. There was so much boilerplate to type and understand. Also, when I started working on the engine, there wasn't much documentation around how to implement a good backend with it. In hindsight, I feel that even though I got a lot of valuable things from tutorials and books, most of them were overcomplicating something that could be much more straightforward. I still have nightmares about trying to resize a window...
 
-## GUS
+Getting Vulkan working on macOS was actually surprisingly easy thanks to MoltenVK. It was nice not having to learn Metal and being able to keep the same codebase on Windows. The engine started out only working on macOS, so I was afraid I'd run into a lot of issues when porting it to Windows. But I was quite nice to see Vulkan just working the same day I tried it.
 
-> I am using sequence and epoch interchangeably here. Confusing, I know!
+My philosophy from day one was to only grow the engine towards exactly what I needed. This was a long solo project, so trying to build a general purpose engine first, without knowing what I needed, would probably have meant never finishing the game. I did waste time on things I thought I would need, but I cut them when I knew I wouldn't be using them. Because I was also learning C/C⁠+⁠+ along the way, I made many coding mistakes but I wasn't afraid of big refactors. Cleaning the codebase helped me bring up my morale.
 
-The way GUS works is that there is a global, monotonically increasing write sequence, as well as a global read sequence, which represents the last minimum observed sequence across CPUs.
+From the beginning I wanted to avoid making a 3D engine since I knew that might complicate things too much. But after I finished the prototype, I kept learning about shader techniques and effects. So in the end, my goal was to get as close as possible to a 3D look without actually having to load any 3D polygons.
 
-Each CPU also keeps track of its own local sequence when it is pinned, akin to how EBR does things.
+To do this, I chose an orthographic top-down view so I could just prerender the assets in Blender and then load their albedo, normal and height maps as textures. Having a fixed camera meant I could render all the assets from exactly the same perspective, so they would always fit together properly in the game. Other things that needed to be animated were drawn in the pixel shader using SDFs. The terrain of the planets was too big to be stored entirely in textures, so in most cases I had to procedurally generate them in shaders too.
 
-The algorithm goes as follows, in pseudocode:
+![Final frame](https://spectralorbit.com/blog/assets/lunae_final_frame.jpg)
 
-```
-enter():
-    store(cpu.cur_seq, load(global_write_seq, relaxed), relaxed)
-    fence(seq_cst)
+*Final frame*
 
-exit():
-    store(cpu.cur_seq, SEQ_INVALID, release)
+![Albedo](https://spectralorbit.com/blog/assets/lunae_albedo.jpg)
 
-advance():
-    fetch_add(global_write_seq, 1, release)
+*Albedo*
 
-// Returns whether a sequence `goal` is reached
-poll(goal):
-    fence(seq_cst)
+![Normals](https://spectralorbit.com/blog/assets/lunae_normals.jpg)
 
-    if goal <= global_read_seq:
-        // Goal already reached!
-        return true
+*Normals*
 
-    min_seq = global_read_seq
+![Light & Shadows](https://spectralorbit.com/blog/assets/lunae_light_and_shadows.jpg)
 
-    for each cpu:
-        min_seq = min(min_seq, load(cpu.cur_seq, relaxed))
+*Light & Shadows*
 
-    if goal <= min_seq:
-        // Goal reached across all CPUs
-        fence(acquire)
+Since I wanted a 3D look with dynamic lighting, I also needed dynamic shadows. The final approach I settled on was ray marching. With the height map of each prop, I could make them look as if they were actually sitting in a 3D space, even though everything was still rendered in 2D. In the shader I basically march along the direction of the light and sample the height map to figure out where a shadow should be drawn.
 
-        Exchange global_read_seq with the new one.
-        return true
+Having the height map was also useful for other things. For example, I could use that information to make objects interact with the water in a convincing way. Objects can actually submerge in the ocean instead of looking like flat images drawn on top of it. This is also how the waves can interact with the shore around an island.
 
-    return false
-```
+The engine was only one part of making a complete game. I also had to build a custom level editor. I wanted to make it as easy as possible to design and iterate on puzzles, so I integrated an edit mode that allowed me to change puzzles and the enviroment at runtime and see the changes in real time.
 
-> I will not go *too* much into details about the atomic operations here, if you're curious, they have been extensively described by people smarter than me! The basic idea, however, is that one needs to remember that all operations after `enter` must not be reordered w.r.t the publication of the epoch (the store to `cur_seq`)
+It was quite fun to quickly draw and tweak puzzles directly in the game. It helped me discover so many ideas. After making thousands of puzzles, you start to develop a sense of beauty about how a puzzle should be. Having this editor allowed me to get into the zone. I could spend hours making puzzles without actually thinking about the tool I was using.
 
-The basic idea is therefore that a sequence is essentially a timestamp<sup>[[1]](https://gregoire.dev/writing/gus/#fn-1)</sup>, and that the read sequence is always playing catch-up with the write sequence, but never actually reaching it,
-(i.e there is always at least a separation of 1 between both). Obviously, in practice, there is a bit more to it especially w.r.t memory orderings, but the whole thing is still freakishingly simple
-and can be implemented in a few hundred lines, see the FreeBSD implementation [here](https://elixir.bootlin.com/freebsd/v15.1/source/sys/kern/subr_smr.c).
+Alongside the in-game editor I made a custom Blender plugin that could load my level config files into Blender. The game had a file watcher that could detect changes in the baked textures of the 3D models rendered by Blender. But it could also load level data and provide another way to edit. The upside was being able to just use Blender tools like multi-select, but aside from that, it wasn't actually that useful. It was cool to make though, and it's an interesting demo. But just being able to edit things in-game was much better, since you can see how it will actually look in the end. Though having said that, looking at the levels in an actual 3D environment feels quite nice.
 
-The unbounded epochs solved the issue #1 that was presented earlier, but what about issue #2: how is polling amortized?
+Building the game with all these custom tools brought some issues. They worked on my machine, but when I started playtesting I began to find lots of bugs that were tricky to reproduce. The hardest ones were related to graphics, due to differences in hardware and drivers on machines I didn't have access to. Tools like Vulkan validation layers were quite useful, though they didn't catch everything.
 
-Jeff Roberson, the author of GUS, also wrote the UMA (universal memory allocator) implementation, and both tie nicely together.
+Another thing that was tricky to deal with was shader compatibility. When using GLSL, if you rely heavily on making visual effects with noise related functions, you will find issues with things like `sin` or `pow` because the specification doesn't guarantee their precision. So I had to be constantly checking that everything looked the same on as many different hardware configurations as I could find. For a while, I didn't notice that the distribution pattern of my stars looked different across vendors. It looked correct, but I wanted to have the same placement of stars wherever you played to make it feel more like an actual place.
 
-## Integration with the rest of the system
+Having good logs to see how the internals of the game were working ended up being very useful. It was essential for me to have them after I released the demo and started getting feedback from users who were seeing errors I couldn't reproduce. Many of them reported a black screen when trying to open the game for the first time, and these were caused by many different kinds of problems. Sometimes it would be a missing extension, sometimes a third party Vulkan layer injecting code that prevented the frame from being drawn, or some other particular driver issue. Without the logs showing the exact point when the error happened, it would have been almost impossible to fix these bugs without having the actual hardware.
 
-To me, the way GUS is integrated with the allocator is really its distinguishing feature and what makes the whole thing work well.
+The logs ended up being quite useful for performance. For example, when trying to do optimizations for Intel GPUs, I noticed that some of the biggest shaders were being compiled in a non-optimal way. I basically ran the whole game in just 2 big shaders, one to blend the scene with all the quads, and another pass where I do lighting, shadows and effects like water, where the final normal and height map of the scene are presented. Because these shaders were so big, they couldn't be compiled for SIMD16.
 
-The UMA allocator is essentially a modernized slab allocator, which was first implemented in Solaris and described in Jeff Bonwick's influential papers<sup>[[2]](https://gregoire.dev/writing/gus/#fn-2)</sup><sup>[[3]](https://gregoire.dev/writing/gus/#fn-3)</sup> in the early 2000s.
-To make things scale on SMP systems, it relies on per-CPU "buckets" (magazines in Bonwickspeak), which are essentially an array of *N* objects on which objects are popped from and pushed onto quickly.
-A certain amount of pre-allocated buckets are stored in a per-zone (`kmem_cache` in Bonwickspeak) "depot" from which empty buckets and full buckets are pulled. *N*, i.e the size of buckets, is dynamically resized
-according to measured contention on the depot lock; high contention needs to be reduced by increasing the bucket size,
-which provides amortization over the (potentially) slow and contended operation of going to the depot.
+These integrated Intel GPUs are quite common on laptops, and they can shade 16 pixels at once, but only if everything in the shader fits in a small amount of very fast memory. Because my shaders grew so much and I wasn't even aware that this would be an actual issue, the driver was quietly falling back to shading 8 pixels at a time, making the game run noticeably slower. Once I had this information in the logs, I could see what I needed to trim down. I reduced the number of values I needed to keep around as much as possible, while also avoiding duplicated code caused by things like macros until everything fit again.
 
-GUS and the allocator join together by allowing the creation of "SMR zones" which are zones that do careful handling around the freeing of objects.
-Someone wanting to write a lock-free data structure could create a SMR zone for their object and do allocations and frees effectively transparently.
+![Menu graphics options](https://spectralorbit.com/blog/assets/menu_graphics.jpg)
 
-On SMR zones, when the allocator notices a bucket is completely free (i.e full of objects), it advances the write sequence and stamps the bucket with it,
-then puts it back at the end of the depot free list.
+*Menu graphics options*
 
-When the allocator then needs to get a free bucket from the depot, it gets the bucket from the head of the free list,
-and **then** polls other CPUs for the sequence that is stamped on that bucket. If the goal has already been reached, then the bucket can be reused, otherwise,
-the allocator will fallback on allocating another bucket itself.
+During development I was always careful about how demanding the game was, but after switching to a faster computer I started paying less attention to it. It's quite easy to just settle for something that looks good enough and move on to the next thing when you're busy. That's why I started targeting the Steam Deck and aiming for stable 90 FPS. It helped me keep performance in sight and avoid things that would make the game too slow on low-powered platforms.
 
-What's cool about this is that buckets naturally provide amortization for those SMR operations;
-polling is done on a batch of objects at once, and not on a per-object basis (which avoids starting one write sequence per object) and growing the buckets lengthens the time spent before touching the depot again, which gives the time for other buckets to age.
+I feel like I threw away a lot of work during development because the art and design of the game changed several times. In hindsight, I think it was good to keep the mentality of avoiding things that would make the game slow and keeping an eye on the performance stats. But it was only towards the end of the game that I could simply focus on performance without worrying about optimizing things in a way that would make them hard to generalize or reuse in the future, since the game was finished.
 
-Remember that the GUS algorithm relies on finding the lowest sequence across all CPUs, which means that oftentimes, if buckets are aged as expected,
-then a single poll operation could allow the reuse of many buckets at the same time, e.g if the depot free list contains buckets stamped with `100, 101, 102` and we notice via polling that the new minimum sequence is `103`,
-then all of those buckets can be reused immediately, which avoids having to do future polls for those buckets.
+In the end I actually added a performance mode that tones down a few special effects, but I think it was a good decision to do that when the game was finished. Otherwise, you suddenly need to be testing and tweaking more than one version of the game while making changes and adding new things.
 
-That is what makes everything click together and the polling not so bad anymore!
+A frame limiter was something else I added to help slower laptops maintain a stable framerate. This also brought the necessity of adding an option to draw the cursor in hardware. For the whole development I was drawing the cursor within the game in software, and that meant some lag was unavoidable. Many users complained about this when the demo was released.
 
-## XNU
+This happens when you use Vsync because the last frame you're seeing is actually buffered, so the frame is already behind the input. The OS has a special mode for drawing the cursor that prevents these issues, but then you lose the ability to apply effects to it, like fluid animations or doing some lighting around it. Being aware of this also helped me focus on reducing the input lag of the game as much as possible. When running the game with the frame limiter, you notice immediately that the cursor becomes super laggy. For that case, having a hardware cursor was necessary.
 
-Apple's XNU has also adopted a very similar scheme but with many goodies on top. For instance, they support preemptible read sections and a `call_rcu`-style API.
-The way it integrates with their zone allocator, however, is quite interesting and its implementation differs enough that I deem it worthy to be described here as well.
+Looking back on all these details, being able to change basic engine things like that is super hard, or almost impossible, with closed engines. I worked with Unity before, doing some ports, and the mentality there was that you had to follow a set of "good practices" and deal with whatever was decided for you, even though the hardware in most cases could do better. It was very rough and slow at the beginning when making a custom engine, but the freedom you get at the end of development is very satisfying.
 
-XNU's zone allocator (`zalloc`) is, like UMA, also essentially a modernized slab allocator;
-I will not try to explain it in depth here because it is quite sophisticated (over 10k lines!), and I am keeping this in reserve for another post, but I will go over the details of how their buckets are reused.
+I feel lucky I got the chance to take this long road and actually make it to the end. I stumbled into something really interesting, and had so many moments of realization while working on this project that I lost count.
 
-What's interesting is that zalloc does not rely on resizing buckets at all, instead, buckets are kept at a fixed size (something like 8 objects),
-and a per-CPU depot is installed on top of the per-zone depot, which they call the "recirculation depot" (this should make sense later why such a name was used).
-This per-CPU depot is then resized with an algorithm similar to the one used to resize buckets, providing the same kind of amortization.
+After all these years, I'm quite happy now to have found the perfect excuse to actually study the things I love the most to work on.
 
-When a bucket becomes full and ready to be recycled, it is stamped with a *deferred* advance of the write sequence and put onto the per-CPU depot.
-When allocation is in need of a bucket, it polls the head of the per-CPU depot, and grabs it if it has expired. Otherwise, it does four things:
-
-1. Append all the buckets from the per-CPU depot to the zone depot
-
-Since the head of the per-CPU depot hasn't expired yet, this means that all buckets that sit in the per-CPU depot are not yet ready.
-All buckets are therefore put at the *end* of the zone depot, as to let them age behind the buckets that were already in depot.
-
-1. Commit the sequence of the last bucket in the zone depot
-
-The last bucket in the depot is the newest, its sequence is taken and the global write sequence is advanced to that one immediately,
-this allows to do one write sequence write for many buckets.
-
-1. Pull back a bunch of buckets from the head of zone depot into the per-CPU depot
-
-A batch of buckets is then pulled from the head of the zone depot, these are the oldest buckets, so they are more likely to have expired.
-The batching here avoids having to constantly thrash on the depot and avoids contention on it.
-
-1. Retry to allocate from per-CPU depot
-
-Finally, the oldest bucket we just freshly pulled from the zone depot is polled again, if it still hasn't expired, then
-there is no choice but to fallback on allocating new memory.
-
-What's all this jazz about deferring and committing? I like to think of a deferred advance as a "fake advance", it snapshots the current sequence but does not increment it,
-which avoids a global read-modify-write (RMW) operation on the global write sequence. The key idea is that there is no need to advance the sequence, i.e commit it, until we actually need to, and
-this also serves as an amortization feature because a sequence can be jumped to instantly, for instance, from 1 to 5 instead of individually advancing through 1, 2, 3, 4, and 5.
-
-The recirculation depot is hence called as such because it allows a given bucket to *recirculate* and age before given the chance to be reused again.
-
-## Pros & Cons
-
-This SMR scheme, like anything else, has its own tradeoffs.
-It is relevant to compare it with RCU because both are analogous, compared to RCU:
-
-Pros:
-
-- Only CPUs actively in a read-section need to participate during polling.
-- Simple implementation
-- Lower free-to-reuse latency[[4]](https://gregoire.dev/writing/gus/#fn-4)
-
-Cons:
-
-- Even though polling is amortized, it is still an expensive operation, and might even be a no-go on large NUMA systems.
-- Higher overhead on entering read sections (needs a fence)
-
-## Resources
-
-The best resource, as always, is reading the actual code, which is thankfully very well commented ([GUS link](https://elixir.bootlin.com/freebsd/v15.1/source/sys/kern/subr_smr.c), [UMA link](https://elixir.bootlin.com/freebsd/v15.1/source/sys/vm/uma_core.c)).
-The XNU code is also heavily commented ([SMR link](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/smr.c), [zalloc link](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/zalloc.c)).
-
-Additionally, these are useful resources:
-
-- Jeff Roberson has made a short talk about GUS and UMA.
-- Comparison with RCU by Joel Fernandes, a Linux developer.
-
-I have also implemented GUS and an allocator inspired by XNU's and UMA in my own operating system, zag ([SMR link](https://github.com/rdmsr/zag/blob/master/src/sys/kern/smr.zig), [allocator link](https://github.com/rdmsr/zag/blob/master/src/sys/mm/zone.zig))
-
-## Footnotes
-
-1. In fact, one could use a timestamp counter such as the TSC for this, as seen in [*Parallel Sequences*](https://faculty.cs.gwu.edu/gparmer/publications/eurosys16ps.pdf). [↩](https://gregoire.dev/writing/gus/#fr-1-1)
-2. [*The Slab Allocator: An Object-Caching Kernel Memory Allocator*](https://people.eecs.berkeley.edu/~kubitron/courses/cs194-24-S14/hand-outs/bonwick_slab.pdf) [↩](https://gregoire.dev/writing/gus/#fr-2-1)
-3. [*Magazines and Vmem: Extending the Slab Allocator to Many CPUs and Arbitrary Resources*](http://www.parrot.org/sites/www.parrot.org/files/vmem.pdf) [↩](https://gregoire.dev/writing/gus/#fr-3-1)
-4. This was actually measured by the FreeBSD people, see the talk I mentioned above. [↩](https://gregoire.dev/writing/gus/#fr-4-1)
+If you enjoyed this article, consider giving Satelital a try. The game is available on Steam, with a free demo available.

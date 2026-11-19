@@ -1,275 +1,79 @@
-Github design is pretty good: it gets the job done, it’s clean, has consistent visual language, its design is calm and suitable for everyday use.
+Android’s source code is big – the Android 17 open source release has **1,084** [Git](https://git-scm.com/) repositories, **1.62 million** files, and takes **300 GB** for a built workspace. Additionally, in a typical Android source tree with hardware vendor code and first-party applications, the size increases by **2-3x**.  
 
-![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
+ Traditionally, it took over 30 minutes to fetch Android Open Source Project (AOSP) source code and well over an hour to build on even highly capable developer workstations. As software development evolved over the last 2 years, modern coding harnesses and LLMs have accelerated the development of many projects. These tools are used today for Android operating system development, but the long sync and build times make them less efficient. Both human developers and agents need quick setup, parallel workspaces, and fast build-and-test iteration times.
 
-Given all that, there are still many areas that could be improved. Today we’ll take one interface—repository page—and look what UI problems it has and if we can fix them.
+We built Another Build File Service (ABFS) to address these bottlenecks. ABFS is a full suite of software across a Linux kernel filesystem module, user-space daemons, and server-side infrastructure. ABFS uses content-addressability across the entire stack to lazy-load and cache source code, developer workspaces, intermediate build files, and build results.
 
-## First problem: nested tabs
+Today, we are excited to announce that [ABFS is open source on GitHub](https://github.com/google/abfs).  
 
-Let’s start with the biggest issue right away: information architecture. Take tabs. Currently there’re two levels of tabs, one nested under the other:
+The impact of ABFS to Android is:
 
-![](https://tonsky.me/blog/github-redesign/20_tabs.png?t=1697319007)
+ABFS already powers parallel workflows for developers and agents in Android, but it is designed to scale to other massive Git-based projects.
 
-If you are a programmer, you might be surprised but other people normally don’t like hierarchies. Nested structures are hard to grasp, remember, navigate, and grouping is very often non-intuitive. Nested tabs are one of the worst UI patterns out there.
+In the Android build system, developers define build rules in Blueprint files (`Android.bp`), Soong compiles them into Ninja files, and [Ninja](https://ninja-build.org/) executes the final build graph (see the [Android build overview](https://source.android.com/docs/setup/build)). Similar to the [Make build tool](https://www.gnu.org/software/make/), Ninja is **timestamp-based**. If a build step’s input file is newer than the existing output file, Ninja rebuilds the output file.
 
-Then there’s a plain usability issue: let’s say I’m in Wiki and need to see Releases. What should I do? There’s no Releases tab visible, so I must figure out somehow that Releases are part of the Code (?). That makes almost no sense. Releases are as much part of the Code as Issues or Wiki are.
+### **Code Size**
 
-Solution here is to flatten all tabs into a single navigational control:
+Analyzing the [AOSP code](https://android.googlesource.com/) for Android 17 shows the sheer disk footprint and file count involved in a single checkout and build.
 
-![](https://tonsky.me/blog/github-redesign/30_tabs-merged.png?t=1697319007)
+In a typical Android tree that includes hardware-specific repositories, board support packages, first-party applications, form-factor-specific code, etc., the code size is 2–3 times the size of AOSP **(over 3,000 Git repositories),** compounded across multiple active SKU and legacy maintenance branches.
 
-Organized that way, tabs are immediately accessible *from anywhere* in the repo. *This is a big deal*.
+Building the Cuttlefish emulator target executes a build graph with **192,249** Ninja actions. While local incremental builds are fast once a tree is already built, every new workspace, branch switch, or ephemeral agent session starts cold.  
 
-As a bonus, we also won quite a bit of vertical space without sacrificing anything! Vertical space is very important, it lets you see more content and get to it faster—all good things.
+Even though typical developer changes touch only 1-10 different Git projects, someone building locally without any remote execution might waste up to **80 minutes on a 64-core** machine repeating work their CI system already built. Even if a developer edits a core library like `system/libbase`, **97%** of the build graph is identical to the CI build.
 
-We still have one problem though: tabs don’t fit. We’re going to solve it by removing icons, but let me build up a case for that first.
+Sharing cached build outputs across CI and local machines is also tricky in a codebase of Android's age and rate of change. Build rules occasionally introduce **hidden dependencies** (such as passing an undeclared schema file inside raw compiler flags), **over-declared inputs**, or **undeclared outputs**. In timestamp-based builds, hidden dependencies silently produce stale incremental artifacts, forcing developers to wipe output directories and run clean builds.
 
-## Problem 2: Redundant icons
+ABFS makes building Android fast by replacing massive local source checkouts with a virtual, content-addressable filesystem (CASFS). ABFS streams files on demand only when a build actually touches them and utilizes shared build caching to help eliminate redundant downloads and compilation.
 
-Icons are visual cues that help you scan the UI quickly. “Quickly” here means faster than reading text labels. If for some reason reading labels is still faster then icons aren’t working.
+On the server side, **Git-pushers** continuously ingest new Git objects from Gerrit or other Git hosts into a horizontally scalable gRPC **ABFS Content-Addressable Storage (CAS) Server** that indexes Git content, workspace snapshots, and build step results. On the developer host, a local Least Recently Used (LRU) **Cacheman** daemon, **Mount Daemon**, and **Tap** utility connect user-space build tools to the kernel filesystem so checkouts and builds stream only what they need. See the [full ABFS architecture on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md).
 
-One example of icons misuse: if you put too many icons in a row and they are *all* different, they won’t work.
+### **Filesystem**
 
-![](https://tonsky.me/blog/github-redesign/35_icons.png?t=1697319007)
+At the core of the client is a virtual filesystem called [Content-Addressable Storage Filesystem (CASFS)](https://github.com/google/abfs-casfs), a Linux kernel module that exposes Git SHA content hashes via extended attributes. When a file's hash is set, CASFS populates its metadata immediately and downloads file bytes via Cacheman only when needed:
 
-Prioritizing, or highlighting, something means deprioritizing everything else. You can’t highlight everything.
+```shell
+$ touch hello
+$ abfs hash --set cc628ccd10742baea8241c5924df992b5c019f71 hello   # metadata only
+$ ls -l hello      # name and size are available; content is not downloaded yet
+-rw-r----- 1 user primarygroup 6 Nov  3 00:11 hello
+$ cat hello        # content is lazy-loaded on first read
+world
+```
 
-Another way to fail at icons: if you use obscure graphics, people will have to read labels anyways, so, again, not working.
+Initial checkouts download only lightweight directory metadata prepopulated with Git hashes. CASFS uses Git's object model natively, allowing standard `git` and [repo](https://source.android.com/docs/setup/download/source-control-tools#repo) operations to work transparently.
 
-![](https://tonsky.me/blog/github-redesign/37_obscure_icons.jpeg?t=1697319007)
+CASFS can also *tap* build processes. *Tapping* records every file actually read, written, or deleted into lists called *patches*, which are stored alongside cached build outputs. [Ninja-go](https://github.com/google/ninja-go) replaces timestamp checks with two-phase content-addressable caching:
 
-Now let’s be honest: the domain of repository and project management is pretty abstract. No matter how good you are at design and how hard you try, you won’t come up with a great icon for a commit. Or a release. Or an issue. Or a license. A great icon is something *other* people know and understand. And for repositories, there’s simply none. I mean,
+Ninja-go accelerates Ninja-based builds like Android and Chrome; other build systems can integrate with ABFS's caching APIs using the same model (see the [two-phase caching walkthrough on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md)).
 
-![](https://tonsky.me/blog/github-redesign/40_is-this-a-commit.png?t=1697319007)
+Each mounted checkout attaches to a persistent *workspace* that eagerly syncs modified files, `git` state, and `repo` state through Cacheman to the ABFS CAS Server—keeping mounts synchronized across sessions or across multiple developer hosts.
 
-So Github tab icons are purely decorative. If you don’t believe me, look at what Github itself is doing. They dim icons:
+## Results
 
-![](https://tonsky.me/blog/github-redesign/45_commits.png?t=1697319007)
+The benchmarks below show the mean time of 3 Android runs on a GCE `n2d-standard-64` VM with 64 vCPUs and 256 GB of RAM. The ABFS remote server was running in the same cloud network as the client.
 
-That’s a sure sign that they, too, think it’s near impossible to figure out why backward clock means “Commit”. Github knows people will be looking at the labels anyways.
+### **Build**
 
-But even being decorative, they’re bad at it. I mean, Icon + Label + Counter make for a symmetric and weak composition:
+Because ABFS does lazy loading and local cache deduplication, developers and their agents can now mount multiple concurrent Android workspaces on a single machine, benefit from a shared local build cache, and achieve massive scale in development time.
 
-![](https://tonsky.me/blog/github-redesign/50_composition.png?t=1697319007)
+```shell
+# Mount 5 distinct Android release branches side-by-side in under 8 seconds each
+$ abfs mount -b android-latest-release   /ws/a17
+$ abfs mount -b android16-qpr2-release   /ws/a16qpr2
+$ abfs mount -b android16-release        /ws/a16
+$ abfs mount -b android15-release        /ws/a15
+$ abfs mount -b android14-release        /ws/a14
+```
 
-By removing icons we:
+An agent can check out a full Android tree in **under 10 seconds** and perform a full build** in under 10 minutes**. Agent swarms are empowered to iterate, review, and test in parallel, which can lead to higher quality solutions and speed.  
 
-1. free up a lot of horizontal space,
-2. make design stronger, and
-3. get rid of visual noize.
+In the demo below, an agent makes a `system/libbase` fix on the latest AOSP release, then 4 parallel agents simultaneously backport, build, and test the fix across 4 more AOSP releases on a single VM.
 
-Win-win-win! Here’s the result, tabs without icons:
+We released [ABFS as open source](https://github.com/google/abfs) because we want developers, Android partners, and any large-scale Git-based project to benefit from what we have learned and be able to scale.
 
-![](https://tonsky.me/blog/github-redesign/60_icons-removed.png?t=1697319007)
+While Android’s Soong/Ninja pipeline was the first acceleration target, ABFS was built to be extensible to other build systems. Content-addressable build systems like Bazel map naturally onto CASFS and there is already a [proof-of-concept integration with Bazel](https://github.com/google/abfs/tree/main/cmd/abfs-bazel-daemon). Chromium, the Android Common Kernel, and other Google projects are exploring ABFS compatibility.
 
-Test yourself, see if you can find Releases tab without an icon and if it was harder than before? It wasn’t, was it?
+Explore [ABFS](https://github.com/google/abfs), [CASFS](https://github.com/google/abfs-casfs), and [Ninja-go](https://github.com/google/ninja-go) on GitHub, and reach out to us at abfs@google.com.
 
-A note on this design: I am using the same limitations Github already uses: English language only, locked page width of 1020px. For different conditions, say, for the adaptive design we might want a different solution.
-
-Another note: I had to remove Contributors tab (which was actually not a tab, but a sub-tab from Insights that was duplicated in Code for some reason) to accommodate for Settings tab. Don’t worry, we’ll get Contributors back later.
-
-## Problem 3: Vanity counters
-
-This is the “vanity menu”:
-
-![](https://tonsky.me/blog/github-redesign/70_vanity.png?t=1697319007)
-
-The thing with vanity metrics is that there should be just one. One metrics is simple to understand and focus. Two or three split attention, making everything weaker.
-
-Luckily for us, both watchers and forks perform poorly as metrics anyways. For watches, people tend not to watch too much. For forks, people tend to fork for no reason.
-
-But stars work. They work because they have no other function but to represent vanity. So let’s keep stars and move them to the left to get more attention:
-
-![](https://tonsky.me/blog/github-redesign/73_vanity.png?t=1697319007)
-
-## Problem 4: “Watch” button ambiguity
-
-In the watch button we have a classic “button or status” UX dilemma. Buttons tell us what can be done but don’t say what the current status is. Status tells current state but it’s not clear what it would change to.
-
-In Github case “Watch” has a button label but it doesn’t act as a button: clicking on it won’t make you watch the repo. It’s not a status either: if you see “Watch” it means you are *not* watching. Same for the other two states: they are neither buttons nor states.
-
-![](https://tonsky.me/blog/github-redesign/75_vanity.png?t=1697319007)
-
-The problem here is that a single button can’t be used to switch between three states. But dropdown can! Dropdowns are a well-established UI component that shows status *and* can be used to change it at the same time.
-
-Funny, but Github is already using a dropdown! We just need to fix it to work as any other dropdown on Earth works: to show current status. Trivial fix, really:
-
-![](https://tonsky.me/blog/github-redesign/77_vanity@2x.png?t=1697319007)
-
-Minor, but annoying: that checkmark is really hard to spot. Let’s highlight the whole row:
-
-![](https://tonsky.me/blog/github-redesign/78_vanity@2x.png?t=1697319007)
-
-All together so far:
-
-![](https://tonsky.me/blog/github-redesign/80_vanity-reorganized.png?t=1697319007)
-
-Uff, we’ve done a lot! If you need a little break, now would be a perfect time for it. Don’t worry, I’ll wait.
-
-Back? Great! Let’s move on.
-
-## Problem 5: Repo description
-
-This is the repository description:
-
-![](https://tonsky.me/blog/github-redesign/90_details.png?t=1697319007)
-
-The problem with it is: why is it located under the Code tab? It’s a description of the whole repository, not just its code, right?
-
-To fix this let’s move it above the tabs, to the area that belongs to the whole repository:
-
-![](https://tonsky.me/blog/github-redesign/100_details-moved.png?t=1697319007)
-
-It still needs a couple of touches.
-
-First, font is neither big nor small (it’s 16px, standing between 18px repository name and 14px tabs). Let’s make it 14px so that there’re only two distinct font sizes. Also I’m sure there’s no need to render “https://” in the URL:
-
-![](https://tonsky.me/blog/github-redesign/112_details.png?t=1697319007)
-
-The second change is to move topics right next to the repository name. There’re usually just a few of those, so it seems wasteful to dedicate a whole line to them:
-
-![](https://tonsky.me/blog/github-redesign/114_details.png?t=1697319007)
-
-Look at us, winning more vertical space again!
-
-## Problem 6: Removing background color
-
-Blue topics on blue background became harder to read. This is because they used to be on #FFF and now they’re on Github’s #FAFBFC “very light dirty blue”.
-
-Let’s change tab’s background to #FFF too:
-
-![](https://tonsky.me/blog/github-redesign/115_details.png?t=1697319007)
-
-But why was that background there in the first place? What did it do?
-
-My guess is Github had to add it because the structure of their menu layers was becoming too complex and they needed visual cues to help you “split” it in order to understand. The black top bar serves the same purpose: to separate. I mean, they were literally spending a good half of 768px screen at navigation alone.
-
-![](https://tonsky.me/blog/github-redesign/116_details.png?t=1697319007)
-
-When split into layers, at least you are not immediately scared by it. Without a background, it would be a mess.
-
-But because we simplified the whole header so much and removed one intermediate layer, we don’t need that color coding anymore. Instead, we can enjoy fresh crisp white:
-
-![](https://tonsky.me/blog/github-redesign/119_details.png?t=1697319007)
-
-And look at all that free space! Finally, we can see some content in the top half of the screen too.
-
-## Problem 7: Description editing
-
-A small touch. If you own the repository, you get to edit both its description and its topics:
-
-![](https://tonsky.me/blog/github-redesign/120_details.png?t=1697319007)
-
-First, the “Edit” button is badly misplaced — too far, easy to miss.
-
-Second, separate edit button for topics is an artifact of topics system being developed at a different time, maybe by a different team. There’s really no need to have two separate buttons.
-
-The solution? How many edit buttons do we need? I say none.
-
-![](https://tonsky.me/blog/github-redesign/122_details.png?t=1697319007)
-
-“But... Where did edit buttons go?” You might ask.
-
-You see, the nature of description and topics is that it’s important to get people to fill them when they first create their repo. After that, people rarely change them at all.
-
-When there is no description or no topics, we will show a button to add one:
-
-![](https://tonsky.me/blog/github-redesign/124_details.png?t=1697319007)
-
-And if description/topics are already filled, go to Settings to change them. Problem solved!
-
-## Problem 8: Files description
-
-The traditional Windows File Explorer, together with macOS Finder, have established a simple pattern for file browsing: files on the left, details on the right.
-
-![](https://tonsky.me/blog/github-redesign/132_file_explorer.png?t=1697319007)
-
-Github decided to copy that pattern, but they put a very unexpected thing as details: a message from the last commit when that particular file was changed.
-
-![](https://tonsky.me/blog/github-redesign/130_code_browser.png?t=1697319007)
-
-Why? I don’t know. Commits often touch files for completely arbitrary reasons, so the last commit tells you almost nothing. I can’t think of any case when somebody would need that particular information.
-
-Maybe they wanted Github to be “about git” more than about traditional file browsing, and this was the only thing they could think of? That’s my speculation, anyway.
-
-The problem with those details is not that such a huge area is filled with something so rarely useful. The problem is that it looks *so much* like file description it confuses me every time. “Tweak layout” is not a description of the “Docs” folder. “Need these debug tools too” for “Tools”—why should I care?
-
-That means we can get rid of the descriptions without really losing anything:
-
-![](https://tonsky.me/blog/github-redesign/135_no_description.png?t=1697319007)
-
-## Problem 9: Repository overview
-
-When you get to the repository, the first page you see should not necessarily be Code. We better call it Overview—something to get a quick idea of what’s going on.
-
-Now, the Github repository is more than just a list of files. It’s also about how those files change over time. What new features were added? Which bugs were fixed? Were there any new releases recently? All those are as important as the files themselves.
-
-That’s why I suggest we add a list of recent commits to the Overview page next to files.
-
-![](https://tonsky.me/blog/github-redesign/140_code_commits.png?t=1697319007)
-
-You can now see if a project is actively developed, maintained or abandoned, if an issue you care about was recently fixed, if a new version was recently published etc (notice tags and branches pills in commit list—I miss this feature on Commits tab SO MUCH).
-
-What about that free space on the right? We can put useful stats there:
-
-![](https://tonsky.me/blog/github-redesign/150_lang_stats.png?t=1697319007)
-
-First, I added contributors. Github is all about people and collaboration, that’s why they put so much emphasis on Fork and PR buttons. Well, people are the face of that collaboration. They put their free time and energy to make that code happen. It’s only fair to see some of their faces.
-
-Activity is a relatively new feature that hasn’t found its place on repository page yet—until now. Helps you see how much momentum the project has.
-
-Language statistics was unfairly hidden away, now it’s front and foremost. I also added code size in lines of code — an obvious addition that Github still doesn’t have for some reason.
-
-Altogether, in my opinion, the new Overview tab is more helpful in everyday use.
-
-## Problem 10: Contextualizing buttons
-
-Both “Create new file”, “Upload files” and “Find files” all relate to files, so it will be reasonable to move them right next to the thing they operate on: Files.
-
-![](https://tonsky.me/blog/github-redesign/160_files_buttons.png?t=1697319007)
-
-## Problem 11: Hidden clone link
-
-Github always used to have clone URL directly on a page. That was pretty useful—when you needed to grab the code, no additional clicks were required.
-
-![](https://tonsky.me/blog/github-redesign/165_clone.png?t=1697319007)
-
-Unfortunately, during one of the redesigns Github hid the clone URL behind a button. My guess is they did it because there was simply not enough space. But people kept looking for it so they had to paint the button green.
-
-Well, after moving file buttons we have enough space to restore full-length Clone link:
-
-![](https://tonsky.me/blog/github-redesign/170_clone.png?t=1697319007)
-
-I also unified all four ways to get the repo into a single control, because semantically they are pretty much the same: a way to get the code on your machine.
-
-## Last problem: dated look
-
-This is how Github [used to look back in 2013](https://blog.github.com/2013-06-17-repository-next/):
-
-![](https://tonsky.me/blog/github-redesign/180_github_2013.jpg?t=1697319007)
-
-And this is [a screenshot from 2015](https://blog.github.com/2015-11-16-a-new-look-for-repositories/):
-
-![](https://tonsky.me/blog/github-redesign/190_github_2015@2x.png?t=1697319007)
-
-Finally, this is how it looks today:
-
-![](https://tonsky.me/blog/github-redesign/10_as-is.png?t=1697319007)
-
-As you can see, the color scheme and main UI elements haven’t changed much since at least 2013. It’s not necessarily bad and mostly proves that the original design was good enough to stand the test of time.
-
-But maybe it’s time to fresh it up a little? Get rid of gradients, dirty washed-out colors, unnecessary separators, add a little more air. Something like this:
-
-![](https://tonsky.me/blog/github-redesign/200_new_look.png?t=1697319007)
-
-If you feel disoriented, give it a minute. Once you are used to it, you might notice it’s actually easier on the eyes and a bit lighter.
-
-## Finally
-
-Current Github design next to my proposal:
-
-![](https://tonsky.me/blog/github-redesign/210_compare.png?t=1697319007)
-
-We’ve added ~4 more files to the screen of the same vertical size, 6 last commits, 3 branches, 10 contributors’ faces, project activity AND expanded language stats WITHOUT losing any information.
-
-If you know someone at Github, send them a link to this article. Maybe someone there will like my ideas and eventually get to implement them—who knows?
+For help with the Google Cloud server-side, infrastructure-as-code, and CASFS for Cloud Workstations and Kubernetes, please reach out to abfs-gcp@google.com.

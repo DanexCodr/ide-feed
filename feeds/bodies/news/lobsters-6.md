@@ -1,33 +1,55 @@
-We're less than a day into dealing with ["Java4Shell"](https://calif.io/java4shell), an issue stemming from how the Java Virtual Machine intrinsifies Base64 encoding code. If you have a Java deployment you haven't updated yet, add `-XX:-UseBASE64Intrinsics` to the VM flags. Then upgrade your VM to a version where the issue is patched when you can.
+5 years is a long time to work on anything. It took 5 years from my first commit of Solid to 1.0, and it's been another 5 since then.
 
-This is just one in a string of high profile outages and vulnerabilities. AI is a good fuzzer, people are finding latent problems with much lower effort than the past. People are pretty worried about this because we're all pretty sure there are more latent problems to find.
+A lot changes in 5 years. Solid 1.0 made a bet that fine-grained reactivity, signals, was the right foundation for building user interfaces. Back then it was an unusual position. Today signals are everywhere. In Angular, in Svelte's runes, in Vue Vapor, and in a proposal before TC39 to put them in the language itself. It even pushed the conversation into React's compiler.
 
-Vulnerabilities tend to be bigger problems [when they stem from native code,](https://www.cisa.gov/news-events/news/urgent-need-memory-safety-software-products) and they tend to be widespread problems when they come from dependencies many people share.
+More recently that conversation has shifted to AI, arguably an even larger change in how we build. But Solid has always been about building the right things; the performant things. So for us the mission hasn't really changed all that much. The things that we identified as standout about our approach still stand out now. But instead of living in the shadow of more popular solutions Solid 2.0 carves out a path that others can follow. Deliberately this time.
 
-Java4Shell is both of these things. A lot of people use Java and the problem stems from a handwritten assembly intrinsic. Fun times.
+Today that solution reaches stable.
 
-But, for a moment, lets say we trust the VM. It is a big dependency, but it is only one dependency. We can all agree to audit it more closely, reduce the amount of native code in it, proactively run AIs against it, etc. Of course.
+If fine-grained reactivity's greatest strength is knowing the shape of our application, that knowledge shouldn't end with the process, or the machine the code is running on. Real applications are distributed. Real applications are born from data that lives on a server. The coordination of these pieces should be intentional and by design.
 
-Normal Java programs are memory safe. If you use a library which wants to call native code you will get a warning, [later a hard error](https://openjdk.org/jeps/472), unless you the person using the library adds `--enable-native-access=the.specific.library` to their command-line options. This means even with a sprawling dependency tree, which is a problem for all programming language ecosystems, you can know your exact exposure to native code and what dependencies you need to audit more closely.
+This starts with bringing async into the graph. A computation can return a Promise or an async iterator, and everything downstream just understands:
 
-Compare that to C#, [which lets any dependency write assembly inline](https://esozbek.me/blog/inline-assembly-in-csharp-and-dotnet/). Python, JavaScript, Go - everything [speaks C](https://faultlore.com/blah/c-isnt-a-language/) and lets any one of your dependencies bring along native code. As we are all learning the hard way, this carries risk.
+This allows authoring by affordance while automating the handling of race conditions. The introduction of async doesn't cause an app refactor. Speculative state is automatically rolled back without manually written processes ensuring the server remains the authority on truth.
 
-Not only are Java programs memory safe. They are also fast. The exact mechanism which caused Java4Shell (the ability for the VM to swap out normal Java code for native code) combined with JIT compilation can make the actual performance of a Java program competitive with C. Sometimes a Java program can even be faster. A JIT compiler knows what code paths are actually taken and can optimize around them. They can even refocus what is optimized if the workload changes. It is pretty cool!
+SolidStart introduce the world to server functions in early 2022, and now they have found their way home to Solid's core, better than ever. Not only do they support highly capable RPC calls over Request/Response but persistent connections over Server Sent Events. And consuming it remains as simple as the code below.
 
-Somewhat recently I went through the [raytracing in a weekend](https://raytracing.github.io/) book with Java.
+This is only the beginning of what can be done with Server Functions and we will be announcing some new features (like reactive Server Components) in coming weeks that leverage this capability.
 
-```
-Impl                          mean ± σ    vs C++
-─────────────────────────────────────────────────
-C++ clang 21 -O3             7.00 ±0.01   1.00x
-Java 28, value classes      11.95 ±0.25   1.71x
-C# .NET 11 preview 6        11.95 ±0.22   1.71x
-C# .NET 10                  11.98 ±0.11   1.71x
-Java 26                     17.53 ±0.21   2.50x
-```
+"But, we aren't writing the code anymore!" We hear you. A system built on constraints by construction ends up with less code to maintain and less edge cases. What used to be considered a DX shortcoming of reactive frameworks are now their greatest strength. And Solid 2.0 goes all in.
 
-Benchmarks can be problematic, I know. What I want you to take away is that the JVM makes your code fast enough that most people don't need native code. Unlike, to take a potshot, CPython. There everything is slow as molasses unless you make it a native extension.
+Every framework now says it "works great with AI", and usually that means models have seen a lot of it. That's a statement about training data, not about the framework. The question that matters is what happens when the agent gets it wrong.
 
-So if you are worried AI is going to find security problems with your code, use Java. The problems are likely to be less severe.
+In most frameworks a reactive mistake is silent. The app runs, it's just wrong, and the framework can't tell you, because it can't see it either. Solid can. A fine-grained graph knows exactly what was read, where, and what will update. So Solid 2.0's development builds report mistakes as they happen, with a stable code, the location in your source, and the fix:
 
-Or use Kotlin, Clojure, JRuby, etc. Whatever. Most of what I talked about applies to all of them. Its only what I didn't talk about (the module system) that is Java specific.
+These handle everything from strict errors to helpful heuristics. Thanks to async in the graph we can detect waterfalls, poorly constructed effect loops, poorly scaling graph shapes like wide graph fanouts and fan-ins. Today along with linting rules we can provide the best in class direction for agents at compile and at runtime.
+
+This area is still evolving as we learn more about how agents build applications with Solid. The hard part, defining the primitives and semantics, is done. We've integrated with new dev tooling, and Chrome's Performance Tracks. And this capability goes beyond development as this observability powers things like our updated Sentry plugin so you can get the same information on your production builds.
+
+We've also been looking at alternative syntax. Solid 2.0 adds experimental support for [ReactiveScript](https://reactivescript.dev) and [TSRX](https://tsrx.dev), both aiming to use compilation to further improve agent authoring.
+
+I've always been a big believer that React's super power is its composability. That it allowed the ecosystem to build on its humble pieces. However, we've learned a lot since 2013. At that point composable state, async patterns, and server rendering lacked the primitives to build upon and the ecosystem came up with their own solutions. This was fine for a while but tied React's hands and fractured their ecosystem. Something only a framework as popular as React could survive.
+
+Newer frameworks have taken more on themselves and tend to only have one metaframework, or one router. We respect React's original positioning but have updated it for 2026. It isn't about restricting the solution but giving developers the primitives to build upon in the way React originally did. Server functions are example of this. Supporting any router, and cache solution for Single-Flight Mutation is another.
+
+We retired our metaframework SolidStart, since every primitive needed to build a Solid Metaframework is now provided by the core or by framework agnostic Vite plugins. We believe that building an opinionated layer like a metaframework shouldn't have you needing to re-implement everything again. We've taken care of the hard parts so you can focus on what you care about. And these days a lot of that work is going to be taken on by your agent. This means less to maintain but no loss in capability.
+
+And this makes it easier for the ecosystem. Solid 2.0 only requires one Clerk or Sentry plugin since we provide the primitives for Request/Response (built on web standards) and the hooks for observability that work across any library. We've already seen success with TanStack Query and Router being as capable as anything we've built first party, bringing in Tanner's impeccable attention to detail for the APIs people love to use.
+
+Somehow even though Solid 2.0 brings more capability to Solid, we've collapsed the surface area at almost every point. There are less primitives needed to be learnt, less ceremony around handling async. `createResource`, `batch`, `startTransition`, `on`, `produce`, `createComputed`, `createMutable` are all gone, because we no longer need them.
+
+The equivalent code written for Solid 2.0 is shorter and clearer on intent. It informs our ability observe the runtime, provide better compiler errors, and removes the need for as many escape hatches (like `createEffect`) that can get us in trouble. This is something we believe important in an age of AI. Safe by construction rather than by exhaustion. Reduce complexity by deriving(reducing) state rather than putting it in a reducer.
+
+When the framework carries the guarantees, all loading state, race conditions, and cancellation logic disappears and what you are left with is the UI.
+
+The first discussions of what a Solid 2.0 would look like started at the moment 1.0 was released. We saught feedback from the community on [new reactivity ideas](https://github.com/solidjs/solid-workgroup/discussions/2). The real effort started in late 2024. We announced the [road to 2.0](https://github.com/solidjs/solid/discussions/2425) in February 2025. Over a year of experiments followed, rewriting the reactive core from scratch until the async model held up to everything we threw at it. The [beta](https://github.com/solidjs/solid/discussions/2596) landed in March, and the [Release Candidate](https://github.com/solidjs/solid/discussions/2995) in August, with the API frozen.
+
+Then 23 release candidates in 14 weeks. In that time alone, 971 pull requests were merged and 753 issues closed. We set one bar for stable. A full week with no regression in ordinary app code, and no crash or hang anywhere. It took a while to get there. By the end, the bug reports coming in were from people(agents) deliberately hunting edge cases in the deepest corners of the scheduler, and finding them.
+
+So many people have touched the project over the past 5 years, from working on the initial reactivity prototypes, to testing the latest RC builds on their production apps. I've tried to thank as many of you as I can and attached hundreds of handles in the RC announcement. There are so many. There are also the many great organizations that have sponsored our development over the years: Sentry, Netlify, Google Chrome, JetBrains, Anomaly, Cursor, Code Rabbit, Anthropic, Tembo and so many more.
+
+But mostly I want to thank everyone who has believed in the project. We've accomplished great things and there is much more to come. That isn't possible without all of you. Personally, the past 2 and half years have been some of the most difficult of my life, but knowing what we are building that impacts so many people leaves me with a sense of fulfillment. Solid has always been bigger than its core team, and 2.0 is the clearest proof of that yet.
+
+Solid 2.0 is here. Let's build.
+
+> The Long Hold refers to [a diagnostic warning](https://docs.solidjs.com/reference/solid-js/diagnostics/long-hold) in Solid 2.0. It fires when a hold has been shown(`isPending`) but sufficient time has passed since the last input. Holds were at the heart of our async work for 2.0, and we acknowledge it took a while for this all to land.

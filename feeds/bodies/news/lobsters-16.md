@@ -1,2 +1,343 @@
-| [LZ-RDO lands in ARM's astc-encoder](https://www.jonolick.com/home/lz-rdo-lands-in-arms-astc-encoder) 11/17/2026 [2 Comments](https://www.jonolick.com/home/lz-rdo-lands-in-arms-astc-encoder#comments) My rate-distortion optimization work for ASTC is now in [ARM's astc-encoder (PR #781)](https://github.com/ARM-software/astc-encoder/commit/5d00dcd2b0c8e8be1cb19e38174f988ae510fc16). Fabian "ryg" Giesen took my original implementation, added a round of optimizations and improvements, and landed it. If you ship ASTC textures inside Oodle, zlib, zstd, LZ4 or LZMA-compressed packages, your downloads can now get smaller with one command-line flag. ​The problem: ASTC looks like noise to LZ ​ASTC is a fixed-rate format. Every block is exactly 128 bits, whether it's 4x4 or 12x12. On the GPU that's what you want, but nobody ships raw textures. They go into packages that get compressed with a general-purpose LZ codec. To an LZ compressor, a normal ASTC bitstream looks almost random: each block's endpoints and weights are fitted to that block's pixels, so neighboring blocks rarely share bytes. That leaves the compressor nothing to match. RDO fixes this by choosing, among encodings that look nearly as good, the ones that repeat bits the encoder has already emitted. The GPU sees a valid ASTC texture of exactly the same size, and LZ sees matches. It's a quality-for-package-size trade, and a single knob controls it. ​How it works **1. Encode normally, plus a "restricted" encoding** First the image goes through the regular astcenc encode. With LZ-RDO enabled, each block also gets one extra trial encode using the most common configuration: 1 partition, 1 weight plane, endpoints quantized to at most 32 levels, and only the always-available block modes for 2D. Blocks that share a configuration are much more likely to share bits, so this gives the optimizer more chances to find repeats.​ **2. Measure where errors will be visible** Raw squared error (PSNR) is the wrong measure when you're adding error on purpose. Errors in smooth areas and slow gradients are easy to spot. Errors in noisy texture or near edges are mostly hidden. So before encoding, the image is split into tiles (about 256×256, or 32³ for 3D) and each texel gets an activity weight:Low-pass filter the image (Gaussian, σ = 2.2).Take the squared difference from the original. That's the local high-frequency energy.Blur that energy a little (σ = 1.25) so it spreads.Map it to a weight that falls off with the square root of the energy. Smooth texels keep tight error tolerances. Busy texels get looser ones. **3. ​Move-to-front histories for endpoints and weights** ASTC packs weights from the top of the block downward and the mode and endpoints from the bottom up. That makes splitting a block into "endpoint bits" and "weight bits" a simple bitmask. The optimizer keeps two move-to-front lists of recently used values:Endpoint history: mode, header and endpoint bits.Weight history: weight bits. The -rdo-endpoints and -rdo-weights options set their sizes. Defaults range from 16/4 at -fastest up to 512/160 at -exhaustive. **4. Build candidates for each block** For every block, the encoder scores:the original encoding;the restricted encoding;endpoint substitution: take endpoints from the history, compute the ideal weights for this block's pixels with those endpoints, and quantize. A quick check on endpoint-axis alignment skips pairs that can't work. The best few candidates are kept.weight splicing: combine every weight entry in the history with each surviving endpoint candidate that has the same weight bit count. If both halves came from the same earlier block, it's one long LZ match. **5. ​Score with a simple LZ cost model** Each candidate's cost is *cost = weighted_SSD + λ · estimated_bits* The bit estimate is deliberately simple: Unmatched bits are billed as literals.A match costs about 10 + log2(mtf_position + 32) bits.If the endpoints and weights match the same earlier block, they're billed as one match.The first two bytes (where the mode lives) are costed from an adaptive histogram, so frequently used modes get cheaper.A partial byte at the endpoint/weight boundary is billed as literal bits. The code comments say "don't over-tune this," and I mean it. The goal is to point the search in the right direction, not to simulate zstd. λ is scaled by texel count, so the same value behaves about the same at 4x4 and at 12x12. **6. Multiple passes, in parallel** The image is processed in independent chunks of blocks, so it spreads across threads. Each pass seeds the histories with random blocks from the chunk, and passes alternate between forward and reverse order. Because splicing produces the same bit pattern many different ways, a small hash-table cache of decoded blocks avoids decoding them again during error checks. Using It Command line: astcenc -cl albedo.png albedo.astc 6x6 -thorough -rdo-lambda 20 API: astcenc_config_init(ASTCENC_PRF_LDR, 6, 6, 1, ASTCENC_PRE_THOROUGH, ASTCENC_FLG_USE_LZ_RDO, &config); config.lz_rdo_lambda = 20.0f; Tuning guidance:λ is tuned so that a step of about 10 is a visible difference.Diffuse/albedo: 20–40 is usually fine.Normal maps: stay low, around 10 or even below, depending on your quality bar.-rdo-passes 2 (the -exhaustive default) squeezes out a bit more, at a real cost in encode time.Progress callbacks and cancellation work across both stages: the base encode reports the first 33%, and the RDO passes report the rest. ​Limitations LDR only. Nothing prevents HDR in principle.In-memory size doesn't change. The gain only shows up after LZ compression on disk or over the wire.It costs encode time. It's meant to be paired with the higher-quality presets. Results ![Picture](https://www.jonolick.com/uploads/7/9/2/1/7921194/d274570313052c4e_orig.png) Thanks ​Huge thanks to Fabian for the optimizations, fixes and for getting this merged, to ARM for taking it upstream, and to Charles, Fabian and Sean for the Oodle Texture work this comes from. [2 Comments](https://www.jonolick.com/home/lz-rdo-lands-in-arms-astc-encoder#comments) Pete Harris 11/17/2026 11:50:19 am As the Arm end of the landing team on this I just wanted to say thank you, it's great to have this in the public compressor implementation =) Reply Jon Olick 11/17/2026 12:24:30 pm You are welcome! :) Reply lastComment Leave a Reply. bid-1: , path: bid: $blog_id | Archives [January 2025](https://www.jonolick.com/home/archives/01-2025) [September 2024](https://www.jonolick.com/home/archives/09-2024) [August 2024](https://www.jonolick.com/home/archives/08-2024) [November 2021](https://www.jonolick.com/home/archives/11-2021) [October 2021](https://www.jonolick.com/home/archives/10-2021) [September 2021](https://www.jonolick.com/home/archives/09-2021) [April 2021](https://www.jonolick.com/home/archives/04-2021) [February 2021](https://www.jonolick.com/home/archives/02-2021) [January 2021](https://www.jonolick.com/home/archives/01-2021) [December 2020](https://www.jonolick.com/home/archives/12-2020) [June 2020](https://www.jonolick.com/home/archives/06-2020) [May 2020](https://www.jonolick.com/home/archives/05-2020) [April 2020](https://www.jonolick.com/home/archives/04-2020) [November 2019](https://www.jonolick.com/home/archives/11-2019) [April 2019](https://www.jonolick.com/home/archives/04-2019) [August 2018](https://www.jonolick.com/home/archives/08-2018) [April 2017](https://www.jonolick.com/home/archives/04-2017) [March 2017](https://www.jonolick.com/home/archives/03-2017) [January 2017](https://www.jonolick.com/home/archives/01-2017) [November 2016](https://www.jonolick.com/home/archives/11-2016) [October 2016](https://www.jonolick.com/home/archives/10-2016) [September 2016](https://www.jonolick.com/home/archives/09-2016) [January 2016](https://www.jonolick.com/home/archives/01-2016) [March 2015](https://www.jonolick.com/home/archives/03-2015) [August 2013](https://www.jonolick.com/home/archives/08-2013) [July 2013](https://www.jonolick.com/home/archives/07-2013) [December 2012](https://www.jonolick.com/home/archives/12-2012) Categories [All](https://www.jonolick.com/home/category/all) [Compression](https://www.jonolick.com/home/category/compression) [Dxt](https://www.jonolick.com/home/category/dxt) [![](https://cdn2.editmysite.com/images/old/bg_feed.gif) RSS Feed](https://www.jonolick.com/2/feed) |
-| --- | --- |
+Sarasa Gothic is a typeface designed for the multilingual programmer in mind. 
+Born from the seamless union of Source Han Sans and Iosevka, 
+it fills a niche in the world of sterotypically limited, boring monospace type.
+
+## Features
+
+- programming ligatures and math symbols
+- true type font hinting designed for pixel-perfect tiny sizes
+- condensed for maximum semantic value
+- *complete* latin, cyrillic, greek, and east asian language support
+- exactly 0.5em set width characters to always perfectly align with 1em width asian characters
+- glyph/language alternates
+- free and open source
+- continuously updated
+
+#### Try it out now!
+
+```python
+# edit me!
+```
+
+### Latin Character Demo
+
+```javascript
+console.log("Hello World");
+document.write("Olá Mundo");
+```
+
+### Cyrillic Character Demo
+
+```php
+print "Привет мир";
+```
+
+### East Asian (CJK) Character Demo
+
+```bash
+echo こんにちは世界
+cat "안녕 세상.sh"
+```
+
+## Programming Language Support
+
+### Programming Ligatures for the following languages:
+
+C, C++, C#, JavaScript, PHP, F#, ML, F*, Haskell, Idris, Elm, PureScript, Swift, Coq, Matlab
+
+### Code Block Demos
+
+#### html
+
+```html
+<h1 class="cute home" title="" class="about me">
+    <a href="#about" id="hidem" >Illustration</a>
+</h1>
+
+<img id="search" src="snow-pic-beret.webp"
+         onerror="this.onerror=null; this.src='snow-pic-beret.png'" alt="person with green beret and silly face">
+<h2 class="cute plane"><a href="#projects" id="showp">Projects</a></h2> 
+
+<h2 class="cute kite"><a href="#gallery" id="showg">Gallery</a></h2>
+
+<a href="#contact" class="cute bird">Contact Me!</a>
+```
+
+#### css
+
+```css
+html, body {
+    background-color: #343233;
+    font-family: 'Sarasa Mono HC', 'Sarasa Mono J', 'Sarasa Mono K', monospace;
+    color: #efdabb;
+}
+
+h1 {
+    font-weight: 300;
+    color: #78af9f;
+}
+```
+
+#### javascript
+
+```javascript
+let west = document.querySelectorAll('.west');
+let east = document.querySelectorAll('.east');
+
+// let all = [].concat(west, east);
+let all = [...west, ...east];
+
+function change() {
+	let weight = document.getElementById("weight").value;
+	for ( i = 0; i < all.length; i++ ) {
+		all[i].style.fontWeight = weight;
+	}
+}
+
+function xLight() {
+	weight.value = 200;
+	change();
+}
+```
+
+## Human Language Support
+
+### Rock the world in 165 Languages!
+
+- Afrikaans
+- Aghem
+- Akan
+- Albanian
+- Asturian
+- Asu
+- Azerbaijani
+- Bafia
+- Bambara
+- Basaa
+- Basque
+- Belarusian
+- Bemba
+- Bena
+- Bosnian
+- Breton
+- Bulgarian
+- Catalan
+- Cebuano
+- Central Atlas Tamazight
+- Chechen
+- Chiga
+- Chinese (Simplified)
+- Chinese (Traditional)
+- Chinese (Hong Kong)
+- Chinese (Classical)
+- Colognian
+- Cornish
+- Croatian
+- Czech
+- Danish
+- Duala
+- Dutch
+- Embu
+- English
+- Esperanto
+- Estonian
+- Ewe
+- Ewondo
+- Faroese
+- Filipino
+- Finnish
+- French
+- Friulian
+- Fulah
+- Galician
+- Ganda
+- German
+- Greek
+- Gusii
+- Hausa
+- Hawaiian
+- Hungarian
+- Icelandic
+- Igbo
+- Inari Sami
+- Indonesian
+- Interlingua
+- Irish
+- Italian
+- Japanese
+- Javanese
+- Jola-Fonyi
+- Kabuverdianu
+- Kabyle
+- Kako
+- Kalaallisut
+- Kalenjin
+- Kamba
+- Kazakh
+- Kikuyu
+- Kinyarwanda
+- Korean
+- Koyra Chiini
+- Koyraboro Senni
+- Kurdish
+- Kwasio
+- Kyrgyz
+- Lakota
+- Langi
+- Latvian
+- Lingala
+- Lithuanian
+- Low German
+- Lower Sorbian
+- Luba-Katanga
+- Luo
+- Luxembourgish
+- Luyia
+- Macedonian
+- Machame
+- Makhuwa-Meetto
+- Makonde
+- Malagasy
+- Malay
+- Maltese
+- Manx
+- Maori
+- Masai
+- Meru
+- Metaʼ
+- Mongolian
+- Morisyen
+- Mundang
+- Nama
+- Ngiemboon
+- North Ndebele
+- Northern Sami
+- Norwegian Bokmål
+- Norwegian Nynorsk
+- Nuer
+- Nyankole
+- Oromo
+- Ossetic
+- Polish
+- Portuguese
+- Prussian
+- Quechua
+- Romanian
+- Romansh
+- Rombo
+- Rundi
+- Russian
+- Rwa
+- Samburu
+- Sango
+- Sangu
+- Scottish Gaelic
+- Sena
+- Serbian
+- Shambala
+- Shona
+- Slovak
+- Slovenian
+- Soga
+- Somali
+- Spanish
+- Swahili
+- Swedish
+- Swiss German
+- Tachelhit (shi_latn)
+- Taita
+- Tajik
+- Tasawaq
+- Tatar
+- Teso
+- Tongan
+- Turkish
+- Turkmen
+- Ukrainian
+- Upper Sorbian
+- Uzbek
+- Vai (vai_latn)
+- Vietnamese
+- Volapük
+- Vunjo
+- Walser
+- Welsh
+- Western Frisian
+- Wolof
+- Xhosa
+- Yangben
+- Yoruba
+- Zarma
+- Zulu
+
+> A user interface is like a joke. If you have to explain it, it’s not that good.
+
+## Characters
+
+### Latin Alphabet
+
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
+
+1234567890‘?’“!”[#]{@}/&<-+÷×=>®©$€£¥¢:;,.*
+
+### Cyrillic Characters
+
+АБВГДЂЕЄЖЗЅИІЈКЛЉМНЊОПРСТЋУФХЦЧЏШЩЪЫЬЭЮЯ
+абвгдђеєжзѕиіјклљмнњопрстћуфхцчџшщъыьэюя
+
+### Greek Alphabet
+
+ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ
+αβγδεζηθικλμνξοπρσςτυφχψω
+
+### Japanese
+
+あいうえおカキクケコさしすせそラリルレロまみむめもワヲンサシスセソ新時代のころを映すタイフ字学校村町森卵ェぃ
+
+### Chinese
+
+一二三四五六七八九十百千萬上中下冬東金木黑白紅橙黃綠孝仁愛信義和平子曰父母兄哀懼見聞聲貝車雨赤不乃之乎人以為相知石禮稷稻穀絲綱老者而運過非革音
+
+### Korean
+
+가개갸거게겨고긔기나내너네녀노뇌놰뇨누뉘눼늬니다대댜더데뎌도되돼됴디라래랴러레려로뢰뢔료루튀퉤튜트틔퍼페펴포푀퐤표푸퓌풰퓨프픠해햐허헤혀호회훼휴흐희히
+
+=>  <=  i++  i--  ->  <->  !=  ===  <=>  !==  == >=  <-  ++++  &&
+
+```javascript
+let cityCount = function(cities, minPopulation, maxPopulation) {
+	let count = 0;
+	cities.forEach( object => object.population <= maxPopulation && object.population >= minPopulation ? count++ : count );
+	return count;
+}
+cityCount(allCities, 1234, 1234567);
+```
+
+## Family info
+
+### The Love Child of
+
+If a child can inherit nearly 100% of its traits and *rock it* flawlesly
+
+### Complete Superfamily Features
+
+- Uncountably large number of glyphs
+- 480 individual .tff files or 5 .ttc files
+  - Each font contains complete Latin, Cyrillic, and Greek characters
+- Subfamilies:
+  - 5 weights: ExtraLight, Light, Regular, SemiBold, Bold
+  - 2 styles: Italic, Bold
+  - Stylistic Usage:
+    - Mono, Slab Mono: for code editors, IDE and tables
+    - UI: matching proportional sans serif for display
+    - Term: for terminals, Fixed: Term with no ligatures
+  - Language Orthography:
+    - CL: Classical Chinese
+    - SC: Simplified Chinese
+    - TC: Traditional Chinese
+    - HC: Hong Kong Chinese
+    - J: Japanese
+    - K: Korean
+
+> Any fool can write code that a computer can understand. Good programmers write code that humans can understand.

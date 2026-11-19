@@ -1,98 +1,109 @@
-Write Rust for long enough, and you are bound to run into `error[E0117]`.Take a simple, everyday scenario. You pull in a serialization library that defines a `ToJson` trait, along with a third-party type library like `uuid`. You want to turn a `uuid::Uuid` into JSON, so you naturally write:`impl ToJson for uuid::Uuid {
-    fn to_json(&self) -> String {
-        format!("\"{}\"", self)
-    }
-}`And the compiler immediately stops you:`error[E0117]: only traits defined in the current crate can be implemented for types defined outside of the crate`This is Rust's well-known **Orphan Rule**. Once people hit this wall, they usually either complain that the compiler is too rigid or dutifully wrap the type in a NewType. But if you look closely at how the Orphan Rule actually works, it is not a dead end. By design, it leaves a pretty wide door open.What Is the Orphan Rule Actually Protecting Against?Setting the jargon aside, the logic behind the Orphan Rule is simple: **if you want a type to implement a trait, at least one of those two things (the type or the trait) must belong to your own crate.** In plain English, you don't get to make rules for someone else's types.Suppose crate A implements `ToJson` for `uuid::Uuid` and outputs a hyphenated UUID string, while crate B also implements `ToJson` for `uuid::Uuid` and outputs 32 raw hex characters without hyphens. If a project depends on both A and B, the compiler has a problem when it sees `uuid.to_json()`: which implementation should it pick?To prevent this kind of global conflict, Rust enforces **coherence**, and the Orphan Rule is how it gets enforced. There is nothing wrong with the rule itself. It keeps the Rust ecosystem from turning into a mess as dependency trees grow. The catch is that real-world projects constantly run into a very common need: making a third-party type implement a trait from another third-party crate. Neither the type nor the trait is yours, yet gluing libraries together like this happens all the time. So what can you do?Why the Two Usual Workarounds Fall ShortRight now, the Rust ecosystem mostly relies on two workarounds. Both appear to solve the problem on the surface, but because neither addresses the root cause, they get awkward fast.1. Building it into the libraryMany foundational crates take this route: since users can't write the `impl` themselves, the crate provides it internally. Because `ToJson` is defined inside the crate, implementing it for any external type satisfies the Orphan Rule. Open up the `Cargo.toml` of one of these crates, and you will see a long list of feature flags: `with-uuid`, `with-chrono`, `with-time`, `with-jiff`, `with-url`, `with-rust-decimal`, and so on.It looks helpful at first, but **it tries to enumerate an open, constantly changing ecosystem inside a single crate**. That approach has clear limits, and the downsides show up quickly:**You can never support everything.** Today the community favors `chrono`, tomorrow people switch to `jiff`, and next week your team builds its own internal `Money` type. If the library doesn't have built-in support, you are stuck waiting for a release or opening a PR yourself.**Version lock-in.** When a third-party type crate bumps its major version, your whole dependency tree gets stuck until the trait crate publishes a matching update.**Hardcoded behavior.** Maybe the library serializes `DateTime<Utc>` as an ISO-8601 string by default, while your API spec requires an integer timestamp in milliseconds. Because the implementation lives inside the library, you have no way to change it.2. Wrap it in a NewType yourselfWhen the library doesn't have built-in support, or its default behavior doesn't fit your needs, you fall back to the familiar NewType pattern:`pub struct MyUuid(pub uuid::Uuid);
+In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
 
-impl ToJson for MyUuid {
-    fn to_json(&self) -> String {
-        format!("\"{}\"", self.0)
-    }
-}`Wrapping one or two types is fine. The trouble starts when a moderately complex domain model mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types all at once. Once you wrap everything into `MyUuid`, `MyUrl`, and `MyDateTime`, your business logic gets littered with `.0`, and you spend your time constantly wrapping and unwrapping values. It gets old very quickly.NewType is a genuinely useful pattern in Rust for expressing domain meaning, hiding internals, or enforcing invariants. The problem is that when you only use it to appease the Orphan Rule on types that didn't need a wrapper in the first place, your code bloats quickly.So is there a way to let users decide how third-party types implement a trait, without wrapping everything in NewTypes?Adding a Generic Slot to the TraitLet's go back to the rule: either the type or the trait must belong to the current crate.Many developers assume the compiler only looks at `Trait` and `Type` in `impl Trait for Type`. In fact, under Rust's Orphan Rule (RFC 2451), **the trait's own generic type parameters are also part of the check**.Put simply, in `impl Trait<P> for Type`, as long as a local type appears in the trait's generic parameters, and there are no uncovered type parameters before it, the compiler knows this implementation belongs exclusively to the current crate. No other crate can conflict with it, so the compiler lets it through.Take this example:`impl ToJson<MyCtx> for uuid::Uuid {
-    // ...
-}``ToJson` is a foreign trait, and `Uuid` is a foreign type, but `MyCtx` is defined in the current crate. Because it sits in the trait's generic parameter position, this `impl` satisfies the Orphan Rule.Following this idea, a library author only needs to take one extra step when designing a trait: **leave a generic parameter on the trait as an extension point for users**.For example:`pub trait ToJson<Ctx = ()> {
-    fn to_json(&self) -> String;
-}`Notice that `Ctx = ()` has a default type. When the library implements `ToJson` for basic types like `i32` and `String`, it makes those implementations generic over any `Ctx`:`impl<Ctx> ToJson<Ctx> for i32 {
-    fn to_json(&self) -> String {
-        self.to_string()
-    }
-}
+Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
 
-impl<Ctx> ToJson<Ctx> for String {
-    fn to_json(&self) -> String {
-        format!("\"{}\"", self)
-    }
-}`This way, regular users never even notice `Ctx` exists. Everything works the exact same way as before, with `()` as the default context.When you do need to plug in third-party types, you just define an empty marker struct in your own crate:`pub struct MyCtx;`Then you can write implementations for any third-party type you want:`impl ToJson<MyCtx> for uuid::Uuid {
-    fn to_json(&self) -> String {
-        format!("\"{}\"", self)
-    }
-}
+In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
 
-impl ToJson<MyCtx> for chrono::DateTime<chrono::Utc> {
-    fn to_json(&self) -> String {
-        self.timestamp_millis().to_string()
-    }
-}`The compiler looks at this and sees: `ToJson` is foreign, `Uuid` and `DateTime` are foreign, but `MyCtx` is local to your crate. No other crate can write a conflicting implementation using your `MyCtx`, so global coherence is completely safe. It compiles right away.You can think of this conversion setup as a web of relationships, with your local `MyCtx` type as its root. A handy way to picture it is **a bunch of grapes, where `MyCtx` is the stem**. Once you grab that stem, it doesn't matter how many third-party types hang off it (`Uuid`, `Url`, `DateTime`, `HashMap`, and so on). You lift the whole bunch at once, and the compiler accepts all of them as local implementations.Better yet, you can define more than one stem in the same project. For instance, your HTTP API layer can use `ApiCtx` to format timestamps as strings, while an internal RPC layer uses `RpcCtx` to format them as integer timestamps. Both sets of rules live under separate contexts, completely isolated at compile time, with zero conflict.One detail to watch out for: the local type has to be a real, newly defined type. Creating a `type` alias for a foreign type will not work.The Position of the Local Type MattersAt this point, you might think that dropping a local type `MyCtx` anywhere into a trait's generic list solves the Orphan Rule for good. Most of the time, it does. But if your trait has more than one generic parameter, or if you want to write a generic `impl`, there is an ordering restriction that is easy to trip over.When the compiler runs its Orphan Rule check, it scans the types in a fixed order: **first the `Self` type, then the trait's 1st generic parameter, then the 2nd, and so on**. The rule comes down to one sentence: **no bare generic type parameter `T` may appear before the first local type.**Code makes this clearest. Suppose an external crate defines `ForeignTrait<A, B>` and `ForeignType`, and you define `MyCtx` locally:`// ✅ Allowed: scans ForeignType, then hits local MyCtx first; the trailing T is unrestricted
-impl<T> ForeignTrait<MyCtx, T> for ForeignType {}
+Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
 
-// ❌ Error: hits a bare T before seeing MyCtx
-impl<T> ForeignTrait<T, MyCtx> for ForeignType {}
+Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
 
-// ❌ Error: hits a bare T right away in Self, before MyCtx gets a chance
-impl<T> ForeignTrait<MyCtx, String> for T {}`The only word to pay attention to here is "bare". In Rust terminology, this is called an **uncovered type parameter**. A plain `T` is uncovered. If it is wrapped inside a non-fundamental concrete type like `Vec<T>` (built-in fundamental types like `&T` and `Box<T>` do not count), it is no longer uncovered, so it will not block a local `MyCtx` that comes after it:`// ✅ Allowed: T is covered by Vec, so it is not an uncovered type parameter
-impl<T> ForeignTrait<Vec<T>, MyCtx> for ForeignType {}`From a library author's perspective, this means it is not enough to just add a generic slot; you also need to put it in the right place. If your trait has multiple generic parameters and there is no strong reason otherwise, **put the context `Ctx` in the first type parameter position**. That way, downstream users writing generic implementations can avoid most of the surprising Orphan Rule errors.A Truly Standalone `models` CrateOnce this mechanism clicks, you will see that it also solves a stubborn architectural headache in larger Rust codebases.As a project grows, it usually gets split into a Cargo workspace: maybe an API gateway crate, a few business service crates, and a background worker crate. These modules often share the same data structures, so the natural move is to pull those structs out into a standalone `models` crate.Traditionally, doing this in Rust is painful. Suppose `models` defines a `Product` struct with `Uuid`, `Url`, and `DateTime` fields. If your serialization library or ORM expects those field types to already implement its traits inside `models`, you are left with two bad options:Wrap everything in NewTypes inside `models`, and pull in the serialization library, database driver, and other heavy dependencies along with them. A crate that was supposed to hold plain data structures ends up with the heaviest dependency tree in the workspace.Give up on splitting it out, and dump models and business logic into the same crate. It saves time early on, but dependency boundaries and compile times get harder to manage as the project grows.With the generic `Ctx` parameter, that knot comes untied. Inside your standalone `models` crate, you just define your structs with native types:`// crate: models
-pub struct Product {
-    pub id: uuid::Uuid,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}`Then you write a generic implementation for `Product` **open to any `Ctx`** (or let a derive macro generate it):`impl<Ctx> ToJson<Ctx> for Product
-    where
-        uuid::Uuid: ToJson<Ctx>,
-        chrono::DateTime<chrono::Utc>: ToJson<Ctx> {
-    fn to_json(&self) -> String {
-        format!(
-            "{{\"id\":{},\"created_at\":{}}}",
-            ToJson::<Ctx>::to_json(&self.id),
-            ToJson::<Ctx>::to_json(&self.created_at),
-        )
-    }
-}`Notice the subtle part here: **inside the `models` crate, `Uuid` and `DateTime` do not implement `ToJson` yet, and this code still compiles.**That is because `models` is only declaring a deferred contract: "whoever uses this later, as long as your context `Ctx` knows how to handle `Uuid` and `DateTime`, `Product` automatically supports `ToJson` under your context." As a result, `models` stays completely lightweight, carries no concrete conversion logic, and compiles very fast. The actual conversions are deferred to the downstream service crates, where each service hooks up what it needs using its own local context.For large workspaces, this keeps dependency boundaries clean. Models can evolve on their own, while different services remain free to pick whatever storage format or API representation they need.Real-World Example: How This Works in KovaThe `ToJson` snippet above is as minimal as it gets. Does this idea still hold up when you bring it into a real, more complex project?When building my own Rust ORM, **[Kova](https://github.com/edvong/kova)**, I applied this pattern across the entire type system. It is a good concrete example of how this plays out in practice.ORMs are where the Orphan Rule hurts the most. A single table often mixes `Uuid`, `Url`, `DateTime`, `HashMap`, and custom domain types. Kova's core `Encode` and `Decode` traits use the exact generic slot design we just walked through:`pub trait Encode<'a, X = ()> {
-    fn encode(self) -> Result<Value<'a>>;
-}
+But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
 
-pub trait Decode<X = ()>: Sized {
-    fn decode(value: Value<'_>) -> Result<Self>;
-}`Because Kova hands the extension point to the user, it only needs built-in support for basic database primitives: integers, floats, booleans, strings, and byte arrays. Its `Cargo.toml` does not have to maintain a pile of optional dependencies and feature flags for `uuid`, `chrono`, `jiff`, `url`, and so on.In a real application, the workflow looks just like the earlier example.First, define your table structs with native types in a standalone `models` crate and add `#[derive(Model)]`:`// crate: models (no database driver or codec code needed)
-#[derive(Model)]
-pub struct Product {
-    pub id: Uuid,
-    pub price: Decimal,
-    pub vendor_url: Url,
-    pub created_at: DateTime<Utc>,
-}``#[derive(Model)]` expands into an open contract like `impl<X> Model<Engine, X> for Product where ...`, so `models` compiles completely on its own without tying itself to any concrete codec implementation.Next, in your downstream service crate, define a local marker struct `pub struct AppCodec;` and implement zero-copy conversions matching your storage layout:`pub struct AppCodec;
+The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
 
-// Store Uuid as 16 raw bytes, borrowing directly with zero copies
-impl<'a, 'b: 'a> Encode<'a, AppCodec> for &'b Uuid {
-    fn encode(self) -> Result<Value<'a>> {
-        Ok(Value::Blob(Cow::Borrowed(self.as_bytes())))
-    }
-}
+The release out today is an invitation to start making other futures, together.
 
-// Store DateTime<Utc> as an integer millisecond timestamp
-impl<'a> Encode<'a, AppCodec> for DateTime<Utc> {
-    fn encode(self) -> Result<Value<'a>> {
-        Ok(Value::Int8(self.timestamp_millis()))
-    }
-}`Finally, switch the client's context marker when you need it:`// Default client using the () codec
-let client = Options::from(conn_str).build()?;
+## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
 
-// Switch to the local AppCodec at zero runtime cost
-let client = client.codec::<AppCodec>();`Switching the type carries zero runtime overhead; under the hood, it only swaps a `PhantomData` marker on `Client` from `()` to `AppCodec`. And while building Kova, another nice benefit showed up: once you have a local type like `AppCodec`, you can attach much more to it than just encoding and decoding.For example, suppose you have implemented `Encode` for `url::Url` in an ORM. If you still can't run `LIKE` queries on a `Url` column, or compare a `Url` column directly against a `&str`, that type still feels second-class in queries.So Kova puts the same generic extension slot on its SQL capability traits and type compatibility rules, such as `CanString<X>`, `CanMath<X>`, and `Compatible<Target, X>`. Users can add a couple of short declarations under their own `AppCodec`:`// Give Url string capabilities (enabling methods like `like` and `ilike`)
-impl CanString<AppCodec> for Url {}
+This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
 
-// Allow passing &str directly to a Url column without calling Url::parse() every time
-impl<'a> Compatible<Static<Url>, AppCodec> for Static<&'a str> {}`With that in place, third-party types fit right into the ORM's DSL and behave no differently from built-in types:`client
-    .update::<Product>()
-    .set(Product::vendor_url.set("https://rust-lang.org"))
-    .filter(Product::id.eq(&target_uuid) & Product::vendor_url.ilike("https://%"))
-    .execute()
-    .await?;`Putting this design through a real codebase like Kova confirmed something practical: opening up type conversions and capabilities to a user-defined context does more than just get around the Orphan Rule on paper. Even in a complex framework, it keeps dependency boundaries clean, compile times fast, and day-to-day usage comfortable.Rust's Orphan Rule is not there to make life hard. It exists to prevent global implementation conflicts and stop crates from stepping on each other in the global namespace. Once you stop fighting for a "globally unique" implementation and instead leave a generic slot on the trait to scope uniqueness to a local context, bypassing the Orphan Rule takes no black magic at all. It is just a simple shift in perspective, yet it makes both library design and large workspace boundaries much cleaner.In the next post, I will walk through the problem that immediately follows this design: once your traits and builders carry a generic context parameter, how do you keep them from spiraling into nested generic types and slow compile times? That brings us to **boundary validation and type erasure**.*(The patterns in this series come from **[Kova](https://github.com/edvong/kova)**, a macro-free PostgreSQL and SQLite ORM for Rust. If you want to see how the full type system fits together, check out the [source and docs on GitHub](https://github.com/edvong/kova).)*
+### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
+
+A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
+
+![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
+
+Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
+
+### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
+
+Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
+
+But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
+
+As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
+
+Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
+
+Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
+
+Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
+
+### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
+
+Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
+
+![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
+
+### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
+
+Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
+
+![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
+
+Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
+
+### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
+
+You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
+
+![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
+
+### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
+
+Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
+
+The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
+
+## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
+
+New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
+
+To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
+
+- Bonfire Networks: general group to share news/discussions/questions about Bonfire
+- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
+- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
+- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
+- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
+
+For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
+
+- Testing & Feedback: try new features and tell us what works and what breaks.
+- UX & Design: help shape how Bonfire looks and works.
+- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
+- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
+- Tech support: ask, answer and support each other in building and deploying Bonfire.
+
+And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
+
+## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
+
+As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
+
+> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
+>
+> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
+
+Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
+
+Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
+
+Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
+
+## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
+
+Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
+
+So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.

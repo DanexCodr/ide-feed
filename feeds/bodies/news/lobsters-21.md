@@ -1,94 +1,242 @@
-jQuery 4.1.0 has arrived! And it brought a friend. Alongside the first minor release of the 4.x line, we're also releasing jQuery 3.8.0. A word of caution: 3.8.0 exists to release the fixes and improvements that have been pending on the `3.x-stable` branch for the past few years, some of which you may recognize from the jQuery 4.0.0 release. It is a send-off, not a comeback. Going forward, the 3.x branch will only receive critical security and bug fixes. If you haven't yet made the jump to 4.x, we encourage you to do so — we have an [upgrade guide](https://jquery.com/upgrade-guide/4.0/) and the [jQuery Migrate plugin](https://github.com/jquery/jquery-migrate/) ready to help, and most users will be able to upgrade with minimal changes.
+Here at Close, our primary backend service has automated tests. Quite a lot of
+them, nearly 58,000. While some things are easy
+to test in pure Python, the tests that actually give us the most confidence generally
+are API or service-level integration tests that avoid mocking and typically *do*
+actually hit datastores.
 
-As usual, the releases are available on [our CDN](https://jquery.com/download/) and the npm package manager. Other third party CDNs will probably have them available soon as well, but remember that we don't control their release schedules and they will need some time. Here are the highlights.
+How long do all 58,000 integration tests take to run in CI?
 
-## In both 4.1.0 and 3.8.0
+*About 2 and a half minutes.*
 
-A few changes landed on both branches, so you get these no matter which version you're on.
+Yes, 58,000 integration tests, most of which do IO across multiple datastores,
+in under 3 minutes.
 
-### A new API for AJAX transport complete callbacks
+[![alt text](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/ca790/image-4.webp)](https://making.close.com/static/094c54c235fbce1f25e0d4bc63a0a27b/4e9ad/image-4.png)
 
-Custom AJAX transports have long received a `completeCallback` with positional arguments:
+How? Let's go on a journey together...
 
+# Learning to Crawl...
+
+Close launched in 2013, but our test suite is actually even older! Tests in CI
+were introduced in 2012, with a Jenkins build script and the
+[nose](https://nose.readthedocs.io/en/latest/) testing library. We've since
+migrated to CircleCI then GitHub Actions, swapping to pytest along the way. But
+a lot of the same concepts are still relevant today. The general shape of a
+test run is:
+
+![A single runner sets up backends, starts the app, collects tests, and runs them sequentially.](https://making.close.com/90d537fc70efb9ac6c1693112ad68ff2/single-runner.svg)
+
+For simple applications with only a handful of tests, this setup works great! But
+as the application starts growing, slowly the "run tests" step inflates to the
+point where you start waiting tens of minutes for a green checkmark to appear.
+While working on features you're subject to intrusive voices of gremlins
+whispering "but what if it was faster? Surely it could go faster"
+
+# Crawl to Walk...
+
+The natural next step is... parallelism! There's a few common ways to do this,
+but the most straightforward options are either multiprocessing parallelism
+(something like [`pytest-xdist`](https://pytest-xdist.readthedocs.io/en/stable/index.html))
+that fans out work across multiple CPUs, or deterministically splitting work
+across multiple machines (something like [`pytest-split`](https://jerry-git.github.io/pytest-split/)).
+
+Multi-CPU parallelism doesn't really help us, because most of our tests
+rely on external databases. Running multiple tests at the same time on the same
+database can lead to logical conflicts where tests end up reading each other's
+data. While it's *possible* to configure things like dynamic database creation,
+practically it's both hard to do correctly across many datastores and is even
+harder to do performantly.
+
+Deterministic work splitting was a much more attractive option for us, since many
+CI providers started offering matrix'd builds where you could easily specify
+different parameters for each of them (i.e. run the `pytest` with parallelism
+of `4`, where each runner knows which number it is). This strategy just added a
+little bit of CI configuration, but ultimately only required installing a plugin
+and adding a few flags to the CI command. Today it would look something like:
+
+```bash
+pytest --splits 4 --group 1
 ```
-function( status, statusText, responses, headers ) {}
-```
 
-Transports can now instead invoke the callback with a single object:
+Some version of this logic has been relatively easy to set up for a long time,
+and we introduced it to Close in late 2014. With this version of test splitting,
+our full test run now looks like:
 
-```
-function( { status, statusText, responses, headers } ) {}
-```
+![Independent runners each set up backends, collect the full suite, select a fixed subset, run it, and save results for merging.](https://making.close.com/ad475443c963e1b06e57f1c04bb8ce45/fixed-shards.svg)
 
-This makes it possible for us to add new parameters in the future without relying on their order, and for transports to provide them selectively. In fact, 4.1.0 already takes advantage of it — see `responseURL` below.
+# Walk to Run...
 
-### Selector: ReDoS fix in identifier matching
+Early versions of test splitting logic relied on file names to split tests up,
+leading to unbalanced workloads. Eventually we were able to tweak the splitting
+logic a bit, so that we tracked main-branch test timings and bin packed them
+instead of splitting pseudo-randomly.
 
-The regular expression jQuery uses to match identifiers in selectors was vulnerable to catastrophic backtracking; a long chain of hex escapes followed by an invalid character — for example, in an attribute selector — could hang the page. The production now explicitly excludes digits & hex characters where the spec says it should, bringing us closer to spec and eliminating the ReDoS.
+And this rough setup actually lasted us about **12** years! Over this time we
+didn't *ignore* CI speed, but we were mostly able to improve it through
+relatively minor / incremental changes:
 
-### Selector: loose document comparisons everywhere
+- refactor unittest-style tests to pytest
+- refactor pytest fixtures to make it easier to rely only on what the test needs
+- architecturally refactor to avoid global state and avoid API overhead when testing edge cases
+- keep global imports out of shared fixtures
+- avoid pytest assertion rewrites in ci
+- increase the level of parallelization (number of runners)
+- upgrade Github Actions runner node instance types
 
-IE & Edge Legacy sometimes throw on strict document comparisons (`===`) but not on loose ones (`==`). We switched most of these comparisons years ago, but a few leftovers remained in the selector code. They've now all been converted, avoiding some rare crashes in those browsers.
+But ultimately we hit a wall. The gremlins continued whispering, but there
+was no low-hanging fruit left. For a long time we were able to stabilize
+our test suite under around 10 minutes, but eventually even at 17x
+parallelization our CI times grew longer. The fixed-cost steps became very hard
+to optimize and scale out of.
 
-## What else is new in 4.1.0
+*What do you mean, "fixed cost"?*
 
-### jqXHR gains responseURL
+Well, the part of the test run that `pytest-split` parallelizes is actually
+*running* the test cases. When the application gets big enough, just running
+things like test *collection* could take up to a minute to resolve. It's not
+technically "fixed" cost, but these operations scale with the size of the *entire*
+app/test suite rather than just the selected test subset. So even as
+we scale up the number of runners, a lot of our runtime still goes
+to an ever-growing setup cost:
 
-`jqXHR` objects now expose `responseURL` — the final URL of the request after any redirects followed by the browser. Following the existing `responseText`/`responseXML`/`responseJSON` pattern, it is only set when the transport can report it: modern-browser XHR provides it, while IE 11 and the script & JSONP transports do not.
+- pulling images and starting datastores could take a minute
+- the app container couldn't start until datastores were ready
+- test collection couldn't start until the app container was ready
+- test collection always needed to collect the full suite before it could deterministically split (which took over a minute even without pytest's assertion rewriting enabled)
 
-### Serialize form-associated custom elements
+![Each runner repeats backend setup, app startup, full-suite collection, and subset selection; only assigned test work is divided among runners.](https://making.close.com/b5974fe41ebb03ab23cf7cb857d23009/fixed-costs.svg)
 
-Form-associated custom elements — custom elements registered with `formAssociated = true` — now serialize correctly with `.serialize()` and `.serializeArray()`. Elements that appear in `form.elements` are trusted to be submittable rather than being filtered out by a tag name check.
+Despite our best efforts, the best performance we could get out of this
+setup was around 12 minutes of wall clock runtime. About half of that was eaten
+up by either fixed-cost steps, or by imperfect test balancing that resulted in
+some runners taking multiple minutes longer than others. We're already
+self-hosting our GitHub Actions runners to squeeze better performance out of
+them, but at some point you have diminishing returns turning the `N` knob
+higher. And that's just for tests! There's also unparallelizable build and
+deploy steps that continued to add up end to end runtime.
 
-### CSS methods work in XML documents
+# Run to ... Fly?
 
-In non-XHTML XML documents, such as XSLT-transformed documents, elements created with `document.createElement` land in the XML namespace and have no `style` property, which broke jQuery's CSS support tests. jQuery now uses `createElementNS` with the XHTML namespace internally, so `.css()` and friends behave in these documents.
+So where do we go from here? Well... while looking at something related to our
+end to end Playwright tests, I stumbled across [currents.dev](https://currents.dev/).
 
-### querySelectorAll everywhere
+What currents.dev does for Playwright is that they maintain a centralized
+queue of work and tweak the test runner logic to consume from that queue instead
+of from a deterministic `-split` of work. They present two major unlocks:
 
-jQuery no longer uses `getElementsByTagName` or `getElementsByClassName` internally, relying on `querySelectorAll` instead. In today's browsers, `qSA` is on par with or faster than the old methods, and returns a static list rather than a live collection that we had to snapshot. The switch also fixes some long-standing bugs, including MathML elements not being found by lowercase tag names on cloned nodes in IE 11, selectors with leading combinators not working on document fragments, and selection by tag names containing less common symbols such as dots.
+1. **Smart Orchestration:** Work is split dynamically so workloads are always split evenly
+2. **Spot instance support:** If a worker's node gets yoinked by AWS, its work gets redistributed
 
-Related selector work makes the quick selection paths stricter about what counts as a simple tag or class selector — with a fallback to regular selection when `qSA` throws — and invalid escape sequences in selectors are now decoded to U+FFFD, the replacement character, as the CSS specification requires.
+Those features are really neat, but there's also a more subtle opportunity this architecture unlocks:
 
-### Faster uniqueSort
+**We can *much* more effectively parallelize our fixed-cost setup steps.**
 
-`jQuery.uniqueSort` removes duplicates with a single-pass, two-pointer compaction instead of repeated splices, taking the duplicate removal from O(N²) time and O(N) extra space to O(N) time and constant space. Behavior and ordering are unchanged; large disconnected sets just get there faster.
+What if we applied these concepts to pytest? Let's visualize how a shared
+orchestrator changes our testing setup:
 
-## What's in 3.8.0
+![One orchestrator discovers files and queues batches while workers start their backends, then workers repeatedly pull batches, collect and run assigned files, and report results.](https://making.close.com/a7a2278b20e4637c330f23bdb4942f8a/orchestrated-tests.svg)
 
-Again, most of what's in 3.8.0 has been sitting on the branch for a while, and much of it will look familiar if you read the [jQuery 4.0.0 release post](https://blog.jquery.com/2026/01/17/jquery-4-0-0/). But there are a few things specific to 3.x.
+A few things worth calling out:
 
-### Support for hidden="until-found"
+- The orchestrator doesn't need to run datastores at all
+- The orchestrator only needs to collect files, which allows us to skip a huge portion of pytest's collection runtime
+- Workers only collect what they run, which means their collection runtime scales down to their workload
+- The orchestrator can collect and split tests in parallel to workers starting their backends
 
-The `hidden` attribute used to be a boolean attribute, but it has since gained the `until-found` value. jQuery 3.x normalized boolean attributes in a way that clobbered that value; `.attr( "hidden", "until-found" )` now sets it as-is. jQuery 4.x changed how boolean attributes are handled precisely to avoid this class of problem, so no change was needed there.
+So now we're running one extra job (to orchestrate), but virtually all of our
+test workers' steps scale in runtime with the number of tests they're asked to
+run. What's next?
 
-### Deprecations to smooth the road to 4.x
+**Spot instances.**
 
-Two sets of APIs that were removed in jQuery 4.0.0 are now formally deprecated in 3.x, which means the [jQuery Migrate plugin](https://github.com/jquery/jquery-migrate/) can warn you about them before you upgrade:
+Actually implementing spot instance support in GitHub Actions was hairy enough
+to deserve its own post, so we'll have to leave it on a cliffhanger for now. But
+with the amount of savings they offer, we were able to turn 17 on-demand runners
+into 2 on-demand runners + 54 spot instances for about the same dollar cost. That's
+one orchestrator and on-demand worker (for yoink insurance), plus 54 spot
+instance workers. We did end up keeping `main` on-demand though to keep it
+predictable.
 
-- The push, sort & splice Array methods on the jQuery prototype. These were always meant for internal use and jQuery itself hasn't used them since Sizzle was inlined. If you need the same behavior, $elems.push( elem ) can be replaced with [].push.call( $elems, elem ).
-- jQuery.expr[ ":" ] and jQuery.expr.filters, which have been documented as deprecated since 3.0.0 but never made their way into the deprecated module. Use jQuery.expr.pseudos instead.
+With that type of parallelism and our improved scaling mechanism, our CI speed is
+good enough ... for now.
 
-### Backported fixes
+## The devil's in the details
 
-3.8.0 also picks up a number of fixes that already shipped in jQuery 4.0.0, including support for self-removing scripts passed to `.html()`, a fix for `jQuery.cleanData` skipping elements during cleanup, correct dimensions for table `<col>` elements, more robust native event handling in `leverageNative`, and support test fixes for pages under CSS zoom and initially hidden iframes.
+If you're trying to reproduce this type of setup, here's a bit more detail to
+help.
 
-## Download
+### How do the workers talk to the orchestrator?
 
-You can get the files from the jQuery CDN, or link to them directly:
+Even with self-hosted runners, workers need some way to communicate back to
+the orchestrator server. But GitHub Actions runners aren't externally
+addressable. We worked around this by having the `pytest-orchestrator` CI step
+work more like a k8s operator that creates a temporary, deterministically
+named namespace / pod in the same CI/CD Kubernetes cluster.
 
-You can also get this release from npm:
+Each worker knows what namespace to look for based on run-specific identifiers,
+and has a connection grace period where it waits for them to come up.
 
-`npm install jquery@4.1.0`
+### Rerun on Failure
 
-`npm install jquery@3.8.0`
+With a `pytest-split` type of setup, rerunning just a subset of workers would
+rerun the same subset of tests. Now that tests are distributed dynamically, it's
+not trivial to rerun just the failing tests. If only one worker fails, rerunning
+failed jobs essentially amounts to running the full test suite with just a
+single worker. Slow.
 
-The slim builds are available as well:
+Instead of always rerunning all jobs, we've set each worker to wait until *all*
+batches are finished, then let the orchestrator decide if the run was clean or
+not. If it wasn't, then *all* workers fail. All test failures / stack traces
+show up in the orchestrator's outputs, so you don't need to inspect every
+individual worker for failures. But now since they all fail, rerunning failed
+jobs starts up the right number of workers for the test suite.
 
-Information on all the ways to get jQuery is available at [https://jquery.com/download/](https://jquery.com/download/).
+### Speeding up test collection
 
-One more time for the folks in the back: jQuery 3.8.0 is the last planned feature release on the 3.x branch. From here on, 3.x will only receive critical fixes. jQuery 4.x is where active development happens, and it's ready for you.
+To avoid drift between pytest config and CI logic, we've opted to keep pytest
+responsible for test collection (as opposed to basic file globbing
+`tests/**/*.py`). The plugin only activates if explicitly enabled, and
+if no other collection-related args are passed (e.g. `-k`, `-m`, `--lf`, etc).
+While collecting, it skips descending into files and writes out discovered files
+to a given location as JSON.
 
-## Thanks
+### Balancing Batches
 
-Thank you to all of you who participated in these releases by submitting patches, reporting bugs, or testing, including [ac-mmi](https://github.com/ac-mmi), [Apoorv Darshan](https://github.com/apoorvdarshan), [Richard Gibson](https://github.com/gibson042), [Michał Gołębiowski-Owczarek](https://github.com/mgol), [J.Son](https://github.com/xwxtwd), [Naveed Khan](https://github.com/rootvector2), [metsw24-max](https://github.com/metsw24-max), [neogy-akash](https://github.com/neogy-akash), [orbisai0security](https://github.com/orbisai0security), [Stephen Sigwart](https://github.com/ssigwart), [studystill](https://github.com/studystill), [Timo Tijhof](https://github.com/Krinkle), [TomTensor](https://github.com/tommyhgunz14), [서울민트초코](https://github.com/minirang), and the whole jQuery team.
+Initially we noticed that some runners still took noticeably longer than others,
+even though we aimed for batches of 20s of test runtime. It turned out to be a
+subtle issue with a simple fix: not all files themselves fit into that 20s
+target, and during batching we ended up with a somewhat random batch ordering.
+So, often an oversized batch would be the last one for a worker to claim and
+everything else would just wait on it. The fix was to sort batches in descending
+order before assigning them out. That way towards the end we have slightly
+better bin packing / runtime distribution.
+
+### Scaling Our Self-Hosted GitHub Actions Runners
+
+Just because we now request dozens of workers all at the same time doesn't mean
+we actually get them. When looking at CI runs, it's not always obvious how long
+was spent waiting in a queue for a runner to come up, and with this type of
+coordinated workload it can make a big difference in end to end runtime.
+
+We bumped our idle runner count and had to scale the max node pool sizing to
+better account for bursty demand during the day.
+
+### Measuring CI Timings
+
+The GitHub Actions UI can be very misleading about how long something *actually*
+took to run. The timings of each step don't well communicate how long it took
+a job to start, and how long in wall-clock time it fully took end to end. And
+it's really hard to get a true sense of this in aggregate if you can only look
+at cherry picked CI runs.
+
+Our CI setup has a post-action job that for every CI run inspects the step
+timings and converts it into trace data. That trace data then feeds into our
+OTel stack, making it easy to aggregate and report on with ClickHouse in
+Grafana. We end up with nice aggregate stats, and can drill down into specific
+jobs if needed:
+
+[![alt text](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/33eb4/image-1.webp)](https://making.close.com/static/e727c5c3bf94f71bcb1ce8c3004992a1/0d368/image-1.png)
+
+*Note: Average build time here includes all actions queueing, uncached image*
+*builds from dependency bumps, deploy, and post-deploy steps. It also reflects*
+*GitHub Actions degradations.*
