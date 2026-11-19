@@ -1,72 +1,163 @@
-For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
+I [wrote an article](https://blog.platypush.tech/article/Local-voice-assistant) a couple of months ago describing how I rebuilt my old voice assistant pipeline in [Platypush](https://platypush.tech).
 
-In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
+And I wrote earlier articles describing my journey through self-hosted voice assistants - [in 2024](https://blog.platypush.tech/article/The-state-of-voice-assistant-integrations-in-2024) (with [Picovoice](https://picovoice.ai)), [in 2020](https://blog.platypush.tech/article/Build-custom-voice-assistants) (diving into the legacy [`assistant.google`](https://docs.platypush.tech/platypush/plugins/assistant.google.html) integration, the now defunct `assistant.alexa` integration, the now defunct Snowboy integration, the now defunct DeepSpeech integration and Picovoice) and the [original article in 2019](https://blog.platypush.tech/article/Build-your-customizable-voice-assistant-with-Platypush) describing the Google Assistant integration.
 
-This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
+For a couple of months I used the voice pipeline described in my latest article as my main driver, but after getting used to the robustness of commercial voice assistants I was unhappy with the high rates of false positives/negatives of my self-hosted pipeline, as well as its lack of robustness in detecting start/end of speech, especially in noisy environments and using cheap microphones.
 
-This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
+After a bit of experimentation, I decided to swap and fine tune a few parts, and after a couple of days of trying the results are satisfying enough for me to write a short article about it.
 
-## Writing code once was never the issue
+The resulting pipeline is:
 
-Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
+## Wake word detection: a new `assistant.microwakeword` plugin
 
-The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+Until recently I used [`assistant.openwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.openwakeword.html), which wraps [openWakeWord](https://github.com/dscripka/openWakeWord).
 
-## curl is the result of time
+It works, but the project has been quiet for a while and all of its pre-trained models are `v0.1` files from 2023, mostly trained on synthetic speech.
 
-curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+In practice I was getting both false positives (the hotword triggering on background noise) and false negatives (the hotword not detected unless I was close to the microphone).
 
-## Behind already
+I added a new plugin, [`assistant.microwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.microwakeword.html), on top of [microWakeWord](https://github.com/kahrendt/microWakeWord) through the [`pymicro-wakeword`](https://pypi.org/project/pymicro-wakeword/) Python bindings.
 
-During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+`microWakeWord` is the engine used by ESPHome and Home Assistant Voice, its models are actively maintained, and the built-in models (`okay_nabu`, `hey_jarvis`, `hey_mycroft`, `alexa`) ship with the package — no download required.
 
-The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+The current official models are provided under the [ESPHome micro-wake-word-models repository](https://github.com/esphome/micro-wake-word-models).
 
-That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+Custom models are supported too: drop a `microWakeWord` JSON manifest (with its `.tflite` model) in the plugin's models directory and reference it by name.
 
-A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+The plugin exposes the same API as `assistant.openwakeword` (same `models`, `detection_threshold`, `frame_duration`, `patience_frames`, `input_device`, `input_volume` parameters, same `list_models` action, same `HotwordDetectedEvent`), so switching is a matter of just changing the configuration to point to the new plugin:
 
-## C
+```
+assistant.microwakeword:
+  models:
+    - alexa
+```
 
-I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+A few design notes:
 
-A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+- Without an explicit detection_threshold, each model uses the probability_cutoff from its own manifest (0.9 for alexa), which is the value the model was validated against.
+- Models already smooth their output over a sliding window, so unlike openwakeword, patience_frames defaults to 0 here.
+- The audio thread never touches the TFLite models directly: it queues frames (and a reset marker) to the main thread, because MicroWakeWord.reset() reloads the interpreter and isn't safe to call concurrently.
+- Like assistant.openwakeword, the plugin releases the audio device when another assistant plugin starts a conversation, and re-acquires it when the conversation ends.
 
-## No rewrites
+## Speech-to-text: `assistant.openai`, with a much better ear
 
-I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+`assistant.openai` records audio when a conversation starts and transcribes it through Whisper.
 
-## Those rewrites
+The tricky part has always been *end-of-speech detection*: knowing when the user has finished talking. The previous implementation used a per-frame boolean from WebRTC VAD, and any single frame classified as speech would reset the silence timer. With even a bit of background noise, phrases would only end when the maximum conversation duration was hit.
 
-I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+The audio preprocessing layer (`AudioPreprocessor`, shared by the STT integrations) has been reworked:
 
-I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+- [Silero VAD](https://github.com/snakers4/silero-vad) as the primary backend (through `onnxruntime`, no PyTorch required), with WebRTC VAD and a plain RMS-based detector as fallbacks. To get an idea of Silero VAD's performance compared against other solutions for speech activity detection, take a look at the insightful article *One voice detector to rule them all*. The Silero model is downloaded on first use into the Platypush workdir and checksum-verified:
 
-They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+```
+assistant.openai:
+  # auto = silero -> webrtc -> energy, depending on what's installed
+  vad_backend: auto
+```
 
-I wish them good luck whatever they decide!
+- **Hysteresis + sliding window**: a frame becomes speech above the VAD threshold and stays speech until its score drops by a margin, and the per-frame decisions are smoothed by majority vote over a 0.5s window. A single noise burst can no longer keep a conversation alive.
+- **Adaptive noise floor**: the background noise level is tracked over time, and frames that aren't louder than `noise_floor_factor` (default 2.0, ~6 dB) times the floor are never considered as speech.
 
-## How do I feel about them?
+On a synthetic benchmark (Piper-generated phrases mixed with babble and burst noise), the old settings kept conversations open for 6–10 seconds after the speech had ended; the new pipeline ends them 1.0–1.6 seconds after the last word, which is the configured [`conversation_end_timeout`](https://docs.platypush.tech/platypush/plugins/assistant.openai.html#platypush.plugins.assistant.openai.AssistantOpenaiPlugin.start_conversation) plus the smoothing lag.
 
-Several people asked me this.
+Since the changes on Platypush have been performed directly in the [`AudioPreprocessor`](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_audio.py) also used by other native speech-to-text engines, other speech-to-text plugins also benefit from them - e.g. if you use [`assistant.vosk`](https://docs.platypush.tech/platypush/plugins/assistant.vosk.html) for full on-device detection.
 
-*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
+## Responses and context: the `openai` plugin
 
-I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
+The transcribed phrase is processed by the `openai` plugin, which handles both the API key and the conversation context. By default the assistant renders the response through the configured `tts_plugin`; if the response ends with a question mark, the conversation continues with a follow-up.
 
-1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27581#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27582#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27583#respond) .comment-body .children
-    1. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 18, 2026 at 10:55](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27596) .comment-metadata .comment-meta Isn’t a programming language just another development tool? We can talk about language capabilities just like any other. Types and tests go together as a pair of tools. Types can be validated incrementally in less than a second (eg in rust-analyzer), tests take seconds, minutes, sometimes hours for feedback. Tests can show the presence but not the absence of bugs, types prove the absence of whole classes of bugs but not their presence. Tests tell you about a specific execution, types reason about all possible executions. Test can validate any behaviour while types can only exclude bugs provable in its logic. The progress in programming languages has generally been towards stronger types, including lifetimes in Rust’s case. I don’t think its fair to say they have no advantages over tests. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27596#respond) .comment-body .children
-      1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 11:30](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27597) .comment-metadata .comment-meta @Jesse: different languages have different advantages and quirks, sure. I just meant that I don’t think the choice of language holds us back. .comment-content .comment-body
-  2. ![](https://secure.gravatar.com/avatar/7af2556d70ebdec658363896fcc23a2b17aeb51da7c5e5cb440e59af5c96788a?s=68&d=monsterid&r=g) **[grayhatter](https://gr.ht)** says: .comment-author [November 17, 2026 at 19:38](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27589) .comment-metadata .comment-meta > Nice, that sounds like very good motivation for a Rust rewrite. I agree; it is a good reason! But I feel like you’ve missed the forest for the single tree. This whole post is describing the value in curl being the maintainers that are willing to put in the time. A single observation doesn’t outweigh the reality that code is (and always has been) cheap. But maintainer time and effort is the important part. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27589#respond) .comment-body
-3. ![](https://secure.gravatar.com/avatar/dba025f411eb5dea75b2ac9d89b8299ba8ded7551da0ec0af415857312de2f7f?s=68&d=monsterid&r=g) **Jack** says: .comment-author [November 17, 2026 at 16:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27584) .comment-metadata .comment-meta cURL is one of the greatest examples of a project, C or otherwise, done right. It’s a stalwart of computing. It’s literally everywhere. It’s probably even in my toaster too, which is kind of scary now that I think about it. Jokes aside, you should really just ignore the people clamoring to rewrite it in Rust or Zig or whatever. I’m a huge Rust fan. I mainly program in Rust and a bit of C. This has nothing to do with rust per se and more to do with the internet being annoying. An AI powered rewrite or even a rewrite by hand misses what actually makes cURL so good. It’s that there is a talented team of maintainers who understand the code, understand the domain, and are dedicated to writing and maintaining curl. Rewrites lose all of this for temporary benefits, or worse it doesn’t have any benefits at all. There are AI and hand rolled postgres rewrites in Rust that are “faster” but it turns out they’re buggy messes that aren’t even durable. They’re faster because they’re broken. 🙂 So, I say this as a huge Rust fan who contributes to a plethora or open source Rust projects. Please ignore the “riir” in Rust crowd. It doesn’t represent most of us. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27584#respond) .comment-body
-4. ![](https://secure.gravatar.com/avatar/89c0c2a3cd1d8d2e7ae262a8b2967c5a214b80cb8f14d913519dcec0ac6ced68?s=68&d=monsterid&r=g) **Joonas Kuorilehto** says: .comment-author [November 17, 2026 at 16:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27585) .comment-metadata .comment-meta ” This latter one claims to have spent 8,600 USD to make it happen”. This is a wrong reading. They claim that amount in estimated API cost equivalent, but based on them running out of quota they use a subscription, which is a lot less cost. Not that it changes anything you said though. Thanks for keeping cURL going all these years. I doubt any of the clones are committed to similar maintainance quality and long term. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27585#respond) .comment-body
-5. ![](https://secure.gravatar.com/avatar/c4cb559cac461ae04977a38bc7c7e1779430589c4cae02e432f275fd7964fee6?s=68&d=monsterid&r=g) **[Vishal Pawar](https://vishalpawar.dev/utm?src=daniel_haxx)** says: .comment-author [November 17, 2026 at 18:00](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27587) .comment-metadata .comment-meta I really like what this post is talking about everyone can make a copy but who can maintain and keep on adding features in long term that is what makes it competing and survival of the copied software. Everyone knows how Cloudflare made a copy of Next.js and everyone started posting about it for few weeks and it is dead or it is copying features from Next.js to keep up with the Next.js as it’s replacement .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27587#respond) .comment-body
-6. ![](https://secure.gravatar.com/avatar/56be1d4b72a7e714a306e1894594615c37419ba7fab85792c32ff6b603f70b6f?s=68&d=monsterid&r=g) **Dàmian Lusq** says: .comment-author [November 17, 2026 at 19:05](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27588) .comment-metadata .comment-meta @Joonas The artifact mentions weekly limit only on 28/10, one week after the start of the rewrite, and not until the end of the experience, so it surely started with some heavy subscription, it may switched to token billing after to keep up with the work. “If the work ran on a subscription plan, this is what it would have cost on the API, not what was billed.” So yes, for sure, it at least been partially subsidized, and once Anthropic will switch to token billed usage (like OpenAI will do next month, because money), it would certainly cost $8.6k for any clone, except if some “super agents” becomes the new hype and would burn way more tokens… Again, “humans made computers for humans” is still a thing nowadays, and AI will not replacing communities tomorrow. It would have been interesting to see a clean C ? Rust ? C rewrite just to compare how the C could have been rewritten, just out of curiosity. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27588#respond) .comment-body
-7. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://tactica.xyz)** says: .comment-author [November 17, 2026 at 19:47](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27590) .comment-metadata .comment-meta It is november 2026. You can use formal verification with Verus to get rid of other 67 logic bugs and then use it continuously to avoid bugs at all! [https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/](https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/) No other language yet provide such an ecosystem for error prevention. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27590#respond) .comment-body
-8. ![](https://secure.gravatar.com/avatar/490f7fcfee38ddde609f8110024f5c8ba08f6e755beedb3c50b4235521e154f5?s=68&d=monsterid&r=g) **[Eser](https://www.techmedya.com/)** says: .comment-author [November 17, 2026 at 20:49](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27591) .comment-metadata .comment-meta This is such a wonderfully grounded perspective! It’s a great reminder that a software’s true strength lies in its community, history, and endless iterations—not just the language it’s written in. Thank you for everything you do for curl! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27591#respond) .comment-body
-9. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/tactica.xyz)** says: .comment-author [November 17, 2026 at 21:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27592) .comment-metadata .comment-meta AI + Verus tool allows you to automatically write formal proofs on your code and get rid of rest 67 issues. Rust has single best ecosystem to get rid of bugs! Happy to help is you ever decide to try and collect metrics on quality improvement! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27592#respond) .comment-body
-10. ![](https://secure.gravatar.com/avatar/59b98429498dc9d91e7c181d67441c6070887f50fc663b51c6cff64e6f0efdb0?s=68&d=monsterid&r=g) **Enne** says: .comment-author [November 17, 2026 at 22:19](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27593) .comment-metadata .comment-meta Similarly-shaped things used to happen at a much smaller scale on web 1.0. How many times I or my peers would share tarballs of our funny little webapps, only to be shown a few weeks later some proto-reactionary teenager trying so hard to impress his two or three followers with the website he “built” all on his lonesome in a day, and soon after that it’d be gone again in a fit of pique. Maybe these are the same people all aged up. Similarly-shaped things and all. But even those kids would have the sense to not brag that they gambled away thousands of dollars to put a Pyongyang Hotel in the metaverse. That’s just sad. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27593#respond) .comment-body
-11. ![](https://secure.gravatar.com/avatar/d26584a90e6abfffb1d8da05fbf6a44015692f85da05cf3bfd6581514220289b?s=68&d=monsterid&r=g) **Félix** says: .comment-author [November 18, 2026 at 08:28](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27594) .comment-metadata .comment-meta I you don’t know Rust well, what makes you confident about the exact number of issues that Rust would have prevented? C is a barebone language, Rust brings much more to the table than memory safety only: – Sane type system, especially with sum types – Better error handling (mostly consequence of the previous point) – Trait-based polymorphism (no such abstraction in C) – RAII – Async (especially useful for curl) Even users’ misusage can be prevented with a good set of types: make invalid states unrepresentable. BTW, we talk about Rust, but any functional language would do. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27594#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 08:34](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/#comment-27595) .comment-metadata .comment-meta @Felix No one can know any exact number of problems curl would have had if written in another language. Not you, not I. What I do know though, and this is verifiable because all the details and data is public, is how many of the past curl vulnerabilities that were “C mistakes”. I think everything else in terms what other languages could do or not is mostly a distraction and “language religious talk”. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/?replytocom=27595#respond) .comment-body
+Custom hooks can intercept phrases before the default response kicks in — for example, to handle home automation commands locally without an LLM round-trip:
+
+```
+from platypush import run, when
+from platypush.message.event.assistant import SpeechRecognizedEvent
+
+@when(SpeechRecognizedEvent, phrase='play (the)? music')
+def play_music():
+    run('music.mpd.play')
+```
+
+And the hotword event is wired to the conversation start with a similar hook:
+
+```
+from platypush import run, when
+from platypush.message.event.assistant import HotwordDetectedEvent
+
+@when(HotwordDetectedEvent)
+def on_hotword(**_):
+    run('assistant.openai.start_conversation')
+```
+
+## Text-to-speech: `tts.openai`
+
+Responses are rendered by [`tts.openai`](https://docs.platypush.tech/platypush/plugins/tts.openai.html), with volume and voice configurable. In my tests however [`tts.piper`](https://docs.platypush.tech/platypush/plugins/tts.piper.html) also yielded good results, and it runs entirely locally. In my tests on a RaspberryPi 5 however it added ~3-4s of latency to process the response to audio compared to `tts.openai`.
+
+Since the TTS output goes to the speakers and the wake word detector listens on the microphone, the assistant plugins pause hotword detection while a conversation is active — otherwise the assistant would hear itself.
+
+## The full configuration
+
+```
+openai:
+  api_key: YOUR_API_KEY
+  # Or, for a custom setup using a model provider compatible with the OpenAI API,
+  # e.g. a local Ollama instance:
+  # base_url: http://localhost:8000/v1
+  # model: gpt-5
+  # Optional context that can be passed to initialize the assistant
+  # context:
+  #   role: system
+  #   content: You are a useful assistant.
+
+assistant.microwakeword:
+  models:
+    - alexa
+
+assistant.openai:
+  tts_plugin: tts.openai
+  conversation_start_sound: ~/sounds/wake_word_detected.wav
+  input_volume: 100
+
+# assistant.vosk:
+#   model: /path/to/vosk/model
+#   conversation_start_sound: ~/sounds/wake_word_detected.wav
+#   input_volume: 100
+
+tts.openai:
+  output_volume: 80.0
+
+# Or, for a fully local setup that uses tts.piper:
+# tts.piper:
+#   output_volume: 80.0
+```
+
+## What changed on the code side
+
+- New [`assistant.microwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.microwakeword.html) plugin: microWakeWord hotword detection through pymicro-wakeword, same API as assistant.openwakeword, built-in models bundled with the package, custom models via JSON manifests.
+- [`assistant.openwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.openwakeword.html) fixes: frames are now 80ms (1280 samples, the size openWakeWord recommends) instead of 500ms — longer chunks only return the highest score over their sub-frames and can miss hotwords — plus a patience_frames parameter (consecutive frames above threshold) and an explicit detection_threshold parameter (default 0.5).
+- Shared [`AudioPreprocessor`](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_audio.py) rework: Silero/WebRTC/energy VAD backends with vad_backend: auto selection, threshold hysteresis, sliding-window majority vote, and an adaptive noise floor. Used by both `assistant.openai` and `assistant.vosk`.
+- New [Silero VAD wrapper](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_vad.py): ONNX inference through `onnxruntime`, recurrent state carried across frames, checksum-verified model download into the workdir.
+
+## Caveats
+
+The microphone on my RPi doesn't support 16 kHz natively, so audio is captured at 44.1 kHz and software-resampled — it works, but if detection feels sluggish software resampling is usually the first suspect.
+
+The VAD and threshold defaults were tuned on synthetic audio plus a couple of my audio recordings.
+
+Different rooms, microphones and acoustics may yield different results. You may want to adjust `detection_threshold` on the wake word plugin and `noise_floor_factor` on the STT plugins if you don't feel satisfied with your mileage.
+
+## Reactions
+
+#### Webmentions
+
+To interact via [Webmentions](https://indieweb.org/Webmention),
+          send an activity that references [this URL](https://blog.platypush.tech/article/Rewriting-my-voice-assistant-pipeline) from a platform that supports Webmentions,
+          such as [Lemmy](https://joinlemmy.org/),
+          [WordPress with Webmention plugins](https://wordpress.org/plugins/webmention/),
+          or any [IndieWeb-compatible site](https://indieweb.org/Webmention#Publishing_Software).
+
+#### ActivityPub
+
+- Follow @blog@platypush.tech on your ActivityPub platform (e.g. Mastodon, Misskey, Pleroma, Lemmy).
+- Mention @blog@platypush.tech in a post to feature on the Guestbook.
+- Search for this URL on your instance to find and interact with the post.
+- Like, boost, quote, or reply to the post to feature your activity here.

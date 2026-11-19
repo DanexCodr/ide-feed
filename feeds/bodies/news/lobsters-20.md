@@ -1,79 +1,169 @@
-Android’s source code is big – the Android 17 open source release has **1,084** [Git](https://git-scm.com/) repositories, **1.62 million** files, and takes **300 GB** for a built workspace. Additionally, in a typical Android source tree with hardware vendor code and first-party applications, the size increases by **2-3x**.  
+I recently asked AI to help me look through the latest Windows binaries for undocumented features and functionality. Among the leads it turned up, one list immediately caught my attention: coding agents such as `codex.exe`, `claude.exe`, `copilot.exe`, and `cursor.exe`, alongside familiar developer tools such as `python.exe`, `dotnet.exe`, `gcc.exe`, and `code.exe`.
 
- Traditionally, it took over 30 minutes to fetch Android Open Source Project (AOSP) source code and well over an hour to build on even highly capable developer workstations. As software development evolved over the last 2 years, modern coding harnesses and LLMs have accelerated the development of many projects. These tools are used today for Android operating system development, but the long sync and build times make them less efficient. Both human developers and agents need quick setup, parallel workspaces, and fast build-and-test iteration times.
+Why would a Windows system DLL need a list of coding agents and developer tools?
 
-We built Another Build File Service (ABFS) to address these bottlenecks. ABFS is a full suite of software across a Linux kernel filesystem module, user-space daemons, and server-side infrastructure. ABFS uses content-addressability across the entire stack to lazy-load and cache source code, developer workspaces, intermediate build files, and build results.
+The names were in `MissionControlAggregator.dll`. I asked the agent to follow the references and dig into what the DLL actually does. That led from a handful of string comparisons to a running Windows component that records which coding agents and developer tools have been used, saves that information locally, and reports it to Windows Diagnostics. And unless you have opted out of the “optional” diagnostic data (which is enabled by default), the data is uploaded to Microsoft.
 
-Today, we are excited to announce that [ABFS is open source on GitHub](https://github.com/google/abfs).  
+I [shared the initial finding on X](https://x.com/CrackmesOne/status/2122147747390468384). This post includes more details about the investigation behind it.
 
-The impact of ABFS to Android is:
+## Following the names
 
-ABFS already powers parallel workflows for developers and agents in Android, but it is designed to scale to other massive Git-based projects.
+Opening the DLL in [Binary Ninja](https://binary.ninja/) made the first lead easy to see. These were explicit executable names embedded in a Windows component:
 
-In the Android build system, developers define build rules in Blueprint files (`Android.bp`), Soong compiles them into Ninja files, and [Ninja](https://ninja-build.org/) executes the final build graph (see the [Android build overview](https://source.android.com/docs/setup/build)). Similar to the [Make build tool](https://www.gnu.org/software/make/), Ninja is **timestamp-based**. If a build step’s input file is newer than the existing output file, Ninja rebuilds the output file.
+![Binary Ninja showing coding-agent executable names embedded in MissionControlAggregator.dll](https://xusheng.dev/posts/windows-coding-agent-telemetry/agent-names.jpeg)
 
-### **Code Size**
+Following the references showed that the names were used in comparisons. There are four CLI-agent slots checking `copilot.exe`, `claude.exe`, `codex.exe`, and `agy.exe`, with extensionless equivalents on the WSL route. Five desktop-agent slots check `github.exe`, `claude.exe`, `codex.exe`, `cursor.exe`, and `antigravity.exe`.
 
-Analyzing the [AOSP code](https://android.googlesource.com/) for Android 17 shows the sheer disk footprint and file count involved in a single checkout and build.
+Here is one of the comparisons against `codex.exe`:
 
-In a typical Android tree that includes hardware-specific repositories, board support packages, first-party applications, form-factor-specific code, etc., the code size is 2–3 times the size of AOSP **(over 3,000 Git repositories),** compounded across multiple active SKU and legacy maintenance branches.
+![Binary Ninja showing an exact comparison with codex.exe inside a matcher](https://xusheng.dev/posts/windows-coding-agent-telemetry/codex-matcher.jpeg)
 
-Building the Cuttlefish emulator target executes a build graph with **192,249** Ninja actions. While local incremental builds are fast once a tree is already built, every new workspace, branch switch, or ephemeral agent session starts cold.  
+The compiler-generated C++ names are unwieldy, so I will call these functions **executable-name matchers**. For reference, one related matcher is `std::_Func_impl_no_alloc<<lambda_340dfe7e962ab225b6ac33bc664bd54f>, bool, std::basic_string_view<wchar_t, std::char_traits<wchar_t>> const&, Microsoft::Diagnostics::MissionControlAggregator::Utils::AppType>::_Do_call`. The screenshot shows another lambda instantiation performing the same kind of name comparison.
 
-Even though typical developer changes touch only 1-10 different Git projects, someone building locally without any remote execution might waste up to **80 minutes on a 64-core** machine repeating work their CI system already built. Even if a developer edits a core library like `system/libbase`, **97%** of the build graph is identical to the CI build.
+The feature guarding the new agent checks has a particularly direct name: `CLICodingAgentUsage`, feature ID `62580080`.
 
-Sharing cached build outputs across CI and local machines is also tricky in a codebase of Android's age and rate of change. Build rules occasionally introduce **hidden dependencies** (such as passing an undeclared schema file inside raw compiler flags), **over-declared inputs**, or **undeclared outputs**. In timestamp-based builds, hidden dependencies silently produce stale incremental artifacts, forcing developers to wipe output directories and run clean builds.
+And the list extends beyond AI agents. The same component checks for `node.exe`, `python.exe`, `dotnet.exe`, `gcc.exe`, `clang.exe`, `gdb.exe`, `javac.exe`, `devenv.exe`, and `code.exe`, among others. Those checks feed broader developer-tool categories. Some of these checks also verify the publisher: the Node.js slot expects `Node.js Foundation`, Python expects `Python Software Foundation`, and the .NET and Visual Studio slots expect `Microsoft Corporation`. The compiler/debugger group containing GCC and Clang has no additional publisher check in this path.
 
-ABFS makes building Android fast by replacing massive local source checkouts with a virtual, content-addressable filesystem (CASFS). ABFS streams files on demand only when a build actually touches them and utilizes shared build caching to help eliminate redundant downloads and compilation.
+## Where does the DLL get this information?
 
-On the server side, **Git-pushers** continuously ingest new Git objects from Gerrit or other Git hosts into a horizontally scalable gRPC **ABFS Content-Addressable Storage (CAS) Server** that indexes Git content, workspace snapshots, and build step results. On the developer host, a local Least Recently Used (LRU) **Cacheman** daemon, **Mount Daemon**, and **Tap** utility connect user-space build tools to the kernel filesystem so checkouts and builds stream only what they need. See the [full ABFS architecture on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md).
+The next question was whether the component scans running processes itself. Following `Aggregator::OnLoad` revealed that it subscribes to existing Windows events instead.
 
-### **Filesystem**
+For Windows programs, it consumes `KernelProcess.AppStateChangeSummary` and `Win32kTraceLogging.AppInteractivitySummary`. These provide application identities that its handlers parse and pass to the matchers. For WSL, it consumes `Microsoft.Windows.Lxss.Manager.Exec` and `ExecCritical`, using the `imageName` field. A regular Windows `codex.exe` can therefore reach the CLI-agent checks through the app-state summary route; this is not limited to Linux programs running inside WSL.
 
-At the core of the client is a virtual filesystem called [Content-Addressable Storage Filesystem (CASFS)](https://github.com/google/abfs-casfs), a Linux kernel module that exposes Git SHA content hashes via extended attributes. When a file's hash is set, CASFS populates its metadata immediately and downloads file bytes via Cacheman only when needed:
+The relevant flow looks like this:
 
-```shell
-$ touch hello
-$ abfs hash --set cc628ccd10742baea8241c5924df992b5c019f71 hello   # metadata only
-$ ls -l hello      # name and size are available; content is not downloaded yet
--rw-r----- 1 user primarygroup 6 Nov  3 00:11 hello
-$ cat hello        # content is lazy-loaded on first read
-world
+```text
+Aggregator::OnLoad
+├─ WSL Exec / ExecCritical
+│  └─ ProcessWslExecEvent → CLI agent matchers
+├─ KernelProcess.AppStateChangeSummary
+│  └─ ProcessAppStateChangeSummaryEvent → CLI agent matchers
+└─ Win32kTraceLogging.AppInteractivitySummary
+   └─ ProcessAppInteractivitySummaryEvent → desktop agent matchers
+
+Aggregator::OnRelativeTimerExpire
+└─ MissionControlAggregatorLogging::ReportCohorts<12,4,5>
+   └─ Segments.SubCohorts ETW report
+
+Aggregator::OnUnload / intermediate timer
+└─ PersistentState::SaveToDisk
 ```
 
-Initial checkouts download only lightweight directory metadata prepopulated with Git hashes. CASFS uses Git's object model natively, allowing standard `git` and [repo](https://source.android.com/docs/setup/download/source-control-tools#repo) operations to work transparently.
+A successful match sets a slot in the aggregator’s state. Later, `ReportCohorts<12,4,5>` turns those slots into bitsets and emits a report named `Segments.SubCohorts`. The numbers correspond to twelve broader tool categories, four CLI agents, and five desktop agents.
 
-CASFS can also *tap* build processes. *Tapping* records every file actually read, written, or deleted into lists called *patches*, which are stored alongside cached build outputs. [Ninja-go](https://github.com/google/ninja-go) replaces timestamp checks with two-phase content-addressable caching:
+[ETW (Event Tracing for Windows)](https://learn.microsoft.com/en-us/windows/win32/etw/event-tracing-portal) is the mechanism carrying that report. In this case, it is a self-describing TraceLogging event. Rather than writing the executable names into every report, the component assigns each category a bit. A set Codex bit means the matching tool was observed during the reporting window.
 
-Ninja-go accelerates Ninja-based builds like Android and Chrome; other build systems can integrate with ABFS's caching APIs using the same model (see the [two-phase caching walkthrough on GitHub](https://github.com/google/abfs/blob/main/doc/ARCHITECTURE.md)).
+The source events also include runtime, time in focus, interaction counters, and resource usage. This component appears to discard those details and record only a bitmap of which agents were observed. The report’s timestamps describe the collection window, not how long each agent was used.
 
-Each mounted checkout attaches to a persistent *workspace* that eagerly syncs modified files, `git` state, and `repo` state through Cacheman to the ABFS CAS Server—keeping mounts synchronized across sessions or across multiple developer hosts.
+Although I found no prompt text or source code in this report, collecting which agents and developer tools someone uses already has significant privacy implications.
 
-## Results
+## Is it actually running on a normal machine?
 
-The benchmarks below show the mean time of 3 Android runs on a GCE `n2d-standard-64` VM with 64 vCPUs and 256 GB of RAM. The ABFS remote server was running in the same cloud network as the client.
+Strings and code are a useful lead, but I wanted to see the component running. I checked my Parallels Windows 11 ARM64 VM, build `26200.9974`. Its `MissionControlAggregator.dll` was version `10.0.26100.9818`, and `CLICodingAgentUsage` was already enabled as a service experiment. I had not manually enabled the feature.
 
-### **Build**
+DiagTrack, the **Connected User Experiences and Telemetry** service, was also already running with its startup type set to `Automatic`. It starts a separate `AggregatorHost.exe` process, and that process loads the DLL. The following administrative PowerShell commands show the service, its child process, and the loaded module:
 
-Because ABFS does lazy loading and local cache deduplication, developers and their agents can now mount multiple concurrent Android workspaces on a single machine, benefit from a shared local build cache, and achieve massive scale in development time.
+```powershell
+PS> Get-Service DiagTrack | Format-Table Name,Status,StartType -AutoSize
 
-```shell
-# Mount 5 distinct Android release branches side-by-side in under 8 seconds each
-$ abfs mount -b android-latest-release   /ws/a17
-$ abfs mount -b android16-qpr2-release   /ws/a16qpr2
-$ abfs mount -b android16-release        /ws/a16
-$ abfs mount -b android15-release        /ws/a15
-$ abfs mount -b android14-release        /ws/a14
+Name       Status StartType
+----       ------ ---------
+DiagTrack Running Automatic
+
+PS> Get-Process AggregatorHost | Format-Table ProcessName,Id -AutoSize
+
+ProcessName      Id
+-----------      --
+AggregatorHost 1500
+
+PS> Get-CimInstance Win32_Service -Filter "Name='DiagTrack'" |
+       Format-List Name,State,StartMode,ProcessId
+
+Name      : DiagTrack
+State     : Running
+StartMode : Auto
+ProcessId : 10148
+
+PS> Get-CimInstance Win32_Process -Filter "Name='AggregatorHost.exe'" |
+       Format-List ProcessId,ParentProcessId
+
+ProcessId       : 1500
+ParentProcessId : 10148
+
+PS> tasklist /m MissionControlAggregator.dll
+
+Image Name                     PID Modules
+========================= ======== ============================================
+AggregatorHost.exe            1500 MissionControlAggregator.dll
 ```
 
-An agent can check out a full Android tree in **under 10 seconds** and perform a full build** in under 10 minutes**. Agent swarms are empowered to iterate, review, and test in parallel, which can lead to higher quality solutions and speed.  
+The process IDs connect the pieces: DiagTrack runs in process `10148`, which is the parent of `AggregatorHost.exe`, process `1500`; the module listing places `MissionControlAggregator.dll` inside that child.
 
-In the demo below, an agent makes a `system/libbase` fix on the latest AOSP release, then 4 parallel agents simultaneously backport, build, and test the fix across 4 more AOSP releases on a single VM.
+## Testing it in practice
 
-We released [ABFS as open source](https://github.com/google/abfs) because we want developers, Android partners, and any large-scale Git-based project to benefit from what we have learned and be able to scale.
+To test the finding in practice, I copied `cmd.exe` to a file named `codex.exe` and ran it in the interactive Windows session. The name alone was enough for the component to recognize it as Codex.
 
-While Android’s Soong/Ninja pipeline was the first acceleration target, ABFS was built to be extensible to other build systems. Content-addressable build systems like Bazel map naturally onto CASFS and there is already a [proof-of-concept integration with Bazel](https://github.com/google/abfs/tree/main/cmd/abfs-bazel-daemon). Chromium, the Android Common Kernel, and other Google projects are exploring ABFS compatibility.
+I captured an `AppStateChangeSummary` for the running process from the `KernelProcess` provider (`{2839ff94-8f12-4e1b-82e3-af7af77a450f}`), with `LaunchCount=1` and `TerminateCount=0`. The aggregator’s saved state contained the value `2` in CLI slot 2, the Codex slot. A separate run without an additional ETW trace also set that slot, confirming that detection worked through Windows’ existing diagnostic collection.
 
-Explore [ABFS](https://github.com/google/abfs), [CASFS](https://github.com/google/abfs-casfs), and [Ninja-go](https://github.com/google/ninja-go) on GitHub, and reach out to us at abfs@google.com.
+That state is persisted in:
 
-For help with the Google Cloud server-side, infrastructure-as-code, and CASFS for Cloud Workstations and Kubernetes, please reach out to abfs-gcp@google.com.
+```text
+C:\ProgramData\Microsoft\Diagnosis\AggregatorStorage\MissionControlAggregator$
+```
+
+The report normally follows a roughly daily boundary. To capture it immediately, I temporarily moved the saved reporting-window start 25 hours into the past and restarted DiagTrack with a trace listening for the aggregator. The resulting `Segments.SubCohorts` event contained:
+
+```text
+Provider: Microsoft.Windows.MissionControlAggregator
+Time:     2026-11-16T12:34:29.125116Z
+Version:  0.1.5
+
+CliAgentSubCohorts:     4
+DesktopAgentSubCohorts: 0
+FlushedFromSave:       true
+```
+
+The value `4` is `1 << 2`: the Codex CLI bit. The name had made it through the input summary, the matcher, the persisted state, and the emitted report.
+
+I also tested the developer-tool path separately, using a copy of `cmd.exe` named `gcc.exe`. It set developer-tool slot 3. With optional diagnostic data allowed, I found the resulting `Segments.SubCohorts` event in DiagTrack’s upload queue with `SubCohorts: [8]` (`1 << 3`). This is the compiler/debugger category shared by GCC, Clang, and related tools, rather than a separate bit for each executable.
+
+## Following the report toward Microsoft
+
+An ETW event by itself would not establish that anything leaves the machine. ETW is used for plenty of local diagnostics. The more revealing question was who was listening to this particular report.
+
+The VM already had a `Diagtrack-Listener` session subscribed to both ends of the path. These PowerShell queries showed its subscriptions:
+
+```powershell
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{2839ff94-8f12-4e1b-82e3-af7af77a450f}'
+
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{00de11a2-ec06-58e5-1a2b-21bb21dbee4b}'
+```
+
+The first subscription, for `KernelProcess`, had `MatchAnyKeyword=0x400000000002`, which includes the summary’s `0x400000000000` keyword. The second, for `Microsoft.Windows.MissionControlAggregator`, had `MatchAnyKeyword=0xe00000000000`, which includes the report’s `0x800000000000` keyword. Both had level `255`.
+
+The subscription showed where the report could go. To check whether Windows actually queued it for transmission, I inspected DiagTrack’s `EventStore.db` and decompressed the JSON batches in its `AsimovEvents` table. This revealed an important condition: the agent-usage report is treated as **optional diagnostic data**.
+
+**When optional diagnostic data is allowed (enabled by default in the US setup I tested), Windows queues the coding-agent usage report for upload to Microsoft.** I verified this by finding the agent event itself in DiagTrack’s upload queue:
+
+```json
+{
+  "name": "Microsoft.Windows.MissionControlAggregator.Segments.SubCohorts",
+  "ext": {
+    "privacy": { "isRequired": false }
+  },
+  "data": {
+    "Version": "0.1.5",
+    "CliAgentSubCohorts": [4],
+    "DesktopAgentSubCohorts": [0],
+    "FlushedFromSave": true
+  }
+}
+```
+
+I checked this with a clean installation of Windows 11 Home ARM64 using the latest official ISO, with the region set to the United States. Before changing any privacy settings, the **Diagnostic data** toggle was already enabled and labeled **Include Optional**. After completing setup with those defaults, `AllowTelemetry` was `3`, confirming that optional diagnostic data was enabled.
+
+![Windows setup with United States region: Diagnostic data defaults to Include Optional](https://xusheng.dev/posts/windows-coding-agent-telemetry/us-optional-diagnostics-default.png)
+
+Optional diagnostic data is therefore enabled by default, at least in the US setup I tested. If you did not opt out of it during installation or disable optional diagnostic data later, it is still enabled and your coding agent usage data is being uploaded. You can decline optional diagnostics during setup or turn off **Send optional diagnostic data** later under **Settings → Privacy & security → Diagnostics & feedback**. Microsoft’s [diagnostics and privacy guide](https://support.microsoft.com/en-us/windows/privacy/diagnostics-feedback-and-privacy-in-windows) explains how to change it.

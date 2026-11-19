@@ -1,91 +1,386 @@
-I was inspired to create my first Fibonacci LED piece after seeing [this video](https://www.youtube.com/watch?v=_rt1cqsU8fo) by [Jim Bumgardner](https://krazydad.com/about) in 2015. I credit him for starting my Fibonacci obsession.
+There are certain ideas in software that are simply beautiful. It doesn't matter if they have any practical use. It doesn't matter that you will never convince your coworkers to consider them. There is just something captivating about the way some computational systems work.
 
-Fast forward to 2026. I’ve made dozens of Fibonacci designs. Recently, I saw [this brilliant post](https://www.instagram.com/p/DbYfgifReFx) by Nick Pisarro explaining the use of the golden angle in creating his beautiful [Halo Pixel](https://desert-ember.square.site/product/halo-pixel/2HSIGXSPGI5TLV2RCXBHFCMY). It got me thinking about how to explain the techniques I use.
+For me, the most beautiful pieces of software are those that reveal something about the nature of programming languages. Programming languages are my obsession. I have never met a problem that couldn't be solved by introducing yet another programming language. Solving a problem at the programming language level is about solving the meta problem. Instead of trying to solve a particular problem, we take a step back and ask how we can solve a whole class of problems at once.
 
-Every Fibonacci board I make, from the tiny [One Inch Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64) to the [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024), puts its LEDs on a Fermat spiral, the same pattern as the seeds in a sunflower. It’s different from the [“Fibonacci spiral”](https://en.wikipedia.org/wiki/Fibonacci_sequence) drawn from squares, which is a single curve. The Fibonacci section shows where the name comes from.
+So when I find something that makes me rethink the nature of programming languages, I start rethinking computation as a whole. One of these incredibly beautiful but tricky concepts goes by the name partial evaluation. If you are fascinated by interpreters and compilers, partial evaluation will teach you how they are related, and how you can get a compiler for free.
 
-## The rules
+## Partial Evaluation Easy Mode[#](https://jimmyhmiller.com/magic-of-partial-evaluation#partial-evaluation-easy-mode)
 
-Start at the center. Then repeat:
+Partial evaluation has been a fascination of mine for a while. But this whole thing came up when [James Long announced he had revived](https://x.com/jlongster/status/2118465154354385010) Meta's partial evaluator for JavaScript called prepack. When I first heard about prepack, I had some high hopes and expectations for the project, but was sadly let down. This revival brought to light those same dreams. But sadly, just as with the original aim, prepack was not designed for beauty, but for practicality. So I figured it was time to renew my own efforts.
 
-1. Increase the radius a little.
-2. Add an LED.
-3. Turn 137.508°.
+Yes, in some ways this is a post repping my own library I'm releasing. But I'm not doing this because I want it to be used. I'm doing this because it lets you play with the idea I find so beautiful. That is what this post is about.
 
-Every LED on every¹ Fibonacci board is placed by those rules. LED *n* sits *n* × 137.508° around from the first, and about √*n* out from the center. The next two sections explain those two numbers.
+### Doing Partial Evaluation by Hand[#](https://jimmyhmiller.com/magic-of-partial-evaluation#doing-partial-evaluation-by-hand)
 
-<small>
-¹ There are exceptions to the √*n* rule, of course, like [Fibonacci64 Flower](https://www.evilgeniuslabs.org/fibonacci64-flower) and [Fibonacci256 Expanding](https://www.evilgeniuslabs.org/fibonacci256-expanding-hdr-pixelblaze).
-</small>
+Consider the following code:
 
-## The golden angle
+```
+function factorial(n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
 
-Any simple fraction of a turn makes spokes. At 90° (a quarter turn), every 4th LED lands on the same line. 120° makes 3 spokes, and 135° (3/8 of a turn) makes 8.
+factorial(5);
+```
 
-At 137° the LEDs still bunch into arms with gaps between them. 137.5° is exactly 55/144 of a turn, so the edge starts to crowd. It takes about 400 LEDs for that to show, though. With 256, 137.5° scores the same as the golden angle.
+As a person who reads code, you can think about how this code computes and what answer it will give. But you can do more than just give the answer. You can see the expanded form of this particular code for these particular calls. This code is spiritually the same as the following expression, once we expand it out.
 
-The golden angle, 360° ÷ φ² ≈ 137.508°, can’t be written as a fraction at all, so the LEDs never line up. The animation measures how close the two nearest of 600 LEDs get, as a percentage of the spacing in a perfect honeycomb.
+```
+5 * (4 * (3 * (2 * 1)))
+```
 
-| angle | closest two LEDs |
-| --- | --- |
-| 90° | 4% |
-| 135° | 9% |
-| 137° | 55% |
-| 137.5° | 82% |
-| 137.508° (golden) | 87% |
+In this case, there is really nothing at all that this code needs to do at runtime. A sufficiently smart compiler will just run this code directly at compile time and give the answer. But this is a bit less clear if things come in at runtime.
 
-The golden angle’s digits never end, but a board only needs a few of them. Each extra digit buys a lot more LEDs before arms start to show:
+```
+function power(base, exponent) {
+  if (exponent === 0) return 1;
+  return base * power(base, exponent - 1);
+}
 
-| angle | as good as the golden angle up to | off by (degrees) |
-| --- | --- | --- |
-| 137.5° | 400 LEDs | 0.0078 |
-| 137.51° | 1,100 LEDs | 0.0022 |
-| 137.508° | 7,800 LEDs | 0.00024 |
-| 137.5078° | 53,000 LEDs | 0.000036 |
-| 137.50776° | 820,000 LEDs | 4.1 × 10⁻⁶ |
-| 137.507764° | 43 million LEDs | 5.0 × 10⁻⁸ |
-| 137.5077641° | 21 million LEDs² | 5.0 × 10⁻⁸ |
-| 137.50776405° | 85 billion LEDs | 3.8 × 10⁻¹¹ |
-| 137.50776405004° | 1.5 trillion LEDs | 2.2 × 10⁻¹² |
+power(process.argv[2], 5)
+```
 
-Two digits are plenty for the [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024).
+It might seem like we can't do anything here, but again, if you are used to thinking about how programs run, you can trace this out and realize this is just the same as:
 
-<small>
-² The seventh digit actually makes things worse: 137.5077641° is just as far from the golden angle as 137.507764°, but on the other side.
-</small>
+```
+process.argv[2] * (process.argv[2] * (process.argv[2] * (process.argv[2] * (process.argv[2] * 1))))
+```
 
-The golden angle isn’t the only angle that scores well, though. Other “noble” angles, like 99.5°, come close. The golden angle is the one that’s furthest from every fraction.
+What we have done in both of these cases is called partial evaluation. In the first, it was a trivial case because everything was statically known. But in this latter case, we have reduced a program down into the essentials of its dynamic structure. There are no recursive function calls left. All of this has been expanded as far as it could till we get just the dynamic parts of the code remaining.
 
-Angles past 180° just mirror these: 222.492° (360° − 137.508°) makes the same spiral, flipped. That’s why you’ll sometimes see the golden angle given as about 222.5°.
+## The Big Idea[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-big-idea)
 
-## The √n radius
+This intuitive notion of partial evaluation is all you need to know to appreciate the beauty here. Partial evaluation just evaluates the part of the program we can evaluate at build time and leaves all the rest. When we do this with certain programs in certain combinations, we get some quite surprising, incredible behavior.
 
-With the angle set, the next question is the radius: how far from the center each LED sits. Each cell in the animation is the part of the board that’s closer to its LED than to any other. The dashed circles go through LEDs 64, 128, 192 and 256, so each ring between them holds 64 LEDs.
+```
+function calculate(expr) {
+  if (typeof expr === "number") return expr;
+  switch (expr[0]) {
+    case "+": return calculate(expr[1]) + calculate(expr[2]);
+    case "-": return calculate(expr[1]) - calculate(expr[2]);
+    case "*": return calculate(expr[1]) * calculate(expr[2]);
+    case "/": return calculate(expr[1]) / calculate(expr[2]);
+    default: throw new Error("Unknown operator");
+  }
+}
 
-If LED *n* goes at radius *n*, LED 128 is twice as far from the center as LED 64, and LED 256 is four times as far. The circles are evenly spaced, but the outer rings are much bigger than the inner ones and get no more LEDs. The LEDs end up crowded in the middle and far apart at the edge. The biggest cell is about 150 times the smallest.
+calculate(["+", 1, ["*", 2, 3]]);
+```
 
-A disc’s area grows with the square of its radius. Putting LED *n* at radius √*n* means LED 256 is only twice as far out as LED 64, and every ring gets the same area. The circles get closer together toward the edge, every LED gets the same share of the board, and the biggest cell is only 1.3 times the smallest. If the radius grows more slowly than √*n*, it flips: the LEDs are far apart in the middle and crowded at the edge.
+Here we have a very simple interpreter for a language that just supports arithmetic. For the above expression, you should be able to think about how we could start "partially" evaluating it. (In this case, it can be a full evaluation.) If this kind of partial evaluation isn't quite clicking for you, I've put the steps below to hopefully help it make sense.
 
-With equal area for every LED, the pixel density is the same all the way across the board.
+```
+calculate(["+", 1, ["*", 2, 3]])
+→ calculate(1) + calculate(["*", 2, 3])
+→ 1 + calculate(["*", 2, 3])
+→ 1 + (calculate(2) * calculate(3))
+→ 1 + (2 * calculate(3))
+→ 1 + (2 * 3)
+→ 1 + 6
+→ 7
+```
 
-## You can always add one more
+This is a simple evaluation of the code.  But what happens if we throw a value we don't know into the expression?
 
-A square grid only looks tidy at square numbers, rings only when every ring is full, and a hex grid only at 7, 19, 37, 61… The faint outlines in the animation show the spots each layout still needs to fill before it looks right again.
+```
+calculate(["+", Number(process.argv[2]), ["*", 2, 3]])
+→ calculate(Number(process.argv[2])) + calculate(["*", 2, 3])
+→ Number(process.argv[2]) + calculate(["*", 2, 3])
+→ Number(process.argv[2]) + (calculate(2) * calculate(3))
+→ Number(process.argv[2]) + (2 * calculate(3))
+→ Number(process.argv[2]) + (2 * 3)
+→ Number(process.argv[2]) + 6
+```
 
-The spiral is an even, round disc at every count, and adding an LED never moves any of the others. The [Fibonacci32](https://www.evilgeniuslabs.org/one-inch-fibonacci32), [Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64), [Fibonacci128](https://www.evilgeniuslabs.org/one-inch-fibonacci128), [Fibonacci256](https://www.evilgeniuslabs.org/fibonacci256-hdr-pixelblaze), [Fibonacci512](https://www.evilgeniuslabs.org/fibonacci512-hdr-pixelblaze) and [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024) all use the same layout, with differently sized LEDs and different spacings, each stopped at a different count.
+Here we can see that clear partial evaluation difference. We don't know how to evaluate `Number(process.argv[2])`. We have no idea what the answer to that will be. But as part of this process, we do know some partial information about it. For example, when we get to
 
-## Where the Fibonacci numbers come from
+```
+if (typeof expr === "number") return expr;
+```
 
-Look closely at any of the boards and you’ll see spiral arms. Connect every 3rd LED and you get 3 arms, because the golden angle is close to 1/3 of a turn. Every 5th LED makes 5 arms curving the other way, every 8th makes 8, and so on. Each of those fractions (2/5, 3/8, 5/13, 8/21…) is a little closer to the golden angle than the last, so each set of arms is a little straighter.
+we know that `Number(process.argv[2])` is indeed a number. So we can partially evaluate it further. Hopefully this is all making sense. But if you are like me, this all might seem a bit trivial and uninteresting. So let's look at a more complicated example.
 
-Any other count, like 4 or 30, zigzags or wobbles across the board instead.
+```
+function brainfuck(code, input = "") {
+  const tape = new Uint8Array(30000);
+  const jumps = {}, stack = [];
+  let pointer = 0, inputPointer = 0, output = "";
+  for (let i = 0; i < code.length; i++) {
+    if (code[i] === "[") stack.push(i);
+    if (code[i] === "]") {
+      const start = stack.pop();
+      jumps[start] = i;
+      jumps[i] = start;
+    }
+  }
+  for (let i = 0; i < code.length; i++) {
+    switch (code[i]) {
+      case ">": pointer++; break;
+      case "<": pointer--; break;
+      case "+": tape[pointer]++; break;
+      case "-": tape[pointer]--; break;
+      case ".": output += String.fromCharCode(tape[pointer]); break;
+      case ",":
+        tape[pointer] = inputPointer < input.length
+          ? input.charCodeAt(inputPointer++)
+          : 0;
+        break;
+      case "[": if (!tape[pointer]) i = jumps[i]; break;
+      case "]": if (tape[pointer]) i = jumps[i]; break;
+    }
+  }
+  return output;
+}
 
-The arm counts are 3, 5, 8, 13, 21 and 34. Put 1, 1 and 2 in front and each number is the sum of the two before it. They’re the Fibonacci numbers, which is where the boards get their name. Count the spirals in a sunflower head and you’ll find Fibonacci numbers there too.
+brainfuck("++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.");
+```
 
-## Real boards
+Here we have a brainfuck interpreter. And the example program we want to partially evaluate does not require any input at all (in brainfuck `,` is the way you get input). So when we go to partially evaluate this, we will just get an answer. In this case, this program is actually brainfuck's "hello world". But what about a program with input?
 
-The video shows a real [Fibonacci256](https://www.evilgeniuslabs.org/fibonacci256), then the [One Inch Fibonacci64](https://www.evilgeniuslabs.org/one-inch-fibonacci64), [One Inch Fibonacci128](https://www.evilgeniuslabs.org/one-inch-fibonacci128), [Fibonacci512](https://www.evilgeniuslabs.org/fibonacci512-hdr-pixelblaze) and [Fibonacci1024](https://www.evilgeniuslabs.org/fibonacci1024). All of them follow the same rules.
+```
+function main() {
+	return brainfuck(",>++[>+++[>++++[<<<+>>>-]<-]<-]<.", process.argv[2])
+}
+```
 
-More on Wikipedia: [Fermat’s spiral](https://en.wikipedia.org/wiki/Fermat%27s_spiral), the [golden angle](https://en.wikipedia.org/wiki/Golden_angle), and [phyllotaxis](https://en.wikipedia.org/wiki/Phyllotaxis), the way plants arrange their leaves and seeds.
+When we do our partial evaluation, we get the following:
 
-<small>The animations and videos in this post are © Evil Genius Labs LLC, licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You’re welcome to share and adapt them with credit, but not commercially.</small>
+```
+function main(b) {
+  let a;
+  a: {
+    a = process.argv[2];
+    a = a === void 0 ? "" : a;
+    if (0 < a.length) {
+      a = a.charCodeAt(0);
+      break a;
+    }
+    a = 0;
+  }
+  a = (a & 255) + 24 & 255;
+  return String.fromCharCode(a);
+}
+```
+
+What is this? A compiled brainfuck program! This is the first incredible fact: when you take an interpreter and partially evaluate it with a program, you get the compiled program out! Now this particular exact form is an artifact of how my partial evaluator works. You could imagine slightly different code. But the key is that what we've done is remove the interpreter completely.
+
+## The Projections[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-projections)
+
+What we've discovered here is the first of three so-called Futamura Projections. Our partial evaluator, when applied to an interpreter and given a program, can give us a compiled version of that program. Or to put it in pseudocode.
+
+Depending on your exposure to interpreters and compilers, this might seem miraculous or mundane. Writing an interpreter and writing a compiler can seem like significantly different undertakings. In the age of AI, perhaps less so, but I think even then many things still hold. It is quite easy to instrument an interpreter, quite a bit harder to do so for a compiler. Changing an interpreter to support new features is quite easy, less so for a compiler. But more than that, there are all sorts of things that can be thought of as interpreters, that we'd almost never write a compiler for.
+
+```
+function validate(schema, value) {
+  switch (schema.type) {
+    case "string":
+      return typeof value === "string" &&
+        (schema.minLength === undefined || value.length >= schema.minLength);
+    case "number":
+      return typeof value === "number" && Number.isFinite(value) &&
+        (schema.min === undefined || value >= schema.min);
+    case "boolean":
+      return typeof value === "boolean";
+    case "array":
+      if (!Array.isArray(value)) return false;
+      const length = value.length;
+      for (let i = 0; i < length; i++) {
+        if (i in value && !validate(schema.items, value[i])) return false;
+      }
+      return true;
+    case "object":
+      return value !== null && typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.keys(schema.properties).every(key =>
+          Object.hasOwn(value, key) &&
+          validate(schema.properties[key], value[key]));
+    default:
+      throw new Error("Unknown schema type: " + schema.type);
+  }
+}
+
+const userSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 1 },
+    age: { type: "number", min: 0 },
+    tags: { type: "array", items: { type: "string" } }
+  }
+};
+
+function validateUser(value) {
+  return validate(userSchema, value);
+}
+```
+
+Consider this simple schema setup. This is code that can easily be partially evaled into something where we have created specialized functions for our particular schema. While not the most crucial code, this can give us a 5x performance boost when our objects start getting more complicated. You may think that we should just hand-write those functions. Or hand-write a compiler for these schemas. But what about those schemas that exist only at runtime? Now we either need to compile those on the fly, or we have to keep both a compiler and interpreter. Having a way to partial eval lowers this burden quite a bit.
+
+## Mind Bending[#](https://jimmyhmiller.com/magic-of-partial-evaluation#mind-bending)
+
+But if the Futamura projections stopped here, they would be exciting, but not quite the craziness they are. To understand how this can go further, we are going to take this a step beyond your raw intuition of what it means to partially evaluate something and give a different frame. We can think of partial evaluation as a process of "specializing" a program.
+
+What exactly is specializing a program? Well, it is taking a program that is generic and making a version that instead works for a single program. Let's think about a simple pattern matcher program like an overly simplified regex.
+
+```
+function matches(pattern, text) {
+  if (pattern.length === 0) {
+    return text.length === 0;
+  }
+
+  const firstCharacterMatches =
+    text.length > 0 && pattern[0] === text[0];
+  const allowsRepetition = pattern[1] === "*";
+
+  if (allowsRepetition) {
+    const remainingPattern = pattern.slice(2);
+
+    if (matches(remainingPattern, text)) {
+      return true;
+    }
+
+    if (!firstCharacterMatches) {
+      return false;
+    }
+
+    const remainingText = text.slice(1);
+    return matches(pattern, remainingText);
+  }
+
+  if (!firstCharacterMatches) {
+    return false;
+  }
+
+  const remainingPattern = pattern.slice(1);
+  const remainingText = text.slice(1);
+  return matches(remainingPattern, remainingText);
+}
+
+matches("a*b*c", "aaabbc");
+```
+
+This program is generic. It lets you match on many different patterns. That can be great if we need that flexibility. But if you don't have a bunch of patterns, it might be worth it to just make specialized code. Now, exactly what kind of specialized code? It might be that you only have this literal pattern; then you want to specialize very particularly.
+
+```
+function matchesAStarBStarC(text) {
+  let i = 0;
+  while (text[i] === "a") i++;
+  while (text[i] === "b") i++;
+  return text[i] === "c" && i + 1 === text.length;
+}
+
+matchesAStarBStarC("aaabbc");
+```
+
+Or  you just have `<x>*<y>*<z>*` as a pattern.
+
+```
+function matchesXStarYStarZStar(x, y, z, text) {
+  let i = 0;
+  while (i < text.length && text[i] === x) i++;
+  while (i < text.length && text[i] === y) i++;
+  while (i < text.length && text[i] === z) i++;
+  return i === text.length;
+}
+
+matchesXStarYStarZStar("a", "b", "c", "aaabbc");
+```
+
+For any bit of generic code, we can think of how to move our code to a more specialized form.
+
+### Specializing the Specializer[#](https://jimmyhmiller.com/magic-of-partial-evaluation#specializing-the-specializer)
+
+Partial evaluation is a form of specialization that figures out what it should specialize on based on what input is static and what is dynamic. In many ways, a partial evaluator is a generic specializer. Given any program, we can make a specialized version of it for any input. What happens if we specialize an interpreter for a given input? We get back that interpreter for only exactly that one program. But what do we need then? Do we need all this generic dispatch? No, we know the full program. We don't need any operations we don't actually use. We can fully get rid of all the generic interpreter mechanism.
+
+But if the specializer can specialize any program, can it specialize itself?
+
+This leads us to the second Futamura projection. Put in our pseudo-code format, we get:
+
+Or, to put it in our specializer language, what if we make a special version of our generic specializer? What is it specialized for? A particular interpreter. Now we have a function that, given any program, will spit out newly specialized interpreters just for that program. Or, in Java speak, we have a specialized interpreter factory.
+
+Let's see a real example of one of these compilers to make this concrete. Here is the interpreter we are going to specialize.
+
+```
+function interp(program, io) {
+  var value = null;
+  while (program.length > 0) {
+    var instruction = program[0];
+
+    if (instruction === "prompt") {
+      value = io.prompt();
+    } else if (instruction === "print") {
+      io.print(value);
+    } else {
+      throw new Error("Unknown instruction: " + instruction);
+    }
+
+    program = program.slice(1);
+  }
+  return value;
+}
+```
+
+When we apply our second projection, we get out the following compiler:
+
+```
+function compile(program) {
+  const lines = codegen.buffer();
+  const literalSource = codegen.literal(null).source;
+  let remaining = program;
+  let value = literalSource;
+
+  while (remaining.length > 0) {
+    const remainingItem = remaining[0];
+    if (remainingItem === "prompt") {
+      const ioReference = codegen.reference("io");
+      const callSource = codegen.call(lines, ioReference, "prompt", []).source;
+      remaining = remaining.slice(1);
+      value = callSource;
+      continue;
+    }
+    if (remainingItem === "print") {
+      const ioReference2 = codegen.reference("io");
+      const args = [codegen.reference(value)];
+      codegen.call(lines, ioReference2, "print", args);
+      remaining = remaining.slice(1);
+      continue;
+    }
+    const text = "Unknown instruction: " + remainingItem;
+    throw new Error(text);
+  }
+
+  const valueReference = codegen.reference(value);
+  return codegen.finish(lines, valueReference);
+}
+
+```
+
+And if we compile one of these very simple programs, we can see the output:
+
+```
+compile(["prompt", "print"])
+
+// returns as a string
+function run(io) {
+	var v0 = io.prompt();
+	var v1 = io.print(v0);
+	return v0;
+}
+```
+
+Now, of course, this is not a very interesting language. But hopefully you can see this general idea. Given an interpreter, we automatically derive a compiler! Pretty incredible.
+
+### The Third Projection[#](https://jimmyhmiller.com/magic-of-partial-evaluation#the-third-projection)
+
+But we can't stop at the second projection. We have to push on and get to the final mind-bending projection. If you apply our specializer to itself as input, you get a compiler generator.
+
+```
+partial_eval(partial_eval, partial_eval) -> compiler_generator
+```
+
+So now we have a generic function that will spit out compilers for any interpreter we give it!
+
+## Playing With It[#](https://jimmyhmiller.com/magic-of-partial-evaluation#playing-with-it)
+
+I [have implemented](https://github.com/jimmyhmiller/split-shot) a reasonable, but still very limited partial evaluator for JavaScript in Rust. I have taken it further to try to make it work quite well for a number of different interpreters and interpreter-like programs in JavaScript. I've also tried to get limited versions of the second and third projections working. Go play with it, see what works, what doesn't, file issues, or better, use some of your tokens to help me make more cases work.
+
+But most of all, explore. This is such a rich space. Below are some papers, blogs, and projects about partial evaluation in some way, shape, or form. There has never been a better time to play with these kinds of crazy techniques for programming languages. Don't let what is practical stop you from exploring the cool, interesting aspects of programming.

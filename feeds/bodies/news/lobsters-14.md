@@ -1,144 +1,81 @@
-Introducing *sysdeck*, a command center for Linux and the BSDs that searches
-applications, files, the clipboard history and more from a single hotkey, and
-that only runs when you call it.
+I’ve been working on a ledger implementation in pure PostgreSQL called [pgledger](https://github.com/pgr0ss/pgledger). As I’ve written about previously, [I think more applications should use double-entry ledgers](https://www.pgrs.net/2025/06/17/double-entry-ledgers-missing-primitive-in-modern-software/).
 
-In August I started working on a tool that I had been missing on my Linux
-desktop for a while, and for which I tried to build a somewhat glued-together
-mess of scripts that used [bemenu](https://github.com/cloudef/bemenu) to do what I wanted. At some point, though, I
-figured that I should probably try to put together an actual program, ideally
-using Zig and GTK.
+However, once a ledger is integrated, it can be a bit hard to wrap your head around it visually. What are the money flows? What are the main set of accounts per user? Why is the balance in this account not what I expect?
 
-I wanted something that, just like bemenu (or rofi, or wofi, or whatnot), is
-basically a single popup that I can open with a hotkey and type a few letters
-into, to start an application, find a file, paste something I copied an hour
-ago, or convert a currency without opening a browser. Now, roughly three months
-later, I think I got it to a point where it’s worth publishing for others to
-try. It’s called *sysdeck*, and the way I describe it is *the less bloated
-Linux/BSD equivalent of Raycast on macOS*.
+In my work with companies, I’ve often tried to make the ledger more visual and understandable, either with a database dashboard like [Metabase](https://www.metabase.com/) or with custom in-app code.
 
-Yes, I’m aware that the title of this post is clickbait. *sysdeck* isn’t a port
-of [Raycast](https://www.raycast.com), it doesn’t share a single line of code with it, and it
-doesn’t come with an extension store or a subscription plan. However, Raycast is
-the name that probably most people know for this kind of tool, and considering
-that you’re here, reading this post, the title has obviously done its job. :-)
+The same way that pgledger is meant to be a common, reusable ledger across applications, I thought we could have a common, reusable visualization tool. And thus [pgledger-ui](https://github.com/pgr0ss/pgledger-ui) was born.
+
+## Screenshot
+
+This is what it looks like to view a ledger account, showing the account details, the most common counterparty accounts, a chart of balance over time, and the detailed transfer entries:
+
+[![pgledger-ui account page](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/03-account-entries.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/03-account-entries.png?raw=true)
 
 ## Overview
 
-*sysdeck* is supposed to be bound to a hotkey in your window manager. When you
-press it, a window appears in which you start typing, and *sysdeck* shows the
-matching entries from your applications, command-line executables, files and
-folders, browser bookmarks, clipboard history, open Sway windows, SSH hosts,
-Podman containers, text snippets and emoji. *Return* acts on the selected entry
-depending on its kind, meaning it launches an application, opens a file or
-copies a clipboard entry back. Holding *Alt* opens a context menu with further
-actions. Selected images are shown along with their EXIF data, and executables
-show their manual page underneath the list unless the `man` extension is
-disabled in the config.
+In general, `pgledger-ui` is pretty simple. It runs database queries and shows them in a webpage. There are some charts and extra aggregate information. And the whole thing is bundled into a single Go binary:
 
-Besides searching, *sysdeck* calculates and converts units and currencies using
-the library behind [`whats`](https://xn--gckvb8fzb.com/whats-1-21-gigawatts-in-watts/). It also controls running media players
-via MPRIS, connects and disconnects NetworkManager connections, and takes
-screenshots of a region, a window or the whole screen. If you configure a
-Gemini, OpenAI or Anthropic model, or any OpenAI-compatible server, it also
-sends your questions to an LLM. It keeps track of what you pick and ranks its
-suggestions accordingly so that it can show you recommendations that matter to
-your personal workflow.
+```
+go run github.com/pgr0ss/pgledger-ui@latest --database-url postgres://user:pass@host:5432/dbname
+```
 
-Oh, and its `--dmenu` mode can replace `dmenu` in scripts, just like a single
-line in your Sway configuration lets it replace clipboard managers like
-`cliphist`.
+Beyond this, there are a few main ideas baked into pgledger-ui:
 
-What I’d like *sysdeck* to become is the one *command center* from which you
-start, find and control everything on a Linux or BSD desktop, instead of the
-collection of single-purpose tools and scripts that a typical tiling window
-manager setup combines for launching programs, managing the clipboard, picking
-emoji and taking screenshots. As mentioned before, *sysdeck* is written in Zig,
-uses GTK4 for its interface and keeps its indexes in SQLite.
+### Everything Is Linked and Clickable
 
-## On demand
+Often, when debugging an issue, you start by realizing a ledger account doesn’t have the balance you expect. Then, you want to see the transfers in and out of that account. And maybe you want to trace a given metadata key across transfers (e.g. the `payment_id`). As you continue debugging, you may follow an account to a transfer to another account and so on. With pgledger-ui, each entity shows the related entities, and you can click on any of them to trace a flow. This even includes metadata keys, so you can see related transfers which share the same key/value pair.
 
-One part of *sysdeck*’s design that differs from most launchers that come with
-more advanced features is that *sysdeck* doesn’t use a background service. This
-is deliberate and will stay that way for the foreseeable future.
+### Search
 
-Raycast, for example, keeps running at all times, so that its window can appear
-the instant you press the hotkey. *sysdeck*, however, only runs when you ask for
-it. Every press of the hotkey starts a new process that shows the window, does
-what you asked it to do, and exits as soon as you pick an entry, press *Escape*
-or switch to another window. Whenever one of its indexes is older than its
-configured maximum age, *sysdeck* rebuilds it on a separate thread while the
-window is open, and searches the existing index in the meantime.
+It should be easy to find what you want, so pgledger-ui has a single, universal search box. You can search by id, account name, idempotency key, metadata values, etc., and it will show you all matches across all entities. For example, if you name your accounts hierarchically (e.g. `user01.available`, `user01.pending`, etc.) you can search for `user01` and see all accounts and transfers for that user.
 
-Similarly, even the clipboard history works without a resident process of its
-own, because `wl-paste` starts a lightweight *sysdeck* process (that only loads
-the absolute necessary bits) for every copy. That run records the entry and
-exits again, all within 10 to 20 milliseconds. The price for all of this is a
-start time of about a tenth of a second on my machine, most of which GTK spends
-on building and presenting the window. In my opinion this *“slight delay”* is a
-fair trade over running a background service, because RAM has become expensive
-and hard to get, as I’ve outlined in my posts on
-[holding on to your hardware](https://xn--gckvb8fzb.com/hold-on-to-your-hardware/) and on
-[dealing with faulty RAM](https://xn--gckvb8fzb.com/hold-on-to-your-hardware-badram/), and I believe that a program that is on
-screen for only a few seconds at a time shouldn’t occupy memory and eat up CPU
-cycles for the rest of the day.
+### Information Density
 
-## What it looks like
+I like interfaces which are information dense, without being overwhelming. The goal is to show a lot of useful information in each page, and make it easy to scan for what you need.
 
-### Conversions
+### Column-Based Views
 
-*sysdeck* uses the [`whats`](https://tty.fail/mrus/whats) library for conversions and can convert
-various units and currencies.
+Normally, when you query data from a database, you get row-based results. However, I find that visualizing ledgers in a columnar format is often more useful.
 
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck02.gif)
+For example, say you are looking at all of the transfer entries for a given payment. The results may come back like this:
 
-### Web search
+```
+       kind       |          name          | amount
+------------------+------------------------+--------
+ payment_created  | user1.external         | -50.00
+ payment_created  | user1.receivables      |  50.00
+ payment_received | user1.receivables      | -49.50
+ payment_received | user1.available        |  49.50
+ refund_created   | user1.available        | -20.00
+ refund_created   | user1.pending_outbound |  20.00
+ refund_sent      | user1.pending_outbound | -20.00
+ refund_sent      | user1.external         |  20.00
+```
 
-You can configure custom web search engines and search them directly from
-*sysdeck*, which then opens your default browser with the results.
+But a columnar view of that same data looks like:
 
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck03.gif)
+```
+       kind       | user1.external | user1.receivables | user1.available | user1.pending_outbound
+------------------+----------------+-------------------+-----------------+------------------------
+ payment_created  |         -50.00 |             50.00 |                 |
+ payment_received |                |            -49.50 |           49.50 |
+ refund_created   |                |                   |          -20.00 |                  20.00
+ refund_sent      |          20.00 |                   |                 |                 -20.00
+```
 
-### Disk search
+(Example from the [pgledger reconciliation.sql.out script](https://github.com/pgr0ss/pgledger/blob/fee1aa05630f5af8cb3196749aa4d998162a9862/examples/reconciliation.sql.out#L148-L224))
 
-*sysdeck* can be configured to index specific folders and include their contents
-in its search results. In disk mode it shows only those items.
+PostgreSQL calls this a [crosstab](https://www.postgresql.org/docs/current/tablefunc.html#TABLEFUNC-FUNCTIONS-CROSSTAB-TEXT) (or [crosstabview](https://wiki.postgresql.org/wiki/Crosstabview) in psql). A pivot table in a spreadsheet may be similar. And it’s a common way to visualize a ledger<sup>[1](https://www.pgrs.net/2026/11/19/visualizing-a-ledger-with-pgledger-ui/#fn:1)</sup>.
 
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck04.gif)
+This type of view exists in pgledger-ui as well, especially if you’re tracing a flow via a metadata key:
 
-### Media controls
+[![pgledger-ui trace crosstab view](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/05-trace-crosstab.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/05-trace-crosstab.png?raw=true)
 
-Using MPRIS, *sysdeck* can control media players and trigger actions such as
-play, pause, skip the current track or go back to the previous one, and it can
-also show what is currently playing from within its UI.
+And you can separate the in/out flows, making it resemble a standard ledger T-account view:
 
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck05.gif)
+[![pgledger-ui trace in/out view](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/06-trace-inout.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/06-trace-inout.png?raw=true)
 
-### Emoji
+## Feedback Please
 
-*sysdeck* builds an index of all available emoji and lets you search for
-individual ones using keywords that make sense, so that you find the one you’re
-looking for, which it then copies to your clipboard on *Return*.
-
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck06.gif)
-
-### Containers
-
-Podman containers can be started and stopped from within *sysdeck*, which also
-shows the current status of each individual container.
-
-![](https://xn--gckvb8fzb.com/sysdeck-raycast-for-linux-bsd/images/sysdeck07.gif)
-
-## Get it
-
-Anyway, *sysdeck* is open source under the [SEGV License](https://xn--gckvb8fzb.com/segv/) and its primary
-repository is on [tty.fail](https://tty.fail/mrus/sysdeck), with a [mirror on GitHub](https://github.com/mrusme/sysdeck) that also
-publishes pre-built binaries. The [latest release](https://github.com/mrusme/sysdeck/releases/latest) includes builds for
-Linux on `x86_64`, `aarch64`, `riscv64`, `powerpc64le` and `s390x`, each for
-glibc as well as musl, a musl build for `loongarch64`, and `x86_64` builds for
-FreeBSD, NetBSD and OpenBSD. The binaries use your system’s GTK4 libraries. If
-you’d rather build *sysdeck* yourself, the README lists the packages you need on
-each of these systems.
-
-If a keyboard-driven command center that only runs when you need it sounds like
-your kind of thing, give *sysdeck* a try, and let me know how it works for you
-in the [community channel](https://xn--gckvb8fzb.com/contact/#xmpp).
+Please check out [pgledger-ui](https://github.com/pgr0ss/pgledger-ui), and I’d love to hear what you think, especially if you work with pgledger or other ledgers today. Are there other useful visualizations or tools you’ve seen in this space? And if pgledger-ui is something that you are interested in using, please let me know.

@@ -1,74 +1,74 @@
-This was a big week for IT incidents making it into the news. I wanted to take a moment and capture links on what’s been reported on each of these so far.
+After over three years of development, over 2000 commits, 170 releases and with multiple customers running OpenRun in production, I am happy to do the 1.0 release for OpenRun.
 
-1. Microsoft 365 (Thu Nov 12)
-2. FAA ground stop (Fri Nov 13)
-3. Workday (Fri Nov 13)
-4. Anthropic (Fri Nov 13)
-5. United (Mon Nov 16)
-6. JPMorgan Chase (Mon Nov 16)
-7. National Security Agency (Tue Nov 17)
-8. Apple services (Tue Nov 17)
-9. Marriott (Tue Nov 17)
+OpenRun is an [open source](https://github.com/openrundev/openrun) self-hosted GitOps platform for deploying web apps and internal tools declaratively. Deploy on a single node with Docker/Podman, or deploy apps onto a Kubernetes cluster. OpenRun adds the authentication, authorization and auditing features required by teams. Code based internal tools get the deployment and auth features which are usually available in low code platforms.
 
-Note that none of these incidents involved cybersecurity attacks, according to the reporting. While there is reporting that Wall Street executives and the National Security Agency are telling congress that [the outages are related to fixing vulnerabilities](https://www.washingtonsun.com/technology/bank-ceos-nsa-tell-congress-ai-driven-patches-behind-outages), the NSA incident is the only one where there is explicit reporting that it involved vulnerability patching work.
+I started the [OpenRun project](https://openrun.dev/blog/intro/) (called Clace initially) in April 2023 - feels like an eternity ago. I have been working on OpenRun as a part time project, doing consulting on the side.
 
-## Microsoft 365 (Thu Nov 12)
+OpenRun is built to make it easy for teams to [declaratively](https://openrun.dev/docs/applications/overview/#declarative-app-management) deploy internal tools. OpenRun also aims to make it easy to set up [OIDC/SAML based authentication](https://openrun.dev/docs/configuration/authentication/), with [RBAC policies](https://openrun.dev/docs/configuration/rbac/) to control which apps are available to which teams and roles.
 
-[Charles Lamanna](https://www.linkedin.com/in/charleslamanna/) of Microsoft posted an abridged version of Microsoft’s preliminary post-incident report on Twitter. There’s a ton of detail there, and I’m not even going to try to summarize. I’ll write a separate blog post about this one after the final report lands.
+![Developers and admins deploy and configure OpenRun through git push, openrun apply, the console and the CLI; team members use the apps from the browser with SSO login and AI agents through MCP. OpenRun runs internal tools, ops tools, SQLite apps and personal apps](https://openrun.dev/d2/use_cases_static_light.svg)
 
-The actually report seems to be only accessible to Microsoft customers, but it looks like somebody posted it to Reddit: [Microsoft Post-Incident Report is up for the Exchange Online Outage](https://www.reddit.com/r/sysadmin/comments/1xxiasy/microsoft_postincident_report_is_up_for_the/)
+*OpenRun use cases*
 
-## FAA ground stop (Fri Nov 13)
+A sample OpenRun config looks like below. See [intro](https://openrun.dev/intro/#config) for a comparison with Kubernetes.
 
-The FAA Telecommunications Infrastructure (FTI) network became saturated (1,000 connection attempts every 4-5 seconds). The current hypothesis is that this was triggered by the deployment of a new router at a site in El Dorado, Arkansas.
+```python
+# Resource limits (optional)
+limits = {"cpus": "1", "memory": "512m"}
 
-FAA website: [Nationwide Ground Stop: Questions and Answers](https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers)
+# A Streamlit app, served at /misc/streamlit_example
+app(path="/misc/streamlit_example",
+    source="github.com/streamlit/streamlit-example",
+    git_branch="master", spec="python-streamlit", container_opts=limits)
 
-## Workday (Fri Nov 13)
+# A FastHTML app, served at the fasthtml subdomain
+# (fasthtml. means use this subdomain on the default domain)
+app(path="fasthtml.:",
+    source="github.com/AnswerDotAI/fasthtml/examples",
+    spec="python-fasthtml",
+    params={"APP_MODULE": "basic_ws:app"}, container_opts=limits)
+```
 
-Services in Workday’s disaster recovery site unexpectedly wrote to production databases, leading to data consistency problems.
+To declaratively create these two apps, run `openrun apply apps.star`. Setting a default auth and RBAC policies in the server config means they apply to all apps.
 
-Unfortunately, I couldn’t find a publicly available report from Workday. Here are some reports from other parties that were reporting on what Workday told them:
+This shows a recorded demo of a [sample workload](https://github.com/openrundev/demo). See [console tour](https://openrun.dev/console-tour/) for a walkthrough of the optional console UI or take a look at the console [live demo](https://utils.demo.clace.io/console).
 
-- People: Workday Suffers Massive Outage, 1 Day After Microsoft Faced Similar Disruption That Impacted Thousands of Companies
-- UC Today: Workday’s Backup Test Took Payroll and Timekeeping Offline
-- Florida Atlantic University: UPDATE – Workday Production Service Disruption
+- **Go**: OpenRun is implemented in [Go](https://go.dev/). The fast compile cycle and excellent runtime performance of Go make developing in Go fun. The difficulty of adding dynamic behavior was the one challenge in Go, especially compared to something like the dynamic class loading available in the JVM. Out of process loading using [go-plugin](https://github.com/hashicorp/go-plugin) was the solution used to get [dynamic loading behavior](https://openrun.dev/docs/plugins/external-plugins/). There is an additional performance overhead of an RPC call but there are advantages in terms of ease of use and stability.
+- **[Starlark](https://starlark-lang.org/)** as the [config language](https://openrun.dev/blog/starlark/) for declaring apps and defining app handler functions. The familiarity of Python which Starlark provides makes it very easy to get started with for end users.
+- **[Hypermedia](https://hypermedia.systems/)** (using [HTMX](https://htmx.org/)) based UI is used for the built-in [actions UI](https://openrun.dev/docs/actions/) and for the optional [Console app](https://openrun.dev/console-tour/). Hypermedia apps work well for the types of apps being built with OpenRun. Fewer frontend dependencies, no separate frontend build pipeline and avoiding the NPM ecosystem have been some benefits of building Hypermedia based apps.
+- **SQLite and Postgres**: For single node deployment, SQLite is used for metadata. For Kubernetes deployment, Postgres is used for metadata. No ORM is used. This was a bit more work to develop initially but allowed for complete control over the queries used for each database.
+- **Declarative deployments**: Initially, the plan was to use the Kubernetes libraries for [three way merge](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/#how-apply-calculates-differences-and-merges-changes) (between new config, previous config and current state), but implementing it in OpenRun itself turned out to be simpler and easier to maintain. The [implementation](https://github.com/openrundev/openrun/blob/8b31bbe4c8685f4648f3ac9d1094702826a8c0e6/internal/server/apply.go#L1364) is custom built for what OpenRun needs, so it does not have the complexity of a general purpose library.
+- **Sequencing**: OpenRun is built for teams to deploy internal tools. The three types of apps which are supported (in the order in which support was added in OpenRun) are:In terms of user adoption, it would have been better to start with Containerized apps, since those work with existing user applications, without requiring any OpenRun specific development.
+  1. Starlark apps, where the whole app is defined in Starlark.
+  2. Action apps for operational tasks like runbooks, defined in Starlark.
+  3. Containerized apps, in any backend language, no Starlark required in app definition.
+- **Starlark Apps**: OpenRun did go somewhat overboard with Starlark support, with features like allowing [database app development](https://openrun.dev/docs/plugins/store/) from Starlark. Containerized apps would have been better since they work with the complete language ecosystem. The Hypermedia support could have been limited to what is required for a [backend for frontend pattern](https://samnewman.io/patterns/architectural/bff/) (although hypermedia apps do not need much of a frontend). Internal apps like the [Console](https://github.com/openrundev/console) are built with Starlark, so the work done to support this was still useful.
+- **Container Management**: Single node deployment with Docker/Podman and multi-node with Kubernetes are the two supported modes. A multi-node deployment, with each node having a Docker/Podman installation, was considered but not done since that would have introduced too many complexities in terms of container and volume management.
 
-## Anthropic (Fri Nov 13)
+There are many products which make deployments easier. OpenRun [differs](https://openrun.dev/compare/coolify-caprover-kamal/) in that it provides a declarative solution and is targeted at teams deploying internal tools.
 
-I couldn’t find any details about the nature of the failure mode for the incident(s) that Anthropic experienced on Friday. Here are the official reports:
+- GitOps based declarative deployments, with a simple declarative spec custom designed for deploying internal tools. App creation, config updates and deletion can be done declaratively. Most other solutions allow updating existing apps through git commits, but creating new apps requires CLI/API calls or click-ops.
+- OIDC/SAML based auth for controlling access to deployed apps, with support for RBAC.
+- Runs like an application server, allowing apps to be deployed easily with domain and path based routing.
+- App files, including static files, are served from a SQLite database instead of the file system (on Kubernetes, files are stored in Postgres and cached in a local SQLite database). This allows atomic version updates and rollbacks, with file contents de-duplicated across versions and apps.
+- Service bindings which allow each app to get isolated database credentials while operations and backups are managed centrally.
+- Single node deployment configuration can easily upgrade to a Kubernetes based deployment, with no changes required in app declarations.
+- Setting up a development environment for apps, with live reload, is a built-in feature (on macOS, Windows and Linux).
 
-- Elevated errors on claude.ai, the Claude API, and Claude Code
-- Elevated errors on claude.ai, Claude Code, and platform.claude.com
+With recent improvements in AI, internal tools which would have required weeks of development work can now be built much faster using AI agents. Higher level abstractions for deploying internal tools securely are necessary now, since the [tools themselves are easier to build](https://openrun.dev/blog/code-first-internal-tools/).
 
-## United (Mon Nov 16)
+Agents are at a point where they can handle the deployment workflow themselves. Letting agents directly do production deployments might be fine for testing and personal workflows, but that approach is not suited for team environments. A declarative approach is better if you want to set up multiple deployment environments and restore an environment from scratch.
 
-The United outage is described in the press as a systemwide operational outage that affected pilot applications, including crew communications, messaging systems, and the ability to provide final aircraft weight information for departing flights. Beyond that, I couldn’t find any details about the nature of the failure mode.
+Agents are pretty good at writing the YAML boilerplate required for Kubernetes deployments. Internal tools generally require OIDC/SAML authentication, RBAC and [audit logs](https://openrun.dev/docs/applications/audit/). [Kubernetes](https://openrun.dev/compare/diy-kubernetes/) alone does not make enabling such access policies easy. OpenRun provides a higher level app deployment abstraction. This helps reduce the overhead of maintaining the deployment configuration. Using Kubernetes directly, multiple systems like CI builder, ArgoCD, auth proxy, Internal Developer Platform (IDP) etc. have to be configured to get the functionality OpenRun provides.
 
-While there is nothing official  from United, there are United statements reported in the media, as well as statements from [the union that represents United pilots](https://ual.alpa.org/):
+The core config format, CLI commands and API are stable and will maintain backward compatibility across the 1.x releases. The plan is to ensure that existing deployments should work without issues when doing upgrades across 1.x, as new features are added and issues fixed.
 
-- NBC 5 Chicago: United Airlines responds to ‘widespread system outage.’ Read the statement here
-- AP: 1.5-hour-long system outage forces United Airlines to delay departing flights
-- ABC News: United Airlines briefly has ‘systemwide’ disruption to departing flights
-- Reuters: United Airlines says technology outage that delayed departures has been resolved
+Date based versioning is being used for the 1.x [releases](https://github.com/openrundev/openrun/releases). All fixes go on the `main` branch and releases use the `1.YYMM.D[D]V` version format, where V is the version number on that day, zero-indexed. So v1.2611.130 means the first release on 13 Nov 2026.
 
-## JPMorgan Chase (Mon Nov 16)
+The OpenRun server and its built-in features, including SSO, RBAC, audit logs, and PostgreSQL/MySQL/Redis service bindings, are [Apache 2.0](https://github.com/openrundev/openrun/blob/main/LICENSE) licensed.
 
-The JPMorgan Chase incident delayed [Zelle](https://www.zelle.com/) transactions. The tweet below mentions a software bug in on-premise hardware systems. Beyond that, I couldn’t find any details.
+Service bindings for additional databases and data platforms (Snowflake, Databricks, SQL Server, Oracle, MongoDB, ClickHouse) are available as downloadable [service providers](https://openrun.dev/docs/applications/servicebindings/#binding-providers-sql-server-oracle-mongodb-snowflake-clickhouse). These are under the [PolyForm Free Trial License 1.0.0](https://polyformproject.org/licenses/free-trial/1.0.0), which allows limited duration evaluation use. Use beyond the evaluation period requires a commercial license.
 
-## National Security Agency (Tue Nov 17)
+Paid support is planned for OpenRun and the commercial service providers. The paid plan will also include SemVer based long term support releases, with fixes backported from the `main` branch. All features and fixes will be available in releases from the `main` branch. A SOC 2 Type 2 report on the organization will be available to customers on the paid plan. Email [contact@openrun.dev](mailto:contact@openrun.dev) for support.
 
-Performance on the NSA’s classified internal communication network (NSA Net) degraded during this incident. According to the reporting, it was triggered by a software patch intended to fix PHP vulnerabilities that were discovered last month.
-
-- NSA statement on network issues
-- The Record: Update: Disruptions in NSA’s internal network caused by software patch, DNI says
-
-## Apple services (Tue Nov 17)
-
-Several Apple services experienced an outage, including iCloud and Apple Pay. I couldn’t find anything directly from Apple. According to a statement from Apple reported by the press, it was triggered by an internal update.
-
-## Marriott (Tue Nov 17)
-
-Marriott experienced sign-in issues on their website (marriott.com) and their app (Marriott Bonvoy). Beyond that, I couldn’t find any additional details. Nothing official from Marriott, here’s reporting that includes a statement from them.
-
-1. ![Ezra SF's avatar](https://1.gravatar.com/avatar/a9414a1ea745b9abce3d779bed96313fcdf02d3dc277a7540277eb6299cd7466?s=192&d=identicon&r=G) **[Ezra SF](https://ezrasf.com/)** says: .comment-author [November 18, 2026 at 7:11 pm](https://surfingcomplexity.blog/2026/11/18/incidents-in-the-news/#comment-9989) .comment-metadata .comment-meta Word is new PHP critical vulnerabilities publish tomorrow. The adventures in patching continue. .comment-content [Reply](https://surfingcomplexity.blog/2026/11/18/incidents-in-the-news/?replytocom=9989#respond) .comment-body
+To try out OpenRun, check out the [Quick Start](https://openrun.dev/docs/quickstart/), which works on macOS, Windows and Linux.
