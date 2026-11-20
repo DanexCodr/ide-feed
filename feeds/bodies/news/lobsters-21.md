@@ -1,109 +1,321 @@
-In 1895, H. G. Wells [sent a time traveller](https://www.gutenberg.org/ebooks/35) to the year 802,701, where he found childlike, carefree people living in apparent paradise, fed and clothed without ever working or thinking for it, never suspecting that people underground were toiling to provide for them, let alone why.
+This article explains how Elixir implements type inference and type narrowing
+using reverse arrows: a small set of composable ideas, rather than special cases
+hardcoded into the type checker.
 
-Half a century later, George [Orwell](https://en.wikipedia.org/wiki/Nineteen_Eighty-Four) showed how authoritarians turn care into control: the omnipresent screen, always watching and shaping us.
+Thanks to this work, the upcoming Elixir v1.21 passes all tests in the
+[If-T: Type Narrowing Benchmark by Guo et al.](https://github.com/utahplt/ifT-benchmark).
+This means v1.21 can find even more sure bugs in existing Elixir programs and, once
+type signatures are introduced, narrowing will give us more precise types and fewer
+false positives.
 
-In 1984, Apple launched the Macintosh with [an ad](https://www.youtube.com/watch?v=ErwS24cBZPc) that borrowed Orwell's imagery, hurling a hammer through the giant screen and setting the audience free. The ad sold liberation, but three years later Apple revealed its vision for the future: the [Knowledge Navigator](https://www.youtube.com/watch?v=umJsITGzXd0) shows a solitary professor in a spacious study, talking to a bow-tied autonomous agent on a tablet that manages his research, his calendar and his calls. Big Brother had been smashed, just to be replaced by a butler, the same screen behind a friendlier mask.
+> The type system was made possible thanks to a partnership between [CNRS](https://www.cnrs.fr/)
+> and [Remote](https://remote.com/). The development work is currently sponsored by
+> [Fresha](https://www.fresha.com/), [Supermethod](https://www.supermethod.com/) and
+> [Dashbit](https://dashbit.co/).
 
-Nearly forty years on, that vision is being delivered almost shot for shot, in every chatbot, agent and AI assistant now offering to run our lives. The gadget arrived, but the life around it didn't: as one commenter under the video points out, today that professor would more likely be an untenured adjunct living in a van than a man with a study bigger than most apartments.
+## Type inference
 
-Anthropologist Anna Tsing [describes](https://fojournal.org/interview/anna-tsing-noticing-is-my-way-of-opposing/) how certain things become encoded as possible futures, and then we develop blinders, walking towards "a stereotyped dream future. And so, we stopped seeing." The personal assistant is one of those futures.
+Elixir performs type inference by refining the dynamic type. This is quite different
+from how inference and gradual typing are implemented in most type systems, so let’s
+break it down.
 
-But as David Graeber [put it](https://davidgraeber.org/books/the-ultimate-hidden-truth-of-the-world/), "the ultimate hidden truth of the world is that it is something that we make, and could just as easily make differently". Silicon Valley's future, each of us alone with our personal assistant, is only one way to make the world. We'd rather help make what the Zapatistas [call](https://enlacezapatista.ezln.org.mx/1996/01/01/cuarta-declaracion-de-la-selva-lacandona/) "a world where many worlds fit", with the communities we care about.
+In many gradual languages, the dynamic type, often known as `any`, is a “black box” and
+can be used in any context. For example, imagine this Elixir function, where `x` starts
+with type `dynamic()`, as there is no type signature:
 
-The things that bring communities together are bigger than any one of us: dealing with the climate crisis, keeping a town informed, creating knowledge for everyone, helping someone through a bad year... And no digital butler can take them off our hands. It takes people who learn, rise up, organise, change their minds, regroup, get things done, celebrate, and keep showing up for each other. The things that matter most are the ones we can only do together.
+```
+def using_x_as_number_and_binary(x) do
+  IO.puts x * 2
+  IO.puts byte_size(x)
+  :ok
+end
+```
 
-The release out today is an invitation to start making other futures, together.
+The program above uses `x` both as a number (more precisely, as `integer() or float()`
+in `x * 2`) and as a bitstring in `byte_size(x)`. In some gradual type systems, the type
+checker will accept the program above, even though it will crash at runtime, because
+the dynamic type can be used in any context.
 
-## What's new in Bonfire for Communities 1.1 [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#what's-new-in-bonfire-for-communities-1.1)
+However, in Elixir, the `dynamic()` type can be refined, and the above will report the
+following typing violation:
 
-This release is built around one idea: equipping groups to organise, from their first conversation to their toughest decision.
+```
+warning: incompatible types given to Kernel.byte_size/1:
 
-### Groups, reworked with their communities [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#groups%2C-reworked-with-their-communities)
+    byte_size(x)
 
-A group is an online space with its own members, goals, rules and moderation team, whether it's for a project, a neighbourhood, a working group or a whole organisation. Since July's launch, we've reworked them with the communities using them, among them Jacobin's readers on [jacobin.social](https://jacobin.social/dashboard), twelve mental health non-profits who are building [Mentaal.nl](https://mentaal.nl/), [Internet Archive Europe](https://community.internetarchive.eu/), [Fedizen](https://wedistribute.org/2026/10/introducing-fedizen-our-bonfire-project/) by [WeDistribute](https://wedistribute.org), and more, with [Apache.be](https://apache.be/), [Totnes Pulse](https://www.totnespulse.co.uk/), [NRC](https://www.nrc.nl/), and [openDemocracy.net](https://www.opendemocracy.net/) among those preparing to join them. Deciding who takes part, and how, is what turns a group into a real community, so it's theirs to make.
+given types:
 
-![A Bonfire group page: the Abbenay Climate Hub, with its topics, who can find, join and post, its rules and its moderators](https://bonfirenetworks.org/img/bonfire-1.1-hub-red.webp)
+    dynamic(float() or integer())
 
-Each group sets its own boundaries: who can find the group, who can read posts, who can join (anyone, people on its server, on request, or by invitation) and who can post (anyone, members, or only moderators). Presets make it quick to start: an open network anyone on the fediverse can join, a local community reserved for people on the same server, an announcement channel where only moderators post, or a private club whose discussions are for members only. See the new [guide to groups](https://docs.bonfirenetworks.org/groups.html) for more.
+but expected one of:
 
-### Federated groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#federated-groups)
+    bitstring()
 
-Nobody should have to relocate just to join a conversation or participate in a community. Our [plan](https://bonfirenetworks.org/posts/bonfire-for-communities/#what's-next) was compatibility first: agree on a federation standard with other projects, then make groups federate.
+where "x" was given the type:
 
-But the communities using them told us they couldn't wait: people wanted to take part from wherever they already are, and alliances of organisations, each on their own server, including servers that federate only with each other in [archipelago mode](https://bonfirenetworks.org/posts/bonfire-social-1-0-5-archipelago/), needed groups that span all of them.
+    # type: dynamic(float() or integer())
+    # from: iex:3
+    x * 2
 
-As Bert Stavenuiter of Ypsilon (one of the 12 mental health non-profits building the [Mentaal.nl](http://Mentaal.nl) network) puts it: "Bonfire enables each of our organisations to run its own community, while connecting peers, families and care workers across all of them."
+└─ iex:4: Foo.using_x_as_number_and_binary/1
+```
 
-Public groups on one Bonfire server can now be found, joined and followed from other Bonfire servers and from fediverse apps like Mastodon, Lemmy or PieFed. Communities don't have to ask everyone to relocate to one place or one app to take part together.
+As you can see in the error message, Elixir infers that the type of `x` after
+`x * 2` is a `dynamic(float() or integer())`. This means that `x` can be given
+to any function that accepts at least one of `float()` or `integer()`. However,
+because `byte_size(x)` expects a bitstring, we have a typing violation.
 
-Open networks and announcement channels federate today. Local communities and private clubs stay on their own server for now, while we work out how to ensure privacy across servers.
+This is possible because `dynamic()` in Elixir actually means `dynamic(term())`,
+where `term()` is the top type. Then, as a variable is used throughout the code,
+its dynamic type is refined by intersecting its type with the arguments of the
+functions the code invokes. In other words, we go through the following steps:
 
-Compatibility still comes first. With no standard yet, we took the long way round: we studied how many existing apps federate today, and tried to make Bonfire's groups work with them, so that we adapt to them and they don't have to adapt to us. And we're bringing what we learned along the way back to the W3C task force, so the eventual standard fits how groups already work as much as possible.
+1. `x` starts as `dynamic(term())`
+2. `x` is given to `x * 2`. The left operand of `*` expects `integer() or float()`, which we then intersect with `term()`, and therefore `x` gains the type `dynamic(integer() or float())`
+3. `x` is given to `byte_size(x)`, which expects a bitstring. The intersection of `integer() or float()` with `bitstring()` is empty, which will lead to a typing violation
 
-### A room for every topic [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#a-room-for-every-topic)
+Now, let’s take a look at this program:
 
-Topics were improved to help groups give every project, question or team its own space, so conversations don't get lost in the noise and newcomers can jump straight into what interests them. Topics in a public group now federate too, so people on other servers can follow and join them.
+```
+def using_x_as_integer(x) do
+  IO.puts x * 2
+  IO.puts rem(x, 2)
+  :ok
+end
+```
 
-![The Heatwave plan topic inside a group, where a member shares a sketch of shade sails for a playground](https://bonfirenetworks.org/img/bonfire-1.1-topic-red.webp)
+This time, we pass `x` to the remainder function, `rem`, which expects all of its
+inputs to be integers. This means that, at the end of this function, Elixir will
+correctly infer that `x` can only be an integer, because `x` was refined from
+`dynamic(term())` to `dynamic(integer() or float())` and then only to `dynamic(integer())`.
+The inferred type for `using_x_as_integer` is a function, commonly written using
+the arrow notation: `dynamic(integer()) -> :ok`.
 
-### Deciding together [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#deciding-together)
+The best part is that all dynamic types in Elixir are refined and therefore the type
+system is always doing its best to find bugs, even in the presence of dynamism.
+And the refinement itself is often quite precise, thanks to reverse arrows, which we
+will explore next.
 
-Polls come in three kinds: a quick poll for a fast read on a question, a group decision where people suggest options and then score each one, and a consensus check that shows where a group agrees and where it doesn't, with optional blocks for serious objections.
+## Reverse arrows
 
-![A group decision on a rain plan, with three options and a reaction to each: Great, Seems fine, Concerned](https://bonfirenetworks.org/img/bonfire-1.1-poll-red.webp)
+An arrow is the type of a function: `integer() -> boolean()` is an arrow that
+says “given an integer, this function returns a boolean”. The type on the left
+of the arrow is its domain (what it accepts) and the type on the right is its
+codomain (what it returns). Every function has arrows, whether they come from
+a type signature you wrote or are inferred by Elixir from the function’s clauses.
 
-Each server, and each group, can also agree its own community rules, starting from a library of rule examples put together by researchers at Princeton.
+Functions in Elixir can be typed with multiple arrows. As an exercise, let’s take
+a function that negates numbers, such as `negate(1)` returning `-1`:
 
-### Notifications on your terms [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#notifications-on-your-terms)
+```
+def negate(number) when is_integer(number), do: 0 - number
+def negate(number) when is_float(number), do: 0.0 - number
+```
 
-You choose who can reach you, about what, and how: in the app, on your phone, or in an email digest that gathers what happened while you were away. Nothing here is designed to keep you scrolling: notifications are for people to reach each other.
+You could give it this type signature with a single arrow:
 
-![Notifications: two requests to join groups, with Approve and Decline, and the votes on a group decision](https://bonfirenetworks.org/img/bonfire-1.1-notifications-red.webp)
+```
+$ integer() or float() -> integer() or float()
+def negate(number)
+```
 
-### Your choice of app [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#your-choice-of-app)
+However, this type says that, if you give it an integer, it may return a
+float, which is never the case! This signature is too broad. Instead, we
+could give it this signature with two arrows:
 
-Bonfire comes with a powerful web app that you can also install on your phone or computer as a Progressive Web App, no app store needed. But nobody should be forced to use Bonfire's interface to take part: a Mastodon-compatible API, now in beta, enables existing apps to connect to Bonfire, and a GraphQL API is open to anyone who wants to build their own app for their community.
+```
+$ integer() -> integer()
+$ float() -> float()
+def negate(number)
+```
 
-The full list of changes is in the [changelog](https://docs.bonfirenetworks.org/changelog.html).
+This precisely captures that, if you give it an integer, it returns an integer.
+If you give it a float, it returns a float. Multiple arrows are an excellent way
+to type functions with multiple clauses, which are common in both Erlang and Elixir.
 
-## Join the first groups [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#join-the-first-groups)
+With this in mind, and remembering that `rem` only works on integers (its type is
+`integer(), integer() -> integer()`), what do you believe is the inferred type of
+`x` in the function below?
 
-New to groups? Start with our [guide to groups](https://docs.bonfirenetworks.org/groups.html).
+```
+def negated_remainder(x), do: rem(negate(x), 2)
+```
 
-To get things started, we're opening a few groups of our own, each with a mission, and you can join them from your existing fediverse account:
+You may think `x` is `dynamic(integer() or float())`, because that’s the domain of
+`negate`. However, `x` will once again be inferred to be `dynamic(integer())`,
+because Elixir propagates types through the arrows in reverse: it starts from
+what the outermost call expects and walks inwards, from results to arguments,
+until it reaches the variables. Let’s break it down.
 
-- Bonfire Networks: general group to share news/discussions/questions about Bonfire
-- Bonfire for Communities: communities who are using and building it, deciding together where it goes next.
-- Bonfire for Open Science: researchers sharing work and making knowledge in the open.
-- Bonfire for Mutual Aid: groups organising care, gifts and help in their neighbourhoods, co-designing tools and pushing the boundaries of mutual aid networks.
-- Bonfire for Publishers: publishers, newsrooms and independent magazines sharing how they turn readers into a community, from conversations around articles to reader groups of their own.
+1. We start type checking the function and we find `rem(negate(x), 2)`. `rem` has a single arrow, `integer(), integer() -> integer()`, so we know that `negate(x)` must return an `integer()` for this to type check
+2. Now we type check `negate(x)`. `negate` has two arrows: `integer() -> integer()` and `float() -> float()`. Since its result must be an integer, we can discard the `float() -> float()` arrow, as it never returns an integer. The only remaining arrow is `integer() -> integer()`, so the argument of `negate` must be `integer()`
+3. Now we type check `x` itself. `x` starts with the type `dynamic(term())`. We then intersect it with `integer()`, resulting in `dynamic(integer())`
 
-For what applies across all of them, the general [Bonfire Networks](https://bonfire.cafe/group/Bonfire_Networks) group has sub-topics for different areas:
+In other words, inference goes in two directions. Going forward, from arguments to
+results, arrows tell us what each call returns. Going in reverse, from results to
+arguments, arrows tell us what each argument must have been for the call to produce
+the expected result. As we give precise type signatures to our programs using multiple
+arrows, the type system will use these same arrows to infer precise types. As we will
+learn next, Elixir uses this technique to infer types from guards and to perform type
+narrowing (also known as occurrence typing).
 
-- Testing & Feedback: try new features and tell us what works and what breaks.
-- UX & Design: help shape how Bonfire looks and works.
-- Third party apps: connect your favourite app through the Mastodon API beta, and help us make it work well.
-- Federation & interop: compare notes on federation, report what doesn't interoperate, and help shape the standards.
-- Tech support: ask, answer and support each other in building and deploying Bonfire.
+## Guards
 
-And why not start your own! (see the [guide to running a group](https://docs.bonfirenetworks.org/group-moderation.html))
+Now we have the foundation to understand how Elixir performs type inference of guards.
+Take this function clause:
 
-## This is just the beginning [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#this-is-just-the-beginning)
+```
+def something(x, y) when is_integer(x) and is_bitstring(y) do
+  ...
+```
 
-As [we wrote in 2021](https://bonfirenetworks.org/posts/let-a-thousand-bonfires-bloom/), "Federation will be a mess. Yes, and it will be fun!" Plurality is messier than a monopoly. It's a price worth paying so that no single company controls the infrastructure our communities organise on, free to enshittify it or switch it off on a whim. What others call chaos is really diversity, and it's where our power, resilience, and beauty come from.
+Both `x` and `y` start with type `dynamic(term())`. We also know that a guard only
+succeeds if it returns `true` and we have the following type signatures (roughly):
 
-> "Choosing Bonfire wasn't just a technical decision, it was a fundamentally political one. We wanted a platform that couldn't be switched off by a foreign government or bought out by a billionaire. That's exactly what we got: Bonfire built not simply for us, but with us, and the result belongs to our readers as much as it does to us."  
->
-> — Magdalena Berger, [Jacobin DE](https://bonfirenetworks.org/case-studies/jacobin/)
+```
+$ true, true -> true
+$ true, false -> false
+$ false, true -> false
+$ false, false -> false
+def and(left, right)
 
-Soon, each group will be able to define roles for its members and what each one can do: who can post, who can invite, who can see things flagged for moderation, who can act on them, and who can review moderators' decisions. A tenants' union can give its "delegates" exactly the mix of permissions they need, and a food co-op can do the same for its "shift coordinators". That's why our proposal to the W3C groups task force, [now included in the draft specification](https://swicg.github.io/groups/#group-permissions), doesn't define fixed roles like "admin" and "moderator". Each group states who can do what, so it can name its own roles and any app can still make sense of them. It reuses a mechanism [GoToSocial introduced](https://docs.gotosocial.org/en/latest/federation/interaction_controls/), which Mastodon and others use to determine [who can quote a post](https://fediverse.codeberg.page/fep/fep/044f/). Federating private groups, better cross-instance moderation and moving groups between servers are among the next things to work out.
+$ integer() -> true
+$ not integer() -> false
+def is_integer(value)
 
-Beyond the fediverse, we're talking with bridge builders like [Bridgy Fed](https://fed.brid.gy/) and [Kazarma](https://kazar.ma/) so groups can reach people on ATproto and Matrix too, and communities on networks like [Blacksky](https://blackskyweb.xyz/)'s [Acorn](https://acorn.blacksky.community/) can organise across networks without anyone having to move.
+$ bitstring() -> true
+$ not bitstring() -> false
+def is_bitstring(value)
+```
 
-Thank you to everyone who chipped in towards the maintenance and groups goals in our crowdfunding, and to the communities whose co-design is carrying groups the rest of the way. If you build fediverse software, or care about groups working the same way across every app, please [join the W3C task force](https://github.com/swicg/groups/issues).
+Therefore, to infer the types of `when is_integer(x) and is_bitstring(y)`,
+we start with `true`, which is the only result for which a guard succeeds,
+and propagate it through the arrows in reverse:
 
-## Human After All [#](https://bonfirenetworks.org/posts/for-the-things-we-can-only-do-together/#human-after-all)
+1. The only arrow of `and` that can return `true` is `true, true -> true`, therefore we know that both operands must be `true`
+2. The only arrow of `is_integer` that can return `true` is `integer() -> true`, therefore we know `x` must be an integer
+3. The only arrow of `is_bitstring` that can return `true` is `bitstring() -> true`, therefore we know `y` must be a bitstring
 
-Daft Punk once [said](https://www.npr.org/2013/05/16/184499357/daft-punk-on-the-soul-that-a-musician-can-bring) that computers "could do the music instead of us", and that while "we couldn't have done our project, definitely, without technology", "we don't really feel that's where the fun is". Neither do we. Bonfire is software, of course, but communities decide what it's for, what it becomes and who it serves, and the work itself is something we share.
+If multiple arrows could return `true`, we would then simply union their domains.
 
-So bring your people. Whether you gather **to learn, to rise up, to organise or to celebrate**, start or join a group from the account you already have, or set up a Bonfire of your own, and make it yours.
+It is worth emphasizing that this behaviour is not hardcoded to a handful of
+functions the type checker knows about. It works with any function, in any context.
+Let’s see more examples.
+
+## Type narrowing (also known as occurrence typing)
+
+Occurrence typing refines the type of variables and expressions based on
+the branch taken in a conditional or pattern match, so the same variable may
+have different types in different branches. For example:
+
+```
+if is_bitstring(x) do
+  x #=> x has type: bitstring()
+else
+  x #=> x has type: not bitstring()
+end
+```
+
+The mechanism we use to perform occurrence typing is quite similar to the one
+from the previous sections. Within the `do`-branch, we consider the scenarios
+where `is_bitstring(x)` will return `true`. Within the `else`-branch, we consider
+the ones where it returns `false`.
+
+And since our foundation is built on reverse arrows, the narrowing also applies to
+patterns and `case`-expressions! For example:
+
+```
+def f(x) do
+  case parse(x) do
+    {:ok, _} -> ... # x is integer()
+    :error -> ...   # x is bitstring()
+  end
+end
+
+defp parse(x) when is_integer(x), do: {:ok, x}
+defp parse(x) when is_bitstring(x), do: :error
+```
+
+Here, `parse` has no type signature, but Elixir infers its arrows from its clauses:
+`integer() -> {:ok, integer()}` and `bitstring() -> :error`. Within the first branch,
+we know `parse(x)` returned a tuple, and the only arrow that returns a tuple has
+`integer()` as its domain, so `x` must be an integer.
+
+The [If-T benchmark](https://github.com/utahplt/ifT-benchmark) is a collection of
+test scenarios designed to evaluate both the precision and soundness of type narrowing.
+Elixir v1.20 already handled 12 out of the 13 tests, but it could not infer the
+proper types for this example:
+
+```
+y = is_integer(x)
+
+if y do
+  # y is true, x remains dynamic
+else
+  # y is false, x remains dynamic
+end
+```
+
+To narrow `x`, we need to reverse the arrows of `is_integer(x)`. In Elixir v1.20, we
+only did so for the expression given directly to `if` or `case`. Here, the expression
+given to `if` is the variable `y`. All v1.20 knew about `y` is that it was a `boolean()`.
+Inside the `do`-branch, `y` is `true`, but by then the connection between `y` and
+`is_integer(x)` had been lost at the assignment, so there were no arrows to reverse.
+
+This would be quite harmful once we add type signatures, because it means trivial
+refactoring techniques, such as extracting an expression into a variable, could lead
+to false positives.
+
+Elixir v1.21 solves this by keeping track of the expression each variable was assigned
+to. Now, when `y` is narrowed to `true`, we know `y` came from `is_integer(x)`, so we
+continue propagating `true` in reverse through the arrows of `is_integer`, narrowing `x`
+to `integer()`. This works across any number of assignments:
+
+```
+y = is_integer(x)
+z = not y
+
+if z do
+  # z is true, y is false, x is not integer()
+else
+  # z is false, y is true, x is integer()
+end
+```
+
+Our implementation also performs the narrowing lazily, by cross-referencing the variables
+in the `if` and `case` expressions with the variables used in each clause, trying to find
+any assignment they share with each other. If the clauses above do not access `z`, `y`, or
+`x`, then no narrowing is performed.
+
+Finally, because Elixir defines reverse arrows for almost all operations, it can refine
+expressions [which are not currently refined in TypeScript](https://www.typescriptlang.org/play/?#code/PTAEHUFMBsGMHsC2lQBd5oBYoCoE8AHSAZVgCcBLA1UABWgEM8BzM+AVwDsATAGiwoBnUENANQAd0gAjQRVSQAUCEmYKsTKGYUAbpGF4OY0BoadYKdJMoL+gzAzIoz3UNEiPOofEVKVqAHSKigBmXLCoFPBeBGxEZKh4APoM0BQMgkmC7LAWgoIAFHgAXKCCqJSczKAAPqCc7IjSkGQAlKUNTS2gAN6KoCbR5aAAHqAAvL2gIfDwpXigAL4A3P0iIaAFiUTwGyMBMxjjx6AAROWVzKetvWsDTqjsZF54Ae5VqJirA4ugMIIoPoDe6QR7PUALADUoAAjN8lopFkA),
+such as data constructors:
+
+```
+def f(foo) when is_bitstring(foo) or is_integer(foo) do
+  map = %{foo: foo}
+
+  if is_bitstring(map.foo) do
+    byte_size(foo)
+  else
+    foo + 1
+  end
+end
+```
+
+In the program above, even though `foo` is set as the value of a map,
+refining the map still refines the original variable.
+
+## Summary
+
+Elixir’s approach to type inference and narrowing is built on a few ideas that
+compose well. Dynamic types are refined as variables are used, multiple arrows
+give precise types to functions, and propagating types through those arrows in
+reverse lets us infer and narrow types across conditionals, patterns, and assignments,
+all without hardcoding knowledge about specific functions.
+
+In Elixir v1.21, we use these techniques to find sure bugs in existing Elixir programs,
+without requiring any changes to your code. The same mechanisms will apply once type
+signatures are introduced: the more precise the signatures, the more precise the
+narrowing and the fewer false positives.

@@ -1,131 +1,169 @@
-Last year marked the 40th anniversary of Phrack so we went big. We published  
-our anniversary launch release in print at Defcon 33, HOPE, WHY25 and some  
-additional variations at several conferences around the world including  
-AlligatorCon, B-Sides Canberra, Out of the Box, Datenspuren, DistrictCon,  
-OffensiveCon, Recon, and Toorcamp. We included a CTF with exploit challenges  
-and had puzzles and easter eggs included in the zine. We threw parties and  
-had talks at Defcon and WHY25 to celebrate this milestone.
+I recently asked AI to help me look through the latest Windows binaries for undocumented features and functionality. Among the leads it turned up, one list immediately caught my attention: coding agents such as `codex.exe`, `claude.exe`, `copilot.exe`, and `cursor.exe`, alongside familiar developer tools such as `python.exe`, `dotnet.exe`, `gcc.exe`, and `code.exe`.
 
-More importantly, we got new research into people's hands. The point of the  
-relaunch was to get people reading, researching, writing, and contributing  
-again. We wanted the next person picking up Phrack to find something that  
-made them sit down at a computer and start pulling a system apart.
+Why would a Windows system DLL need a list of coding agents and developer tools?
 
-We owe a huge thanks to the authors, editors, artists, publishing partners,  
-donors, and staff who made it happen. Writing the paper, working through  
-revisions, putting the print editions together, paying the bills, and  
-getting boxes of zines to the right places all take time and effort. Most of  
-that work is invisible when you are holding the finished issue. We  
-appreciate everyone who did it.
+The names were in `MissionControlAggregator.dll`. I asked the agent to follow the references and dig into what the DLL actually does. That led from a handful of string comparisons to a running Windows component that records which coding agents and developer tools have been used, saves that information locally, and reports it to Windows Diagnostics. And unless you have opted out of the “optional” diagnostic data (which is enabled by default), the data is uploaded to Microsoft.
 
-And to the readers: thank you for giving a shit. Seeing someone get excited  
-about an article, connect it to something they are working on, or realize  
-that they could contribute something themselves makes the effort worthwhile.  
-That exchange is how this thing keeps going. The relaunch worked, and this  
-issue is the follow-through.
+I [shared the initial finding on X](https://x.com/CrackmesOne/status/2122147747390468384). This post includes more details about the investigation behind it.
 
-### [--[ Present ]](https://phrack.org/issues/73/introduction_md.html#---present-)
+## Following the names
 
-This is the third release curated by the new staff, and we are not slowing  
-down. This issue is larger than last year's, with 23 main papers and eight  
-additional articles in Line Noise. The subjects range from exploitation and  
-reverse engineering to machine learning, hardware, and the history and  
-culture that grew around this work.
+Opening the DLL in [Binary Ninja](https://binary.ninja/) made the first lead easy to see. These were explicit executable names embedded in a Windows component:
 
-We have container escapes through the vDSO, use-after-free exploitation, QNX  
-userland shellcode, Linux kernel research, and a Chromium renderer sandbox  
-escape through Skia. Elsewhere, the issue takes on Windows smart card  
-architecture, static taint analysis in Binary Ninja, and autonomous  
-underwater vehicles.  There is also work examining backdoors in machine  
-learning and what it means to trust an AI system. One paper takes us from  
-PhrackCTF to two WinFSP zero-days, which is a pretty good argument for  
-continuing to put challenges in a zine.
+![Binary Ninja showing coding-agent executable names embedded in MissionControlAggregator.dll](https://xusheng.dev/posts/windows-coding-agent-telemetry/agent-names.jpeg)
 
-We also have four more articles in Phrack World History, including the story  
-of the infamous SSH1 CRC32 vulnerability featured in The Matrix Reloaded as  
-well as stories about blue boxing free phone calls, a confession of a hacker  
-who tried to backdoor Linux kernel in 2003, and an early discovery of  
-botnets for hire. Our Prophile features Halvar Flake, whose contributions to  
-reverse engineering and security research are legendary.
+Following the references showed that the names were used in comparisons. There are four CLI-agent slots checking `copilot.exe`, `claude.exe`, `codex.exe`, and `agy.exe`, with extensionless equivalents on the WSL route. Five desktop-agent slots check `github.exe`, `claude.exe`, `codex.exe`, `cursor.exe`, and `antigravity.exe`.
 
-### [--[ Future ]](https://phrack.org/issues/73/introduction_md.html#---future-)
+Here is one of the comparisons against `codex.exe`:
 
-In 2026, we find ourselves in a time of rapid technological change. It is  
-hard to say what vulnerability research or red teaming will look like in  
-another five years. AI has moved well beyond completing a line of code into  
-agentic systems capable of analyzing source code and reverse engineering  
-binaries to find and exploit vulnerabilities.
+![Binary Ninja showing an exact comparison with codex.exe inside a matcher](https://xusheng.dev/posts/windows-coding-agent-telemetry/codex-matcher.jpeg)
 
-We can be sure that the future will require us to continue to explore new  
-ideas, create new tools, and push the boundaries of what is possible in the  
-face of new challenges and opportunities created by the advancement of AI  
-and automation systems. As the effort required to put ideas into practice  
-falls, creativity and human intuition forged through experience is valued  
-even higher.
+The compiler-generated C++ names are unwieldy, so I will call these functions **executable-name matchers**. For reference, one related matcher is `std::_Func_impl_no_alloc<<lambda_340dfe7e962ab225b6ac33bc664bd54f>, bool, std::basic_string_view<wchar_t, std::char_traits<wchar_t>> const&, Microsoft::Diagnostics::MissionControlAggregator::Utils::AppType>::_Do_call`. The screenshot shows another lambda instantiation performing the same kind of name comparison.
 
-We hope that this release of Phrack will inspire new ideas, discussions, and  
-collaborations that will keep the human side of hacking a critical element  
-in shaping the future of technology and society. We will continue to do our  
-part to support the community and provide a platform for sharing knowledge  
-and ideas. We look forward to seeing what the future holds and we are  
-excited to be a part of it.
+The feature guarding the new agent checks has a particularly direct name: `CLICodingAgentUsage`, feature ID `62580080`.
 
-Read the papers, try the ideas, and challenge the conclusions. When you find  
-something worth sharing, write it up and send it in. We have another issue  
-to put together, and some of you should be in it!
+And the list extends beyond AI agents. The same component checks for `node.exe`, `python.exe`, `dotnet.exe`, `gcc.exe`, `clang.exe`, `gdb.exe`, `javac.exe`, `devenv.exe`, and `code.exe`, among others. Those checks feed broader developer-tool categories. Some of these checks also verify the publisher: the Node.js slot expects `Node.js Foundation`, Python expects `Python Software Foundation`, and the .NET and Visual Studio slots expect `Microsoft Corporation`. The compiler/debugger group containing GCC and Clang has no additional publisher check in this path.
 
-To those who have supported us the past three years helping to restore  
-vitality to Phrack, we thank you.
+## Where does the DLL get this information?
 
-Conferences who funded prints: Defcon, OffensiveCon, Recon, Unprompted[AU],  
-Unprompted[US], BSides Canberra, Alligatorcon, TenguCon
+The next question was whether the component scans running processes itself. Following `Aggregator::OnLoad` revealed that it subscribes to existing Windows events instead.
 
-Sponsors & Major Donors - WatchTowr, Elltam, Verichains, BShield,  
-TrustedSec, Binarly, Trenchant, Praetorian (WWSUL), EFF, Blaze, EMX,  
-Mullvad, ToorCon, Hacker Initiative, Endrazine, Dug Song, Napster, halvar,  
-Horizon, Huku, Julio Auto, Gadi, and the rest of the people who stepped up with  
-smaller donations.
+For Windows programs, it consumes `KernelProcess.AppStateChangeSummary` and `Win32kTraceLogging.AppInteractivitySummary`. These provide application identities that its handlers parse and pass to the matchers. For WSL, it consumes `Microsoft.Windows.Lxss.Manager.Exec` and `ExecCritical`, using the `imageName` field. A regular Windows `codex.exe` can therefore reach the CLI-agent checks through the app-state summary route; this is not limited to Linux programs running inside WSL.
 
-Artists - Ian Dash, pinguino, tainted, pepper, mar, xer0, abstrakt, ToscaKaiser,  
-h7, zir, Mick, p0rtL, netspooky, ackmage, digitalis, Tedsig42, and the many  
-others who submitted their work for consideration.
+The relevant flow looks like this:
 
-Reviewers - barbie, bsdaemon, C, chompie, danielcuthbert, devinc, grugq, joern,  
-jordan9001, K3, richinseattle, roddux, saber, skyper, SSHad0w, TMZ, zh4ck
+```text
+Aggregator::OnLoad
+├─ WSL Exec / ExecCritical
+│  └─ ProcessWslExecEvent → CLI agent matchers
+├─ KernelProcess.AppStateChangeSummary
+│  └─ ProcessAppStateChangeSummaryEvent → CLI agent matchers
+└─ Win32kTraceLogging.AppInteractivitySummary
+   └─ ProcessAppInteractivitySummaryEvent → desktop agent matchers
 
-All the authors past and present who are now bound to the history of phrack.
+Aggregator::OnRelativeTimerExpire
+└─ MissionControlAggregatorLogging::ReportCohorts<12,4,5>
+   └─ Segments.SubCohorts ETW report
 
-The unnamed ones who have helped us with logistics and carrying literal tons  
-of paper around conferences to deliver them into the hands of the next  
-generation.
-
-All information in Phrack Magazine is, to the best of the ability of  
-the editors and contributors, truthful and accurate. When possible,  
-all facts are checked, all code is compiled. However, we are not  
-omniscient (hell, we don’t even get paid). It is entirely possible  
-something contained within this publication is incorrect in some way.  
-If this is the case, please drop us some email so that we can correct  
-it in a future issue.
-
-Also, keep in mind that Phrack Magazine accepts no responsibility for  
-the entirely stupid (or illegal) things people may do with the  
-information contained herein. Phrack is a compendium of knowledge,  
-wisdom, wit, and sass. We neither advocate, condone nor participate  
-in any sort of illicit behavior. But we will sit back and watch.
-
-Lastly, it bears mentioning that the opinions that may be expressed in  
-the articles of Phrack Magazine are intellectual property of their authors.  
-These opinions do not necessarily represent those of the Phrack Staff.
-
+Aggregator::OnUnload / intermediate timer
+└─ PersistentState::SaveToDisk
 ```
 
-    <  Editors           : staff[at]phrack{dot}org         >
-    >  Submissions       : submissions[at]phrack{dot}org   <
-    <  /dev/urandom      : loopback[at]phrack{dot}org      >
-    >  Arts & Leisure    : arts[at]phrack{dot}org          <
-    <  Twitter/X         : phrack                          >
-    >  Mastodon          : phrack[at]haunted{dot}computer  <
-    <  BlueSky           : phrack{dot}org                  >
+A successful match sets a slot in the aggregator’s state. Later, `ReportCohorts<12,4,5>` turns those slots into bitsets and emits a report named `Segments.SubCohorts`. The numbers correspond to twelve broader tool categories, four CLI agents, and five desktop agents.
 
-ANTISPAM in the subject or face the mighty /dev/null demon!
+[ETW (Event Tracing for Windows)](https://learn.microsoft.com/en-us/windows/win32/etw/event-tracing-portal) is the mechanism carrying that report. In this case, it is a self-describing TraceLogging event. Rather than writing the executable names into every report, the component assigns each category a bit. A set Codex bit means the matching tool was observed during the reporting window.
+
+The source events also include runtime, time in focus, interaction counters, and resource usage. This component appears to discard those details and record only a bitmap of which agents were observed. The report’s timestamps describe the collection window, not how long each agent was used.
+
+Although I found no prompt text or source code in this report, collecting which agents and developer tools someone uses already has significant privacy implications.
+
+## Is it actually running on a normal machine?
+
+Strings and code are a useful lead, but I wanted to see the component running. I checked my Parallels Windows 11 ARM64 VM, build `26200.9974`. Its `MissionControlAggregator.dll` was version `10.0.26100.9818`, and `CLICodingAgentUsage` was already enabled as a service experiment. I had not manually enabled the feature.
+
+DiagTrack, the **Connected User Experiences and Telemetry** service, was also already running with its startup type set to `Automatic`. It starts a separate `AggregatorHost.exe` process, and that process loads the DLL. The following administrative PowerShell commands show the service, its child process, and the loaded module:
+
+```powershell
+PS> Get-Service DiagTrack | Format-Table Name,Status,StartType -AutoSize
+
+Name       Status StartType
+----       ------ ---------
+DiagTrack Running Automatic
+
+PS> Get-Process AggregatorHost | Format-Table ProcessName,Id -AutoSize
+
+ProcessName      Id
+-----------      --
+AggregatorHost 1500
+
+PS> Get-CimInstance Win32_Service -Filter "Name='DiagTrack'" |
+       Format-List Name,State,StartMode,ProcessId
+
+Name      : DiagTrack
+State     : Running
+StartMode : Auto
+ProcessId : 10148
+
+PS> Get-CimInstance Win32_Process -Filter "Name='AggregatorHost.exe'" |
+       Format-List ProcessId,ParentProcessId
+
+ProcessId       : 1500
+ParentProcessId : 10148
+
+PS> tasklist /m MissionControlAggregator.dll
+
+Image Name                     PID Modules
+========================= ======== ============================================
+AggregatorHost.exe            1500 MissionControlAggregator.dll
 ```
+
+The process IDs connect the pieces: DiagTrack runs in process `10148`, which is the parent of `AggregatorHost.exe`, process `1500`; the module listing places `MissionControlAggregator.dll` inside that child.
+
+## Testing it in practice
+
+To test the finding in practice, I copied `cmd.exe` to a file named `codex.exe` and ran it in the interactive Windows session. The name alone was enough for the component to recognize it as Codex.
+
+I captured an `AppStateChangeSummary` for the running process from the `KernelProcess` provider (`{2839ff94-8f12-4e1b-82e3-af7af77a450f}`), with `LaunchCount=1` and `TerminateCount=0`. The aggregator’s saved state contained the value `2` in CLI slot 2, the Codex slot. A separate run without an additional ETW trace also set that slot, confirming that detection worked through Windows’ existing diagnostic collection.
+
+That state is persisted in:
+
+```text
+C:\ProgramData\Microsoft\Diagnosis\AggregatorStorage\MissionControlAggregator$
+```
+
+The report normally follows a roughly daily boundary. To capture it immediately, I temporarily moved the saved reporting-window start 25 hours into the past and restarted DiagTrack with a trace listening for the aggregator. The resulting `Segments.SubCohorts` event contained:
+
+```text
+Provider: Microsoft.Windows.MissionControlAggregator
+Time:     2026-11-16T12:34:29.125116Z
+Version:  0.1.5
+
+CliAgentSubCohorts:     4
+DesktopAgentSubCohorts: 0
+FlushedFromSave:       true
+```
+
+The value `4` is `1 << 2`: the Codex CLI bit. The name had made it through the input summary, the matcher, the persisted state, and the emitted report.
+
+I also tested the developer-tool path separately, using a copy of `cmd.exe` named `gcc.exe`. It set developer-tool slot 3. With optional diagnostic data allowed, I found the resulting `Segments.SubCohorts` event in DiagTrack’s upload queue with `SubCohorts: [8]` (`1 << 3`). This is the compiler/debugger category shared by GCC, Clang, and related tools, rather than a separate bit for each executable.
+
+## Following the report toward Microsoft
+
+An ETW event by itself would not establish that anything leaves the machine. ETW is used for plenty of local diagnostics. The more revealing question was who was listening to this particular report.
+
+The VM already had a `Diagtrack-Listener` session subscribed to both ends of the path. These PowerShell queries showed its subscriptions:
+
+```powershell
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{2839ff94-8f12-4e1b-82e3-af7af77a450f}'
+
+Get-EtwTraceProvider -SessionName Diagtrack-Listener `
+  -Guid '{00de11a2-ec06-58e5-1a2b-21bb21dbee4b}'
+```
+
+The first subscription, for `KernelProcess`, had `MatchAnyKeyword=0x400000000002`, which includes the summary’s `0x400000000000` keyword. The second, for `Microsoft.Windows.MissionControlAggregator`, had `MatchAnyKeyword=0xe00000000000`, which includes the report’s `0x800000000000` keyword. Both had level `255`.
+
+The subscription showed where the report could go. To check whether Windows actually queued it for transmission, I inspected DiagTrack’s `EventStore.db` and decompressed the JSON batches in its `AsimovEvents` table. This revealed an important condition: the agent-usage report is treated as **optional diagnostic data**.
+
+**When optional diagnostic data is allowed (enabled by default in the US setup I tested), Windows queues the coding-agent usage report for upload to Microsoft.** I verified this by finding the agent event itself in DiagTrack’s upload queue:
+
+```json
+{
+  "name": "Microsoft.Windows.MissionControlAggregator.Segments.SubCohorts",
+  "ext": {
+    "privacy": { "isRequired": false }
+  },
+  "data": {
+    "Version": "0.1.5",
+    "CliAgentSubCohorts": [4],
+    "DesktopAgentSubCohorts": [0],
+    "FlushedFromSave": true
+  }
+}
+```
+
+I checked this with a clean installation of Windows 11 Home ARM64 using the latest official ISO, with the region set to the United States. Before changing any privacy settings, the **Diagnostic data** toggle was already enabled and labeled **Include Optional**. After completing setup with those defaults, `AllowTelemetry` was `3`, confirming that optional diagnostic data was enabled.
+
+![Windows setup with United States region: Diagnostic data defaults to Include Optional](https://xusheng.dev/posts/windows-coding-agent-telemetry/us-optional-diagnostics-default.png)
+
+Optional diagnostic data is therefore enabled by default, at least in the US setup I tested. If you did not opt out of it during installation or disable optional diagnostic data later, it is still enabled and your coding agent usage data is being uploaded. You can decline optional diagnostics during setup or turn off **Send optional diagnostic data** later under **Settings → Privacy & security → Diagnostics & feedback**. Microsoft’s [diagnostics and privacy guide](https://support.microsoft.com/en-us/windows/privacy/diagnostics-feedback-and-privacy-in-windows) explains how to change it.

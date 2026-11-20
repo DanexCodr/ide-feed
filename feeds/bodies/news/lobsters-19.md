@@ -1,43 +1,33 @@
-Seven vulnerabilities have been discovered in Ruby’s regular expression engine and in the case conversion of strings. We are aware of PoCs that prove some of them can be used to trigger remote code execution. We have released Ruby 4.0.10, 3.4.13 and 3.3.14 to fix them. We strongly recommend upgrading.
+We're less than a day into dealing with ["Java4Shell"](https://calif.io/java4shell), an issue stemming from how the Java Virtual Machine intrinsifies Base64 encoding code. If you have a Java deployment you haven't updated yet, add `-XX:-UseBASE64Intrinsics` to the VM flags. Then upgrade your VM to a version where the issue is patched when you can.
 
-CVE identifiers have been requested for these vulnerabilities but have not been assigned yet, so this advisory refers to them by their GitHub Security Advisory (GHSA) identifiers.
+This is just one in a string of high profile outages and vulnerabilities. AI is a good fuzzer, people are finding latent problems with much lower effort than the past. People are pretty worried about this because we're all pretty sure there are more latent problems to find.
 
-## [GHSA-34m4-m9fh-gqp5](https://github.com/ruby/ruby/security/advisories/GHSA-34m4-m9fh-gqp5): Heap buffer overflow in case conversion of strings
+Vulnerabilities tend to be bigger problems [when they stem from native code,](https://www.cisa.gov/news-events/news/urgent-need-memory-safety-software-products) and they tend to be widespread problems when they come from dependencies many people share.
 
-Ruby has a one-byte heap-based buffer overflow in the case conversion of strings. Changing the case of a crafted string may allow remote code execution. We are aware of PoCs that prove this flaw can be used to trigger RCE in some scenarios.
+Java4Shell is both of these things. A lot of people use Java and the problem stems from a handwritten assembly intrinsic. Fun times.
 
-## [GHSA-7x2q-68qv-6p8x](https://github.com/ruby/ruby/security/advisories/GHSA-7x2q-68qv-6p8x): Double free in regular expression compilation
+But, for a moment, lets say we trust the VM. It is a big dependency, but it is only one dependency. We can all agree to audit it more closely, reduce the amount of native code in it, proactively run AIs against it, etc. Of course.
 
-Ruby has a double free in its regular expression engine. Compiling a crafted regular expression pattern may allow remote code execution in applications that compile attacker-controlled patterns. We are aware of PoCs that prove this flaw can be used to trigger RCE in some scenarios.
+Normal Java programs are memory safe. If you use a library which wants to call native code you will get a warning, [later a hard error](https://openjdk.org/jeps/472), unless you the person using the library adds `--enable-native-access=the.specific.library` to their command-line options. This means even with a sprawling dependency tree, which is a problem for all programming language ecosystems, you can know your exact exposure to native code and what dependencies you need to audit more closely.
 
-## [GHSA-87fm-7w84-j2px](https://github.com/ruby/ruby/security/advisories/GHSA-87fm-7w84-j2px): Integer overflow in case conversion of strings
+Compare that to C#, [which lets any dependency write assembly inline](https://esozbek.me/blog/inline-assembly-in-csharp-and-dotnet/). Python, JavaScript, Go - everything [speaks C](https://faultlore.com/blah/c-isnt-a-language/) and lets any one of your dependencies bring along native code. As we are all learning the hard way, this carries risk.
 
-Ruby has an integer overflow in the case conversion of strings, which causes a heap-based buffer overflow. Changing the case of a crafted string may allow remote code execution. We are aware of PoCs that prove this flaw can be used to trigger RCE in some scenarios.
+Not only are Java programs memory safe. They are also fast. The exact mechanism which caused Java4Shell (the ability for the VM to swap out normal Java code for native code) combined with JIT compilation can make the actual performance of a Java program competitive with C. Sometimes a Java program can even be faster. A JIT compiler knows what code paths are actually taken and can optimize around them. They can even refocus what is optimized if the workload changes. It is pretty cool!
 
-## [GHSA-wpqw-5qxg-m68r](https://github.com/ruby/ruby/security/advisories/GHSA-wpqw-5qxg-m68r): Out-of-bounds read in case-insensitive regular expression matching
+Somewhat recently I went through the [raytracing in a weekend](https://raytracing.github.io/) book with Java.
 
-Ruby has an out-of-bounds read in its regular expression engine. Matching against a crafted regular expression pattern may allow remote code execution in applications that use attacker-controlled patterns. We are aware of PoCs that prove this flaw can lead to memory corruption in an attacker-controlled way.
+```
+Impl                          mean ± σ    vs C++
+─────────────────────────────────────────────────
+C++ clang 21 -O3             7.00 ±0.01   1.00x
+Java 28, value classes      11.95 ±0.25   1.71x
+C# .NET 11 preview 6        11.95 ±0.22   1.71x
+C# .NET 10                  11.98 ±0.11   1.71x
+Java 26                     17.53 ±0.21   2.50x
+```
 
-## [GHSA-3p8q-wmhx-vm2w](https://github.com/ruby/ruby/security/advisories/GHSA-3p8q-wmhx-vm2w): Heap buffer overflow in regular expression compilation
+Benchmarks can be problematic, I know. What I want you to take away is that the JVM makes your code fast enough that most people don't need native code. Unlike, to take a potshot, CPython. There everything is slow as molasses unless you make it a native extension.
 
-Ruby has an integer overflow in its regular expression engine, which causes a heap-based buffer overflow. Compiling a crafted regular expression pattern may allow remote code execution in applications that compile attacker-controlled patterns. We are aware of PoCs that prove this flaw can be used to trigger RCE in some scenarios.
+So if you are worried AI is going to find security problems with your code, use Java. The problems are likely to be less severe.
 
-## [GHSA-7whj-cfh7-xgm4](https://github.com/ruby/ruby/security/advisories/GHSA-7whj-cfh7-xgm4): Heap buffer overflow in Regexp#to_s
-
-Ruby has a heap-based buffer overflow in `Regexp#to_s`. Converting a crafted regular expression to a string may allow information disclosure or remote code execution in applications that compile attacker-controlled patterns. We are aware of PoCs that prove this flaw can be used to trigger RCE in some scenarios.
-
-## [GHSA-pvgc-g7gj-pv6h](https://github.com/ruby/ruby/security/advisories/GHSA-pvgc-g7gj-pv6h): Out-of-bounds read in case-insensitive backreference matching
-
-Ruby has an out-of-bounds read in its regular expression engine. Matching a crafted string may disclose memory contents or crash the process.
-
-## Affected versions
-
-- Ruby 3.3.13 and earlier
-- Ruby 3.4.0 through 3.4.12
-- Ruby 4.0.0 through 4.0.9
-
-## Recommended action
-
-We strongly recommend upgrading to Ruby 4.0.10, 3.4.13 or 3.3.14.
-
-Ruby 3.3 is in the security maintenance phase. Ruby 3.2 and earlier have reached their end of life and will not receive these fixes.
+Or use Kotlin, Clojure, JRuby, etc. Whatever. Most of what I talked about applies to all of them. Its only what I didn't talk about (the module system) that is Java specific.

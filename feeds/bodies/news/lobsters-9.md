@@ -204,5 +204,3 @@ Broken down by command, `HSET` p99 sits around 2 ms, `HGET` p99 around 1.4 ms, a
 ![p99 latency per command per node over a trading session](https://zerodha.tech/static/images/blobasaur-5.png)
 
 Blobasaur is open source under the AGPLv3 license and available on GitHub [@iamd3vil/blobasaur](https://github.com/iamd3vil/blobasaur). Find other projects from the Zerodha.tech hacker collective at [4th Cross Labs](https://fourthcross.tech).
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50557537)

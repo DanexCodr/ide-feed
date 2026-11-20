@@ -1,40 +1,208 @@
-Something I learned a long time ago, something that's been proven to me time and again, is that the world is held together by smart people who give a shit. This truth always comes into stark focus when I learn how a complex system functions—or, rather, how it barely functions.
+November 19, 2026 - The [PostgreSQL Global Development Group](https://www.postgresql.org)
+today announced the release of [PostgreSQL 19](https://www.postgresql.org/docs/19/release-19.html),
+the latest version of the world's most advanced open source database.
 
-When I worked at [Stripe](https://stripe.com) I learned a lot about various banking and money movement systems, and it's terrifying how flawed and fragile these systems are. [ACH](https://en.wikipedia.org/wiki/Automated_clearing_house) is a great example. It's a complex system we rely on every day that is just barely good enough to function. It's old, riddled with flaws, and encumbered with legacy baggage. And yet, despite all of those problems, ACH usually works great and is generally considered to be safe, cheap, and reliable.
+Mission-critical usage of PostgreSQL continues to rapidly rise, and
+PostgreSQL 19 responds to this by simplifying both administration and
+development for these workloads at scale. This release introduces the
+[`REPACK (CONCURRENTLY)`](https://www.postgresql.org/docs/19/sql-repack.html)
+command so users can optimize tables for their current workload without
+disruption to ongoing operations. PostgreSQL 19 gives users better control over
+plan stability and query performance with the new [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
+extension. Developers will find many delightful features in this release, from
+support for "read-your-writes" consistency on standbys to "get or create"
+behavior that saves a network round trip.
 
-The reason there's a mismatch between the technical reality of the ACH system and how it functions in practice is due to a single factor: smart people who give a shit. Every problem with ACH is fixed, patched, bypassed, overridden, routed around, or manually handled by people who have two things:
+"For over 30 years, the global open source community has built PostgreSQL into a
+database that organizations trust with their most critical data," said
+Jonathan Katz, a member of the PostgreSQL core team. "PostgreSQL 19 continues
+that commitment to reliability, giving users new ways to manage their workloads
+without disruption and to build applications that span multiple systems."
 
-1. Intimate knowledge of the system
-2. The drive and determination to force the system to work
+PostgreSQL, an innovative data management system known for its reliability,
+robustness, and extensibility, benefits from 30 years of open source
+development from a global developer community and has become the preferred open
+source relational database for organizations of all sizes.
 
-Those two things feed into each other. You have to care about a complex system to dive deep enough to learn how it works, and when you know a lot about how a complex system works you care more about it, especially if the system is important or critical infrastructure.
+Tables that receive many updates and deletes can build up unused space, known as
+"bloat," which can also significantly impact query performance. The
+`VACUUM FULL` and `CLUSTER` commands were previously used to handle this, but
+had tradeoffs, including preventing access to the table until the cleanup
+finished. PostgreSQL 19 introduces the [`REPACK`](https://www.postgresql.org/docs/19/sql-repack.html)
+command, which reclaims this space and can reorder a table's data to match an
+index, and with `REPACK (CONCURRENTLY)`, can do so without blocking reads or
+writes. `REPACK` replaces the `VACUUM FULL` and `CLUSTER` commands, both of
+which remain available for compatibility.
 
-Now, you can replace "ACH" above with a myriad of other complex systems—everything from huge infrastructure to nice-to-have apps—and everything I said remains true, both about the systems themselves and the people who keep them running. The world runs on these systems, and they depend on smart people who give a shit. Take those people away, and the systems collapse.
+The PostgreSQL query planner usually picks an efficient plan for each query, but
+the plan can change as your data changes, and sometimes the new plan is slower.
+PostgreSQL 19 adds the [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
+extension, which allows stabilization of plan choices and the ability to
+experiment with different plans using the "plan advice" mini-language. The companion
+[`pg_stash_advice`](https://www.postgresql.org/docs/19/pgstashadvice.html)
+extension stores advice and automatically applies it to queries based on their
+query identifier, so you can fix a slow plan without changing your application.
 
-And collapse is what we're starting to see. Some recent examples of various failures from just this past week or so: [Microsoft 365](https://apnews.com/article/microsoft-outage-outlook-email-365-status-down-d92547a821930290db2964388016979a), [Air Traffic Control](https://www.reuters.com/world/us/faa-issues-national-ground-stop-due-extraordinary-circumstance-reasons-safety-2026-11-13/), [United Airlines' systems](https://www.reuters.com/world/us/united-airlines-says-technology-issue-affecting-departing-flights-2026-11-16/), [the NSA's network](https://www.reuters.com/world/us/national-security-agency-says-network-hit-by-temporary-degradation-during-2026-11-17/), [many major banks](https://apnews.com/article/bank-outage-chase-wells-fargo-truist-50fee2693c22f597fa6ca51a97ef2cda), [Apple's systems](https://www.reuters.com/business/retail-consumer/apple-works-restore-services-after-outage-caused-by-internal-update-2026-11-17/), and more. We're told these failures and problems are not related. They're not the result of a cyberattack. They're not the fault of generative AI.
+PostgreSQL 19 also helps [autovacuum](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM)
+keep up on busy systems. Autovacuum can now vacuum indexes using parallel
+workers, controlled by the new
+[`autovacuum_max_parallel_workers`](https://www.postgresql.org/docs/19/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-PARALLEL-WORKERS)
+setting, and uses a new [scoring system](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM-PRIORITY)
+to decide which tables to process first. Queries that read a table can now
+automatically mark pages as all-visible in the [visibility map](https://www.postgresql.org/docs/19/routine-vacuuming.html#VACUUM-FOR-VISIBILITY-MAP) during execution,
+reducing the work that future vacuums need to do. Additionally,
+[`vacuumdb --analyze-only`](https://www.postgresql.org/docs/19/app-vacuumdb.html)
+now analyzes partitioned tables when no tables are specified.
 
-I guess that depends on how you look at it.
+This release adds new views for monitoring workloads, including
+[`pg_stat_lock`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-LOCK-VIEW)
+for per-lock-type statistics, [`pg_stat_recovery`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-RECOVERY-VIEW)
+for recovery status, and [`pg_stat_autovacuum_scores`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-AUTOVACUUM-SCORES-VIEW)
+to show how autovacuum prioritizes tables. The new `IO` option for
+[`EXPLAIN ANALYZE`](https://www.postgresql.org/docs/19/sql-explain.html) and the
+matching [`auto_explain`](https://www.postgresql.org/docs/19/auto-explain.html#AUTO-EXPLAIN-CONFIGURATION-PARAMETERS-LOG-IO)
+setting report asynchronous I/O activity. PostgreSQL 19 also reports the amount
+of WAL written for full-page images in [`pg_stat_wal`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-WAL-VIEW),
+`EXPLAIN (ANALYZE, WAL)`, and in vacuum and analyze log events.
 
-I don't have inside information about what's going on, but my experience dealing with complex systems tells me there's a common through line to all of these disruptions: there aren't enough smart people who give a shit.
+Previously, PostgreSQL often required users to restart their server to enable
+[logical replication](https://www.postgresql.org/docs/19/logical-replication.html),
+which could be disruptive in production workloads. PostgreSQL 19 simplifies
+logical replication initialization by automatically raising the effective WAL
+level to `logical` when you create the first logical replication slot. You can
+see the WAL level in use with the new [`effective_wal_level`](https://www.postgresql.org/docs/19/runtime-config-preset.html#GUC-EFFECTIVE-WAL-LEVEL) setting.
 
-So where did they go?
+PostgreSQL 19 also adds logical replication of
+[sequence values](https://www.postgresql.org/docs/19/logical-replication-sequences.html),
+which you can publish using `FOR ALL SEQUENCES` with
+[`CREATE PUBLICATION`](https://www.postgresql.org/docs/19/sql-createpublication.html).
+`CREATE PUBLICATION` also adds an `EXCEPT` clause to exclude tables when
+publishing `FOR ALL TABLES`, and [`CREATE SUBSCRIPTION`](https://www.postgresql.org/docs/19/sql-createsubscription.html)
+can now get its connection settings from a foreign server, such as one defined
+with [`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html),
+using the `SERVER` clause. Additionally, the new
+[`retain_dead_tuples`](https://www.postgresql.org/docs/19/sql-createsubscription.html#SQL-CREATESUBSCRIPTION-PARAMS-WITH-RETAIN-DEAD-TUPLES)
+subscription option lets PostgreSQL detect updates that conflict with a
+concurrent delete, and these conflicts are counted in
+[`pg_stat_subscription_stats`](https://www.postgresql.org/docs/19/monitoring-stats.html#MONITORING-PG-STAT-SUBSCRIPTION-STATS).
 
-Capitalism has never been particularly kind to smart people who give a shit (or people in general... but I digress). Capitalism does, however begrudgingly, recognize that smart people who give a shit are required to build and maintain complex systems that serve capitalist goals. Thus, those people have been accommodated and incorporated into the system by virtue of their necessity and, in many cases, their rarity.
+For applications that send reads to standbys, PostgreSQL 19 adds
+"read-your-writes" consistency with the new
+[`WAIT FOR LSN`](https://www.postgresql.org/docs/19/sql-wait.html) command. A
+session on a standby can use `WAIT FOR LSN` to wait until the standby has
+replayed the write-ahead log (WAL) up to a specific
+[log sequence number (LSN)](https://www.postgresql.org/docs/19/wal-internals.html)
+before running a query, so the application can read data it just wrote on the
+primary.
 
-Now, though, generative AI is here. To the people running the show—leadership and management—it seems like they can get the same or better value (and even more output!) from a machine. The machine is cheaper, works longer, doesn't take sick days or vacations, doesn't ask for any benefits, and never pushes back against a bad idea.
+PostgreSQL 19 also improves queries on foreign tables. With the new
+[`import_stats`](https://www.postgresql.org/docs/19/postgres-fdw.html#POSTGRES-FDW-OPTIONS-COST-ESTIMATION) option,
+[`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html) can
+import table statistics from the remote server when you run `ANALYZE`, instead
+of sampling rows from the remote table, which helps the query planner choose
+better plans.
 
-People who don't do the actual work—the people who aren't in the trenches—have a hard time telling the difference between a flawed system held aloft by the drive and determination of smart people who give a shit and slop provided by generative AI. To them it's all just output: words you can read, code that runs, and pixels that look nice to their eye. It's all the same to them, so why does it matter where it comes from?
+PostgreSQL 19 adds [`INSERT ... ON CONFLICT DO SELECT`](https://www.postgresql.org/docs/19/sql-insert.html#SQL-ON-CONFLICT),
+which lets the `RETURNING` clause return existing rows that conflict with an
+insert, simplifying the common "get or create" pattern.
+[`COPY`](https://www.postgresql.org/docs/19/sql-copy.html) can now output data
+as JSON, including as a single JSON array, and the
+[SQL/JSON path language](https://www.postgresql.org/docs/19/functions-json.html#FUNCTIONS-SQLJSON-PATH-OPERATORS)
+adds string methods such as `lower()`, `upper()`, `replace()`, `split_part()`,
+and `btrim()`. Additionally, the `lead()`, `lag()`, `first_value()`,
+`last_value()`, and `nth_value()` [window functions](https://www.postgresql.org/docs/19/functions-window.html)
+can now skip `NULL` values using `IGNORE NULLS`. The [`random()`](https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-TABLE) function can now also generate random dates
+and timestamps within a range.
 
-It matters because generative AI isn't smart, and it doesn't give a shit. What seems like intelligence is an illusion propped up by a massive amount of data strip-mined from the commons with weights that nudge the output toward a generally desirable shape. What seems like care, concern, and attention is just generative AI doing what it's designed to do: telling you what you want to hear. The math and logic that power LLMs are as cold, unfeeling, and indifferent as the laws of physics.
+This release also makes many workloads faster without changes to your
+application. PostgreSQL 19 improves the performance of foreign key checks, which
+in testing made bulk inserts nearly 2x faster, and adds more query planner
+optimizations, such as converting `NOT IN` clauses to more efficient anti-joins
+when `NULL` values are not present, and performing
+[eager aggregation](https://www.postgresql.org/docs/19/runtime-config-query.html#GUC-ENABLE-EAGER-AGGREGATE)
+before joins to reduce the number of rows to process. PostgreSQL 19 also builds
+on the [asynchronous I/O](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-METHOD)
+subsystem added in PostgreSQL 18. When `io_method` is set to `worker` (the
+default), PostgreSQL now automatically adjusts the number of I/O workers between
+the new [`io_min_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MIN-WORKERS)
+and [`io_max_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MAX-WORKERS)
+settings, which replace the `io_workers` setting. There are also scalability
+improvements when using [`LISTEN`](https://www.postgresql.org/docs/19/sql-listen.html)
+and [`NOTIFY`](https://www.postgresql.org/docs/19/sql-notify.html) to
+exchange notifications in multi-channel workloads.
 
-Smart people who give a shit notice things. They connect dots. They notice when things don't feel right. They know when something is about to go off the rails, and they know how to get things back on track. They know how to handle edge cases. They know how to manually handle a unique situation. They know what the right thing to do is, and they know when they need to put in extra effort or time to make something happen. Generative AI falls far short in these areas, but this is the glue that holds complex systems together. More prompting and more output isn't a substitute for this.
+Finally, the new [`password_expiration_warning_threshold`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-PASSWORD-EXPIRATION-WARNING-THRESHOLD)
+setting warns users when their password is about to expire.
 
-It's hard for capitalist leadership to internalize any of that, though. It would be such a relief for them, such a burden lifted, to replace all those smart people who give a shit with generative AI. It would be so much easier to win at capitalism if generative AI lived up to the hype, and there's so much pressure for leadership and management to believe that the hype is real.
+PostgreSQL 19 adds server-side support for
+[Server Name Indication (SNI)](https://www.postgresql.org/docs/19/ssl-tcp.html#SSL-SNI),
+letting a single PostgreSQL server present a different TLS certificate based on
+the hostname a client connects to. You can map hostnames to their certificates
+and keys in the new [`pg_hosts.conf`](https://www.postgresql.org/docs/19/runtime-config-file-locations.html#GUC-HOSTS-FILE)
+file. PostgreSQL 19 also now issues a warning after a successful `md5` password
+authentication, which you can turn off with the
+[`md5_password_warnings`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-MD5-PASSWORD-WARNINGS)
+setting. `md5` password authentication was deprecated in PostgreSQL 18 and will
+be removed in a future release. If you require password-based authentication,
+use [SCRAM authentication](https://www.postgresql.org/docs/19/auth-password.html).
+This release also removes support for RADIUS authentication.
 
-Thus, a lot of the smart people who give a shit have been laid off, and the ones that remain are hollowed out. Telling people to stop doing the job they signed up for in favor of babysitting LLMs so they can do that job instead is a great way to make people less smart about the system they used to work on and give less of a shit about it. Every prompt moves them one step further away from the system they used to know inside and out. Every generated output that becomes part of the system means those people understand less about how the system actually works. Those people are robbed of the things that make them smart (the struggle of building and learning) and the things that made them gave a shit (a sense of ownership and close connection with the system).
+[Just-in-time compilation (JIT)](https://www.postgresql.org/docs/19/jit.html) is
+now disabled by default, as the cost estimates PostgreSQL used to decide when to
+use it proved unreliable. If you run many large analytical queries, you may want
+to enable JIT. When PostgreSQL is built with LZ4 support, the default
+[TOAST](https://www.postgresql.org/docs/19/storage-toast.html) compression
+method is now `lz4`.
 
-We've moved from a world dependent on complex and fragile systems held together by smart people who give a shit to a world of complex and fragile systems run by generative AI. The people running the generative AI are not as smart, nor do they give as much of a shit. There are, of course, exceptions (which is why a lot of things are still humming along), but we are on a course where the number of smart people who give a shit are decreasing, and that's a big problem. As long as the number continues to go down, more systems will fail.
+Many other new features and improvements have been added to PostgreSQL 19 that
+may also be helpful for your use cases. Please see the
+[release notes](https://www.postgresql.org/docs/19/release-19.html) for a
+complete list of new and changed features.
 
-I think what we have here is a hot stove moment for capitalism. When you tell a young kid a stove is hot and they shouldn't touch it, you'll find there are two kinds of kids. For one kind of kid, the warning is the lesson, and they don't touch the stove. For the other kind of kid, the only lesson that works for them is being burned. They have to touch the stove at least once to learn the lesson. Capitalism was told the stove was hot, but their hand is on it right now.
+[PostgreSQL](https://www.postgresql.org) is the world's most advanced open
+source database, with a global community of thousands of users, contributors,
+companies and organizations. Since its beginnings at the University of
+California, Berkeley over 40 years ago, PostgreSQL has continued with an
+unmatched pace of development. PostgreSQL's mature feature set not only matches
+top proprietary database systems, but exceeds them in advanced database
+features, extensibility, security, and stability.
 
-Unfortunately, we're all getting burned.
+For explanations of the above features and others, please see the following
+resources:
+
+There are several ways you can download PostgreSQL 19, including:
+
+Other tools and extensions are available on the
+[PostgreSQL Extension Network](http://pgxn.org/).
+
+## Documentation
+
+PostgreSQL 19 comes with HTML documentation as well as man pages, and you can also browse the documentation online in both [HTML](https://www.postgresql.org/docs/19/) and [PDF](https://www.postgresql.org/files/documentation/pdf/19/postgresql-19-US.pdf) formats.
+
+PostgreSQL uses the [PostgreSQL License](https://www.postgresql.org/about/licence/),
+a BSD-like "permissive" license. This
+[OSI-certified license](http://www.opensource.org/licenses/postgresql/) is
+widely appreciated as flexible and business-friendly, since it does not restrict
+the use of PostgreSQL with commercial and proprietary applications. Together
+with multi-company support and public ownership of the code, our license makes
+PostgreSQL very popular with vendors wanting to embed a database in their own
+products without fear of fees, vendor lock-in, or changes in licensing terms.
+
+Website
+
+Postgres, PostgreSQL, and the Elephant Logo (Slonik) are all registered
+trademarks of the [PostgreSQL Community Association](https://www.postgres.ca).
+If you wish to use these marks, you must comply with the [trademark policy](https://www.postgresql.org/about/policies/trademarks/).
+
+PostgreSQL enjoys the support of numerous companies, who sponsor developers,
+provide hosting resources, and give us financial support. See our
+[sponsors](https://www.postgresql.org/about/sponsors/) page for some of these
+project supporters.
+
+There is also a large community of
+[companies offering PostgreSQL Support](https://www.postgresql.org/support/professional_support/),
+from individual consultants to multinational companies.
+
+If you wish to make a financial contribution to the PostgreSQL Global
+Development Group or one of the recognized community non-profit organizations,
+please visit our [donations](https://www.postgresql.org/about/donate/) page.

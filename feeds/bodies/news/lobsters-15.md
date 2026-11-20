@@ -1,163 +1,393 @@
-I [wrote an article](https://blog.platypush.tech/article/Local-voice-assistant) a couple of months ago describing how I rebuilt my old voice assistant pipeline in [Platypush](https://platypush.tech).
+**More expressive code**, **stronger types**, and **scalable I/O**.
 
-And I wrote earlier articles describing my journey through self-hosted voice assistants - [in 2024](https://blog.platypush.tech/article/The-state-of-voice-assistant-integrations-in-2024) (with [Picovoice](https://picovoice.ai)), [in 2020](https://blog.platypush.tech/article/Build-custom-voice-assistants) (diving into the legacy [`assistant.google`](https://docs.platypush.tech/platypush/plugins/assistant.google.html) integration, the now defunct `assistant.alexa` integration, the now defunct Snowboy integration, the now defunct DeepSpeech integration and Picovoice) and the [original article in 2019](https://blog.platypush.tech/article/Build-your-customizable-voice-assistant-with-Platypush) describing the Google Assistant integration.
+Allows some of a function's arguments to be provided in advance, returning a Closure that accepts the rest.
 
-For a couple of months I used the voice pipeline described in my latest article as my main driver, but after getting used to the robustness of commercial voice assistants I was unhappy with the high rates of false positives/negatives of my self-hosted pipeline, as well as its lack of robustness in detecting start/end of speech, especially in noisy environments and using cheap microphones.
+The Duration class represents elapsed time as measured by a stopwatch.
 
-After a bit of experimentation, I decided to swap and fine tune a few parts, and after a couple of days of trying the results are satisfying enough for me to write a short article about it.
+Ensures that a given value (numeric or otherwise) falls within a specified range.
 
-The resulting pipeline is:
+## Partial Function Application
 
-## Wake word detection: a new `assistant.microwakeword` plugin
-
-Until recently I used [`assistant.openwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.openwakeword.html), which wraps [openWakeWord](https://github.com/dscripka/openWakeWord).
-
-It works, but the project has been quiet for a while and all of its pre-trained models are `v0.1` files from 2023, mostly trained on synthetic speech.
-
-In practice I was getting both false positives (the hotword triggering on background noise) and false negatives (the hotword not detected unless I was close to the microphone).
-
-I added a new plugin, [`assistant.microwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.microwakeword.html), on top of [microWakeWord](https://github.com/kahrendt/microWakeWord) through the [`pymicro-wakeword`](https://pypi.org/project/pymicro-wakeword/) Python bindings.
-
-`microWakeWord` is the engine used by ESPHome and Home Assistant Voice, its models are actively maintained, and the built-in models (`okay_nabu`, `hey_jarvis`, `hey_mycroft`, `alexa`) ship with the package — no download required.
-
-The current official models are provided under the [ESPHome micro-wake-word-models repository](https://github.com/esphome/micro-wake-word-models).
-
-Custom models are supported too: drop a `microWakeWord` JSON manifest (with its `.tflite` model) in the plugin's models directory and reference it by name.
-
-The plugin exposes the same API as `assistant.openwakeword` (same `models`, `detection_threshold`, `frame_duration`, `patience_frames`, `input_device`, `input_volume` parameters, same `list_models` action, same `HotwordDetectedEvent`), so switching is a matter of just changing the configuration to point to the new plugin:
+Allows some of a function's arguments to be provided in advance, using `?` and `...` placeholders for the rest. The result is a Closure, and the function is only called once the remaining arguments are passed to it.
 
 ```
-assistant.microwakeword:
-  models:
-    - alexa
+$versions = ['8.4', '8.5', '8.6', '8.7', '9.0'];
+
+$supportsPfa = array_filter(
+    $versions,
+    fn ($version) => version_compare($version, '8.6', '>='),
+);
 ```
 
-A few design notes:
-
-- Without an explicit detection_threshold, each model uses the probability_cutoff from its own manifest (0.9 for alexa), which is the value the model was validated against.
-- Models already smooth their output over a sliding window, so unlike openwakeword, patience_frames defaults to 0 here.
-- The audio thread never touches the TFLite models directly: it queues frames (and a reset marker) to the main thread, because MicroWakeWord.reset() reloads the interpreter and isn't safe to call concurrently.
-- Like assistant.openwakeword, the plugin releases the audio device when another assistant plugin starts a conversation, and re-acquires it when the conversation ends.
-
-## Speech-to-text: `assistant.openai`, with a much better ear
-
-`assistant.openai` records audio when a conversation starts and transcribes it through Whisper.
-
-The tricky part has always been *end-of-speech detection*: knowing when the user has finished talking. The previous implementation used a per-frame boolean from WebRTC VAD, and any single frame classified as speech would reset the silence timer. With even a bit of background noise, phrases would only end when the maximum conversation duration was hit.
-
-The audio preprocessing layer (`AudioPreprocessor`, shared by the STT integrations) has been reworked:
-
-- [Silero VAD](https://github.com/snakers4/silero-vad) as the primary backend (through `onnxruntime`, no PyTorch required), with WebRTC VAD and a plain RMS-based detector as fallbacks. To get an idea of Silero VAD's performance compared against other solutions for speech activity detection, take a look at the insightful article *One voice detector to rule them all*. The Silero model is downloaded on first use into the Platypush workdir and checksum-verified:
-
 ```
-assistant.openai:
-  # auto = silero -> webrtc -> energy, depending on what's installed
-  vad_backend: auto
+$versions = ['8.4', '8.5', '8.6', '8.7', '9.0'];
+
+$supportsPfa = array_filter(
+    $versions,
+    version_compare(?, '8.6', '>='),
+);
 ```
 
-- **Hysteresis + sliding window**: a frame becomes speech above the VAD threshold and stays speech until its score drops by a margin, and the per-frame decisions are smoothed by majority vote over a 0.5s window. A single noise burst can no longer keep a conversation alive.
-- **Adaptive noise floor**: the background noise level is tracked over time, and frames that aren't louder than `noise_floor_factor` (default 2.0, ~6 dB) times the floor are never considered as speech.
-
-On a synthetic benchmark (Piper-generated phrases mixed with babble and burst noise), the old settings kept conversations open for 6–10 seconds after the speech had ended; the new pipeline ends them 1.0–1.6 seconds after the last word, which is the configured [`conversation_end_timeout`](https://docs.platypush.tech/platypush/plugins/assistant.openai.html#platypush.plugins.assistant.openai.AssistantOpenaiPlugin.start_conversation) plus the smoothing lag.
-
-Since the changes on Platypush have been performed directly in the [`AudioPreprocessor`](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_audio.py) also used by other native speech-to-text engines, other speech-to-text plugins also benefit from them - e.g. if you use [`assistant.vosk`](https://docs.platypush.tech/platypush/plugins/assistant.vosk.html) for full on-device detection.
-
-## Responses and context: the `openai` plugin
-
-The transcribed phrase is processed by the `openai` plugin, which handles both the API key and the conversation context. By default the assistant renders the response through the configured `tts_plugin`; if the response ends with a question mark, the conversation continues with a follow-up.
-
-Custom hooks can intercept phrases before the default response kicks in — for example, to handle home automation commands locally without an LLM round-trip:
+The Duration class represents elapsed time as measured by a stopwatch. Its representation is independent of any time and timezone and can represent a range of more than 250 years with nanosecond precision. This makes it well-suited to represent timeouts or benchmark timings in an expressive way.
 
 ```
-from platypush import run, when
-from platypush.message.event.assistant import SpeechRecognizedEvent
+/**
+ * All delays are in microseconds.
+ */
+function backoff(
+    int $baseDelay,
+    int $step,
+    int $attempt,
+): void {
+    $delay = $baseDelay + ($step * (2 ** $attempt));
 
-@when(SpeechRecognizedEvent, phrase='play (the)? music')
-def play_music():
-    run('music.mpd.play')
+    // Wait at most 30 seconds.
+    usleep(min($delay, 30_000_000));
+}
+
+// 1 second base delay, plus 100 milliseconds
+// doubling with each attempt.
+backoff(1_000_000, 100_000, $attempt);
 ```
 
-And the hotword event is wired to the conversation start with a similar hook:
-
 ```
-from platypush import run, when
-from platypush.message.event.assistant import HotwordDetectedEvent
+use Time\Duration;
 
-@when(HotwordDetectedEvent)
-def on_hotword(**_):
-    run('assistant.openai.start_conversation')
-```
+function backoff(
+    Duration $baseDelay,
+    Duration $step,
+    int $attempt,
+): void {
+    $delay = $baseDelay->add($step->multiplyBy(2 ** $attempt));
 
-## Text-to-speech: `tts.openai`
+    // Durations are comparable, so min() works directly.
+    $delay = min($delay, Duration::fromSeconds(30));
 
-Responses are rendered by [`tts.openai`](https://docs.platypush.tech/platypush/plugins/tts.openai.html), with volume and voice configurable. In my tests however [`tts.piper`](https://docs.platypush.tech/platypush/plugins/tts.piper.html) also yielded good results, and it runs entirely locally. In my tests on a RaspberryPi 5 however it added ~3-4s of latency to process the response to audio compared to `tts.openai`.
+    time_nanosleep($delay->seconds, $delay->nanoseconds);
+}
 
-Since the TTS output goes to the speakers and the wake word detector listens on the microphone, the assistant plugins pause hotword detection while a conversation is active — otherwise the assistant would hear itself.
+backoff(
+    Duration::fromSeconds(1),
+    Duration::fromMilliseconds(100),
+    $attempt,
+);
 
-## The full configuration
-
-```
-openai:
-  api_key: YOUR_API_KEY
-  # Or, for a custom setup using a model provider compatible with the OpenAI API,
-  # e.g. a local Ollama instance:
-  # base_url: http://localhost:8000/v1
-  # model: gpt-5
-  # Optional context that can be passed to initialize the assistant
-  # context:
-  #   role: system
-  #   content: You are a useful assistant.
-
-assistant.microwakeword:
-  models:
-    - alexa
-
-assistant.openai:
-  tts_plugin: tts.openai
-  conversation_start_sound: ~/sounds/wake_word_detected.wav
-  input_volume: 100
-
-# assistant.vosk:
-#   model: /path/to/vosk/model
-#   conversation_start_sound: ~/sounds/wake_word_detected.wav
-#   input_volume: 100
-
-tts.openai:
-  output_volume: 80.0
-
-# Or, for a fully local setup that uses tts.piper:
-# tts.piper:
-#   output_volume: 80.0
+// Preconfigure the delays using Partial Function Application.
+$waitBeforeRetry = backoff(
+    Duration::fromSeconds(1),
+    Duration::fromMilliseconds(100),
+    attempt: ?,
+);
+$waitBeforeRetry($attempt);
 ```
 
-## What changed on the code side
+## Polling API
 
-- New [`assistant.microwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.microwakeword.html) plugin: microWakeWord hotword detection through pymicro-wakeword, same API as assistant.openwakeword, built-in models bundled with the package, custom models via JSON manifests.
-- [`assistant.openwakeword`](https://docs.platypush.tech/platypush/plugins/assistant.openwakeword.html) fixes: frames are now 80ms (1280 samples, the size openWakeWord recommends) instead of 500ms — longer chunks only return the highest score over their sub-frames and can miss hotwords — plus a patience_frames parameter (consecutive frames above threshold) and an explicit detection_threshold parameter (default 0.5).
-- Shared [`AudioPreprocessor`](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_audio.py) rework: Silero/WebRTC/energy VAD backends with vad_backend: auto selection, threshold hysteresis, sliding-window majority vote, and an adaptive noise floor. Used by both `assistant.openai` and `assistant.vosk`.
-- New [Silero VAD wrapper](https://git.platypush.tech/platypush/platypush/src/branch/master/platypush/plugins/assistant/_vad.py): ONNX inference through `onnxruntime`, recurrent state carried across frames, checksum-verified model download into the workdir.
+The new `Io\Poll` API efficiently monitors many streams at once using the best mechanism available on each platform (epoll, kqueue, event ports, or WSAPoll), without the scalability limits of `stream_select()`. It is designed as a common foundation that event loop libraries such as ReactPHP and AMPHP can build on.
 
-## Caveats
+```
+$server = stream_socket_server('tcp://0.0.0.0:8080');
+$clients = [];
 
-The microphone on my RPi doesn't support 16 kHz natively, so audio is captured at 44.1 kHz and software-resampled — it works, but if detection feels sluggish software resampling is usually the first suspect.
+while (true) {
+    $read = [$server, ...$clients];
+    $write = $except = null;
 
-The VAD and threshold defaults were tuned on synthetic audio plus a couple of my audio recordings.
+    // Based on select(), which typically can't handle
+    // more than 1024 connections
+    stream_select($read, $write, $except, null);
 
-Different rooms, microphones and acoustics may yield different results. You may want to adjust `detection_threshold` on the wake word plugin and `noise_floor_factor` on the STT plugins if you don't feel satisfied with your mileage.
+    foreach ($read as $stream) {
+        if ($stream === $server) {
+            $clients[] = stream_socket_accept($server);
+            continue;
+        }
 
-## Reactions
+        $data = fread($stream, 8192);
 
-#### Webmentions
+        if ($data === '' || $data === false) {
+            $key = array_search($stream, $clients, true);
+            unset($clients[$key]);
+            fclose($stream);
+        } else {
+            fwrite($stream, $data);
+        }
+    }
+}
+```
 
-To interact via [Webmentions](https://indieweb.org/Webmention),
-          send an activity that references [this URL](https://blog.platypush.tech/article/Rewriting-my-voice-assistant-pipeline) from a platform that supports Webmentions,
-          such as [Lemmy](https://joinlemmy.org/),
-          [WordPress with Webmention plugins](https://wordpress.org/plugins/webmention/),
-          or any [IndieWeb-compatible site](https://indieweb.org/Webmention#Publishing_Software).
+```
+use Io\Poll\{Context, Event};
 
-#### ActivityPub
+$server = stream_socket_server('tcp://0.0.0.0:8080');
 
-- Follow @blog@platypush.tech on your ActivityPub platform (e.g. Mastodon, Misskey, Pleroma, Lemmy).
-- Mention @blog@platypush.tech in a post to feature on the Guestbook.
-- Search for this URL on your instance to find and interact with the post.
-- Like, boost, quote, or reply to the post to feature your activity here.
+// Automatically uses epoll, kqueue, event ports, or WSAPoll
+$poll = new Context();
+$poll->add(new StreamPollHandle($server), [Event::Read]);
+
+while (true) {
+    foreach ($poll->wait() as $watcher) {
+        $stream = $watcher->getHandle()->getStream();
+
+        if ($stream === $server) {
+            $client = stream_socket_accept($server);
+            $poll->add(
+                new StreamPollHandle($client),
+                [Event::Read],
+            );
+            continue;
+        }
+
+        $data = fread($stream, 8192);
+
+        if ($data === '' || $data === false) {
+            $watcher->remove();
+            fclose($stream);
+        } else {
+            fwrite($stream, $data);
+        }
+    }
+}
+```
+
+Stream operations can now be configured to throw a `StreamException` or to fail silently instead of emitting warnings. Errors are reported as structured `StreamError` objects with a `StreamErrorCode` enum case, the wrapper name, and the affected path or URL, and can also be retrieved later with `stream_last_errors()` or passed to a custom error handler.
+
+```
+$config = @file_get_contents('/etc/app/config.json');
+
+if ($config === false) {
+    // Only an unstructured message string is available
+    $error = error_get_last();
+    log_error($error['message']);
+}
+```
+
+```
+$context = stream_context_create([
+    'stream' => [
+        'error_mode' => StreamErrorMode::Exception,
+    ],
+]);
+
+try {
+    $config = file_get_contents(
+        '/etc/app/config.json',
+        context: $context,
+    );
+} catch (StreamException $e) {
+    foreach ($e->getErrors() as $error) {
+        // $error->code is a StreamErrorCode enum case
+        log_error(
+            $error->code->name,
+            $error->message,
+            $error->wrapperName,
+        );
+    }
+}
+```
+
+## New `clamp()` Function
+
+Ensures that a given value (numeric or otherwise) falls within a specified range. Otherwise, the nearest boundary value is returned.
+
+```
+var_dump(max(0, min(-10, 100)));
+// int(0)
+
+var_dump(max(0, min(50, 100)));
+// int(50)
+
+var_dump(max(0, min(110, 100)));
+// int(100)
+```
+
+```
+var_dump(clamp(-10, 0, 100));
+// int(0)
+
+var_dump(clamp(50, 0, 100));
+// int(50)
+
+var_dump(clamp(110, 0, 100));
+// int(100)
+
+// Any comparable value works with clamp(). This
+// includes the new Duration class.
+var_dump(clamp(
+    \Time\Duration::fromSeconds(30),
+    min: \Time\Duration::fromMinutes(1),
+    max: \Time\Duration::fromMinutes(10),
+)->seconds);
+// int(60)
+```
+
+The `SortDirection` enum provides a shared, type-safe way to express sort order with its `Ascending` and `Descending` cases. Previously, every library had to define its own way of representing sort direction, resulting in a mix of incompatible integers, strings, booleans, and custom enums. Since `SortDirection` is built into PHP, libraries can accept it in their public APIs without needing adapter code.
+
+Learn more about this feature in [The PHP Foundation’s blog](https://thephp.foundation/blog/2026/11/03/stdlib-investment/).
+
+```
+class QueryBuilder
+{
+    private array $orderBy = [];
+
+    public function orderBy(
+        string $column,
+        int $direction = SORT_ASC,
+    ): static {
+        $this->orderBy[] = $column . ' ' . match ($direction) {
+            SORT_ASC => 'ASC',
+            SORT_DESC => 'DESC',
+        };
+
+        return $this;
+    }
+}
+
+$qb->orderBy('name', SORT_DESC);
+$qb->orderBy('name', SORT_STRING);
+// Accepted by the signature, then fails inside the method:
+// UnhandledMatchError: Unhandled match case 2
+```
+
+```
+class QueryBuilder
+{
+    private array $orderBy = [];
+
+    public function orderBy(
+        string $column,
+        SortDirection $direction = SortDirection::Ascending,
+    ): static {
+        $this->orderBy[] = $column . ' ' . match ($direction) {
+            SortDirection::Ascending => 'ASC',
+            SortDirection::Descending => 'DESC',
+        };
+
+        return $this;
+    }
+}
+
+$qb->orderBy('name', SortDirection::Descending);
+$qb->orderBy('name', SORT_STRING);
+// TypeError: QueryBuilder::orderBy(): Argument #2 ($direction)
+// must be of type SortDirection, int given
+```
+
+Function and method parameters can now have their own DocComments, which are available via the new `ReflectionParameter::getDocComment()` method. This allows each parameter to be documented right next to its declaration, without repeating its name and type in a `@param` tag.
+
+```
+class DB
+{
+    /**
+     * Returns up to $limit items matching the $query.
+     *
+     * @param string $query Terms to search
+     * @param int $limit Maximum number of results
+     */
+    public function search(string $query, int $limit = 10): array
+    {
+        return [];
+    }
+}
+
+// Parameter descriptions can only be extracted
+// by parsing the function's DocComment.
+```
+
+```
+class DB
+{
+    /**
+     * Returns up to $limit items matching the $query.
+     */
+    public function search(
+        /** Terms to search */
+        string $query,
+
+        /** Maximum number of results */
+        int $limit = 10,
+    ): array {
+        return [];
+    }
+}
+
+var_dump(
+    new ReflectionParameter([DB::class, 'search'], 'query')
+        ->getDocComment(),
+);
+// string(22) "/** Terms to search */"
+```
+
+## New `ReflectionProperty::isReadable()` and `ReflectionProperty::isWritable()` Methods
+
+With readonly properties, asymmetric visibility, and property hooks, checking whether a property is public is no longer enough to know whether it can be read or written. The new methods answer this directly for a given scope, and optionally for a specific object, taking into account visibility, initialization state, hooks, and magic methods.
+
+```
+class NewsEntry
+{
+    public string $title = 'PHP 8.6 released!';
+
+    public private(set) string $slug = 'php-86-released';
+}
+
+$entry = new NewsEntry();
+foreach (['title', 'slug'] as $item) {
+    $property = new ReflectionProperty(NewsEntry::class, $item);
+    printf(
+        "%s: isReadable=%s isWritable=%s\n",
+        $item,
+        $property->isReadable(null, $entry) ? 'yes' : 'no',
+        $property->isWritable(null, $entry) ? 'yes' : 'no',
+    );
+}
+// title: isReadable=yes isWritable=yes
+// slug: isReadable=yes isWritable=no
+```
+
+Instance readonly properties, including those in readonly classes, can now declare a default value. This makes it simple to implement get-only interface properties with fixed values, which previously required assigning them in a constructor. The default counts as the property's initialization, so the constructor cannot overwrite it.
+
+```
+interface Rule
+{
+    public string $parser { get; }
+}
+
+final readonly class SlugRule implements Rule
+{
+    public string $parser;
+
+    public function __construct()
+    {
+        $this->parser = SlugParser::class;
+    }
+}
+```
+
+```
+interface Rule
+{
+    public string $parser { get; }
+}
+
+final readonly class SlugRule implements Rule
+{
+    public string $parser = SlugParser::class;
+}
+```
+
+- Using return inside a finally block is now deprecated, as it silently discards exceptions and overrides values returned from the try or catch block.
+- Returning a value from __construct() or __destruct() is now deprecated, as is making them generators. Declaring a nullable return type for __debugInfo() is also deprecated.
+- Using let or is as the name of a class, function, or constant is now deprecated. Using _ as a constant name, namespace as a class constant name, or readonly as a function name is also deprecated.
+- The mbstring regular expression functions such as mb_ereg() and mb_split() have been deprecated, as the underlying Oniguruma library is no longer maintained. PCRE functions with the u modifier can be used instead.
+- The is_double(), is_long(), is_integer(), and doubleval() aliases have been deprecated. Use is_float(), is_int(), and floatval() instead.
+- spl_object_hash() has been deprecated in favor of spl_object_id(), and spl_classes() in favor of ReflectionExtension::getClassNames().
+- Passing an object where an array is expected to array_walk(), array_walk_recursive(), http_build_query(), mb_convert_variables(), and compression functions and filters is now deprecated. Use get_object_vars() to convert the object first.
+- strcoll() and the SORT_LOCALE_STRING sort flag have been deprecated. Use the Collator class from the intl extension instead.
+- Passing a third argument to define() is now deprecated, as is calling is_a() or is_subclass_of() with a class name string when $allow_string is false.
+- Using more than 16 filters in a php://filter URL without setting the filter.max_filter_count context option is now deprecated.
+- Sessions are now more secure by default: session.use_strict_mode and session.cookie_httponly are enabled, and session.cookie_samesite is set to Lax.
+- Custom session handlers that do not implement both create_sid() and validateId() are now deprecated.
+- The metaphone(), mysqli_get_charset(), and mysqli_stmt_init() functions are now deprecated, along with the CSV methods of SplFileObject and the sorting, flag, and serialization methods of ArrayIterator.
+- trim(), ltrim(), and rtrim() now also strip form feed (\f) characters by default.
+- fclose(), file_put_contents(), and copy() now return false when flushing or closing the stream fails, instead of silently ignoring the failure.
+- Many functions now throw a ValueError for out-of-range values, invalid flags, or strings containing NUL bytes, instead of silently truncating or ignoring them.
