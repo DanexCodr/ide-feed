@@ -1,321 +1,74 @@
-This article explains how Elixir implements type inference and type narrowing
-using reverse arrows: a small set of composable ideas, rather than special cases
-hardcoded into the type checker.
+For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
 
-Thanks to this work, the upcoming Elixir v1.21 passes all tests in the
-[If-T: Type Narrowing Benchmark by Guo et al.](https://github.com/utahplt/ifT-benchmark).
-This means v1.21 can find even more sure bugs in existing Elixir programs and, once
-type signatures are introduced, narrowing will give us more precise types and fewer
-false positives.
-
-> The type system was made possible thanks to a partnership between [CNRS](https://www.cnrs.fr/)
-> and [Remote](https://remote.com/). The development work is currently sponsored by
-> [Fresha](https://www.fresha.com/), [Supermethod](https://www.supermethod.com/) and
-> [Dashbit](https://dashbit.co/).
-
-## Type inference
+In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
 
-Elixir performs type inference by refining the dynamic type. This is quite different
-from how inference and gradual typing are implemented in most type systems, so let’s
-break it down.
+This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
 
-In many gradual languages, the dynamic type, often known as `any`, is a “black box” and
-can be used in any context. For example, imagine this Elixir function, where `x` starts
-with type `dynamic()`, as there is no type signature:
+This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
 
-```
-def using_x_as_number_and_binary(x) do
-  IO.puts x * 2
-  IO.puts byte_size(x)
-  :ok
-end
-```
+## Writing code once was never the issue
 
-The program above uses `x` both as a number (more precisely, as `integer() or float()`
-in `x * 2`) and as a bitstring in `byte_size(x)`. In some gradual type systems, the type
-checker will accept the program above, even though it will crash at runtime, because
-the dynamic type can be used in any context.
-
-However, in Elixir, the `dynamic()` type can be refined, and the above will report the
-following typing violation:
+Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
 
-```
-warning: incompatible types given to Kernel.byte_size/1:
-
-    byte_size(x)
-
-given types:
-
-    dynamic(float() or integer())
-
-but expected one of:
-
-    bitstring()
-
-where "x" was given the type:
-
-    # type: dynamic(float() or integer())
-    # from: iex:3
-    x * 2
-
-└─ iex:4: Foo.using_x_as_number_and_binary/1
-```
-
-As you can see in the error message, Elixir infers that the type of `x` after
-`x * 2` is a `dynamic(float() or integer())`. This means that `x` can be given
-to any function that accepts at least one of `float()` or `integer()`. However,
-because `byte_size(x)` expects a bitstring, we have a typing violation.
-
-This is possible because `dynamic()` in Elixir actually means `dynamic(term())`,
-where `term()` is the top type. Then, as a variable is used throughout the code,
-its dynamic type is refined by intersecting its type with the arguments of the
-functions the code invokes. In other words, we go through the following steps:
-
-1. `x` starts as `dynamic(term())`
-2. `x` is given to `x * 2`. The left operand of `*` expects `integer() or float()`, which we then intersect with `term()`, and therefore `x` gains the type `dynamic(integer() or float())`
-3. `x` is given to `byte_size(x)`, which expects a bitstring. The intersection of `integer() or float()` with `bitstring()` is empty, which will lead to a typing violation
-
-Now, let’s take a look at this program:
-
-```
-def using_x_as_integer(x) do
-  IO.puts x * 2
-  IO.puts rem(x, 2)
-  :ok
-end
-```
-
-This time, we pass `x` to the remainder function, `rem`, which expects all of its
-inputs to be integers. This means that, at the end of this function, Elixir will
-correctly infer that `x` can only be an integer, because `x` was refined from
-`dynamic(term())` to `dynamic(integer() or float())` and then only to `dynamic(integer())`.
-The inferred type for `using_x_as_integer` is a function, commonly written using
-the arrow notation: `dynamic(integer()) -> :ok`.
-
-The best part is that all dynamic types in Elixir are refined and therefore the type
-system is always doing its best to find bugs, even in the presence of dynamism.
-And the refinement itself is often quite precise, thanks to reverse arrows, which we
-will explore next.
-
-## Reverse arrows
-
-An arrow is the type of a function: `integer() -> boolean()` is an arrow that
-says “given an integer, this function returns a boolean”. The type on the left
-of the arrow is its domain (what it accepts) and the type on the right is its
-codomain (what it returns). Every function has arrows, whether they come from
-a type signature you wrote or are inferred by Elixir from the function’s clauses.
-
-Functions in Elixir can be typed with multiple arrows. As an exercise, let’s take
-a function that negates numbers, such as `negate(1)` returning `-1`:
-
-```
-def negate(number) when is_integer(number), do: 0 - number
-def negate(number) when is_float(number), do: 0.0 - number
-```
-
-You could give it this type signature with a single arrow:
-
-```
-$ integer() or float() -> integer() or float()
-def negate(number)
-```
-
-However, this type says that, if you give it an integer, it may return a
-float, which is never the case! This signature is too broad. Instead, we
-could give it this signature with two arrows:
-
-```
-$ integer() -> integer()
-$ float() -> float()
-def negate(number)
-```
-
-This precisely captures that, if you give it an integer, it returns an integer.
-If you give it a float, it returns a float. Multiple arrows are an excellent way
-to type functions with multiple clauses, which are common in both Erlang and Elixir.
-
-With this in mind, and remembering that `rem` only works on integers (its type is
-`integer(), integer() -> integer()`), what do you believe is the inferred type of
-`x` in the function below?
-
-```
-def negated_remainder(x), do: rem(negate(x), 2)
-```
-
-You may think `x` is `dynamic(integer() or float())`, because that’s the domain of
-`negate`. However, `x` will once again be inferred to be `dynamic(integer())`,
-because Elixir propagates types through the arrows in reverse: it starts from
-what the outermost call expects and walks inwards, from results to arguments,
-until it reaches the variables. Let’s break it down.
-
-1. We start type checking the function and we find `rem(negate(x), 2)`. `rem` has a single arrow, `integer(), integer() -> integer()`, so we know that `negate(x)` must return an `integer()` for this to type check
-2. Now we type check `negate(x)`. `negate` has two arrows: `integer() -> integer()` and `float() -> float()`. Since its result must be an integer, we can discard the `float() -> float()` arrow, as it never returns an integer. The only remaining arrow is `integer() -> integer()`, so the argument of `negate` must be `integer()`
-3. Now we type check `x` itself. `x` starts with the type `dynamic(term())`. We then intersect it with `integer()`, resulting in `dynamic(integer())`
-
-In other words, inference goes in two directions. Going forward, from arguments to
-results, arrows tell us what each call returns. Going in reverse, from results to
-arguments, arrows tell us what each argument must have been for the call to produce
-the expected result. As we give precise type signatures to our programs using multiple
-arrows, the type system will use these same arrows to infer precise types. As we will
-learn next, Elixir uses this technique to infer types from guards and to perform type
-narrowing (also known as occurrence typing).
-
-## Guards
-
-Now we have the foundation to understand how Elixir performs type inference of guards.
-Take this function clause:
-
-```
-def something(x, y) when is_integer(x) and is_bitstring(y) do
-  ...
-```
-
-Both `x` and `y` start with type `dynamic(term())`. We also know that a guard only
-succeeds if it returns `true` and we have the following type signatures (roughly):
-
-```
-$ true, true -> true
-$ true, false -> false
-$ false, true -> false
-$ false, false -> false
-def and(left, right)
-
-$ integer() -> true
-$ not integer() -> false
-def is_integer(value)
-
-$ bitstring() -> true
-$ not bitstring() -> false
-def is_bitstring(value)
-```
-
-Therefore, to infer the types of `when is_integer(x) and is_bitstring(y)`,
-we start with `true`, which is the only result for which a guard succeeds,
-and propagate it through the arrows in reverse:
-
-1. The only arrow of `and` that can return `true` is `true, true -> true`, therefore we know that both operands must be `true`
-2. The only arrow of `is_integer` that can return `true` is `integer() -> true`, therefore we know `x` must be an integer
-3. The only arrow of `is_bitstring` that can return `true` is `bitstring() -> true`, therefore we know `y` must be a bitstring
-
-If multiple arrows could return `true`, we would then simply union their domains.
-
-It is worth emphasizing that this behaviour is not hardcoded to a handful of
-functions the type checker knows about. It works with any function, in any context.
-Let’s see more examples.
-
-## Type narrowing (also known as occurrence typing)
-
-Occurrence typing refines the type of variables and expressions based on
-the branch taken in a conditional or pattern match, so the same variable may
-have different types in different branches. For example:
-
-```
-if is_bitstring(x) do
-  x #=> x has type: bitstring()
-else
-  x #=> x has type: not bitstring()
-end
-```
-
-The mechanism we use to perform occurrence typing is quite similar to the one
-from the previous sections. Within the `do`-branch, we consider the scenarios
-where `is_bitstring(x)` will return `true`. Within the `else`-branch, we consider
-the ones where it returns `false`.
-
-And since our foundation is built on reverse arrows, the narrowing also applies to
-patterns and `case`-expressions! For example:
-
-```
-def f(x) do
-  case parse(x) do
-    {:ok, _} -> ... # x is integer()
-    :error -> ...   # x is bitstring()
-  end
-end
-
-defp parse(x) when is_integer(x), do: {:ok, x}
-defp parse(x) when is_bitstring(x), do: :error
-```
-
-Here, `parse` has no type signature, but Elixir infers its arrows from its clauses:
-`integer() -> {:ok, integer()}` and `bitstring() -> :error`. Within the first branch,
-we know `parse(x)` returned a tuple, and the only arrow that returns a tuple has
-`integer()` as its domain, so `x` must be an integer.
-
-The [If-T benchmark](https://github.com/utahplt/ifT-benchmark) is a collection of
-test scenarios designed to evaluate both the precision and soundness of type narrowing.
-Elixir v1.20 already handled 12 out of the 13 tests, but it could not infer the
-proper types for this example:
-
-```
-y = is_integer(x)
-
-if y do
-  # y is true, x remains dynamic
-else
-  # y is false, x remains dynamic
-end
-```
-
-To narrow `x`, we need to reverse the arrows of `is_integer(x)`. In Elixir v1.20, we
-only did so for the expression given directly to `if` or `case`. Here, the expression
-given to `if` is the variable `y`. All v1.20 knew about `y` is that it was a `boolean()`.
-Inside the `do`-branch, `y` is `true`, but by then the connection between `y` and
-`is_integer(x)` had been lost at the assignment, so there were no arrows to reverse.
-
-This would be quite harmful once we add type signatures, because it means trivial
-refactoring techniques, such as extracting an expression into a variable, could lead
-to false positives.
-
-Elixir v1.21 solves this by keeping track of the expression each variable was assigned
-to. Now, when `y` is narrowed to `true`, we know `y` came from `is_integer(x)`, so we
-continue propagating `true` in reverse through the arrows of `is_integer`, narrowing `x`
-to `integer()`. This works across any number of assignments:
-
-```
-y = is_integer(x)
-z = not y
-
-if z do
-  # z is true, y is false, x is not integer()
-else
-  # z is false, y is true, x is integer()
-end
-```
-
-Our implementation also performs the narrowing lazily, by cross-referencing the variables
-in the `if` and `case` expressions with the variables used in each clause, trying to find
-any assignment they share with each other. If the clauses above do not access `z`, `y`, or
-`x`, then no narrowing is performed.
-
-Finally, because Elixir defines reverse arrows for almost all operations, it can refine
-expressions [which are not currently refined in TypeScript](https://www.typescriptlang.org/play/?#code/PTAEHUFMBsGMHsC2lQBd5oBYoCoE8AHSAZVgCcBLA1UABWgEM8BzM+AVwDsATAGiwoBnUENANQAd0gAjQRVSQAUCEmYKsTKGYUAbpGF4OY0BoadYKdJMoL+gzAzIoz3UNEiPOofEVKVqAHSKigBmXLCoFPBeBGxEZKh4APoM0BQMgkmC7LAWgoIAFHgAXKCCqJSczKAAPqCc7IjSkGQAlKUNTS2gAN6KoCbR5aAAHqAAvL2gIfDwpXigAL4A3P0iIaAFiUTwGyMBMxjjx6AAROWVzKetvWsDTqjsZF54Ae5VqJirA4ugMIIoPoDe6QR7PUALADUoAAjN8lopFkA),
-such as data constructors:
-
-```
-def f(foo) when is_bitstring(foo) or is_integer(foo) do
-  map = %{foo: foo}
-
-  if is_bitstring(map.foo) do
-    byte_size(foo)
-  else
-    foo + 1
-  end
-end
-```
-
-In the program above, even though `foo` is set as the value of a map,
-refining the map still refines the original variable.
-
-## Summary
-
-Elixir’s approach to type inference and narrowing is built on a few ideas that
-compose well. Dynamic types are refined as variables are used, multiple arrows
-give precise types to functions, and propagating types through those arrows in
-reverse lets us infer and narrow types across conditionals, patterns, and assignments,
-all without hardcoding knowledge about specific functions.
-
-In Elixir v1.21, we use these techniques to find sure bugs in existing Elixir programs,
-without requiring any changes to your code. The same mechanisms will apply once type
-signatures are introduced: the more precise the signatures, the more precise the
-narrowing and the fewer false positives.
+The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+
+## curl is the result of time
+
+curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+
+## Behind already
+
+During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+
+The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+
+That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+
+A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+
+## C
+
+I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+
+A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+
+## No rewrites
+
+I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+
+## Those rewrites
+
+I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+
+I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+
+They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+
+I wish them good luck whatever they decide!
+
+## How do I feel about them?
+
+Several people asked me this.
+
+*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
+
+I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
+
+1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27581#respond) .comment-body
+2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27582#respond) .comment-body .children
+  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27583#respond) .comment-body .children
+    1. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 18, 2026 at 10:55](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27596) .comment-metadata .comment-meta Isn’t a programming language just another development tool? We can talk about language capabilities just like any other. Types and tests go together as a pair of tools. Types can be validated incrementally in less than a second (eg in rust-analyzer), tests take seconds, minutes, sometimes hours for feedback. Tests can show the presence but not the absence of bugs, types prove the absence of whole classes of bugs but not their presence. Tests tell you about a specific execution, types reason about all possible executions. Test can validate any behaviour while types can only exclude bugs provable in its logic. The progress in programming languages has generally been towards stronger types, including lifetimes in Rust’s case. I don’t think its fair to say they have no advantages over tests. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27596#respond) .comment-body .children
+      1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 11:30](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27597) .comment-metadata .comment-meta @Jesse: different languages have different advantages and quirks, sure. I just meant that I don’t think the choice of language holds us back. .comment-content .comment-body
+  2. ![](https://secure.gravatar.com/avatar/7af2556d70ebdec658363896fcc23a2b17aeb51da7c5e5cb440e59af5c96788a?s=68&d=monsterid&r=g) **[grayhatter](https://gr.ht)** says: .comment-author [November 17, 2026 at 19:38](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27589) .comment-metadata .comment-meta > Nice, that sounds like very good motivation for a Rust rewrite. I agree; it is a good reason! But I feel like you’ve missed the forest for the single tree. This whole post is describing the value in curl being the maintainers that are willing to put in the time. A single observation doesn’t outweigh the reality that code is (and always has been) cheap. But maintainer time and effort is the important part. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27589#respond) .comment-body
+3. ![](https://secure.gravatar.com/avatar/dba025f411eb5dea75b2ac9d89b8299ba8ded7551da0ec0af415857312de2f7f?s=68&d=monsterid&r=g) **Jack** says: .comment-author [November 17, 2026 at 16:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27584) .comment-metadata .comment-meta cURL is one of the greatest examples of a project, C or otherwise, done right. It’s a stalwart of computing. It’s literally everywhere. It’s probably even in my toaster too, which is kind of scary now that I think about it. Jokes aside, you should really just ignore the people clamoring to rewrite it in Rust or Zig or whatever. I’m a huge Rust fan. I mainly program in Rust and a bit of C. This has nothing to do with rust per se and more to do with the internet being annoying. An AI powered rewrite or even a rewrite by hand misses what actually makes cURL so good. It’s that there is a talented team of maintainers who understand the code, understand the domain, and are dedicated to writing and maintaining curl. Rewrites lose all of this for temporary benefits, or worse it doesn’t have any benefits at all. There are AI and hand rolled postgres rewrites in Rust that are “faster” but it turns out they’re buggy messes that aren’t even durable. They’re faster because they’re broken. 🙂 So, I say this as a huge Rust fan who contributes to a plethora or open source Rust projects. Please ignore the “riir” in Rust crowd. It doesn’t represent most of us. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27584#respond) .comment-body
+4. ![](https://secure.gravatar.com/avatar/89c0c2a3cd1d8d2e7ae262a8b2967c5a214b80cb8f14d913519dcec0ac6ced68?s=68&d=monsterid&r=g) **Joonas Kuorilehto** says: .comment-author [November 17, 2026 at 16:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27585) .comment-metadata .comment-meta ” This latter one claims to have spent 8,600 USD to make it happen”. This is a wrong reading. They claim that amount in estimated API cost equivalent, but based on them running out of quota they use a subscription, which is a lot less cost. Not that it changes anything you said though. Thanks for keeping cURL going all these years. I doubt any of the clones are committed to similar maintainance quality and long term. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27585#respond) .comment-body
+5. ![](https://secure.gravatar.com/avatar/c4cb559cac461ae04977a38bc7c7e1779430589c4cae02e432f275fd7964fee6?s=68&d=monsterid&r=g) **[Vishal Pawar](https://vishalpawar.dev/utm?src=daniel_haxx)** says: .comment-author [November 17, 2026 at 18:00](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27587) .comment-metadata .comment-meta I really like what this post is talking about everyone can make a copy but who can maintain and keep on adding features in long term that is what makes it competing and survival of the copied software. Everyone knows how Cloudflare made a copy of Next.js and everyone started posting about it for few weeks and it is dead or it is copying features from Next.js to keep up with the Next.js as it’s replacement .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27587#respond) .comment-body
+6. ![](https://secure.gravatar.com/avatar/56be1d4b72a7e714a306e1894594615c37419ba7fab85792c32ff6b603f70b6f?s=68&d=monsterid&r=g) **Dàmian Lusq** says: .comment-author [November 17, 2026 at 19:05](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27588) .comment-metadata .comment-meta @Joonas The artifact mentions weekly limit only on 28/10, one week after the start of the rewrite, and not until the end of the experience, so it surely started with some heavy subscription, it may switched to token billing after to keep up with the work. “If the work ran on a subscription plan, this is what it would have cost on the API, not what was billed.” So yes, for sure, it at least been partially subsidized, and once Anthropic will switch to token billed usage (like OpenAI will do next month, because money), it would certainly cost $8.6k for any clone, except if some “super agents” becomes the new hype and would burn way more tokens… Again, “humans made computers for humans” is still a thing nowadays, and AI will not replacing communities tomorrow. It would have been interesting to see a clean C ? Rust ? C rewrite just to compare how the C could have been rewritten, just out of curiosity. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27588#respond) .comment-body
+7. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://tactica.xyz)** says: .comment-author [November 17, 2026 at 19:47](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27590) .comment-metadata .comment-meta It is november 2026. You can use formal verification with Verus to get rid of other 67 logic bugs and then use it continuously to avoid bugs at all! [https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/](https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/) No other language yet provide such an ecosystem for error prevention. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27590#respond) .comment-body
+8. ![](https://secure.gravatar.com/avatar/490f7fcfee38ddde609f8110024f5c8ba08f6e755beedb3c50b4235521e154f5?s=68&d=monsterid&r=g) **[Eser](https://www.techmedya.com/)** says: .comment-author [November 17, 2026 at 20:49](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27591) .comment-metadata .comment-meta This is such a wonderfully grounded perspective! It’s a great reminder that a software’s true strength lies in its community, history, and endless iterations—not just the language it’s written in. Thank you for everything you do for curl! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27591#respond) .comment-body
+9. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/tactica.xyz)** says: .comment-author [November 17, 2026 at 21:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27592) .comment-metadata .comment-meta AI + Verus tool allows you to automatically write formal proofs on your code and get rid of rest 67 issues. Rust has single best ecosystem to get rid of bugs! Happy to help is you ever decide to try and collect metrics on quality improvement! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27592#respond) .comment-body
+10. ![](https://secure.gravatar.com/avatar/59b98429498dc9d91e7c181d67441c6070887f50fc663b51c6cff64e6f0efdb0?s=68&d=monsterid&r=g) **Enne** says: .comment-author [November 17, 2026 at 22:19](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27593) .comment-metadata .comment-meta Similarly-shaped things used to happen at a much smaller scale on web 1.0. How many times I or my peers would share tarballs of our funny little webapps, only to be shown a few weeks later some proto-reactionary teenager trying so hard to impress his two or three followers with the website he “built” all on his lonesome in a day, and soon after that it’d be gone again in a fit of pique. Maybe these are the same people all aged up. Similarly-shaped things and all. But even those kids would have the sense to not brag that they gambled away thousands of dollars to put a Pyongyang Hotel in the metaverse. That’s just sad. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27593#respond) .comment-body
+11. ![](https://secure.gravatar.com/avatar/d26584a90e6abfffb1d8da05fbf6a44015692f85da05cf3bfd6581514220289b?s=68&d=monsterid&r=g) **Félix** says: .comment-author [November 18, 2026 at 08:28](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27594) .comment-metadata .comment-meta I you don’t know Rust well, what makes you confident about the exact number of issues that Rust would have prevented? C is a barebone language, Rust brings much more to the table than memory safety only: – Sane type system, especially with sum types – Better error handling (mostly consequence of the previous point) – Trait-based polymorphism (no such abstraction in C) – RAII – Async (especially useful for curl) Even users’ misusage can be prevented with a good set of types: make invalid states unrepresentable. BTW, we talk about Rust, but any functional language would do. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27594#respond) .comment-body .children
+  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 08:34](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27595) .comment-metadata .comment-meta @Felix No one can know any exact number of problems curl would have had if written in another language. Not you, not I. What I do know though, and this is verifiable because all the details and data is public, is how many of the past curl vulnerabilities that were “C mistakes”. I think everything else in terms what other languages could do or not is mostly a distraction and “language religious talk”. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27595#respond) .comment-body
+12. ![](https://secure.gravatar.com/avatar/169e688ce4f4457968b144aa7c6dbee2fdc2a4cabfabcfefadaf40de425722ec?s=68&d=monsterid&r=g) **Gustavo Noronha** says: .comment-author [November 20, 2026 at 11:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27601) .comment-metadata .comment-meta The catch up on the new commits for the rewite is on the way, done locally but finishing some things first. And I will stay closer going forward. But more important than the bugs that will be fixed with the catch up are the ones that did not affect the rewrite because of language and design – will publish an analysis soon. I am tightening things further so that it becomes the majority as time goes by. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27601#respond) .comment-body .children
+  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 20, 2026 at 12:41](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27602) .comment-metadata .comment-meta > The catch up on the new commits for the rewite is on the way Why? What’s the point? .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27602#respond) .comment-body

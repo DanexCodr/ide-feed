@@ -1,81 +1,40 @@
-I’ve been working on a ledger implementation in pure PostgreSQL called [pgledger](https://github.com/pgr0ss/pgledger). As I’ve written about previously, [I think more applications should use double-entry ledgers](https://www.pgrs.net/2025/06/17/double-entry-ledgers-missing-primitive-in-modern-software/).
+Something I learned a long time ago, something that's been proven to me time and again, is that the world is held together by smart people who give a shit. This truth always comes into stark focus when I learn how a complex system functions—or, rather, how it barely functions.
 
-However, once a ledger is integrated, it can be a bit hard to wrap your head around it visually. What are the money flows? What are the main set of accounts per user? Why is the balance in this account not what I expect?
+When I worked at [Stripe](https://stripe.com) I learned a lot about various banking and money movement systems, and it's terrifying how flawed and fragile these systems are. [ACH](https://en.wikipedia.org/wiki/Automated_clearing_house) is a great example. It's a complex system we rely on every day that is just barely good enough to function. It's old, riddled with flaws, and encumbered with legacy baggage. And yet, despite all of those problems, ACH usually works great and is generally considered to be safe, cheap, and reliable.
 
-In my work with companies, I’ve often tried to make the ledger more visual and understandable, either with a database dashboard like [Metabase](https://www.metabase.com/) or with custom in-app code.
+The reason there's a mismatch between the technical reality of the ACH system and how it functions in practice is due to a single factor: smart people who give a shit. Every problem with ACH is fixed, patched, bypassed, overridden, routed around, or manually handled by people who have two things:
 
-The same way that pgledger is meant to be a common, reusable ledger across applications, I thought we could have a common, reusable visualization tool. And thus [pgledger-ui](https://github.com/pgr0ss/pgledger-ui) was born.
+1. Intimate knowledge of the system
+2. The drive and determination to force the system to work
 
-## Screenshot
+Those two things feed into each other. You have to care about a complex system to dive deep enough to learn how it works, and when you know a lot about how a complex system works you care more about it, especially if the system is important or critical infrastructure.
 
-This is what it looks like to view a ledger account, showing the account details, the most common counterparty accounts, a chart of balance over time, and the detailed transfer entries:
+Now, you can replace "ACH" above with a myriad of other complex systems—everything from huge infrastructure to nice-to-have apps—and everything I said remains true, both about the systems themselves and the people who keep them running. The world runs on these systems, and they depend on smart people who give a shit. Take those people away, and the systems collapse.
 
-[![pgledger-ui account page](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/03-account-entries.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/03-account-entries.png?raw=true)
+And collapse is what we're starting to see. Some recent examples of various failures from just this past week or so: [Microsoft 365](https://apnews.com/article/microsoft-outage-outlook-email-365-status-down-d92547a821930290db2964388016979a), [Air Traffic Control](https://www.reuters.com/world/us/faa-issues-national-ground-stop-due-extraordinary-circumstance-reasons-safety-2026-11-13/), [United Airlines' systems](https://www.reuters.com/world/us/united-airlines-says-technology-issue-affecting-departing-flights-2026-11-16/), [the NSA's network](https://www.reuters.com/world/us/national-security-agency-says-network-hit-by-temporary-degradation-during-2026-11-17/), [many major banks](https://apnews.com/article/bank-outage-chase-wells-fargo-truist-50fee2693c22f597fa6ca51a97ef2cda), [Apple's systems](https://www.reuters.com/business/retail-consumer/apple-works-restore-services-after-outage-caused-by-internal-update-2026-11-17/), and more. We're told these failures and problems are not related. They're not the result of a cyberattack. They're not the fault of generative AI.
 
-## Overview
+I guess that depends on how you look at it.
 
-In general, `pgledger-ui` is pretty simple. It runs database queries and shows them in a webpage. There are some charts and extra aggregate information. And the whole thing is bundled into a single Go binary:
+I don't have inside information about what's going on, but my experience dealing with complex systems tells me there's a common through line to all of these disruptions: there aren't enough smart people who give a shit.
 
-```
-go run github.com/pgr0ss/pgledger-ui@latest --database-url postgres://user:pass@host:5432/dbname
-```
+So where did they go?
 
-Beyond this, there are a few main ideas baked into pgledger-ui:
+Capitalism has never been particularly kind to smart people who give a shit (or people in general... but I digress). Capitalism does, however begrudgingly, recognize that smart people who give a shit are required to build and maintain complex systems that serve capitalist goals. Thus, those people have been accommodated and incorporated into the system by virtue of their necessity and, in many cases, their rarity.
 
-### Everything Is Linked and Clickable
+Now, though, generative AI is here. To the people running the show—leadership and management—it seems like they can get the same or better value (and even more output!) from a machine. The machine is cheaper, works longer, doesn't take sick days or vacations, doesn't ask for any benefits, and never pushes back against a bad idea.
 
-Often, when debugging an issue, you start by realizing a ledger account doesn’t have the balance you expect. Then, you want to see the transfers in and out of that account. And maybe you want to trace a given metadata key across transfers (e.g. the `payment_id`). As you continue debugging, you may follow an account to a transfer to another account and so on. With pgledger-ui, each entity shows the related entities, and you can click on any of them to trace a flow. This even includes metadata keys, so you can see related transfers which share the same key/value pair.
+People who don't do the actual work—the people who aren't in the trenches—have a hard time telling the difference between a flawed system held aloft by the drive and determination of smart people who give a shit and slop provided by generative AI. To them it's all just output: words you can read, code that runs, and pixels that look nice to their eye. It's all the same to them, so why does it matter where it comes from?
 
-### Search
+It matters because generative AI isn't smart, and it doesn't give a shit. What seems like intelligence is an illusion propped up by a massive amount of data strip-mined from the commons with weights that nudge the output toward a generally desirable shape. What seems like care, concern, and attention is just generative AI doing what it's designed to do: telling you what you want to hear. The math and logic that power LLMs are as cold, unfeeling, and indifferent as the laws of physics.
 
-It should be easy to find what you want, so pgledger-ui has a single, universal search box. You can search by id, account name, idempotency key, metadata values, etc., and it will show you all matches across all entities. For example, if you name your accounts hierarchically (e.g. `user01.available`, `user01.pending`, etc.) you can search for `user01` and see all accounts and transfers for that user.
+Smart people who give a shit notice things. They connect dots. They notice when things don't feel right. They know when something is about to go off the rails, and they know how to get things back on track. They know how to handle edge cases. They know how to manually handle a unique situation. They know what the right thing to do is, and they know when they need to put in extra effort or time to make something happen. Generative AI falls far short in these areas, but this is the glue that holds complex systems together. More prompting and more output isn't a substitute for this.
 
-### Information Density
+It's hard for capitalist leadership to internalize any of that, though. It would be such a relief for them, such a burden lifted, to replace all those smart people who give a shit with generative AI. It would be so much easier to win at capitalism if generative AI lived up to the hype, and there's so much pressure for leadership and management to believe that the hype is real.
 
-I like interfaces which are information dense, without being overwhelming. The goal is to show a lot of useful information in each page, and make it easy to scan for what you need.
+Thus, a lot of the smart people who give a shit have been laid off, and the ones that remain are hollowed out. Telling people to stop doing the job they signed up for in favor of babysitting LLMs so they can do that job instead is a great way to make people less smart about the system they used to work on and give less of a shit about it. Every prompt moves them one step further away from the system they used to know inside and out. Every generated output that becomes part of the system means those people understand less about how the system actually works. Those people are robbed of the things that make them smart (the struggle of building and learning) and the things that made them gave a shit (a sense of ownership and close connection with the system).
 
-### Column-Based Views
+We've moved from a world dependent on complex and fragile systems held together by smart people who give a shit to a world of complex and fragile systems run by generative AI. The people running the generative AI are not as smart, nor do they give as much of a shit. There are, of course, exceptions (which is why a lot of things are still humming along), but we are on a course where the number of smart people who give a shit are decreasing, and that's a big problem. As long as the number continues to go down, more systems will fail.
 
-Normally, when you query data from a database, you get row-based results. However, I find that visualizing ledgers in a columnar format is often more useful.
+I think what we have here is a hot stove moment for capitalism. When you tell a young kid a stove is hot and they shouldn't touch it, you'll find there are two kinds of kids. For one kind of kid, the warning is the lesson, and they don't touch the stove. For the other kind of kid, the only lesson that works for them is being burned. They have to touch the stove at least once to learn the lesson. Capitalism was told the stove was hot, but their hand is on it right now.
 
-For example, say you are looking at all of the transfer entries for a given payment. The results may come back like this:
-
-```
-       kind       |          name          | amount
-------------------+------------------------+--------
- payment_created  | user1.external         | -50.00
- payment_created  | user1.receivables      |  50.00
- payment_received | user1.receivables      | -49.50
- payment_received | user1.available        |  49.50
- refund_created   | user1.available        | -20.00
- refund_created   | user1.pending_outbound |  20.00
- refund_sent      | user1.pending_outbound | -20.00
- refund_sent      | user1.external         |  20.00
-```
-
-But a columnar view of that same data looks like:
-
-```
-       kind       | user1.external | user1.receivables | user1.available | user1.pending_outbound
-------------------+----------------+-------------------+-----------------+------------------------
- payment_created  |         -50.00 |             50.00 |                 |
- payment_received |                |            -49.50 |           49.50 |
- refund_created   |                |                   |          -20.00 |                  20.00
- refund_sent      |          20.00 |                   |                 |                 -20.00
-```
-
-(Example from the [pgledger reconciliation.sql.out script](https://github.com/pgr0ss/pgledger/blob/fee1aa05630f5af8cb3196749aa4d998162a9862/examples/reconciliation.sql.out#L148-L224))
-
-PostgreSQL calls this a [crosstab](https://www.postgresql.org/docs/current/tablefunc.html#TABLEFUNC-FUNCTIONS-CROSSTAB-TEXT) (or [crosstabview](https://wiki.postgresql.org/wiki/Crosstabview) in psql). A pivot table in a spreadsheet may be similar. And it’s a common way to visualize a ledger<sup>[1](https://www.pgrs.net/2026/11/19/visualizing-a-ledger-with-pgledger-ui/#fn:1)</sup>.
-
-This type of view exists in pgledger-ui as well, especially if you’re tracing a flow via a metadata key:
-
-[![pgledger-ui trace crosstab view](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/05-trace-crosstab.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/05-trace-crosstab.png?raw=true)
-
-And you can separate the in/out flows, making it resemble a standard ledger T-account view:
-
-[![pgledger-ui trace in/out view](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/06-trace-inout.png?raw=true)](https://github.com/pgr0ss/pgledger-ui/blob/dbbf6ca48d477bbf80552cb1bd741eb96839d0d1/screenshots/light/06-trace-inout.png?raw=true)
-
-## Feedback Please
-
-Please check out [pgledger-ui](https://github.com/pgr0ss/pgledger-ui), and I’d love to hear what you think, especially if you work with pgledger or other ledgers today. Are there other useful visualizations or tools you’ve seen in this space? And if pgledger-ui is something that you are interested in using, please let me know.
+Unfortunately, we're all getting burned.

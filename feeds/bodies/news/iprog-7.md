@@ -1,10 +1,69 @@
-**GitHub Copilot App for Beginners** is a free, hands-on course, designed to teach developers how to direct, supervise, and review AI coding agents using the desktop GitHub Copilot App.   
-The GitHub Copilot App is a desktop control center designed specifically for directing, supervising, and reviewing AI coding agents. Unlike Copilot in your code editor (which helps you write code line by line) or the CLI (in your terminal), the desktop app brings together plans, diffs, terminal test outputs, browser previews, issues, and pull requests into a single window so you can manage agent driven development without constantly switching tools. The central principle is that a confident, polite response from an AI agent does not mean working software. Before calling any task complete, you verify local diffs, terminal test outputs, running browser previews, and GitHub CI checks. As such, instead of treating AI as a "magic code button," the course teaches you to orchestrate agents across the entire software development lifecycle. To do that, the course frames agentic development through a music studio metaphor, isolated Git worktrees are soundproof recording booths, session modes mimic a producer directing takes, skills are song charts, canvases are arrangement boards, and automations are programmable sequencers. Despite addressed to developers wanting to orchestrate and review agent work, teams evaluating how to keep human oversight, and existing Copilot IDE/CLI users wanting to know where the desktop app fits, requires no prior AI or agentic development background; instead basic familiarity with Git, GitHub, and running standard commands (npm install, npm test) is all you need. Course structure and curriculum. The course consists of an initial setup chapter followed by seven hands on chapters: Chapter 00 – Setup: Install and authenticate the app, fork the repository, verify developer tools (git, node, npm, gh), and run a setup script that seeds intentional training issues, practice branches, and pull requests. Chapter 01 – Tour the App: Compare the desktop app to editor and CLI surfaces, distinguish lightweight Chats from repository backed Project Sessions, and configure session modes (Interactive, Plan, Autopilot) and model reasoning effort (Copilot Fusion). Chapter 02 – Sessions, Worktrees, and Context: Prevent file collisions across parallel tasks using isolated Git worktrees, inject targeted context using shorthands (@ for files, # for issues/PRs), and inspect token usage and recaps with /context and /chronicle. Chapter 03 – Development and GitHub Workflows: Master the inner loop (plan, edit, inspect diffs, run tests, preview in the built in browser) and the outer loop (start from an issue, draft PRs, resolve review comments, and fix failing CI checks). Chapter 04 – Skills and Custom Agents: Package reusable task instructions into Agent Skills (updating an accessibility and structure checklist) and create specialized Custom Agents restricted by the principle of least privilege (such as a read only explainer agent). Chapter 05 – MCP Servers and Plugins: Extend agent reach safely by querying external documentation via Model Context Protocol (MCP) servers (Context7) and installing pre-packaged feature bundles via plugins (Modern Web Guidance). Chapter 06 – Canvases: Replace cluttered chat threads with interactive, shared visual boards in the side panel using /create-canvas to track multi stage plans, checklists, and validation evidence in real time. Chapter 07 – Automations: Convert recurring manual tasks into scheduled or on demand automated workflows (such as generating daily pull request review readiness reports) with scoped, read only permissions. You internalize all this information through exercises coding a single sample project throughout the course, the samples/book-app-web. It is a lightweight book collection web application built with React, Vite, and TypeScript that includes live search, filtering, reading statistics, automated unit tests, and a build step. Wrapping it up, the course is worthwhile because it moves you beyond simple AI chat by giving you practical hands-on experience in directing parallel AI coding agents while instilling rigorous habits to verify every change with real tests, diffs, and human oversight.
+Containers seem mysterious technology, but in fact they are very simple indeed - on Linux at least! This is an extract from the newly-published: **  
+**
 
-#### More Information
+## How Containers Work
 
-[GitHub Copilot app for Beginners](<https://github.com/github/copilot-app-for-beginners>)
+You do not need to know how containers work to make use of them, but it is an interesting story and it does indicate why Linux containers work so well. The first requirement of a container is that its file system is separate from the host’s file system. This is achieved using the Linux chroot (change root) command:
 
-#### Related Articles
+    sudo chroot _folder_ _command_
 
-[GitHub Copilot CLI For Beginners - The Course](<https://www.i-programmer.info/news/150-training-a-education/18824-github-copilot-cli-for-beginners-the-course-.html#google_vignette>) __ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+This changes the current file system root to be the _folder_ you select and runs the specified _command_ , which must be accessible from the folder. Notice that this is a native Linux command, and not some third-party add-on. This is almost all that is required to create a container. Be sure to set the folder up so that it contains all of the files necessary to run the command, but that is sufficient. As an example, we can install BusyBox (see Chapter 6) and create a simple Linux container. First, download the correct BusyBox for the host architecture and copy it into a new folder /myContainer. Change the permissions of BusyBox so that it is executable with, for example, chmod +x busybox. Open a terminal and navigate to the new directory and enter:
+
+    mkdir bin
+    ./busybox --install bin
+
+This stores symlinks in the bin directory for all of the BusyBox commands. Add the bin directory to the PATH:
+
+    PATH="$PATH:/myContainer/bin"
+
+Finally, use the chroot command to activate the “container”:
+
+    sudo chroot /myContainer ./busybox ash
+
+Now, if you use a command such as ls at the command prompt, you will just see the file system with /myContainer as the root. If you try to access files and folders outside of /myContainer, you will fail. The chroot command stays in effect until you stop ash running with Ctrl+D. This is a good start on creating a container, but there are many missing features. For example, if you try the command ps, you will see the error message: /proc : No such file or directory The problem is that none of the pseudo directories are present. To include the pseudo directories you have to mount each one into the “container”. For example, to mount the proc directory:
+
+    mkdir proc
+    sudo mount -t proc none /myContainer/proc
+
+After this, you can use the chroot command and you will find that ps works. You have to remember to umount the proc folder when you have finished with the “container” so as to keep the host file system intact. This brings us to the second aspect of simple containers. If you use ps to see the processes running while using chroot you will discover that you can see all of the processes while working in the “container”. We need to isolate the container from processes running on the host. The solution to this is the unshare command line tool that runs commands in isolated “namespaces”.
+
+    unshare --mount --uts --ipc --net --pid --fork –user
+          --map-root-user chroot /myContainer ./busybox ash
+
+This isolates the “container” from most of the namespaces that matter including pid. If you now mount the proc folder:
+
+    mount -t proc none /myContainer/proc
+
+and use ps you will only see the processes started in the “container”.
+
+    PID   USER  TIME  COMMAND
+     1    0     0:00  /busybox ash
+     7    0     0:00  ps
+
+The final feature we need is some way of limiting the access of a “container” to the physical resources of the host. To do this we need cgroups, which can be used to allocate so much CPU, so much memory and so on. The details of how to do this are not difficult, but they are fiddly and involved, and having the basic idea is really all that is required to understand what Docker, and similar programs, are doing when creating containers.
+
+## Programmers Guide To Containers  
+with Docker and Visual Studio Code
+
+#### By Mike James
+
+[](<https://www.amazon.com/dp/1871962684?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=iprog-20&linkId=13e3793e24ef8654297f065cab51686a&language=en_US&ref_=as_li_ss_tl>)
+
+#### Contents****
+
+  1. Chapter 1 Docker
+  2. Chapter 2 Why Containers?
+  3. Chapter 3 Getting Started With Docker  
+Extract 1: [Starting](<https://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html>)
+  4. Chapter 4 Container As File System   
+Extract 1: [Container As File System 1](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>)
+  5. Chapter 5 Docker Compose for Build and Run
+  6. Chapter 6 Containers as Functions 
+  7. Chapter 7 Connecting To Containers
+  8. Chapter 8 A Web Server
+  9. Chapter 9 VS Code Containers
+  10. Chapter 10 Dev Containers
+  11. Appendix I Reset Docker 
+  12. [Appendix II How Containers Work ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>) ***NEW!!!
+
+<ASIN:B0HKY1GQ5K> To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

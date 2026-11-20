@@ -1,434 +1,99 @@
-After some [recent discussion](https://github.com/rust-lang/rust/issues/149359) on the topic of mutex poisoning and notably a [blog post](https://sunshowers.io/posts/on-poisoning/) that I
-thought was interesting, thoughtful, exhaustive, yet completely disagreed with, I wanted to comment
-on the debate myself. To me, poisoning-by-default is one of biggest mistakes that were made in the
-language, next to some others that are a story for a different time.
+I’m pleased to announce a new source control tool, [jj-musubi](https://www.serpentine.com/software/jj-musubi/), that
+live-syncs copies of a Jujutsu (`jj`) repository across multiple machines. Every time jj
+snapshots my work, jj-musubi syncs it to every machine in moments, and also commits, rebases,
+fetches, and so on.
 
-In short, I believe that Mutex poisoning is the wrong choice for most applications, as
+This simple capability is surprisingly powerful.
 
-- it significantly pessimises code performance in the general case
-- in addition to hampering readability
-- while encouraging bad code patterns to deal with its weirdness
-- in order to solve a niche problem
-- that doesn’t even solve the general problem.
+- I often work on one machine, and build or test on others. Now they get my changes as I make them, and I don’t need to remember whether I was editing on my laptop or someplace else.
+- If I fetch changes from or push changes to upstream, all of my copies stay up to date.
 
-## What is poisoning?
+jj-musubi makes repos on multiple machines feel like jj workspaces (worktrees if you speak git).
 
-In theory, a mutex guards a critical section of the code. That code changes the state of a piece of
-data free from interference of concurrent threads, then releases the lock. That code might then
-encounter an error, and release the lock in the middle of doing its important work. For example:
+It’s intended for use by one person who works across several machines, so it has no security
+model (or rather, that *is* the extent of its security model).
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-fn important(always_even: Arc<Mutex<i32>>) -> i32 {
-    // Invariant: always_even must always be even
-    let mut handle = always_even.lock().unwrap();
+## Things you can do[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#things-you-can-do)
 
-    *handle += 1;
+Jujutsu already treats the working copy as a commit. Running `jj status` records a snapshot of
+my edits in that commit, which jj-musubi then syncs to my other machines. I like to have my
+shell prompt run `jj status`, so in practice I rarely have to think about snapshots.
 
-    risky_operation();
+jj-musubi does not write to the working copy. Each machine has its own working copy and
+workspaces as usual, so syncs of commits, snapshots, and rewrites can bring in new history while
+a build is running, without changing the files under it. On a laptop, I can work offline, and my
+machine will sync when I’m back on the network.
 
-    *handle += 1;
+This has also proven handy when I have agents working on several machines. I can give each agent
+its own jj workspace on different systems, then run `jj diff -r devbox/agent-1@` on the laptop
+to see what one of them has done so far. If one finds a bug that another needs to fix, they can
+coordinate and see each other’s work without overhead.
 
-    *handle
-}
+## Ephemeral uses[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#ephemeral-uses)
 
-fn risky_operation() {
-    if rng().next_u32() % 42 == 0 {
-        panic!();
-    }
-}
-```
+jj-musubi refers to a collection of copies of a repo as a *hive*.
 
-The following code will work fine most of the time, but if the dice roll doesn’t go our way, the
-`always_even` mutex gets unlocked in an invalid state. In Rust, today, poisoning exists to handle
-this. If a guard is released abnormally (while panicking), it records that this happened in a
-boolean. Any future calls to `lock()` will return `Err(PoisonError)`, which will trigger a panic
-when we unwrap it. The bad state is never observed and all is well.
+I often run agents in temporary disposable VMs. jj-musubi supports this by allowing an agent to
+*lease* its repo’s membership in the hive: if it doesn’t renew that lease in time, its repo gets
+forgotten about, so temporary repos or vanished containers can’t just stack up and clutter
+things.
 
-You might have felt that the example I made up was somewhat contrived. That’s because it is. Real
-cases of this pattern can and do happen, but most of the use cases that involve mutexes are much
-simpler. Many critical sections are no longer than a variable assignment, or doesn’t have an invalid
-in-between state. There are cases in lower level programming where a mutex guards a piece of data
-that is not directly inside it, or is outside the view of the program entirely. In fact, I’ve
-written a wrapper for a C library that worked like that. Though I disagree with the notion that this
-is the common case.
+## Why I wanted this[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#why-i-wanted-this)
 
-I do recommend anyone [Rain’s blog](https://sunshowers.io/posts/on-poisoning/) on the matter, as she has some good examples of how
-you can cause violations of these critical sections (even without mutexes) and I wholeheartedly
-support the idea of a `Poison` wrapper for the use cases that need it. I suspect the domains she
-works on lend themselves more towards these issues compared to mine. Rust’s default behaviour should
-make the common case easy and the rare case possible.
+Back when I was at Meta, I kicked off the project that became Sapling and Mononoke. Sapling’s
+Commit Cloud gives engineers there a similar way to move work between machines, and Google
+engineers have something similar with an internal jj server.
 
-## Side-note: how mutexes work
+Since then, I’d missed that everyday convenience for the machines I already use, and felt like I
+could get it without massive infrastructure or hosting. With jj-musubi, one machine runs a hub,
+and daemons exchange jj history with it over SSH. That’s almost as lightweight as you can get.
 
-This section is only tangentially related to the topic at hand, but I already wrote it and wasn’t
-ready to kill my darlings.<sup>[1](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:mutexes)</sup> Skip to [the next
-section](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#how-poisoning-harms-every-single-piece-of-code) to continue the discussion on poisoning.
+## Safety[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#safety)
 
-In Rust, for most platforms, mutexes are implemented using the `futex`<sup>[2](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:futex)</sup> system call. It
-allows for operations to remain purely in user-space as long as the mutex in question isn’t
-contended, which is nice for performance reasons.
+What’s tricky is getting concurrent work *right*. That’s already hard in any distributed source
+control system, and when syncs are live *and* we plan for disconnected work in an unreliable
+network, the difficulty goes way up.
 
-Under the hood, a mutex is a simple 32-bit integer on most platforms even though it only holds three
-unique values:
+As a user, I shouldn’t have to care about when exactly I can safely close my laptop after
+finishing an edit; all of my changes should make it through either just before I close it, or
+right after I reopen. No work should get lost or corrupted in the presence of interrupts,
+resends, delays, or machines sleeping, and the system should stay reliable even when machines go
+offline forever.
 
-- If it’s zero, the mutex is free and can be claimed by any thread by a simple atomic compare-exchange.
-- If it’s one, the mutex is held but there are no waiting threads. This is useful to know, as it means there are no threads that we need to wake up when releasing the mutex, and we can yet again remain in userspace.
-- If it’s two, the mutex is held and some other thread is waiting for it. This means some additional care should be taken when unlocking.
+I used Lean to prove key properties of jj-musubi’s network protocol, and tests compare the Rust
+code against that model. An extensive body of other tests run real jj repositories through
+concurrent edits, interrupted syncs, hub restarts, and a myriad of other nasty situations.
+Mutation and adversarial testing ensure that when bugs are injected, sensible things happen. The
+[safety guide](https://www.serpentine.com/software/jj-musubi/safety/) details all the checks (and the parts I don’t yet cover).
 
-Rust implements this with a few atomic operations and the `futex_wait` call. Crucially, the path for
-locking a mutex that *isn’t* contended is a single atomic operation. The only operation that
-requires a context switch is `futex_wait`.
+## Concurrent edits without commits…!?[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#concurrent-edits-without-commits)
 
-Unlocking is even simpler. The thread that holds the mutex first releases the lock, then optionally,
-if there was an indication that the lock was contended, wakes any sleeping threads so they can try
-to acquire the lock.
+It might sound spooky or dangerous to be able to see in-progress work on one machine from
+another. How can that be safe?
 
-## How poisoning harms every single piece of code
+If you use jj in multiple workspaces, you’re already used to the novelty of being able to check
+out the same change in two workspaces and modify it. jj simply marks the change as divergent,
+but it won’t update either working copy with changes from the other until you decide to, e.g. by
+calling `jj workspace update-stale`. In jj, dealing with divergent versions of a change is
+similar to any other kind of conflicted merge.
 
-As discussed in too much detail above, (un)locking mutexes is cheap as long as they’re not
-contended, and when contended, they are at least cheap instruction wise. This is where poisoning
-mutexes get you.
+jj-musubi uses jj’s existing workspace machinery, so everything will feel familiar. The only
+difference is that when you run jj-musubi, a workspace’s name is prefixed with the name of the
+machine it lives on.
 
-In short, being able to poison is a cost that is always paid, but seldom used. To start, poisoning
-is essentially implemented by adding an `AtomicBool` field to every `Mutex`. Due to alignment, this
-grows the size of every mutex by anywhere from zero bytes to an additional pointer. This isn’t
-terrible but for use cases where you have many mutexes guarding small objects, this can add up.
+## Try it[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#try-it)
 
-The real issue to me however is in code size. Let’s start with another contrived example, a function
-that reads its argument, copies it, and returns it. An idealised version of that would be the
-following.
+Start with e.g. a laptop and another machine that’s always on (let’s call it `devbox`), with a
+copy of a jj repo on each. On each machine, [download the
+binary](https://github.com/bos/jj-musubi/releases/) or build it yourself:
 
-```
-1
-2
-3
-pub fn get_contents(val: &i32) -> i32 {
-    *val
-}
+```sh
+cargo install --locked jj-musubi
 ```
 
-This compiles down to 2 instructions and a label. Copy the data into the register then return.
+Run `musubi hub` on `devbox`; it will keep your sync data in `~/musubi-hub`. In the laptop’s
+repo, run `musubi create --hub devbox`. In `devbox`’s repo, run `musubi join`.
 
-```
-1
-2
-3
-example::check_contents::h197b180b47e24703:
-        mov     eax, dword ptr [rdi]
-        ret
-```
-
-Of course, this doesn’t work for any context that needs shared mutation, but we can consider it our
-baseline. Perfection would look like this. So, let’s ignore that atomic integers exist and add a
-mutex to this story. We will go over the generated assembly code for each, and you can compare the
-code in its entirety in [this Compiler Explorer overview](https://rust.godbolt.org/z/1jEP5MEGz).
-
-### Base case: Locking and unwrapping
-
-We can update the code above to actually use mutexes, and simply lock-then-unwrap the mutex.
-
-```
-1
-2
-3
-4
-5
-use std::sync::Mutex;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap()
-}
-```
-
-This compiles to a total of *147* lines of assembly which I’m not going to reproduce here in full.
-
-- 75 of those are specifically inlined to this particular function and cannot be reused.
-- About 45 those are monomorphised[3](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:monomorphised) for mutexes guarding an i32
-- The remainder is global program information and might be reused for other locks.
-
-To divide that up a different way, we have
-
-- code checking the poison status
-- code doing the mutex manipulation
-- code to initiate a poison in case of a panic
-- code for preparing to panic should we need to
-- code for displaying a panic
-- some dyn drop glue
-
-Most of this is inlined into the function. This in turn affects performance, as this limits how much
-of your “real” code fits in the CPU’s instruction cache. The laptop I’m writing this on has a paltry
-32KiB of instruction cache. Luckily we can do better.
-
-### Removing the panic
-
-Most of the code generated in the previous example had to do with setting up the panic, and checking
-the conditions. But we don’t care about panicking. We can simply acknowledge the `PoisonError` and
-continue. That looks as follows:
-
-```
-1
-2
-3
-4
-5
-6
-use std::sync::Mutex;
-use std::sync::PoisonError;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-```
-
-This results in only 68 lines of assembly, which is much better, though all of it is inlined to our
-function. Compared to before, we’ve lost all panic related code. There’s still some unnecessary
-branching related to whether the mutex is poisoned, as well as a little dance to track poisoning in
-our function. Our function can never panic, but compiler optimisations currently do not remove the
-atomic loads and stores involved here. Nevertheless, if you want to target stable Rust *and* you
-don’t care about panics, this is what you should do at the moment.
-
-### The ideal: no poison handling at all
-
-In the current nightly builds of Rust, there are non-poisoning mutexes that can don’t have any of
-the overhead. We can optimise our code from above to make use of them.
-
-```
-1
-2
-3
-4
-5
-6
-7
-#![feature(nonpoison_mutex)]
-#![feature(sync_nonpoison)]
-use std::sync::nonpoison::Mutex;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock()
-}
-```
-
-No unwrapping, and it only results in 34 lines of assembly code. This is short enough for me to walk
-through it.
-
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-example[da70a55c1c00d324]::check_contents:
-        push    rbp
-        push    rbx
-        push    rax
-        xor     ebp, ebp
-        mov     ecx, 1
-        xor     eax, eax
-        lock    cmpxchg dword ptr [rdi], ecx ; (1) check if mutex is held, and if not, claim it
-        jne     .contended ; (2) mutex was not zero, jump to contended case
-        mov     eax, dword ptr [rdi + 4] ;  (4) if not, load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        je      .exit_with_threads_waiting
-.fast_exit:
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
-.contended:
-        mov     rbx, rdi
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::lock_contended@GOTPCREL] ; (3) Perform the spin/futex_wait loop
-        mov     rdi, rbx ;
-        mov     eax, dword ptr [rdi + 4] ; (4) load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        jne     .fast_exit
-.exit_with_threads_waiting:
-        mov     ebx, eax
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::wake@GOTPCREL] ; (7) wake sleeping threads
-        mov     eax, ebx
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
-```
-
-I’ve added comments and labels to the assembly so the steps from the (un)locking flow charts become
-visible. As far as assembly code goes, it’s very readable and simple. Which, of course, is exactly
-what you want from fundamental library code.
-
-The additional logic checking the poison state, adding a destructor for the mutex guard, and, if you
-choose ergonomics, even panic machinery, significantly bloats the code of a rather fundamental
-operation.
-
-## Readability and good habits
-
-Besides the purely technical argument that poisoning makes all code larger and slower than it needs
-to be, there is a different one. [As discussed previously](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#removing-the-panic), code that doesn’t
-care about mutex poisoning should generally write:
-
-```
-1
-my_mutex.lock().unwrap_or_else(PoisonError::into_inner)
-```
-
-It’s reasonably efficient and available on stable Rust. But that whole `unwrap_or_else` part takes
-up more than half the line. No worry, you might say, we can make it shorter:
-
-```
-1
-my_mutex.lock().unwrap()
-```
-
-This works well enough. It’s less efficient than the previous example, but it’s nice and short. If
-your code never panics, it’s even perfectly safe. You might have spotted a load-bearing “if”
-already. It’s kind of hard to guarantee your code does not panic. Array indexing, integer division,
-and a whole host of other features might panic unexpectedly.
-
-This is hard for experienced developers, but for those learning it’s even worse. It also trains bad
-habits. Every time a beginner Rust developer writes `unwrap()` instead of handling their errors, a
-puppy steps on a Lego brick. Or [causes a widespread internet outage](https://blog.cloudflare.com/18-november-2025-outage/). One of the
-two, I forget which.
-
-We should not want to include APIs into the standard library that return a `Result` that is
-“expected” to be unwrapped. Infallible operations should not fail.
-
-## Inconsistency
-
-Poisoning protects against a task panicking in the middle of an invariant violation. But why must
-this be specific to mutexes? The example from before works just as well with a simple mutable
-borrow. Panics may still happen, and you may still [catch](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) them.
-
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-fn important2(always_even: &mut i32) -> i32 {
-    // Invariant: always_even must always be even
-    *always_even += 1;
-
-    risky_operation();
-
-    *always_even += 1;
-
-    *always_even
-}
-```
-
-This is actually a fairly common problem. In a more recent blog post, [researchers at Microsoft
-highlight various places they’ve found where even the standard library gets this
-wrong](https://forge-blog.github.io/posts/rust-std-memory-safety/#pattern-1-trusting-code-not-to-panic).
-
-In most cases however, this is fine, as it is with the mutex example given in the beginning. You
-don’t need to poison this reference. But for applications where you do, it’s kinda nice to be able
-to.
-
-It’s not hard to imagine a wrapper that adds poisoning behaviour when you want to have it.
-Crucially, this needs to be an additive wrapper. You can add a poisoning system to something. You
-cannot strip out the poisoning system from a primitive that has it. Poison safety is important for
-the specific use cases that need it, but most do not.
-
-I don’t believe it’s worth it to saddle mutexes in particular with this overhead when the problem is
-near universal with any mutable state. State invariants are just hard that way.
-
-## Comparison to bounds checking
-
-One might draw a comparison between poison safety and buffer safety. In Rust, we always do bounds
-checking, relying on the compiler to optimise it out in cases it can be proven redundant. Can’t
-poison safety be the same? And the answer, it turns out, is no.
-
-The compiler cannot optimise poisoning away. It requires any mutex carry additional data to track
-it. *Maybe* the compiler can figure out one particular critical section cannot panic, and therefore
-it can leave out the setup and clean-up, but in general it cannot avoid checking the state. This is
-overhead that always applies, and hurts, especially in environments where code size is more
-restricted.
-
-## De facto standard workarounds
-
-In C++, there are a few choices in the standard that make certain containers less efficient than
-they could be<sup>[4](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:unordered_map)</sup>. Because of how standardisation works, the containers can never be
-“fixed”. This causes third party implementations, such as Abseil and Boost, to become the de facto
-standard.
-
-Mutexes in Rust suffer from the same problem. The standard library has poisoning, but people don’t
-want poisoning, so instead they opt for crates like [`parking_lot`](https://docs.rs/parking_lot/latest/parking_lot/). I believe this is
-bad for the ecosystem as a whole. When the standard library offers a feature, it should be an
-uncontroversially good choice, unless you are doing something hyper specific. We don’t have to be
-“batteries included” but the parts that are there should be a good fit.
-
-## In conclusion
-
-I started out writing this blog in response to a movement to change the default mutex behaviour in
-Rust. It seems to me there are three camps:
-
-1. Keep the status quo. std::sync::Mutex and friends will have poisoning.
-2. Make std::sync::Mutex propagate panics when poisoned.
-3. Add a non-poisoning variant std::sync::nonpoison::Mutex
-4. Replace std::sync::Mutex with std::sync::nonpoison::Mutex. Poisoning becomes opt-in.
-
-Rain’s blog argued for option 1. I believe we both agree that option 2 is a terrible idea. I think
-we should do at least option 3. Option 4 would be a good edition improvement, but it is also a
-significant compatibility issue, and even I find it hard to argue that it’s really worth it.
-
-Which is a roundabout way of saying that we really should stabilise `std::sync::nonpoison` and
-definitely should not make `std::sync::Mutex` panic by default.
-
-1. It is becoming apparent to me that I just like explaining mutexes and I don’t know what to do about that. [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:mutexes)
-2. Fast Userspace muTEX. See [`futex(2)`](https://man.archlinux.org/man/futex.2) for more on the system call and [`futex(7)`](https://man.archlinux.org/man/futex.7) for its semantics [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:futex)
-3. For generic definitions (e.g. `Mutex<T>`) the compiler must generate code for every unique `T` that gets used, and for loads of reasons often more than once per `T`. The compiler development docs have [a deeper explanation of monomorphisation](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:monomorphised)
-4. A famous example is `std::unordered_map`, which [suffers from being over-specified and that prevents more efficient implementations](https://bannalia.blogspot.com/2022/06/advancing-state-of-art-for.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:unordered_map)
+I provide [builds for Linux, macOS and Windows](https://github.com/bos/jj-musubi/releases/), and the [quick start](https://www.serpentine.com/software/jj-musubi/get-started/)
+walks through setup and the first sync. If you try it and something surprises you, I’d like to
+[hear about it](https://github.com/bos/jj-musubi/issues).

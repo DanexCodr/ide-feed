@@ -1,69 +1,9 @@
-Containers seem mysterious technology, but in fact they are very simple indeed - on Linux at least! This is an extract from the newly-published: **  
-**
+Apache SeaTunnel 3 has been released, along with SeaTunnel Shade 3, a collection of shaded (relocated) third-party libraries that SeaTunnel bundles to avoid classpath conflicts with downstream applications. SeaTunnel is a next-generation cloud-native, high-performance, distributed, massive data integration tool. It was originally created by open source community members, data experts, and developers in China. It can be used to ingest and synchronize massive data (tens of billions of items of data a day) faster, greatly lowering the cost of maintaining the data transfer. SeaTunnel has been designed to solve common problems in the field of data integration such as the need to use multiple incompatible data sources with complex synchronization scenarios such as offline-full synchronization, offline- incremental synchronization, CDC, real-time synchronization, and full database synchronization. It also takes care of problems in the data integration and synchronization processes such as data loss or duplication. SeaTunnel 3's improvements start with a greatly expanded set of connectors, increasing the range away from databases, message queues, and data lakes to add support for SaaS and Cloud connectors. This release adds first-class support for marketing and ads platforms including Google Ads, Facebook Ads and TikTok Ads; and customer/collaboration tools including Salesforce, Zendesk, Airtable, Linear, and PostHog. There's also new support for payments and commerce systems including Stripe and Shopify. The list of cloud storage and vector sinks now supported include GCS, Baidu BOS, Azure Queue, Azure Cosmos DB, Amazon DocumentDB, Couchbase, NebulaGraph, Google Bigtable, and Deep Lake. Support has also been added for Python Source and Python Transform, meaning that if you need to create a system that doesn't really fit any pre-configured connector, you can now write it in Python directly.  The support for CDC (Change Data Capture) and IoT (Internet of Things) has also been improved, with support for DB2 CDC and Vitess CDC, alongside MQTT, NATS JetStream, Google Pub/Sub, and SNMPv2c SET sinks. SeaTunnel adds support for running jobs on more engines, so in addition to using the default SeaTunnel Engine (Zeta), you can now use Apache Flink or Apache Spark using a unified connector and job configuration model.  Elsewhere, performance has been improved through the addition of unified batch and streaming capabilities, distributed snapshot algorithms for exact-once data guarantees, schema evolution, and high-throughput parallel execution. SeaTunnel Shade has also been updated to use the latest versions of Jackson, Calcite, and Scala. There's also a new seatunnel-shade-jackson-yaml module.  SeaTunnel 3 and Shade 3 are available now.
 
-## How Containers Work
+#### More Information
 
-You do not need to know how containers work to make use of them, but it is an interesting story and it does indicate why Linux containers work so well. The first requirement of a container is that its file system is separate from the host’s file system. This is achieved using the Linux chroot (change root) command:
+[SeaTunnel Website](<https://seatunnel.apache.org>)
 
-    sudo chroot _folder_ _command_
+#### Related Articles
 
-This changes the current file system root to be the _folder_ you select and runs the specified _command_ , which must be accessible from the folder. Notice that this is a native Linux command, and not some third-party add-on. This is almost all that is required to create a container. Be sure to set the folder up so that it contains all of the files necessary to run the command, but that is sufficient. As an example, we can install BusyBox (see Chapter 6) and create a simple Linux container. First, download the correct BusyBox for the host architecture and copy it into a new folder /myContainer. Change the permissions of BusyBox so that it is executable with, for example, chmod +x busybox. Open a terminal and navigate to the new directory and enter:
-
-    mkdir bin
-    ./busybox --install bin
-
-This stores symlinks in the bin directory for all of the BusyBox commands. Add the bin directory to the PATH:
-
-    PATH="$PATH:/myContainer/bin"
-
-Finally, use the chroot command to activate the “container”:
-
-    sudo chroot /myContainer ./busybox ash
-
-Now, if you use a command such as ls at the command prompt, you will just see the file system with /myContainer as the root. If you try to access files and folders outside of /myContainer, you will fail. The chroot command stays in effect until you stop ash running with Ctrl+D. This is a good start on creating a container, but there are many missing features. For example, if you try the command ps, you will see the error message: /proc : No such file or directory The problem is that none of the pseudo directories are present. To include the pseudo directories you have to mount each one into the “container”. For example, to mount the proc directory:
-
-    mkdir proc
-    sudo mount -t proc none /myContainer/proc
-
-After this, you can use the chroot command and you will find that ps works. You have to remember to umount the proc folder when you have finished with the “container” so as to keep the host file system intact. This brings us to the second aspect of simple containers. If you use ps to see the processes running while using chroot you will discover that you can see all of the processes while working in the “container”. We need to isolate the container from processes running on the host. The solution to this is the unshare command line tool that runs commands in isolated “namespaces”.
-
-    unshare --mount --uts --ipc --net --pid --fork –user
-          --map-root-user chroot /myContainer ./busybox ash
-
-This isolates the “container” from most of the namespaces that matter including pid. If you now mount the proc folder:
-
-    mount -t proc none /myContainer/proc
-
-and use ps you will only see the processes started in the “container”.
-
-    PID   USER  TIME  COMMAND
-     1    0     0:00  /busybox ash
-     7    0     0:00  ps
-
-The final feature we need is some way of limiting the access of a “container” to the physical resources of the host. To do this we need cgroups, which can be used to allocate so much CPU, so much memory and so on. The details of how to do this are not difficult, but they are fiddly and involved, and having the basic idea is really all that is required to understand what Docker, and similar programs, are doing when creating containers.
-
-## Programmers Guide To Containers  
-with Docker and Visual Studio Code
-
-#### By Mike James
-
-[](<https://www.amazon.com/dp/1871962684?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=iprog-20&linkId=13e3793e24ef8654297f065cab51686a&language=en_US&ref_=as_li_ss_tl>)
-
-#### Contents****
-
-  1. Chapter 1 Docker
-  2. Chapter 2 Why Containers?
-  3. Chapter 3 Getting Started With Docker  
-Extract 1: [Starting](<https://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html>)
-  4. Chapter 4 Container As File System   
-Extract 1: [Container As File System 1](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>)
-  5. Chapter 5 Docker Compose for Build and Run
-  6. Chapter 6 Containers as Functions 
-  7. Chapter 7 Connecting To Containers
-  8. Chapter 8 A Web Server
-  9. Chapter 9 VS Code Containers
-  10. Chapter 10 Dev Containers
-  11. Appendix I Reset Docker 
-  12. [Appendix II How Containers Work ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>) ***NEW!!!
-
-<ASIN:B0HKY1GQ5K> To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+[Apache SeaTunnel Reaches Top Level Status](<https://www.i-programmer.info/news/197-data-mining/16369-apache-seatunnel-reaches-top-level-status.html>) [Apache HugeGraph Becomes Top-Level Project](<https://www.i-programmer.info/news/197-data-mining/18736-apache-hugegraph-becomes-top-level-project.html>) [Apache Iceberg Improves Spark Support](<https://www.i-programmer.info/news/197-data-mining/15669-apache-iceberg-improves-spark-support.html>) [Spark BI Gets Fine Grain Security](<https://www.i-programmer.info/news/197-data-mining/10407-spark-bi-gets-fine-grain-security.html>) [Spark Announcements](<https://www.i-programmer.info/news/84/9471.html>) [Apache Flink ML 2.0 Released](<https://www.i-programmer.info/news/197-data-mining/15160-apache-flink-ml-20-released.html>) [Apache Flink 1.9 Adds New Query Engine](<https://www.i-programmer.info/news/197-data-mining/13043-apache-flink-19-adds-new-query-engine.html>) [Apache Flink 1.5.0 Adds Support For Broadcast State](<https://www.i-programmer.info/news/197-data-mining/11872-apache-flink-adds-support-for-broadcast-state.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

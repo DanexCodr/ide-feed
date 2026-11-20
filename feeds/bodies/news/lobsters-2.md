@@ -1,40 +1,137 @@
-Something I learned a long time ago, something that's been proven to me time and again, is that the world is held together by smart people who give a shit. This truth always comes into stark focus when I learn how a complex system functions—or, rather, how it barely functions.
+> With a subscription to LWN, you can stay current with what is happening in the Linux and free-software community and take advantage of subscriber-only site features.  We are pleased to offer you **[a free trial subscription](https://lwn.net/Promo/nst-trial1/claim)**, no credit card required, so that you can see for yourself.  Please, join us!
 
-When I worked at [Stripe](https://stripe.com) I learned a lot about various banking and money movement systems, and it's terrifying how flawed and fragile these systems are. [ACH](https://en.wikipedia.org/wiki/Automated_clearing_house) is a great example. It's a complex system we rely on every day that is just barely good enough to function. It's old, riddled with flaws, and encumbered with legacy baggage. And yet, despite all of those problems, ACH usually works great and is generally considered to be safe, cheap, and reliable.
+The final talk at Kangrejos 2026 was about the removal of the C implementation
+of Android's
+[Binder driver](https://source.android.com/docs/core/architecture/ipc/binder-overview), the primary interprocess communication mechanism
+used on Android devices. Carlos Llamas announced that he had deleted the C
+code to general applause, and then shared some insights about what went into
+replacing the C implementation. Alice Ryhl, who has worked on the Rust
+implementation for some years, added her own thoughts about what the most
+difficult and interesting parts of the transition were.
 
-The reason there's a mismatch between the technical reality of the ACH system and how it functions in practice is due to a single factor: smart people who give a shit. Every problem with ACH is fixed, patched, bypassed, overridden, routed around, or manually handled by people who have two things:
+Binder was added to the kernel in 2008, Llamas said, as an interprocess
+communication mechanism for Android devices. Its design originated in
+[BeOS](https://en.wikipedia.org/wiki/BeOS), but
+it has grown significantly since then. It provides a rich set of operations for
+allowing processes to communicate with the minimum amount of overhead. It also,
+therefore, presents a large attack surface for Android. Many complicated chained
+attacks against Android have involved Binder at one step or another, Llamas
+explained. Google's internal "red team" (the team dedicated to proactive
+security research) deemed Binder to be the most vulnerability-dense component in
+the entire operating system, with more CVEs per line than anywhere else.
 
-1. Intimate knowledge of the system
-2. The drive and determination to force the system to work
+That made it an obvious candidate for porting to Rust, Llamas said. Binder was the first user
+of Rust in the kernel, he added, although Ryhl did not
+[publicly post](https://lwn.net/ml/linux-kernel/20231101-rust-binder-v1-0-08ba9197f637@google.com/) the first version
+of what became the Rust implementation [until 2023](https://lwn.net/Articles/953116/), well after the Rust experiment started
+in 2021. All told, the effort took more than
+five years. Binder is used for every single screen touch, permission check,
+and cross-application message on Android, which runs on more than three billion
+devices. In total, it works out to hundreds of billions of Binder transactions
+per second, globally, he added. That scale meant that even the smallest discrepancy between the
+interface provided by the C version and the one provided by the Rust version
+would cause problems and regressions for some use case.
 
-Those two things feed into each other. You have to care about a complex system to dive deep enough to learn how it works, and when you know a lot about how a complex system works you care more about it, especially if the system is important or critical infrastructure.
+One particularly tricky aspect has been performance, Ryhl said. Throughput
+doesn't matter that much; what matters is the tail latencies. Most
+screen frames on Android have a Binder transaction in the critical path of the
+frame, she explained. So, a difference of two microseconds on average is not a
+real problem, but if Binder is ever twenty milliseconds slower, even once
+in a while, people will notice and care.
 
-Now, you can replace "ACH" above with a myriad of other complex systems—everything from huge infrastructure to nice-to-have apps—and everything I said remains true, both about the systems themselves and the people who keep them running. The world runs on these systems, and they depend on smart people who give a shit. Take those people away, and the systems collapse.
+The actual algorithms that the C and Rust implementations use are identical, she
+continued, so there are no large differences in throughput. But, because Rust
+handles locking differently, there were problems with the tail latency
+from lock contention that she had to debug. For example, one user-reported
+traceback showed Binder attempting to take a mutex that was held by another
+process. That process was preempted, and did not resume executing for twenty
+milliseconds, well past the sixteen millisecond budget to render a single frame.
 
-And collapse is what we're starting to see. Some recent examples of various failures from just this past week or so: [Microsoft 365](https://apnews.com/article/microsoft-outage-outlook-email-365-status-down-d92547a821930290db2964388016979a), [Air Traffic Control](https://www.reuters.com/world/us/faa-issues-national-ground-stop-due-extraordinary-circumstance-reasons-safety-2026-11-13/), [United Airlines' systems](https://www.reuters.com/world/us/united-airlines-says-technology-issue-affecting-departing-flights-2026-11-16/), [the NSA's network](https://www.reuters.com/world/us/national-security-agency-says-network-hit-by-temporary-degradation-during-2026-11-17/), [many major banks](https://apnews.com/article/bank-outage-chase-wells-fargo-truist-50fee2693c22f597fa6ca51a97ef2cda), [Apple's systems](https://www.reuters.com/business/retail-consumer/apple-works-restore-services-after-outage-caused-by-internal-update-2026-11-17/), and more. We're told these failures and problems are not related. They're not the result of a cyberattack. They're not the fault of generative AI.
+It was a classic case of priority inversion. To solve the problem in Binder, Ryhl moved
+as many operations out from under the lock as possible, and was able
+to replace it with a spinlock, which made the problem go away. The equivalent
+lock in the C implementation was already a spinlock: "I deviated from C
+Binder, and *pow*. It has eighteen years of accumulated quirks."
 
-I guess that depends on how you look at it.
+Eventually, however, the Rust implementation was good enough for most use cases.
+And the C implementation was still producing new vulnerabilities every time
+someone tried to introduce a new feature. Eventually, Llamas and Ryhl decided to
+only add new features to the Rust implementation, in order to motivate people to
+switch and to avoid headaches from the C implementation. That policy has
+resulted in the Rust version becoming faster than the C version,
+because Ryhl was able to introduce an algorithmic improvement that reduced the
+number of needed system calls, a change that had been considered too complex for
+the C implementation. Now that the C implementation has been deleted, there are
+more of those coming, she promised.
 
-I don't have inside information about what's going on, but my experience dealing with complex systems tells me there's a common through line to all of these disruptions: there aren't enough smart people who give a shit.
+Another area that proved difficult was dealing with tracepoints. Users aren't
+supposed to rely on the presence or behavior of most kernel-internal
+tracepoints, but they do. This meant that Ryhl had to copy
+the existing tracepoints in Binder as a de facto part of the driver's API. That
+even extended into some of the data structures involved in the driver. In one
+case, she said, there was a reference-counted structure that had a slightly
+different reference count in the Rust implementation, because the Rust code was
+holding an additional pointer to the structure. That turned out to be a
+problem for one particular piece of client code, since it relied on checking the
+reference count via a tracepoint in order to determine when the C implementation
+had reached a particular state.
 
-So where did they go?
+There was also a lot of toolchain support needed, Ryhl continued. The Rust
+implementation had to work with kernel address-space layout randomization
+(KASLR), control-flow integrity (CFI), and profile-guided optimization.
+Production Android kernels are built with all of those enabled, and since they impact code
+generation, the Rust code needed to account for them.
 
-Capitalism has never been particularly kind to smart people who give a shit (or people in general... but I digress). Capitalism does, however begrudgingly, recognize that smart people who give a shit are required to build and maintain complex systems that serve capitalist goals. Thus, those people have been accommodated and incorporated into the system by virtue of their necessity and, in many cases, their rarity.
+Llamas then went into more detail about the deployment plan that will be used
+to convert users to the Rust implementation. A major problem with just rolling
+the Rust implementation out is the existence of
+[vendor hooks](https://lwn.net/Articles/1098493/): custom
+tracepoints used to inject vendor-specific behavior into the kernel. The Rust
+implementation of Binder was not able to reproduce those in every case, and
+therefore many vendors are stuck on the C implementation until they update their
+code. That's going to be a slow process.
 
-Now, though, generative AI is here. To the people running the show—leadership and management—it seems like they can get the same or better value (and even more output!) from a machine. The machine is cheaper, works longer, doesn't take sick days or vacations, doesn't ask for any benefits, and never pushes back against a bad idea.
+Old stable
+versions of the kernel will continue to have the C Binder, and receive security
+fixes, which gives the various Android vendors a little bit of leeway until
+they're forced to update. After the conference, the patch removing the C
+implementation
+[was merged](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fd2bc059ed46) as part of the 7.4 merge window, so that is the
+version past which the Rust implementation is required. 7.3 is the designated
+long-term-support release for 2026.
 
-People who don't do the actual work—the people who aren't in the trenches—have a hard time telling the difference between a flawed system held aloft by the drive and determination of smart people who give a shit and slop provided by generative AI. To them it's all just output: words you can read, code that runs, and pixels that look nice to their eye. It's all the same to them, so why does it matter where it comes from?
+One person asked whether this would pose a problem for people compiling
+the kernel with GCC. Miguel Ojeda responded that many distributions are using a
+workaround for the current lack of Rust support in GCC: they are building
+the C side of the kernel with GCC, and the Rust side with LLVM. He said that he
+had advised against compiling the kernel in that way, because it is "a
+complete hack", though people who use it are unlikely to complain about
+being forced onto Clang. Greg Kroah-Hartman added that it will take months or
+years to learn about anyone who has problems with the Rust version of the
+driver, given how slowly Android vendors update their kernels. Furthermore, the
+removal is a single patch that can be cleanly reverted, if someone needs
+to continue using the C version.
 
-It matters because generative AI isn't smart, and it doesn't give a shit. What seems like intelligence is an illusion propped up by a massive amount of data strip-mined from the commons with weights that nudge the output toward a generally desirable shape. What seems like care, concern, and attention is just generative AI doing what it's designed to do: telling you what you want to hear. The math and logic that power LLMs are as cold, unfeeling, and indifferent as the laws of physics.
+Llamas thought that it was worth considering what the removal process should
+look like for other code that gets ported to Rust. He asked what people thought
+should happen to the C version of converted drivers on long-term-support
+branches. Ojeda said that the process would be exactly the same as the existing
+policy for replaced C code. The only difference
+between Rust and C in long-term-support releases is that the Rust maintainers
+backport fixes for soundness problems, he said.
+Kroah-Hartman told Llamas not to worry about code that has been replaced:
+"Just delete it. I take patches for subsystems that have been deleted. It's
+fine."
 
-Smart people who give a shit notice things. They connect dots. They notice when things don't feel right. They know when something is about to go off the rails, and they know how to get things back on track. They know how to handle edge cases. They know how to manually handle a unique situation. They know what the right thing to do is, and they know when they need to put in extra effort or time to make something happen. Generative AI falls far short in these areas, but this is the glue that holds complex systems together. More prompting and more output isn't a substitute for this.
+With that declaration, the session, the conference, and the presence of the C
+Binder driver in the kernel were all over. Binder is the first nontrivial component
+in the
+kernel to be ported to Rust, and its journey has revealed several pitfalls that
+don't apply to new drivers written in Rust from scratch. Still, the most
+difficult problems were not Rust-specific; they were the compatibility problems
+that any rewrite would face. Whether any other kernel components will find the hassle
+of a rewrite worth it, and how long they will take to accomplish it, remains to
+be seen.
 
-It's hard for capitalist leadership to internalize any of that, though. It would be such a relief for them, such a burden lifted, to replace all those smart people who give a shit with generative AI. It would be so much easier to win at capitalism if generative AI lived up to the hype, and there's so much pressure for leadership and management to believe that the hype is real.
-
-Thus, a lot of the smart people who give a shit have been laid off, and the ones that remain are hollowed out. Telling people to stop doing the job they signed up for in favor of babysitting LLMs so they can do that job instead is a great way to make people less smart about the system they used to work on and give less of a shit about it. Every prompt moves them one step further away from the system they used to know inside and out. Every generated output that becomes part of the system means those people understand less about how the system actually works. Those people are robbed of the things that make them smart (the struggle of building and learning) and the things that made them gave a shit (a sense of ownership and close connection with the system).
-
-We've moved from a world dependent on complex and fragile systems held together by smart people who give a shit to a world of complex and fragile systems run by generative AI. The people running the generative AI are not as smart, nor do they give as much of a shit. There are, of course, exceptions (which is why a lot of things are still humming along), but we are on a course where the number of smart people who give a shit are decreasing, and that's a big problem. As long as the number continues to go down, more systems will fail.
-
-I think what we have here is a hot stove moment for capitalism. When you tell a young kid a stove is hot and they shouldn't touch it, you'll find there are two kinds of kids. For one kind of kid, the warning is the lesson, and they don't touch the stove. For the other kind of kid, the only lesson that works for them is being burned. They have to touch the stove at least once to learn the lesson. Capitalism was told the stove was hot, but their hand is on it right now.
-
-Unfortunately, we're all getting burned.
+[ Thanks to the Linux Foundation, LWN's travel sponsor, for supporting my travel
+to Kangrejos. ]

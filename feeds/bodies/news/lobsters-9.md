@@ -1,206 +1,478 @@
-**TLDR;** We built Blobasaur, a sharded, distributed, lightweight blob storage server on top of SQLite to solve our high-throughput blob read/write usecase. JSON blobs varying from a few KBs to MBs are now written and read thousands of times per second on commodity hardware while maintaining single-digit millisecond latency.
+*This is a talk I gave at Google’s internal Code Health Summit in November of 2025. I’m sharing it here in the hopes that it sparks further learning and discussion.*
 
-On [Kite](https://zerodha.com/products/kite), our trading platform with ~20 million customers, users are able to customize their investment and trading screens heavily. They save multi-chart layouts, financial indicator templates, vector drawings, and various kinds of arbitrary UI preferences. In addition, we offer a Terminal mode that allows users to design their own workspaces by dragging, dropping, and customizing widgets. Under the hood, our backend services store these user preferences and metadata as opaque blobs (mostly JSON) ranging from a few kilobytes to several megabytes.
+## Abstract
 
-Many years ago, we stored such blobs in CouchDB, which turned out to be ill-suited for the kind of throughput we were starting to see. We then moved to SSDB ([ssdb](https://github.com/ideawu/ssdb)), a C++ disk-backed store that speaks the Redis protocol. This made it very easy to integrate as well. SSDB solved our immediate performance problems and ran reliably in production for several years.
+In a world where LLMs generate much of our code, understanding that code is more important than ever. But with a system as large and complex as Google’s codebase, SWEs can easily fall into a pattern of learned helplessness where the best you can do is tweak the code and pray that it passes the tests. Without understanding, LLMs are little more than complexity-generating machines running at top speed.
 
-Over time, two problems forced us to look for a replacement:
+There’s a better way to go about this. Just as our industry has learned to design software for testability, we can also design it for understandability. We can use ideas like design by contract, class invariants, modularity, and more to create systems that we can understand one piece at a time, rather than piling more onto the big ball of mud and hoping it doesn’t all collapse.
 
-1. SSDB became unmaintained, which was an obvious operational risk. It is written in C++, which is not a part of our stack or expertise, so forking and maintaining was also not viable.
-2. Scaling and size limits. SSDB is not a distributed system and can only run on a single node. This imposes significant future scaling challenges, including at one point forcing us to cap blob sizes at 1 MB because latency degrades on larger payloads.
+Is it easy? No. But is it worthwhile? Absolutely. These ideas aren’t new, but they’re not nearly as widely taught or well understood as they deserve to be, and mastering them leads to a world where we can have more confidence in our code and increase velocity at the same time.
 
-As we added features like the Terminal mode and onboarded more internal services, we needed a robust solution. Our criteria were:
+## Slides and Transcript
 
-- A key-value blob store with a simple API.
-- Designed for multi-megabyte blob read/write ops and high throughput. We sustain loads of thousands to tens of thousands of requests per second reading and writing arbitrary blobs. These are unpredictable and bursty thanks to the volatility in stock markets.
-- Horizontally scalable, distributed.
-- Disk-space efficiency / compression.
-- Easily maintainable and highly economical.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_1.png)
 
-So we investigated FOSS databases optimized for high-throughput blob storage and looked at the following:
+Hi everyone, thanks for having me! Let’s get started.
 
-- ScyllaDB: We already run ScyllaDB for high-throughput workloads, but in our tests, it turned out to be suboptimal for large blobs. Significantly lower throughput and higher resource usage. We specifically want multi-megabyte blobs. Tombstones from frequent overwrites and TTL expiries require careful tuning in ScyllaDB.
-- PostgreSQL: We already have considerable experience with Postgres in our stack and experimented with storing blobs as BYTEA columns, but it turned out to be severely suboptimal again for the use case in terms of performance and disk-space efficiency.
-- YugabyteDB: Has blob storage as one of the options, but is not primarily designed or optimized for it. Also, a large system with too many features.
-- RocksDB: Had the right primitives, but again, not architected for high throughput multi-MB blob writes.
-- Ceph: Severe operational complexity and resource requirements. We didn’t even get to trying it out.
-- SeaweedFS: This was the closest candidate. However, there were a few blockers. Our use case is overwrite-heavy (a user changing their workspace) over the same key, and SeaweedFS keeps appending before compaction, which can cause disk usage to grow uncontrollably. Blobs have their own IDs, which then have to be mapped against user keys in a separate DB, adding another layer. It doesn’t support TTL per blob. Also, reasonably complex setup with many parts.
-- S3 and MinIO: Object storage has high per-request latency for small blobs, high request costs under write-heavy workloads (writes are 50% of our traffic), and coarse lifecycle TTLs instead of exact key expiry. Not to mention, S3 would incur significant costs given thousands of ops per second and tens of millions of ops per day.
-- Raw filesystem (one file per blob): Putting blobs directly on disk meant implementing atomic writes and write batching, managing large numbers of files and directories, good old atomic read/write disk performance and inode headaches, and maintaining a separate metadata index for TTLs. Not to mention, orchestrating this over AWS storage volumes.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_2.png)
 
-Around this time, we were toying with SQLite for another project and were marveling at its [*35% Faster Than The Filesystem*](https://www.sqlite.org/fasterthanfs.html) claim. We also happen to have a query cache system that creates [millions of tables](https://nadh.in/files/indiafoss-2024-dungbeetle.pdf) every day in a Postgres instance, which pushes the database to its limits quite successfully. Putting two and two together, we thought, why not build a system on top of SQLite to store millions of blobs and see what happens?
+I’d like to start this talk with a question: If LLMs can code, then what is left for human SWEs?
 
-So we ended up building [Blobasaur](https://github.com/iamd3vil/blobasaur), an open source sharded blob server written in Rust that speaks the Redis protocol and uses SQLite as its storage engine. It is a single binary application that is high performance, and super simple to deploy and maintain. It is in production at Zerodha and it has successfully replaced SSDB.
+The tech industry is quickly looking to large language models to write all of our code. But you might say: isn’t writing code our job as software engineers? Where does this leave the responsibility of SWEs? What is the essential human element that SWEs add on top of LLMs?
 
-[![Blobasaur logo](https://zerodha.tech/static/images/blobasaur-logo.svg)](https://github.com/iamd3vil/blobasaur)
+Every one of you is going to have a different answer to this question, and that’s fine. But here’s my take.
 
-## What we needed
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_3-1.png)
 
-We had several Go and Python services already talking to SSDB via the Redis protocol, with more waiting to onboard. We wanted the new solution to meet these requirements:
+That necessary human element is judgment. Judgment of whether the code is maintainable. Judgment of whether it is healthy.
 
-- Redis protocol compatibility (if possible at all): Every existing client already used standard Redis libraries (GET, SET, HGET, HSET, DEL, EXPIRE). If we could get a system that could be a drop-in replacement, that would allow us to leave existing services untouched and reduce risk significantly.
-- Low latency across payload sizes: It needed to serve both 2 KB settings blobs and 5 MB chart layouts with single-digit millisecond latency.
-- Built-in compression: Almost all our payloads are repetitive JSON, which compresses well.
-- Simple CRUD with TTLs: We didn’t need complex data structures, server-side scripting, or secondary queries. We just needed key-value and hash CRUD with key expiry.
-- Multi-node partitioning: We needed to split data across multiple machines so a single node wasn’t a bottleneck.
-- Relaxed durability is acceptable: This store holds non-critical UI and workspace preferences, and not critical financial data. If a sudden power loss drops recent writes, a user might lose a recent chart layout tweak, which is annoying, but it never affects trading. This was a good performance trade-off for our use case.
+LLMs can follow patterns and generate code that looks like what it was trained on. Sometimes they can produce useful tips and critiques for a piece of code. But that critical piece of judgment, of deciding whether some code is suitable for the task it was designed for, is still up to you, the human.
 
-## Why SQLite (and Rust)
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_4.png)
 
-We had a few options for the storage. The obvious one is the raw filesystem, with one file per blob. But with that, we’d need to invent everything ourselves:
+Because here’s the thing: LLMs today are still a sloppy intern. Sometimes the code they produce is good, but sometimes it’s completely off-track and needs correcting. You wouldn’t incorporate a sloppy intern’s code into your system without a close review first, so you shouldn’t do so for an LLM’s code either.
 
-- Atomic writes and batching.
-- TTL cleanup, which needs secondary indexes or walking the directories.
-- Dealing with fd limits.
-- Managing metadata separately from the raw data.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_5.png)
 
-SQLite pretty much gave us everything that the raw filesystem lacked. For small blobs, SQLite is up to 35% faster than raw filesystem I/O. While raw files start to beat SQLite above ~100 KiB, we compress blobs before writing them. And thankfully, 99% of our compressed values sit well below 100 KiB.
+YOU are responsible for the quality of your code, regardless of whether you had an LLM generate it for you or wrote it the old-fashioned way with fingers on a keyboard
 
-Using SQLite also meant inheriting a battle-tested storage engine with ACID transactions, crash recovery, and standard tooling. Any shard on disk can be inspected with the standard `sqlite3` CLI or queried with plain SQL for analytics, etc.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_6.png)
 
-While most of our backend stack is written in Go, we wrote Blobasaur in Rust. Go’s standard SQLite driver requires CGo, which complicates static builds, pins OS threads during C calls under high concurrency, and adds garbage-collection pressure when allocating and compressing multi-megabyte buffers. With Rust (`sqlx`, `rusqlite`, and `tokio`), we call SQLite’s C API directly with predictable memory usage and ship a single static binary.
+So where does that leave us? If LLMs are going to write a lot of the code for us, then we’re looking at a future where we humans are going to spend less time writing code, and more time reading code and understanding it, in order to make sure it passes our quality bar.
 
-## Architecture
+This means it’s more important than ever to get better at understanding code, and to speed up that reading and understanding process.
 
-### Splitting data into shards
+Now: if you want to get better at something, it’s helpful to set an aspirational goal for yourself. Something that’s above your current skill level, and drives you to get better and better every day.
 
-In WAL (Write-Ahead Logging) mode, a single SQLite database allows concurrent readers, but still permits only one writer at a time. Since writes make up roughly 50% of our production traffic, a single SQLite file per node would bottleneck quickly.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_7.png)
 
-To get write concurrency on a single machine, Blobasaur splits data across multiple SQLite database files on disk, called shards:
+Here’s the goal I propose: we should be able to predict the behavior of every line of code, without running a single test.
 
-- Consistent hashing: Each key maps to one shard via multi-probe consistent hashing.
-- Per-shard writer with group commit: Each shard has a dedicated writer task fed by a bounded queue. Instead of committing one key at a time, the writer drains a batch of pending writes from the queue and executes them inside a single BEGIN IMMEDIATE ... COMMIT transaction. This amortizes transaction and WAL overhead across concurrent clients.
-- Concurrent readers: Reads go directly to a per-shard pool of read-only SQLite connections and can run concurrently with the writer.
+Let me say that again: We should be able to predict the behavior of every line of code, without running a single test
 
-![Blobasaur node: per-shard writer and reader pool](https://zerodha.tech/static/images/blobasaur-1.png)
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_8.png)
 
-### How much does sharding help?
+Now, I know you may be thinking: “Understand every line of code? Without testing? Are you serious?! There’s way too much complexity and legacy code for me to ever be able to do that!”
 
-We benchmarked 1 shard against 16 shards using a load generator opening 64 concurrent connections. Each request used a 64 KiB JSON blob payload (close to our production average), which zstd compresses roughly 9x.
+You might think so. And if we take our hands off the wheel and relinquish all control, you might be right. But I’m here to tell you there’s a better way.
 
-All runs used 100,000 keys, synchronous writes, and `batch_size = 50`, with the data directory on `tmpfs` to isolate SQLite locking and CPU overhead from disk variance. Both setups received the same total resources: 1,600 MB of SQLite page cache and 64 total read connections.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_9.png)
 
-| Workload | 1 shard | 16 shards |
-| --- | --- | --- |
-| `HSET` only | 7,740 ops/s, p99 10.7 ms | 25,324 ops/s, p99 8.3 ms |
-| 50% `HSET`, 50% `HGET` | 14,227 ops/s, p99 10.5 ms | 29,538 ops/s, p99 8.5 ms |
-| `HGET` only | 67,128 ops/s, p99 2.1 ms | 70,884 ops/s, p99 2.3 ms |
+We can *design* our code to be understandable.
 
-With 16 shards, write throughput increases 3.3x and median write latency drops from 8.2 ms to 2.1 ms. Read throughput stays nearly identical because SQLite WAL mode already serves concurrent readers without contention.
+Consider that a decade or two ago, we used to think that writing multiple tests for every public method in an API would have been infeasible. It wasn’t because we didn’t want to, or that we weren’t trying. It was because we hadn’t designed our code to make testing possible at that level. But gradually, across the software industry, we changed our practices to design for testability. Today, designing our code for testability is so ingrained into our culture that doing anything else is practically unthinkable. We can do the same for understandability, so that our code enables us to understand it better.
 
-At 25,324 `HSET` operations per second, each carrying a 64 KiB payload, Blobasaur processes roughly **1.66 GB/s of uncompressed JSON** through zstd. Both the server and load generator ran on the same 16-core laptop, sharing its CPU resources.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_10.png)
 
-### Schema
+Our own Code Health guide makes a strong case for understandability. It says “For code to be sustainable, it must be understood. Change cannot be made unless a developer knows what the system currently provides, and what needs to change to adapt to new circumstances. As a result, key components of code health include good documentation, easy to understand error messages, and clear, simple code”
 
-Our services use both plain keys (`SET`/`GET`) and Redis hashes (`HSET`/`HGET`) to group blobs by service or feature (for example, `HSET prefs userID <json>`).
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_11.png)
 
-Inside each shard, plain keys live in a `blobs` table:
+Not only is designing for understandability important, but it’s a learnable skill. It’s not some magical ability that you either have or you don’t. There are specific, concrete actions you can take to improve the understandability of your code.
 
-```sql
-CREATE TABLE IF NOT EXISTS blobs (
-    key TEXT PRIMARY KEY,
-    data BLOB,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    expires_at INTEGER,
-    version INTEGER NOT NULL DEFAULT 0
-);
+I’m going to introduce you to a few of those today. Think of it as a “starter kit” for designing for understandability. We’ll also talk more about a general theme that runs through all of these practices, so that at a certain point you can find even more ways to design your code for understandability.
 
-CREATE INDEX IF NOT EXISTS idx_expires_at
-    ON blobs(expires_at)
-    WHERE expires_at IS NOT NULL;
-```
+The ideas I’m going to show you today are not new. But they’re not taught as well as they should be, when they’re taught at all, and most of us have only a rough understanding of how to apply them. My goal today is to sharpen that understanding just a little bit, and make it just a little more practical, so we can kickstart a process of making our code more understandable over time.
 
-`SET` writes to `blobs`. `HSET` writes to a table for its namespace, `blobs_<namespace>`, with the same columns. For example, `HSET prefs user42 ...` stores `user42` in `blobs_prefs`.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_12.png)
 
-Expiry is stored in `expires_at` on the same row. Read queries filter out expired rows at read time (`expires_at IS NULL OR expires_at > ?`), while a background worker reaps expired rows asynchronously. Because the index on `expires_at` is a partial index (`WHERE expires_at IS NOT NULL`), rows without a TTL take up no space in the expiry index.
+So let’s get started on each of these Design for Understandability practices.
 
-### Compression
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_13.png)
 
-Blobasaur supports zstd, lz4, gzip, and brotli compression before writing to SQLite. We run zstd in production.
+The first one is Design by Contract.
 
-Here is the compression ratio across one hour of production `HSET` traffic:
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_14.png)
 
-| `HSET` payload | Sent by the client | Stored in SQLite | Reduction |
-| --- | --- | --- | --- |
-| Average | 63.6 KiB | 5.5 KiB | about 11x |
-| p99 | 935 KiB | 59.3 KiB | about 16x |
+To motivate the idea, let’s ask the question: when calling a method, what behavior should you rely on?
 
-With SQLite’s default 4 KiB pages, shrinking a 63.6 KiB payload to 5.5 KiB reduces its storage footprint from roughly 16 pages to roughly 2, before accounting for row and index overhead. Fewer pages holding blob data means less pressure on the page cache and less data to write through the WAL and into the database.
+Let’s say we have this binary search method, but its documentation is not terribly helpful (you’ve probably seen something like this before).
 
-![HSET payload size before and after compression](https://zerodha.tech/static/images/blobasaur-2.png)
+Binary search is reasonably well understood, but as a caller of the method, we have some questions we want to ask about this specific implementation. Such as:
 
-### Durability
+- Will the returned index always be the first occurrence?
+- What happens if t is not found?
+- What happens if the list is not sorted?
 
-Because we don’t require strict durability for our specific use case of UI preferences, shards run in WAL mode with `PRAGMA synchronous = NORMAL`. SQLite does not fsync on every transaction commit. An OS crash or power loss can lose recent committed transactions that have not yet been synced to durable storage, while preserving database consistency.
+The documentation doesn’t answer these questions. So what can we do?
 
-For workloads that want even lower write latency, Blobasaur also supports an optional `async_write` mode that acknowledges writes as soon as they enter the shard’s memory queue, before the SQLite batch commits.
+First, we could guess. But we’ll probably be wrong.
 
-### Scaling across machines
+Second, we could read the code. But that might take a long time, especially if the particular behavior we care about is buried several levels deep.
 
-To scale beyond a single server, Blobasaur implements the Redis Cluster protocol, making it compatible with standard cluster-aware Redis clients. Like Redis Cluster, the keyspace is divided into 16384 hash slots using `CRC16`. Each Blobasaur node owns a configured range of slots, and nodes discover each other via gossip. If a client sends a key to the wrong node, the node responds with a `MOVED` redirect pointing to the owner node.
+Third, we could test the code on some examples and see what happens. But just because it works a certain way on some examples doesn’t necessarily mean it works that way for all such inputs. Furthermore, even if it works that way now, there’s no guarantee that it will continue to work that way in the future.
 
-![Two-level routing across Blobasaur nodes](https://zerodha.tech/static/images/blobasaur-3.png)
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_15.png)
 
-This gives Blobasaur two-level routing:
+The point is that without a clear statement of what this code is intended to do, there’s no distinction between implementation and intent. The SWE who wants to use this code has to guess at which behavior the method *commits* to, versus which behavior is an implementation detail that might change over time.
 
-1. Cluster level: CRC16(key) % 16384 selects the machine.
-2. Node level: Multi-probe consistent hashing selects the SQLite shard on that machine.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_16.png)
 
-There are some limitations right now. At present, slot assignment is static in config. Live slot rebalancing between running nodes and automatic failover are not implemented yet.
+This is where contracts come in.
 
-### Changing the number of shards
+There are many ways to define a contract, but for the sake of this talk I’m going to define it as a formal-ish description of the observable behavior that each participant in an interaction commits to.
 
-We chose multi-probe consistent hashing so resharding a node only has to move minimal data, without needing virtual nodes. With naive `hash % num_shards`, increasing from 4 to 5 shards moves ~80% of keys. With consistent hashing, only ~20% of keys move (the share belonging to the new shard).
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_17.png)
 
-Resharding is currently an offline operation via the built-in CLI:
+In the real world, a basic contract is something like “If I cook dinner, then you will wash the dishes”.
 
-1. Stop the server.
-2. Run blobasaur shard migrate 4 5 --verify.
-3. Update num_shards in config.toml and start the server.
+In programming, an example might be: “If the caller provides a non-negative integer n, then the square-root function returns the square root of n”
 
-The migration tool moves keys whose target shard changed. With `--verify`, it checks that keys are in the expected shards and reports post-migration row counts.
+Let’s see how contracts can help us with our binary-search example.
 
-## Moving off SSDB
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_18.png)
 
-We rolled out Blobasaur in a phased deployment strategy:
+Here’s a possible contract for this function. It says, “If the list is sorted, binarySearch returns the index of the first occurrence of t in the list, or -1 if not found. Behavior is undefined for unsorted lists.”
 
-1. New workloads first: When we launched Kite Terminal mode, we pointed its workspace storage directly at Blobasaur.
-2. Dual-write and backfill: For existing workloads like chart preferences, we updated the services to dual-write to both SSDB and Blobasaur while running a background migration for historical keys. Reads went to Blobasaur first and fell back to SSDB on a cache miss or error.
-3. Cutover: On the client side, the only code change was switching from a single-node Redis client to a Redis Cluster client with the three Blobasaur node IPs.
+We can see that this contract answers the questions we asked about it:
 
-After running dual-writes for a month with zero discrepancies, we turned off SSDB.
+- Will the returned index always be the first occurrence? Yes, the contract explicitly says this.
+- What happens if t is not found? The contract says binarySearch will return -1 to signal that case.
+- What happens if the list is not sorted? The contract doesn’t say anything, so this behavior is intentionally left undefined. And that’s a valid design choice! There may be performance reasons to not check whether the list is sorted at run-time. So this contract tells the user that they shouldn’t rely on any particular behavior if the list is not sorted. Instead, the obligation is on the caller to check whether the list is sorted before calling binarySearch.
 
-## What we learned along the way
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_19.png)
 
-### Deleting rows doesn’t shrink SQLite files
+The power of a contract is that it defines a clear boundary between the author’s intent and the implementation. The caller doesn’t have to guess at the behavior anymore: they can just read the contract, and if a specific detail of the behavior isn’t there, they will know that it’s unspecified.
 
-Early on, we noticed disk usage only grew, even after millions of keys expired or were deleted. By default, SQLite keeps freed pages on an internal freelist for future writes rather than returning space to the OS.
+In reality, this isn’t always perfect. Whether intentionally or accidentally, we still tend to end up with code that relies on implementation details rather than specified behavior. But contracts at least give us a way to minimize this behavior.
 
-To fix this, we enabled `PRAGMA auto_vacuum = INCREMENTAL` across every shard and added a `blobasaur shard vacuum` subcommand to reclaim unused freelist pages within a set allocation (128 MB default). Since shrinking the actual database file in WAL mode requires a checkpoint, Blobasaur runs `PRAGMA wal_checkpoint(TRUNCATE)` right after executing an incremental vacuum.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_22.png)
 
-### Async writes have to be visible to every read
+Now that we understand what a contract looks like, let’s talk about how contracts can help us reason about and understand our code better.
 
-When `async_write` is enabled, a write returns `OK` while still sitting in the shard’s memory queue waiting for the next batch commit. To preserve read-your-writes consistency, queued writes are also placed in an in-memory pending map that reads check before querying SQLite.
+Suppose you just wrote a method. I’m going to draw that method as a little circle here.
 
-During testing, we hit edge cases where certain read and existence-check paths bypassed this pending map or didn’t account for deletes. For example, a `DEL` followed immediately by a `GET` could return the old value from SQLite because the queued `DEL` hadn’t committed yet. We fixed this by storing explicit tombstones in the pending map and routing every read (`GET`, `HGET`, `EXISTS`, `TTL`) through it first.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_23.png)
 
-### Expiry cleanup has to share the writer
+You want to know if it’s correct.
 
-In production, our p99 write latency normally sat below 5 ms, but we occasionally saw spikes to 30 to 50 ms.
+I’m going to use a purple circle to stand for methods we’ve read the code for
 
-We traced the spikes to the background TTL cleanup task. Initially, the cleanup worker opened its own write connection and ran a single large `DELETE` statement for all expired rows. That large `DELETE` contended with the shard’s main writer for SQLite’s single write lock, stalling normal client batches.
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_24.png)
 
-We fixed this in two ways: routing cleanup batches through the shard’s existing writer connection so they take turns cleanly with client writes, and bounding each pass with `cleanup_chunk_size` (1,000 rows by default). Since expired rows are already filtered out at read time, spreading physical deletion across smaller chunks eliminated the latency spikes without affecting correctness.
+Now, our method doesn’t live in isolation: it calls some other code.
 
-## In production
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_25.png)
 
-Our current Blobasaur deployment runs as a three-node (4 vCPU, 8 GB RAM) cluster. Over a full trading session (09:00 to 15:30), p99 latency across all commands stays around 2 ms on every node, and p50 sits between 250 and 550 µs.
+So, you think “Okay, well, I need to understand what those do. I’m going to read the code for those methods.”
 
-![Command latency (p50, p90, p99) per node over a trading session](https://zerodha.tech/static/images/blobasaur-4.png)
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_26.png)
 
-Broken down by command, `HSET` p99 sits around 2 ms, `HGET` p99 around 1.4 ms, and `HDEL` p99 mostly under 1 ms.
+Well, those methods call other methods, and we start thinking about this, and figure out how we’re going to reason about those. And at this point you can maybe see where I’m going.
 
-![p99 latency per command per node over a trading session](https://zerodha.tech/static/images/blobasaur-5.png)
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_27.png)
 
-Blobasaur is open source under the AGPLv3 license and available on GitHub [@iamd3vil/blobasaur](https://github.com/iamd3vil/blobasaur). Find other projects from the Zerodha.tech hacker collective at [4th Cross Labs](https://fourthcross.tech).
+Oh no. Now we have lots and lots of code we have to read across our entire code base.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/Design-for-Understandability-public-blog-post-version-1.png)
+
+Why do we need all this reasoning just to reason about one single method? That’s all we’re trying to do! How did we get so out of control?
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_29.png)
+
+So, let’s back up and try again, using Design by Contract this time.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_30.png)
+
+You still have to read your own code. We can’t get around this part; that’s the change we just made.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_31.png)
+
+And we haven’t changed the code. It still calls those other methods.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_32.png)
+
+But now, the trick is that we can read just the *contract* on those called methods, not the code.
+
+And that’s it! We can stop here. We don’t need to worry about all of that other code. The contracts tell us all we need to know about calling these other two methods.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_33.png)
+
+The rest of that code still exists, but we don’t have to think about it. The contract abstracts away all that other behavior that doesn’t matter to us as the caller of these two methods.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/Design-for-Understandability-public-blog-post-version-2.png)
+
+So that is the power that contracts give to us to reason about our code.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_35.png)
+
+Finally, I’ll wrap up this section with a few tips for writing contracts:
+
+First, document the behavior that you’re willing to commit to. This is usually the same as what you want your callers to rely on. For example, you probably want to document the return value of your method. But the exact human-readable text in your error messages? Not so much.
+
+Second, describe your error handling in your contracts. A contract does not and should not be just about the happy path. If your method might go wrong in some way, tell the caller under what conditions it might go wrong, and how you’re going to signal that to the caller, whether it be through a special return value, or an exception, or something else.
+
+Finally, keep in mind that the more callers your method has, the harder it is to change the contract. If it’s a private method used only by your team? Sure, that’s probably an easy case to change both the contract and change the callers to match. If it’s a public method on a popular framework used by hundreds of other projects? Then renegotiating the contract is a much more expensive effort, so you should evaluate the costs and benefits carefully before deciding to do that.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_36.png)
+
+So that was the first element in our Design for Understandability starter kit.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_37.png)
+
+The next one is data invariants.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_38.png)
+
+Let me explain this idea with a little story.
+
+Early in the COVID-19 pandemic, when my wife and I started working from home, we missed having free soda at work. So we got in the habit of keeping cans of Diet Coke in the fridge.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/Design-for-Understandability-public-blog-post-version-3.png)
+
+But there was a problem: we were great at taking cans out of the fridge, but not so great about putting new ones back in. So if you’re working hard and looking forward to taking a break with a nice cold beverage, it was a big disappointment to open a Coke-less fridge and resort to drinking room-temperature soda from the pantry instead.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/Design-for-Understandability-public-blog-post-version-4.png)
+
+The problem was that we hadn’t set any rules on how we retrieve Diet Coke and how we replenish the fridge.  Without any rules governing access to the fridge, we eventually got into an unwanted state: in this case, an empty fridge.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_41.png)
+
+This happens in code, too. For example, let’s say you have this proto to represent a customer’s order [Note: “proto” is Google jargon for a Protocol Buffers message, similar to a JSON object]. If you receive this proto, how much do you trust that the total actually indicates the total amount on the items?
+
+Probably not much, right? This proto could have come from any part of your code, so it’s easy to imagine that someone forgot to set that field appropriately.
+
+Protos give you completely uncontrolled access to the underlying representation of your data. Protos are great for transferring data back and forth across the network, but they’re poorly suited to situations where you want to rule out certain states.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_42.png)
+
+To solve these kinds of problems, we can use data invariants. A data invariant is a statement about a piece of data that is always true.
+
+Data invariants are a principled way to enforce these kinds of valid states in your data. If you use them well, you can avoid a lot of bugs in your code.
+
+Let’s see how we can use invariants to solve the Diet Coke problem, and similar problems you might come across in your own code
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_43.png)
+
+First, identify the invariant you want to maintain.
+
+Ask yourself: What’s the property you want to rely on for this piece of data? Where are the places in the code where you explicitly validate and return an error if invalid? Alternatively, where do you make the assumption that it’s invalid, but you’re not actually sure?
+
+In this case, the invariant we want is “the fridge always contains a Diet Coke”.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_44.png)
+
+Second, you need to document the invariant.
+
+It’s important to note this is a separate step. It’s one thing to have an invariant in your own head. It’s another thing to write it down so that you communicate it to everyone else who might touch this code. Not to mention that if you come back to this code months or years later, you yourself might have forgotten which exact invariant you meant to maintain.
+
+Write it down where people will see it: probably close to the relevant data members, or maybe in a class-level comment at the top.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_45.png)
+
+Third, establish the invariant at creation time. Usually this will be done in a constructor or factory method. In this case, we’re constructing the fridge with a few drinks already added.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_46.png)
+
+Fourth, every time you change your the data, make sure you maintain the invariant.
+
+This is the part my wife and I didn’t do for our fridge. What we should have done is established a rule where if you take a Diet Coke, you put another one back in the fridge to make sure there’s another for the next person.
+
+You can maintain the invariant many ways – that part is up to you. The important thing is that you always maintain it. Without that, you have to think to yourself “Wait, are there going to be Diet Cokes in the fridge? Did I already take them out earlier? Let me go back and check all my callers to see if they did that already”. With an invariant, though, you just know: If I have a Fridge object, then it definitely has Diet Cokes, regardless of the sequence of operations that led to this point.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_47.png)
+
+Finally, one last step, and this might be the hardest one: you need to maintain the invariant as the code evolves. It’s relatively easy to maintain the invariant for a single version of code. But over the weeks, months, and years, complexity will creep in, new requirements will force you to change the code, and you might accidentally break the invariant or forget you even had one.
+
+Establish the culture on your team that maintaining invariants is just a thing you do. If you have a mental checklist of things you look for in code review, make sure that maintaining the invariants is on that checklist.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_48.png)
+
+So how do data invariants help us design for understandability? Let’s first consider what we have to do when we don’t have an invariant.
+
+Recall this representation of all the methods in your codebase, calling each other in various ways. Suppose you have a proto-based version of the fridge, and you want to know if it has any Diet Cokes in it. Because it’s a proto, you don’t have a way of knowing what state it’s in.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_49.png)
+
+So, you need to check all the callers of the current method.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_50.png)
+
+And you do the check, crawling across the codebase, and you find that there’s one particular case where you didn’t enforce it.
+
+Of course you can fix these issues one at a time as they crop up, but all that searching sounds like a lot of work, right? What do you think are the chances you’re always going to find that one particular buggy spot? What are the chances that new methods added to this web of code are going to maintain that condition?
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_51.png)
+
+In contrast, let’s try the version with our Fridge class and its invariant.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_52.png)
+
+In this case, the class has an invariant: the Fridge always has at least one Diet Coke, no matter what operations have been done previously or where we came from. By maintaining that invariant, we’ve removed the need to check what every single caller does.
+
+This is what data invariants do for you: they let you focus on the state you’re in now, and not how you got there.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_53.png)
+
+That wraps up the section on data invariants.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_54.png)
+
+The final practice I want to discuss today is isolating side effects and dependencies on global state.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_55.png)
+
+To motivate this idea with an example. Let’s say there’s a supermarket point-of-sales system with this method to compute sales tax. Now ask yourself: what are the inputs and outputs for this method?
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_56.png)
+
+Seems pretty obvious, right? It takes in a customer’s grocery order and returns the sales tax as an integer.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_57.png)
+
+But that’s not the whole story. If you dig into the implementation of this method, you’ll find that it reads in a set of sales tax rates from a separate file. That’s effectively a new input channel! The code depends on that data to compute the tax just as much as it depends on the content of the grocery order itself.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_58.png)
+
+And if you look further, you’ll find that the method also records the computed tax in the store’s account database for bookkeeping purposes. That’s a new output, but it’s nowhere to be found in the type signature!
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_59.png)
+
+So functions have two kinds of input and output: the ones that are visible in the type signature, like the order and the computed sales tax, and the ones that are hidden, like the tax rates file and the entry in the accounting database.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_60.png)
+
+The hidden outputs are more commonly known as side effects. Side effects generally come in two flavors: mutation, so modifying something like a global variable or one of your input arguments, and outputs outside of your process. That would be things like database writes, remote procedure calls, printing to the console, etc.
+
+I don’t know a common term for the hidden inputs, but I would call these dependencies on global state. Again, there are two flavors: dependency on the state of some global variable, or a dependency on the state of the system your program is running in. That’s things like permissions to access the database, the existence of a given file on the file system, and even the ability to read the system clock.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_61.png)
+
+So why are these hidden inputs and outputs a problem? They make code hard to test, hard to reuse, and hard to reason about.
+
+Hard to test because you have to make sure you have all the necessary dependencies are set up before you can even run the method in your test. And then once you do run the method, side effects often force the test to rely more on interaction verification than state verification, which can be brittle.
+
+Hard to reuse because the code now makes assumptions about what kinds of resources you have available to you. If you need to reuse some method in another part of the codebase, but the input data needs to come from a different source, or you need to store the results in a different place, those side effects and global states are going to create a tight coupling between your computation code and the specific sources and destinations for that computation, which will make your life harder.
+
+Hard to reason about because, by definition, these inputs and outputs are hidden! If you don’t even know that your method is making these kinds of assumptions on the system that it’s running in, then you’re going to make some faulty conclusions about how your code will behave.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_62.png)
+
+Now I’m not saying all side effects or global state are bad. And I’m not saying we should all immediately switch to a pure functional programming language like Haskell.
+
+Effects have to happen somewhere. Without side effects, computation is just the process of making a metal box hot for a little while  
+(and even that heat is a side effect! although not usually one we care about).
+
+But by default, we tend to sprinkle them everywhere throughout the code. Need some input? Just read the file at whatever point you happen to be at in the code. Need to store your result? Go ahead and do it 4 layers deep into your business logic.
+
+Without a principled approach to side effects and global state, we’re constantly running into the kinds of problems we just described.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_63.png)
+
+There’s a better way, which is to isolate the side effects and the dependencies on global state. Much of our code is just logic on top of the data (once we get it) and creating new data based on that. Divide your code into the computational parts on one hand, and the parts that deal with side effects and global state on the other.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_64.png)
+
+There are a few common patterns for this.
+
+One of them is Command/Query Separation. It’s a pattern where each method is either a command, which performs some side effect, or a query, which is a pure function that returns its output as the return value. But you maintain a strict separation so that no function does both of those things.
+
+Another pattern is called “Functional Core, Imperative Shell”. This is a pattern at the architectural level. You focus the inner modules of your system on the business logic and computation, not performing side effects – this is the “functional core”. The outer modules coordinate the effects of your system with that computation, so that the complexity of the side effects is isolated to just that outer layer, and the majority of your system is simpler due to the functional purity.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_65.png)
+
+As with the other two practices, side effects and global state have a big impact on how we think about code.
+
+For example, you might be working on a method and need to delete a file. Your assumption is that it should be okay, you think no one is using it.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_66.png)
+
+But then it turns out, some other part of the codebase was relying on it, and you just broke them. The code was so far away and unrelated that you didn’t even think to check there.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_67.png)
+
+On the other hand, if you isolate your side effects and global state such that they only happen in a known region of the code, then you can have confidence that you really aren’t going to break anyone else.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_68.png)
+
+So, those are the three starter practices for Design for Understandability: Design by Contract, Data Invariants, and Isolating Side Effects and Dependencies on Global State.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_69.png)
+
+Now, I’ve presented these as independent practices, but in fact they’re not so distinct. There’s a unifying theme to them. That theme is local reasoning.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_70.png)
+
+What do I mean by local reasoning?
+
+Local reasoning means you can come to conclusions about some chunk of code by looking only at that chunk of code, plus just a small amount of the neighboring code, like the specifications or contracts of the components that you directly interact with.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_71.png)
+
+This is as opposed to global reasoning. That’s the kind of reasoning where to answer even a simple question, you have to read a large chunk of the codebase, because the answer could be in any method, at any level of the call stack.
+
+The benefit of local reasoning is that it puts a hard boundary on how far you have to look in order to figure something out about your system: there’s always a limit to how far you have to search.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_72.png)
+
+So let’s talk about how each of the practices we talked about enables local reasoning. You may have noticed we covered this already, but let’s review.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_73.png)
+
+Design by Contract defines the expected behavior for a caller and a called method. That means that to understand what behavior a caller can rely on, or what behavior a called method is obligated to implement, the only place we need to look is the defined interface for that called method. Without that, we would revert to global reasoning to find all the parts of the code that might depend on some aspect of this method’s behavior.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_74.png)
+
+Data invariants often go hand in hand with contracts, but they usually say something about an entire object rather than a single method on that object.
+
+If you have a piece of data and you want to know something about its validity, like “does this fridge have any diet cokes?”, an invariant is what lets you immediately conclude yes, without looking at the callers that produced that data.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_75.png)
+
+Finally, by isolating side effects and global state, you minimize the number of places in your code where a change in one part of the code can cause a problem in a completely unrelated part. So it lets you say things like “this is the only part of the code that’s allowed to touch this file, so I know for sure that it’s safe to delete”.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_76.png)
+
+Another way of looking at local reasoning is to say that it minimizes the amount of context we need in order to reason about the system.
+
+With global reasoning, you might need to know about any arbitrary part of your codebase, because the part that breaks your assumptions could be anywhere. You need to have the whole system loaded into your head in order to understand it.
+
+Local reasoning keeps the amount of stuff you need loaded into your head to a reasonable size.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_77.png)
+
+And guess what else benefits from small contexts: LLMs!
+
+A key portion of making an LLM useful for your work is giving an LLM the right context to give good suggestions. But contexts costs tokens, and your tokens are limited. So LLMs give us another great motivation to use local reasoning and minimize our context.
+
+In other words, if you want your LLMs to be useful to you, then design your systems for understandability. Keep the necessary context small to make it easier for both you and your LLM to work with your code.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_78.png)
+
+At the beginning of this talk, I compared “Design for Understandability” to “Design for Testability”. I’d like to revisit that for a moment.
+
+Before designing for testability was the norm, the default testing approach was application-level testing. Our code wasn’t set up for practices like dependency injection, so there was no way to run your code without setting up a huge set of dependencies as well. It wasn’t until we started designing and building our systems with testability in mind that we were able to make unit testing practical.
+
+That’s how it is with understandability and local reasoning, as well. If you don’t design for it ahead of time, it’s somewhere between hard and impossible to use local reasoning. But if you design for it along the way, you can make it work.
+
+If you’ve never heard of unit testing, then application-level testing seems obvious, and straightforward. But it’s not sufficient for modern software engineering. The same is true for global reasoning. I say it’s time we made designing for understandability a required part of our work, just like we did for testability.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_79.png)
+
+So you may be thinking: that all sounds good, and these practices sound good on paper, but is designing for understandability feasible in practice? You’re probably not working in a brand-new greenfield project. You’re probably working on old code, with lots of old warts and complexity, and the situation may seem hopeless. Can you really do this?
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_80.png)
+
+I’m here to say yes, this is feasible, if you take it one small step at a time. I’ll share some tips for getting started.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_81.png)
+
+First off, take little bits at a time. Don’t try to boil the ocean. Don’t say “We’re going to take two weeks off from our normal work, make all of our code perfectly understandable, and then we’re done!”. That’s not going to work; you’re going to have a bad time.
+
+Instead, try applying some of these practices to just new methods that you write. You might have some old code out there that’s hard to change. So be it. Start with just the new methods and build some momentum.
+
+Teach your teammates, as well. Maybe share this talk, or find other ways to help your teammates design for understandability.
+
+And finally, you might consider group programming sessions where you all get together and discuss: what does designing for understandability mean in your context? The Monarch team at Google did this with their Design by Contract practice and it worked well for them.
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_83.png)
+
+Here are some further resources to learn more about Design for Understandability. I’m not going to go into them in detail, but please feel free to go revisit the slides after the talk and check these out.
+
+[Public links reproduced here for the blog post:]
+
+![](https://jschuster.org/blog/wp-content/uploads/2026/10/page_84.png)
+
+In conclusion: design your code for understandability. Whenever you’re working on some code and realize that you’re falling back to global reasoning, pause for a moment. Ask yourself: can I do this with local reasoning instead? Would a contract or an invariant help here? Or what if I moved the side effects and global state somewhere else? Or, maybe you’ll think of some other practice that fits here – you probably know a lot of local-reasoning practices, even if you didn’t have the terminology to call it that until today.
+
+It’s time to make design for understandability just as much a part of software engineering as designing for testability is today. Understandability is not just helpful – it’s crucial, especially with Google-size systems. And not just that, but making your code understandable is doable if you design for it along the way.

@@ -1,393 +1,434 @@
-**More expressive code**, **stronger types**, and **scalable I/O**.
+After some [recent discussion](https://github.com/rust-lang/rust/issues/149359) on the topic of mutex poisoning and notably a [blog post](https://sunshowers.io/posts/on-poisoning/) that I
+thought was interesting, thoughtful, exhaustive, yet completely disagreed with, I wanted to comment
+on the debate myself. To me, poisoning-by-default is one of biggest mistakes that were made in the
+language, next to some others that are a story for a different time.
 
-Allows some of a function's arguments to be provided in advance, returning a Closure that accepts the rest.
+In short, I believe that Mutex poisoning is the wrong choice for most applications, as
 
-The Duration class represents elapsed time as measured by a stopwatch.
+- it significantly pessimises code performance in the general case
+- in addition to hampering readability
+- while encouraging bad code patterns to deal with its weirdness
+- in order to solve a niche problem
+- that doesn’t even solve the general problem.
 
-Ensures that a given value (numeric or otherwise) falls within a specified range.
+## What is poisoning?
 
-## Partial Function Application
-
-Allows some of a function's arguments to be provided in advance, using `?` and `...` placeholders for the rest. The result is a Closure, and the function is only called once the remaining arguments are passed to it.
-
-```
-$versions = ['8.4', '8.5', '8.6', '8.7', '9.0'];
-
-$supportsPfa = array_filter(
-    $versions,
-    fn ($version) => version_compare($version, '8.6', '>='),
-);
-```
+In theory, a mutex guards a critical section of the code. That code changes the state of a piece of
+data free from interference of concurrent threads, then releases the lock. That code might then
+encounter an error, and release the lock in the middle of doing its important work. For example:
 
 ```
-$versions = ['8.4', '8.5', '8.6', '8.7', '9.0'];
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+fn important(always_even: Arc<Mutex<i32>>) -> i32 {
+    // Invariant: always_even must always be even
+    let mut handle = always_even.lock().unwrap();
 
-$supportsPfa = array_filter(
-    $versions,
-    version_compare(?, '8.6', '>='),
-);
-```
+    *handle += 1;
 
-The Duration class represents elapsed time as measured by a stopwatch. Its representation is independent of any time and timezone and can represent a range of more than 250 years with nanosecond precision. This makes it well-suited to represent timeouts or benchmark timings in an expressive way.
+    risky_operation();
 
-```
-/**
- * All delays are in microseconds.
- */
-function backoff(
-    int $baseDelay,
-    int $step,
-    int $attempt,
-): void {
-    $delay = $baseDelay + ($step * (2 ** $attempt));
+    *handle += 1;
 
-    // Wait at most 30 seconds.
-    usleep(min($delay, 30_000_000));
+    *handle
 }
 
-// 1 second base delay, plus 100 milliseconds
-// doubling with each attempt.
-backoff(1_000_000, 100_000, $attempt);
-```
-
-```
-use Time\Duration;
-
-function backoff(
-    Duration $baseDelay,
-    Duration $step,
-    int $attempt,
-): void {
-    $delay = $baseDelay->add($step->multiplyBy(2 ** $attempt));
-
-    // Durations are comparable, so min() works directly.
-    $delay = min($delay, Duration::fromSeconds(30));
-
-    time_nanosleep($delay->seconds, $delay->nanoseconds);
-}
-
-backoff(
-    Duration::fromSeconds(1),
-    Duration::fromMilliseconds(100),
-    $attempt,
-);
-
-// Preconfigure the delays using Partial Function Application.
-$waitBeforeRetry = backoff(
-    Duration::fromSeconds(1),
-    Duration::fromMilliseconds(100),
-    attempt: ?,
-);
-$waitBeforeRetry($attempt);
-```
-
-## Polling API
-
-The new `Io\Poll` API efficiently monitors many streams at once using the best mechanism available on each platform (epoll, kqueue, event ports, or WSAPoll), without the scalability limits of `stream_select()`. It is designed as a common foundation that event loop libraries such as ReactPHP and AMPHP can build on.
-
-```
-$server = stream_socket_server('tcp://0.0.0.0:8080');
-$clients = [];
-
-while (true) {
-    $read = [$server, ...$clients];
-    $write = $except = null;
-
-    // Based on select(), which typically can't handle
-    // more than 1024 connections
-    stream_select($read, $write, $except, null);
-
-    foreach ($read as $stream) {
-        if ($stream === $server) {
-            $clients[] = stream_socket_accept($server);
-            continue;
-        }
-
-        $data = fread($stream, 8192);
-
-        if ($data === '' || $data === false) {
-            $key = array_search($stream, $clients, true);
-            unset($clients[$key]);
-            fclose($stream);
-        } else {
-            fwrite($stream, $data);
-        }
+fn risky_operation() {
+    if rng().next_u32() % 42 == 0 {
+        panic!();
     }
 }
 ```
 
+The following code will work fine most of the time, but if the dice roll doesn’t go our way, the
+`always_even` mutex gets unlocked in an invalid state. In Rust, today, poisoning exists to handle
+this. If a guard is released abnormally (while panicking), it records that this happened in a
+boolean. Any future calls to `lock()` will return `Err(PoisonError)`, which will trigger a panic
+when we unwrap it. The bad state is never observed and all is well.
+
+You might have felt that the example I made up was somewhat contrived. That’s because it is. Real
+cases of this pattern can and do happen, but most of the use cases that involve mutexes are much
+simpler. Many critical sections are no longer than a variable assignment, or doesn’t have an invalid
+in-between state. There are cases in lower level programming where a mutex guards a piece of data
+that is not directly inside it, or is outside the view of the program entirely. In fact, I’ve
+written a wrapper for a C library that worked like that. Though I disagree with the notion that this
+is the common case.
+
+I do recommend anyone [Rain’s blog](https://sunshowers.io/posts/on-poisoning/) on the matter, as she has some good examples of how
+you can cause violations of these critical sections (even without mutexes) and I wholeheartedly
+support the idea of a `Poison` wrapper for the use cases that need it. I suspect the domains she
+works on lend themselves more towards these issues compared to mine. Rust’s default behaviour should
+make the common case easy and the rare case possible.
+
+## Side-note: how mutexes work
+
+This section is only tangentially related to the topic at hand, but I already wrote it and wasn’t
+ready to kill my darlings.<sup>[1](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:mutexes)</sup> Skip to [the next
+section](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#how-poisoning-harms-every-single-piece-of-code) to continue the discussion on poisoning.
+
+In Rust, for most platforms, mutexes are implemented using the `futex`<sup>[2](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:futex)</sup> system call. It
+allows for operations to remain purely in user-space as long as the mutex in question isn’t
+contended, which is nice for performance reasons.
+
+Under the hood, a mutex is a simple 32-bit integer on most platforms even though it only holds three
+unique values:
+
+- If it’s zero, the mutex is free and can be claimed by any thread by a simple atomic compare-exchange.
+- If it’s one, the mutex is held but there are no waiting threads. This is useful to know, as it means there are no threads that we need to wake up when releasing the mutex, and we can yet again remain in userspace.
+- If it’s two, the mutex is held and some other thread is waiting for it. This means some additional care should be taken when unlocking.
+
+Rust implements this with a few atomic operations and the `futex_wait` call. Crucially, the path for
+locking a mutex that *isn’t* contended is a single atomic operation. The only operation that
+requires a context switch is `futex_wait`.
+
+Unlocking is even simpler. The thread that holds the mutex first releases the lock, then optionally,
+if there was an indication that the lock was contended, wakes any sleeping threads so they can try
+to acquire the lock.
+
+## How poisoning harms every single piece of code
+
+As discussed in too much detail above, (un)locking mutexes is cheap as long as they’re not
+contended, and when contended, they are at least cheap instruction wise. This is where poisoning
+mutexes get you.
+
+In short, being able to poison is a cost that is always paid, but seldom used. To start, poisoning
+is essentially implemented by adding an `AtomicBool` field to every `Mutex`. Due to alignment, this
+grows the size of every mutex by anywhere from zero bytes to an additional pointer. This isn’t
+terrible but for use cases where you have many mutexes guarding small objects, this can add up.
+
+The real issue to me however is in code size. Let’s start with another contrived example, a function
+that reads its argument, copies it, and returns it. An idealised version of that would be the
+following.
+
 ```
-use Io\Poll\{Context, Event};
-
-$server = stream_socket_server('tcp://0.0.0.0:8080');
-
-// Automatically uses epoll, kqueue, event ports, or WSAPoll
-$poll = new Context();
-$poll->add(new StreamPollHandle($server), [Event::Read]);
-
-while (true) {
-    foreach ($poll->wait() as $watcher) {
-        $stream = $watcher->getHandle()->getStream();
-
-        if ($stream === $server) {
-            $client = stream_socket_accept($server);
-            $poll->add(
-                new StreamPollHandle($client),
-                [Event::Read],
-            );
-            continue;
-        }
-
-        $data = fread($stream, 8192);
-
-        if ($data === '' || $data === false) {
-            $watcher->remove();
-            fclose($stream);
-        } else {
-            fwrite($stream, $data);
-        }
-    }
+1
+2
+3
+pub fn get_contents(val: &i32) -> i32 {
+    *val
 }
 ```
 
-Stream operations can now be configured to throw a `StreamException` or to fail silently instead of emitting warnings. Errors are reported as structured `StreamError` objects with a `StreamErrorCode` enum case, the wrapper name, and the affected path or URL, and can also be retrieved later with `stream_last_errors()` or passed to a custom error handler.
+This compiles down to 2 instructions and a label. Copy the data into the register then return.
 
 ```
-$config = @file_get_contents('/etc/app/config.json');
+1
+2
+3
+example::check_contents::h197b180b47e24703:
+        mov     eax, dword ptr [rdi]
+        ret
+```
 
-if ($config === false) {
-    // Only an unstructured message string is available
-    $error = error_get_last();
-    log_error($error['message']);
+Of course, this doesn’t work for any context that needs shared mutation, but we can consider it our
+baseline. Perfection would look like this. So, let’s ignore that atomic integers exist and add a
+mutex to this story. We will go over the generated assembly code for each, and you can compare the
+code in its entirety in [this Compiler Explorer overview](https://rust.godbolt.org/z/1jEP5MEGz).
+
+### Base case: Locking and unwrapping
+
+We can update the code above to actually use mutexes, and simply lock-then-unwrap the mutex.
+
+```
+1
+2
+3
+4
+5
+use std::sync::Mutex;
+
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock().unwrap()
 }
 ```
 
-```
-$context = stream_context_create([
-    'stream' => [
-        'error_mode' => StreamErrorMode::Exception,
-    ],
-]);
+This compiles to a total of *147* lines of assembly which I’m not going to reproduce here in full.
 
-try {
-    $config = file_get_contents(
-        '/etc/app/config.json',
-        context: $context,
-    );
-} catch (StreamException $e) {
-    foreach ($e->getErrors() as $error) {
-        // $error->code is a StreamErrorCode enum case
-        log_error(
-            $error->code->name,
-            $error->message,
-            $error->wrapperName,
-        );
-    }
+- 75 of those are specifically inlined to this particular function and cannot be reused.
+- About 45 those are monomorphised[3](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:monomorphised) for mutexes guarding an i32
+- The remainder is global program information and might be reused for other locks.
+
+To divide that up a different way, we have
+
+- code checking the poison status
+- code doing the mutex manipulation
+- code to initiate a poison in case of a panic
+- code for preparing to panic should we need to
+- code for displaying a panic
+- some dyn drop glue
+
+Most of this is inlined into the function. This in turn affects performance, as this limits how much
+of your “real” code fits in the CPU’s instruction cache. The laptop I’m writing this on has a paltry
+32KiB of instruction cache. Luckily we can do better.
+
+### Removing the panic
+
+Most of the code generated in the previous example had to do with setting up the panic, and checking
+the conditions. But we don’t care about panicking. We can simply acknowledge the `PoisonError` and
+continue. That looks as follows:
+
+```
+1
+2
+3
+4
+5
+6
+use std::sync::Mutex;
+use std::sync::PoisonError;
+
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 ```
 
-## New `clamp()` Function
+This results in only 68 lines of assembly, which is much better, though all of it is inlined to our
+function. Compared to before, we’ve lost all panic related code. There’s still some unnecessary
+branching related to whether the mutex is poisoned, as well as a little dance to track poisoning in
+our function. Our function can never panic, but compiler optimisations currently do not remove the
+atomic loads and stores involved here. Nevertheless, if you want to target stable Rust *and* you
+don’t care about panics, this is what you should do at the moment.
 
-Ensures that a given value (numeric or otherwise) falls within a specified range. Otherwise, the nearest boundary value is returned.
+### The ideal: no poison handling at all
 
-```
-var_dump(max(0, min(-10, 100)));
-// int(0)
-
-var_dump(max(0, min(50, 100)));
-// int(50)
-
-var_dump(max(0, min(110, 100)));
-// int(100)
-```
+In the current nightly builds of Rust, there are non-poisoning mutexes that can don’t have any of
+the overhead. We can optimise our code from above to make use of them.
 
 ```
-var_dump(clamp(-10, 0, 100));
-// int(0)
+1
+2
+3
+4
+5
+6
+7
+#![feature(nonpoison_mutex)]
+#![feature(sync_nonpoison)]
+use std::sync::nonpoison::Mutex;
 
-var_dump(clamp(50, 0, 100));
-// int(50)
-
-var_dump(clamp(110, 0, 100));
-// int(100)
-
-// Any comparable value works with clamp(). This
-// includes the new Duration class.
-var_dump(clamp(
-    \Time\Duration::fromSeconds(30),
-    min: \Time\Duration::fromMinutes(1),
-    max: \Time\Duration::fromMinutes(10),
-)->seconds);
-// int(60)
-```
-
-The `SortDirection` enum provides a shared, type-safe way to express sort order with its `Ascending` and `Descending` cases. Previously, every library had to define its own way of representing sort direction, resulting in a mix of incompatible integers, strings, booleans, and custom enums. Since `SortDirection` is built into PHP, libraries can accept it in their public APIs without needing adapter code.
-
-Learn more about this feature in [The PHP Foundation’s blog](https://thephp.foundation/blog/2026/11/03/stdlib-investment/).
-
-```
-class QueryBuilder
-{
-    private array $orderBy = [];
-
-    public function orderBy(
-        string $column,
-        int $direction = SORT_ASC,
-    ): static {
-        $this->orderBy[] = $column . ' ' . match ($direction) {
-            SORT_ASC => 'ASC',
-            SORT_DESC => 'DESC',
-        };
-
-        return $this;
-    }
-}
-
-$qb->orderBy('name', SORT_DESC);
-$qb->orderBy('name', SORT_STRING);
-// Accepted by the signature, then fails inside the method:
-// UnhandledMatchError: Unhandled match case 2
-```
-
-```
-class QueryBuilder
-{
-    private array $orderBy = [];
-
-    public function orderBy(
-        string $column,
-        SortDirection $direction = SortDirection::Ascending,
-    ): static {
-        $this->orderBy[] = $column . ' ' . match ($direction) {
-            SortDirection::Ascending => 'ASC',
-            SortDirection::Descending => 'DESC',
-        };
-
-        return $this;
-    }
-}
-
-$qb->orderBy('name', SortDirection::Descending);
-$qb->orderBy('name', SORT_STRING);
-// TypeError: QueryBuilder::orderBy(): Argument #2 ($direction)
-// must be of type SortDirection, int given
-```
-
-Function and method parameters can now have their own DocComments, which are available via the new `ReflectionParameter::getDocComment()` method. This allows each parameter to be documented right next to its declaration, without repeating its name and type in a `@param` tag.
-
-```
-class DB
-{
-    /**
-     * Returns up to $limit items matching the $query.
-     *
-     * @param string $query Terms to search
-     * @param int $limit Maximum number of results
-     */
-    public function search(string $query, int $limit = 10): array
-    {
-        return [];
-    }
-}
-
-// Parameter descriptions can only be extracted
-// by parsing the function's DocComment.
-```
-
-```
-class DB
-{
-    /**
-     * Returns up to $limit items matching the $query.
-     */
-    public function search(
-        /** Terms to search */
-        string $query,
-
-        /** Maximum number of results */
-        int $limit = 10,
-    ): array {
-        return [];
-    }
-}
-
-var_dump(
-    new ReflectionParameter([DB::class, 'search'], 'query')
-        ->getDocComment(),
-);
-// string(22) "/** Terms to search */"
-```
-
-## New `ReflectionProperty::isReadable()` and `ReflectionProperty::isWritable()` Methods
-
-With readonly properties, asymmetric visibility, and property hooks, checking whether a property is public is no longer enough to know whether it can be read or written. The new methods answer this directly for a given scope, and optionally for a specific object, taking into account visibility, initialization state, hooks, and magic methods.
-
-```
-class NewsEntry
-{
-    public string $title = 'PHP 8.6 released!';
-
-    public private(set) string $slug = 'php-86-released';
-}
-
-$entry = new NewsEntry();
-foreach (['title', 'slug'] as $item) {
-    $property = new ReflectionProperty(NewsEntry::class, $item);
-    printf(
-        "%s: isReadable=%s isWritable=%s\n",
-        $item,
-        $property->isReadable(null, $entry) ? 'yes' : 'no',
-        $property->isWritable(null, $entry) ? 'yes' : 'no',
-    );
-}
-// title: isReadable=yes isWritable=yes
-// slug: isReadable=yes isWritable=no
-```
-
-Instance readonly properties, including those in readonly classes, can now declare a default value. This makes it simple to implement get-only interface properties with fixed values, which previously required assigning them in a constructor. The default counts as the property's initialization, so the constructor cannot overwrite it.
-
-```
-interface Rule
-{
-    public string $parser { get; }
-}
-
-final readonly class SlugRule implements Rule
-{
-    public string $parser;
-
-    public function __construct()
-    {
-        $this->parser = SlugParser::class;
-    }
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock()
 }
 ```
 
-```
-interface Rule
-{
-    public string $parser { get; }
-}
+No unwrapping, and it only results in 34 lines of assembly code. This is short enough for me to walk
+through it.
 
-final readonly class SlugRule implements Rule
-{
-    public string $parser = SlugParser::class;
+```
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+example[da70a55c1c00d324]::check_contents:
+        push    rbp
+        push    rbx
+        push    rax
+        xor     ebp, ebp
+        mov     ecx, 1
+        xor     eax, eax
+        lock    cmpxchg dword ptr [rdi], ecx ; (1) check if mutex is held, and if not, claim it
+        jne     .contended ; (2) mutex was not zero, jump to contended case
+        mov     eax, dword ptr [rdi + 4] ;  (4) if not, load the value
+        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
+        cmp     ebp, 2 ; (6) check if there are other threads waiting
+        je      .exit_with_threads_waiting
+.fast_exit:
+        add     rsp, 8
+        pop     rbx
+        pop     rbp
+        ret
+.contended:
+        mov     rbx, rdi
+        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::lock_contended@GOTPCREL] ; (3) Perform the spin/futex_wait loop
+        mov     rdi, rbx ;
+        mov     eax, dword ptr [rdi + 4] ; (4) load the value
+        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
+        cmp     ebp, 2 ; (6) check if there are other threads waiting
+        jne     .fast_exit
+.exit_with_threads_waiting:
+        mov     ebx, eax
+        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::wake@GOTPCREL] ; (7) wake sleeping threads
+        mov     eax, ebx
+        add     rsp, 8
+        pop     rbx
+        pop     rbp
+        ret
+```
+
+I’ve added comments and labels to the assembly so the steps from the (un)locking flow charts become
+visible. As far as assembly code goes, it’s very readable and simple. Which, of course, is exactly
+what you want from fundamental library code.
+
+The additional logic checking the poison state, adding a destructor for the mutex guard, and, if you
+choose ergonomics, even panic machinery, significantly bloats the code of a rather fundamental
+operation.
+
+## Readability and good habits
+
+Besides the purely technical argument that poisoning makes all code larger and slower than it needs
+to be, there is a different one. [As discussed previously](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#removing-the-panic), code that doesn’t
+care about mutex poisoning should generally write:
+
+```
+1
+my_mutex.lock().unwrap_or_else(PoisonError::into_inner)
+```
+
+It’s reasonably efficient and available on stable Rust. But that whole `unwrap_or_else` part takes
+up more than half the line. No worry, you might say, we can make it shorter:
+
+```
+1
+my_mutex.lock().unwrap()
+```
+
+This works well enough. It’s less efficient than the previous example, but it’s nice and short. If
+your code never panics, it’s even perfectly safe. You might have spotted a load-bearing “if”
+already. It’s kind of hard to guarantee your code does not panic. Array indexing, integer division,
+and a whole host of other features might panic unexpectedly.
+
+This is hard for experienced developers, but for those learning it’s even worse. It also trains bad
+habits. Every time a beginner Rust developer writes `unwrap()` instead of handling their errors, a
+puppy steps on a Lego brick. Or [causes a widespread internet outage](https://blog.cloudflare.com/18-november-2025-outage/). One of the
+two, I forget which.
+
+We should not want to include APIs into the standard library that return a `Result` that is
+“expected” to be unwrapped. Infallible operations should not fail.
+
+## Inconsistency
+
+Poisoning protects against a task panicking in the middle of an invariant violation. But why must
+this be specific to mutexes? The example from before works just as well with a simple mutable
+borrow. Panics may still happen, and you may still [catch](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) them.
+
+```
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+fn important2(always_even: &mut i32) -> i32 {
+    // Invariant: always_even must always be even
+    *always_even += 1;
+
+    risky_operation();
+
+    *always_even += 1;
+
+    *always_even
 }
 ```
 
-- Using return inside a finally block is now deprecated, as it silently discards exceptions and overrides values returned from the try or catch block.
-- Returning a value from __construct() or __destruct() is now deprecated, as is making them generators. Declaring a nullable return type for __debugInfo() is also deprecated.
-- Using let or is as the name of a class, function, or constant is now deprecated. Using _ as a constant name, namespace as a class constant name, or readonly as a function name is also deprecated.
-- The mbstring regular expression functions such as mb_ereg() and mb_split() have been deprecated, as the underlying Oniguruma library is no longer maintained. PCRE functions with the u modifier can be used instead.
-- The is_double(), is_long(), is_integer(), and doubleval() aliases have been deprecated. Use is_float(), is_int(), and floatval() instead.
-- spl_object_hash() has been deprecated in favor of spl_object_id(), and spl_classes() in favor of ReflectionExtension::getClassNames().
-- Passing an object where an array is expected to array_walk(), array_walk_recursive(), http_build_query(), mb_convert_variables(), and compression functions and filters is now deprecated. Use get_object_vars() to convert the object first.
-- strcoll() and the SORT_LOCALE_STRING sort flag have been deprecated. Use the Collator class from the intl extension instead.
-- Passing a third argument to define() is now deprecated, as is calling is_a() or is_subclass_of() with a class name string when $allow_string is false.
-- Using more than 16 filters in a php://filter URL without setting the filter.max_filter_count context option is now deprecated.
-- Sessions are now more secure by default: session.use_strict_mode and session.cookie_httponly are enabled, and session.cookie_samesite is set to Lax.
-- Custom session handlers that do not implement both create_sid() and validateId() are now deprecated.
-- The metaphone(), mysqli_get_charset(), and mysqli_stmt_init() functions are now deprecated, along with the CSV methods of SplFileObject and the sorting, flag, and serialization methods of ArrayIterator.
-- trim(), ltrim(), and rtrim() now also strip form feed (\f) characters by default.
-- fclose(), file_put_contents(), and copy() now return false when flushing or closing the stream fails, instead of silently ignoring the failure.
-- Many functions now throw a ValueError for out-of-range values, invalid flags, or strings containing NUL bytes, instead of silently truncating or ignoring them.
+This is actually a fairly common problem. In a more recent blog post, [researchers at Microsoft
+highlight various places they’ve found where even the standard library gets this
+wrong](https://forge-blog.github.io/posts/rust-std-memory-safety/#pattern-1-trusting-code-not-to-panic).
+
+In most cases however, this is fine, as it is with the mutex example given in the beginning. You
+don’t need to poison this reference. But for applications where you do, it’s kinda nice to be able
+to.
+
+It’s not hard to imagine a wrapper that adds poisoning behaviour when you want to have it.
+Crucially, this needs to be an additive wrapper. You can add a poisoning system to something. You
+cannot strip out the poisoning system from a primitive that has it. Poison safety is important for
+the specific use cases that need it, but most do not.
+
+I don’t believe it’s worth it to saddle mutexes in particular with this overhead when the problem is
+near universal with any mutable state. State invariants are just hard that way.
+
+## Comparison to bounds checking
+
+One might draw a comparison between poison safety and buffer safety. In Rust, we always do bounds
+checking, relying on the compiler to optimise it out in cases it can be proven redundant. Can’t
+poison safety be the same? And the answer, it turns out, is no.
+
+The compiler cannot optimise poisoning away. It requires any mutex carry additional data to track
+it. *Maybe* the compiler can figure out one particular critical section cannot panic, and therefore
+it can leave out the setup and clean-up, but in general it cannot avoid checking the state. This is
+overhead that always applies, and hurts, especially in environments where code size is more
+restricted.
+
+## De facto standard workarounds
+
+In C++, there are a few choices in the standard that make certain containers less efficient than
+they could be<sup>[4](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:unordered_map)</sup>. Because of how standardisation works, the containers can never be
+“fixed”. This causes third party implementations, such as Abseil and Boost, to become the de facto
+standard.
+
+Mutexes in Rust suffer from the same problem. The standard library has poisoning, but people don’t
+want poisoning, so instead they opt for crates like [`parking_lot`](https://docs.rs/parking_lot/latest/parking_lot/). I believe this is
+bad for the ecosystem as a whole. When the standard library offers a feature, it should be an
+uncontroversially good choice, unless you are doing something hyper specific. We don’t have to be
+“batteries included” but the parts that are there should be a good fit.
+
+## In conclusion
+
+I started out writing this blog in response to a movement to change the default mutex behaviour in
+Rust. It seems to me there are three camps:
+
+1. Keep the status quo. std::sync::Mutex and friends will have poisoning.
+2. Make std::sync::Mutex propagate panics when poisoned.
+3. Add a non-poisoning variant std::sync::nonpoison::Mutex
+4. Replace std::sync::Mutex with std::sync::nonpoison::Mutex. Poisoning becomes opt-in.
+
+Rain’s blog argued for option 1. I believe we both agree that option 2 is a terrible idea. I think
+we should do at least option 3. Option 4 would be a good edition improvement, but it is also a
+significant compatibility issue, and even I find it hard to argue that it’s really worth it.
+
+Which is a roundabout way of saying that we really should stabilise `std::sync::nonpoison` and
+definitely should not make `std::sync::Mutex` panic by default.
+
+1. It is becoming apparent to me that I just like explaining mutexes and I don’t know what to do about that. [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:mutexes)
+2. Fast Userspace muTEX. See [`futex(2)`](https://man.archlinux.org/man/futex.2) for more on the system call and [`futex(7)`](https://man.archlinux.org/man/futex.7) for its semantics [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:futex)
+3. For generic definitions (e.g. `Mutex<T>`) the compiler must generate code for every unique `T` that gets used, and for loads of reasons often more than once per `T`. The compiler development docs have [a deeper explanation of monomorphisation](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:monomorphised)
+4. A famous example is `std::unordered_map`, which [suffers from being over-specified and that prevents more efficient implementations](https://bannalia.blogspot.com/2022/06/advancing-state-of-art-for.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:unordered_map)
