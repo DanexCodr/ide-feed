@@ -1,25 +1,55 @@
-Modern processors are fast, in part, because they guess. Rather than waiting to find out which way a program will branch, a chip predicts the likely path and races ahead. When the guess is right, time is saved. When it's wrong, the work is discarded, but traces of it linger. Since the [Spectre](https://news.mit.edu/2018/mit-csail-dawg-better-security-against-spectre-meltdown-attacks-1018) vulnerability was disclosed in 2018, attackers have known how to read those traces to pull secrets out of memory they should never see.
+It all started with some exasperated emails. Back in 2009, a group of researchers began venting their frustration with the programming languages designed to help scientists and other researchers perform complex mathematical operations and statistical simulations without learning how to code. These programming languages were rigid and slow. If scientists built something that really worked, they’d need to rewrite the entire program in another language just to run it more quickly.
 
-Chipmakers and operating system developers have spent years building defenses. A [new study](https://people.csail.mit.edu/mengjia/data/2026.USENIX.TONTOU.pdf) from MIT's Computer Science and Artificial Intelligence Laboratory (CSAIL) shows that a key assumption behind many of them doesn't hold.
+The emails turned into a research project at MIT with the mission of building an easy-to-use, high-performance programming language called Julia, which is designed for scientific research, data analysis, and modeling complex systems such as jet engines, drugs, financial markets, and robots, to name a few examples.
 
-The defenses work by wiping or isolating the processor's prediction machinery, removing anything an attacker might have planted. The catch, as Daniël Trujillo, a PhD student in the MIT Department of Electrical Engineering and Computer Science (EECS), and Mengjia Yan, an assistant professor in EECS, point out, is that the wipe and the moment the predictions get used can't happen at the same instant. There is always a gap — sometimes only a handful of instructions wide. Anything that runs in that gap can dirty the machinery all over again. The researchers call this class of attack "[TONTOU](https://people.csail.mit.edu/mengjia/data/2026.USENIX.TONTOU.pdf)."
+That research project turned into a lab at MIT, and the lab turned into the company [JuliaHub](https://juliahub.com/). Along the way, Julia gained a loyal following among scientists, engineers, mathematicians, and others. Today, the free and open-source language counts more than 1 million users, including people working in thousands of companies and universities around the world.
 
-**Mind the gap**
+It is only a slight exaggeration to say Julia has been used to model everything under the sun, from the behavior of tiny atoms to [semiconductors](https://juliahub.com/videos/software-at-asml-the-force-behind-making-microchips), neural networks, [race cars](https://juliahub.com/case-studies/williams-racing-unlocks), and airplanes. It has also been used to study much beyond the sun, with astronomers [using Julia for imaging black holes](https://www.youtube.com/watch?v=xk-SIRH3sbE).
 
-Their contribution is a reliable way to get code into that gap. Computers constantly pause whatever they're doing to handle interrupts: small, routine tasks triggered by timers, network traffic, and hardware. Ordinary programs can set those timers themselves. By tuning a timer with enough precision, Trujillo and Yan can make the processor take its detour at exactly the wrong moment, and the interrupt execution does the contaminating. They call the technique "interrupt injection."
+Julia’s secret sauce is in the way it compiles code depending on the type of data being used. Such “just-in-time compilation” makes Julia faster and more flexible than other numerical programming languages.
 
-The team tested four processor generations from Intel and AMD, and got mispredictions on both. On Intel chips, the attack defeated two different protections, one built in software for older parts, one built into the silicon of newer ones. Curiously, the newer protection held firm on one Intel generation and failed on another, suggesting chipmakers implement the same nominal defense in meaningfully different ways.
+“Scientists and engineers are not programmers. Building scientific applications with multidisciplinary teams of scientists, engineers, and programmers is challenging,” JuliaHub co-founder and CEO Viral Shah says. “We asked: What if you could equip the scientists and engineers with a programming language that allowed them to express their ideas at a high level and also get great software performance?”
 
-AMD's defense, called saferet, cleans the prediction machinery immediately before each use, leaving a vulnerable window just two instructions wide, which typically execute within tens of nanoseconds. The researchers hit it anyway, by slowing down the processor at that exact spot to make the target easier to strike.
+Making programming easy for non-programmers has been a north star for JuliaHub’s founders, who include Julia co-creators Shah, MIT professor of mathematics Alan Edelman, Jeff Bezanson SM ’12, PhD ’15, and former MIT research scientist Stefan Karpinski.
 
-**From a bad guess to a password file**
+In April, JuliaHub’s team took another big step in that direction with the [launch of Dyad 3.0](https://juliahub.com/blog/juliahub-announces-dyad3.0-general-availability), the latest version of its AI platform to help engineering teams accelerate the development of complex physical systems like rockets, heat pumps, and satellites. Engineers are already using Dyad to direct autonomous AI agents as they work through physics simulations, safety analyses, quality controls, and more.
 
-To show what this means in practice, the team built a working exploit on an AMD system running a current Linux kernel. They first stripped away a defense that scrambles where the operating system sits in memory, succeeding in all 10 tries in about nine minutes each. That helped them read protected memory at roughly five bytes per second — slow, but fast enough to locate and copy "/etc/shadow," the file storing the system's root password hash, in half their attempts.
+“With [Dyad](https://juliahub.com/products/dyad) 3.0, [you can upload data and design documents and the system will design an entire aircraft](https://juliahub.com/videos/automating-aerospace-systems-engineering-pdf-to-simulation-with-the-dyad-agent) for you,” Shah says. “Working with customers like Boeing, we are building agentic hardware design capabilities for engineers. Simplistically, you want to say, ‘Okay computer, build me a plane’; upload the design documents; and have the system account for all the physics, compile all the code, verify everything, and build the entire design agentically.”
 
-The paper suggests cleaning the prediction machinery a second time, when the interrupt finishes. That looks workable on AMD. On Intel it may backfire: Because the attack relies on the interrupt leaving behind a consistent state rather than any particular one, the standard fix could make the attack more reliable, not less. Newer Intel chips include a dedicated instruction that appears to help.
+**Humble beginnings**
 
-The other option, blocking interrupts during the vulnerable window, would likely cost too much performance to be practical.
+After discussing the need for better programming languages for scientists and other researchers, Julia’s co-creators started the Julia Lab around 2009. The Julia Lab remains active in MIT’s Computer Science and Artificial Intelligence Laboratory.
 
-Trujillo and Yan notified AMD and Intel in early February and reached Linux kernel maintainers in March, coordinating with AMD to warn cloud providers and other downstream customers. AMD then released a patch that mitigates the attack, which can be obtained by updating your operating system. Their code is publicly available.
+The core idea was to create a high-performance platform that would excel at engineering, scientific, and mathematics applications. Shah says before Julia, scientists and engineers would either have to hire someone to build software for them or accept the slow performance of the few programming languages designed for them.
 
-The research was supported, in part, by the U.S. Air Force Office of Scientific Research under an award made through the U.S. Department of War, and ACE, one of the seven centers in JUMP 2.0, a program sponsored by the U.S. Defense Advanced Research Projects Agency (DARPA). It was presented at both Black Hat USA and USENIX Security this month.
+“We wanted to create something as easy to use as Python or MATLAB but as fast as the C programming language,” Shah says. “We built Julia for ourselves.”
+
+Edelman says at first, the researchers didn’t think anyone would want their creation.
+
+“We figured it would take 10 years before anyone was interested, but we said, ‘Patience is a virtue, so let’s do it,’” Edelman recalls.
+
+The MIT researchers announced Julia with a blog post in 2012. They quickly realized many other researchers shared their frustration.
+
+“When we first started, we were targeting interactive research workflows, but increasingly people are using it for everything,” Bezanson says. “Now we’re moving the whole stack of the language onto smaller, embedded devices as we evolve with our users.”
+
+Since those early days, Edelman has taught a class on Julia with students from nearly every department at MIT. Today, he often learns students are already using Julia when they enroll in the class for applications as wide ranging as robotics, astronomy, physics simulations, and finance.
+
+“Researchers come up to me and say, ‘I tell my supervisor I’m using Julia because it’s fast, but don’t tell them I’m using Julia because it’s really fun,’” Edelman says. “The key thing is Julia’s abstractions. A lot of times a coding language forces you to solve the one problem you’re thinking about. Julia’s language makes it so you’re solving not only the problem you’re thinking about, but other people’s problems around the world too. It encourages you to solve problems more generally.”
+
+As Julia gained popularity, researchers around the world started asking the Julia team for support. By 2015, the demand became strong enough that they decided to start JuliaHub and help users through the company full-time. They received support from the MIT Deshpande Center for Technological Innovation and others at MIT to get the company off the ground.
+
+JuliaHub’s work has evolved from simply helping users to advancing the language more generally. That’s powered an impressive list of creations from Julia’s loyal users. Julia has been used to simulate computer circuits, detect health disparities, model global climates and oceans, analyze brain activity, and more.
+
+After someone built a pharmaceutical modeling platform in Julia, it was used to accelerate development of Moderna’s Covid-19 vaccine. In another case, researchers used Julia to create a [program for avoiding aircraft collisions](https://juliahub.com/case-studies/lincoln-labs). They found it ran about 50 times faster than an earlier version built on Python. Engineers at Meta used Julia to develop a better audio codec for WhatsApp’s 4 billion users.
+
+“Over the years we’ve seen industrial, government, and academic users doing all kinds of interesting things with the Julia language,” Edelman says. “It’s honestly surprised us in many ways, the wide-ranging things people are using it for.”
+
+**Autonomous design**
+
+JuliaHub launched Dyad 1.0 in June of 2025 as a research agent to accelerate programming and Dyad 2.0 in December. The founders believe Dyad 3.0 represents a new level of ability and autonomy for designing complex systems.
+
+“One important thing about Dyad is that it is a physics compiler and hence [enforces physical laws](https://help.juliahub.com/dyad/stable/tutorials/getting-started.html),” Shah explains. “General AI systems often solve physical problems in ways that violate physical laws. When using the Dyad agent, it will detect such violations and guide the agent in the direction of the physically correct solution. We expect it will decrease design times in product engineering by orders of magnitude, leading to months of work being accomplished in hours.”
+
+One way Edelman sees the impact of Julia is through his class. One student recently used Dyad to model how robots move around in space. Another used it to build a rocket engine.
+
+“At the end he said, ‘I couldn’t believe how easy that was — I just got a rocket engine!’” Edelman recalls.

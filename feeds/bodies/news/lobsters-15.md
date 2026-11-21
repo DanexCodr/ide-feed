@@ -1,434 +1,208 @@
-After some [recent discussion](https://github.com/rust-lang/rust/issues/149359) on the topic of mutex poisoning and notably a [blog post](https://sunshowers.io/posts/on-poisoning/) that I
-thought was interesting, thoughtful, exhaustive, yet completely disagreed with, I wanted to comment
-on the debate myself. To me, poisoning-by-default is one of biggest mistakes that were made in the
-language, next to some others that are a story for a different time.
-
-In short, I believe that Mutex poisoning is the wrong choice for most applications, as
-
-- it significantly pessimises code performance in the general case
-- in addition to hampering readability
-- while encouraging bad code patterns to deal with its weirdness
-- in order to solve a niche problem
-- that doesn’t even solve the general problem.
-
-## What is poisoning?
-
-In theory, a mutex guards a critical section of the code. That code changes the state of a piece of
-data free from interference of concurrent threads, then releases the lock. That code might then
-encounter an error, and release the lock in the middle of doing its important work. For example:
-
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-fn important(always_even: Arc<Mutex<i32>>) -> i32 {
-    // Invariant: always_even must always be even
-    let mut handle = always_even.lock().unwrap();
-
-    *handle += 1;
-
-    risky_operation();
-
-    *handle += 1;
-
-    *handle
-}
-
-fn risky_operation() {
-    if rng().next_u32() % 42 == 0 {
-        panic!();
-    }
-}
-```
-
-The following code will work fine most of the time, but if the dice roll doesn’t go our way, the
-`always_even` mutex gets unlocked in an invalid state. In Rust, today, poisoning exists to handle
-this. If a guard is released abnormally (while panicking), it records that this happened in a
-boolean. Any future calls to `lock()` will return `Err(PoisonError)`, which will trigger a panic
-when we unwrap it. The bad state is never observed and all is well.
-
-You might have felt that the example I made up was somewhat contrived. That’s because it is. Real
-cases of this pattern can and do happen, but most of the use cases that involve mutexes are much
-simpler. Many critical sections are no longer than a variable assignment, or doesn’t have an invalid
-in-between state. There are cases in lower level programming where a mutex guards a piece of data
-that is not directly inside it, or is outside the view of the program entirely. In fact, I’ve
-written a wrapper for a C library that worked like that. Though I disagree with the notion that this
-is the common case.
-
-I do recommend anyone [Rain’s blog](https://sunshowers.io/posts/on-poisoning/) on the matter, as she has some good examples of how
-you can cause violations of these critical sections (even without mutexes) and I wholeheartedly
-support the idea of a `Poison` wrapper for the use cases that need it. I suspect the domains she
-works on lend themselves more towards these issues compared to mine. Rust’s default behaviour should
-make the common case easy and the rare case possible.
-
-## Side-note: how mutexes work
-
-This section is only tangentially related to the topic at hand, but I already wrote it and wasn’t
-ready to kill my darlings.<sup>[1](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:mutexes)</sup> Skip to [the next
-section](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#how-poisoning-harms-every-single-piece-of-code) to continue the discussion on poisoning.
-
-In Rust, for most platforms, mutexes are implemented using the `futex`<sup>[2](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:futex)</sup> system call. It
-allows for operations to remain purely in user-space as long as the mutex in question isn’t
-contended, which is nice for performance reasons.
-
-Under the hood, a mutex is a simple 32-bit integer on most platforms even though it only holds three
-unique values:
-
-- If it’s zero, the mutex is free and can be claimed by any thread by a simple atomic compare-exchange.
-- If it’s one, the mutex is held but there are no waiting threads. This is useful to know, as it means there are no threads that we need to wake up when releasing the mutex, and we can yet again remain in userspace.
-- If it’s two, the mutex is held and some other thread is waiting for it. This means some additional care should be taken when unlocking.
-
-Rust implements this with a few atomic operations and the `futex_wait` call. Crucially, the path for
-locking a mutex that *isn’t* contended is a single atomic operation. The only operation that
-requires a context switch is `futex_wait`.
-
-Unlocking is even simpler. The thread that holds the mutex first releases the lock, then optionally,
-if there was an indication that the lock was contended, wakes any sleeping threads so they can try
-to acquire the lock.
-
-## How poisoning harms every single piece of code
-
-As discussed in too much detail above, (un)locking mutexes is cheap as long as they’re not
-contended, and when contended, they are at least cheap instruction wise. This is where poisoning
-mutexes get you.
-
-In short, being able to poison is a cost that is always paid, but seldom used. To start, poisoning
-is essentially implemented by adding an `AtomicBool` field to every `Mutex`. Due to alignment, this
-grows the size of every mutex by anywhere from zero bytes to an additional pointer. This isn’t
-terrible but for use cases where you have many mutexes guarding small objects, this can add up.
-
-The real issue to me however is in code size. Let’s start with another contrived example, a function
-that reads its argument, copies it, and returns it. An idealised version of that would be the
-following.
-
-```
-1
-2
-3
-pub fn get_contents(val: &i32) -> i32 {
-    *val
-}
-```
-
-This compiles down to 2 instructions and a label. Copy the data into the register then return.
-
-```
-1
-2
-3
-example::check_contents::h197b180b47e24703:
-        mov     eax, dword ptr [rdi]
-        ret
-```
-
-Of course, this doesn’t work for any context that needs shared mutation, but we can consider it our
-baseline. Perfection would look like this. So, let’s ignore that atomic integers exist and add a
-mutex to this story. We will go over the generated assembly code for each, and you can compare the
-code in its entirety in [this Compiler Explorer overview](https://rust.godbolt.org/z/1jEP5MEGz).
-
-### Base case: Locking and unwrapping
-
-We can update the code above to actually use mutexes, and simply lock-then-unwrap the mutex.
-
-```
-1
-2
-3
-4
-5
-use std::sync::Mutex;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap()
-}
-```
-
-This compiles to a total of *147* lines of assembly which I’m not going to reproduce here in full.
-
-- 75 of those are specifically inlined to this particular function and cannot be reused.
-- About 45 those are monomorphised[3](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:monomorphised) for mutexes guarding an i32
-- The remainder is global program information and might be reused for other locks.
-
-To divide that up a different way, we have
-
-- code checking the poison status
-- code doing the mutex manipulation
-- code to initiate a poison in case of a panic
-- code for preparing to panic should we need to
-- code for displaying a panic
-- some dyn drop glue
-
-Most of this is inlined into the function. This in turn affects performance, as this limits how much
-of your “real” code fits in the CPU’s instruction cache. The laptop I’m writing this on has a paltry
-32KiB of instruction cache. Luckily we can do better.
-
-### Removing the panic
-
-Most of the code generated in the previous example had to do with setting up the panic, and checking
-the conditions. But we don’t care about panicking. We can simply acknowledge the `PoisonError` and
-continue. That looks as follows:
-
-```
-1
-2
-3
-4
-5
-6
-use std::sync::Mutex;
-use std::sync::PoisonError;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-```
-
-This results in only 68 lines of assembly, which is much better, though all of it is inlined to our
-function. Compared to before, we’ve lost all panic related code. There’s still some unnecessary
-branching related to whether the mutex is poisoned, as well as a little dance to track poisoning in
-our function. Our function can never panic, but compiler optimisations currently do not remove the
-atomic loads and stores involved here. Nevertheless, if you want to target stable Rust *and* you
-don’t care about panics, this is what you should do at the moment.
-
-### The ideal: no poison handling at all
-
-In the current nightly builds of Rust, there are non-poisoning mutexes that can don’t have any of
-the overhead. We can optimise our code from above to make use of them.
-
-```
-1
-2
-3
-4
-5
-6
-7
-#![feature(nonpoison_mutex)]
-#![feature(sync_nonpoison)]
-use std::sync::nonpoison::Mutex;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock()
-}
-```
-
-No unwrapping, and it only results in 34 lines of assembly code. This is short enough for me to walk
-through it.
-
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-example[da70a55c1c00d324]::check_contents:
-        push    rbp
-        push    rbx
-        push    rax
-        xor     ebp, ebp
-        mov     ecx, 1
-        xor     eax, eax
-        lock    cmpxchg dword ptr [rdi], ecx ; (1) check if mutex is held, and if not, claim it
-        jne     .contended ; (2) mutex was not zero, jump to contended case
-        mov     eax, dword ptr [rdi + 4] ;  (4) if not, load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        je      .exit_with_threads_waiting
-.fast_exit:
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
-.contended:
-        mov     rbx, rdi
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::lock_contended@GOTPCREL] ; (3) Perform the spin/futex_wait loop
-        mov     rdi, rbx ;
-        mov     eax, dword ptr [rdi + 4] ; (4) load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        jne     .fast_exit
-.exit_with_threads_waiting:
-        mov     ebx, eax
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::wake@GOTPCREL] ; (7) wake sleeping threads
-        mov     eax, ebx
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
-```
-
-I’ve added comments and labels to the assembly so the steps from the (un)locking flow charts become
-visible. As far as assembly code goes, it’s very readable and simple. Which, of course, is exactly
-what you want from fundamental library code.
-
-The additional logic checking the poison state, adding a destructor for the mutex guard, and, if you
-choose ergonomics, even panic machinery, significantly bloats the code of a rather fundamental
-operation.
-
-## Readability and good habits
-
-Besides the purely technical argument that poisoning makes all code larger and slower than it needs
-to be, there is a different one. [As discussed previously](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#removing-the-panic), code that doesn’t
-care about mutex poisoning should generally write:
-
-```
-1
-my_mutex.lock().unwrap_or_else(PoisonError::into_inner)
-```
-
-It’s reasonably efficient and available on stable Rust. But that whole `unwrap_or_else` part takes
-up more than half the line. No worry, you might say, we can make it shorter:
-
-```
-1
-my_mutex.lock().unwrap()
-```
-
-This works well enough. It’s less efficient than the previous example, but it’s nice and short. If
-your code never panics, it’s even perfectly safe. You might have spotted a load-bearing “if”
-already. It’s kind of hard to guarantee your code does not panic. Array indexing, integer division,
-and a whole host of other features might panic unexpectedly.
-
-This is hard for experienced developers, but for those learning it’s even worse. It also trains bad
-habits. Every time a beginner Rust developer writes `unwrap()` instead of handling their errors, a
-puppy steps on a Lego brick. Or [causes a widespread internet outage](https://blog.cloudflare.com/18-november-2025-outage/). One of the
-two, I forget which.
-
-We should not want to include APIs into the standard library that return a `Result` that is
-“expected” to be unwrapped. Infallible operations should not fail.
-
-## Inconsistency
-
-Poisoning protects against a task panicking in the middle of an invariant violation. But why must
-this be specific to mutexes? The example from before works just as well with a simple mutable
-borrow. Panics may still happen, and you may still [catch](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) them.
-
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-fn important2(always_even: &mut i32) -> i32 {
-    // Invariant: always_even must always be even
-    *always_even += 1;
-
-    risky_operation();
-
-    *always_even += 1;
-
-    *always_even
-}
-```
-
-This is actually a fairly common problem. In a more recent blog post, [researchers at Microsoft
-highlight various places they’ve found where even the standard library gets this
-wrong](https://forge-blog.github.io/posts/rust-std-memory-safety/#pattern-1-trusting-code-not-to-panic).
-
-In most cases however, this is fine, as it is with the mutex example given in the beginning. You
-don’t need to poison this reference. But for applications where you do, it’s kinda nice to be able
-to.
-
-It’s not hard to imagine a wrapper that adds poisoning behaviour when you want to have it.
-Crucially, this needs to be an additive wrapper. You can add a poisoning system to something. You
-cannot strip out the poisoning system from a primitive that has it. Poison safety is important for
-the specific use cases that need it, but most do not.
-
-I don’t believe it’s worth it to saddle mutexes in particular with this overhead when the problem is
-near universal with any mutable state. State invariants are just hard that way.
-
-## Comparison to bounds checking
-
-One might draw a comparison between poison safety and buffer safety. In Rust, we always do bounds
-checking, relying on the compiler to optimise it out in cases it can be proven redundant. Can’t
-poison safety be the same? And the answer, it turns out, is no.
-
-The compiler cannot optimise poisoning away. It requires any mutex carry additional data to track
-it. *Maybe* the compiler can figure out one particular critical section cannot panic, and therefore
-it can leave out the setup and clean-up, but in general it cannot avoid checking the state. This is
-overhead that always applies, and hurts, especially in environments where code size is more
-restricted.
-
-## De facto standard workarounds
-
-In C++, there are a few choices in the standard that make certain containers less efficient than
-they could be<sup>[4](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:unordered_map)</sup>. Because of how standardisation works, the containers can never be
-“fixed”. This causes third party implementations, such as Abseil and Boost, to become the de facto
-standard.
-
-Mutexes in Rust suffer from the same problem. The standard library has poisoning, but people don’t
-want poisoning, so instead they opt for crates like [`parking_lot`](https://docs.rs/parking_lot/latest/parking_lot/). I believe this is
-bad for the ecosystem as a whole. When the standard library offers a feature, it should be an
-uncontroversially good choice, unless you are doing something hyper specific. We don’t have to be
-“batteries included” but the parts that are there should be a good fit.
-
-## In conclusion
-
-I started out writing this blog in response to a movement to change the default mutex behaviour in
-Rust. It seems to me there are three camps:
-
-1. Keep the status quo. std::sync::Mutex and friends will have poisoning.
-2. Make std::sync::Mutex propagate panics when poisoned.
-3. Add a non-poisoning variant std::sync::nonpoison::Mutex
-4. Replace std::sync::Mutex with std::sync::nonpoison::Mutex. Poisoning becomes opt-in.
-
-Rain’s blog argued for option 1. I believe we both agree that option 2 is a terrible idea. I think
-we should do at least option 3. Option 4 would be a good edition improvement, but it is also a
-significant compatibility issue, and even I find it hard to argue that it’s really worth it.
-
-Which is a roundabout way of saying that we really should stabilise `std::sync::nonpoison` and
-definitely should not make `std::sync::Mutex` panic by default.
-
-1. It is becoming apparent to me that I just like explaining mutexes and I don’t know what to do about that. [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:mutexes)
-2. Fast Userspace muTEX. See [`futex(2)`](https://man.archlinux.org/man/futex.2) for more on the system call and [`futex(7)`](https://man.archlinux.org/man/futex.7) for its semantics [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:futex)
-3. For generic definitions (e.g. `Mutex<T>`) the compiler must generate code for every unique `T` that gets used, and for loads of reasons often more than once per `T`. The compiler development docs have [a deeper explanation of monomorphisation](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:monomorphised)
-4. A famous example is `std::unordered_map`, which [suffers from being over-specified and that prevents more efficient implementations](https://bannalia.blogspot.com/2022/06/advancing-state-of-art-for.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:unordered_map)
+November 19, 2026 - The [PostgreSQL Global Development Group](https://www.postgresql.org)
+today announced the release of [PostgreSQL 19](https://www.postgresql.org/docs/19/release-19.html),
+the latest version of the world's most advanced open source database.
+
+Mission-critical usage of PostgreSQL continues to rapidly rise, and
+PostgreSQL 19 responds to this by simplifying both administration and
+development for these workloads at scale. This release introduces the
+[`REPACK (CONCURRENTLY)`](https://www.postgresql.org/docs/19/sql-repack.html)
+command so users can optimize tables for their current workload without
+disruption to ongoing operations. PostgreSQL 19 gives users better control over
+plan stability and query performance with the new [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
+extension. Developers will find many delightful features in this release, from
+support for "read-your-writes" consistency on standbys to "get or create"
+behavior that saves a network round trip.
+
+"For over 30 years, the global open source community has built PostgreSQL into a
+database that organizations trust with their most critical data," said
+Jonathan Katz, a member of the PostgreSQL core team. "PostgreSQL 19 continues
+that commitment to reliability, giving users new ways to manage their workloads
+without disruption and to build applications that span multiple systems."
+
+PostgreSQL, an innovative data management system known for its reliability,
+robustness, and extensibility, benefits from 30 years of open source
+development from a global developer community and has become the preferred open
+source relational database for organizations of all sizes.
+
+Tables that receive many updates and deletes can build up unused space, known as
+"bloat," which can also significantly impact query performance. The
+`VACUUM FULL` and `CLUSTER` commands were previously used to handle this, but
+had tradeoffs, including preventing access to the table until the cleanup
+finished. PostgreSQL 19 introduces the [`REPACK`](https://www.postgresql.org/docs/19/sql-repack.html)
+command, which reclaims this space and can reorder a table's data to match an
+index, and with `REPACK (CONCURRENTLY)`, can do so without blocking reads or
+writes. `REPACK` replaces the `VACUUM FULL` and `CLUSTER` commands, both of
+which remain available for compatibility.
+
+The PostgreSQL query planner usually picks an efficient plan for each query, but
+the plan can change as your data changes, and sometimes the new plan is slower.
+PostgreSQL 19 adds the [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
+extension, which allows stabilization of plan choices and the ability to
+experiment with different plans using the "plan advice" mini-language. The companion
+[`pg_stash_advice`](https://www.postgresql.org/docs/19/pgstashadvice.html)
+extension stores advice and automatically applies it to queries based on their
+query identifier, so you can fix a slow plan without changing your application.
+
+PostgreSQL 19 also helps [autovacuum](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM)
+keep up on busy systems. Autovacuum can now vacuum indexes using parallel
+workers, controlled by the new
+[`autovacuum_max_parallel_workers`](https://www.postgresql.org/docs/19/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-PARALLEL-WORKERS)
+setting, and uses a new [scoring system](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM-PRIORITY)
+to decide which tables to process first. Queries that read a table can now
+automatically mark pages as all-visible in the [visibility map](https://www.postgresql.org/docs/19/routine-vacuuming.html#VACUUM-FOR-VISIBILITY-MAP) during execution,
+reducing the work that future vacuums need to do. Additionally,
+[`vacuumdb --analyze-only`](https://www.postgresql.org/docs/19/app-vacuumdb.html)
+now analyzes partitioned tables when no tables are specified.
+
+This release adds new views for monitoring workloads, including
+[`pg_stat_lock`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-LOCK-VIEW)
+for per-lock-type statistics, [`pg_stat_recovery`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-RECOVERY-VIEW)
+for recovery status, and [`pg_stat_autovacuum_scores`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-AUTOVACUUM-SCORES-VIEW)
+to show how autovacuum prioritizes tables. The new `IO` option for
+[`EXPLAIN ANALYZE`](https://www.postgresql.org/docs/19/sql-explain.html) and the
+matching [`auto_explain`](https://www.postgresql.org/docs/19/auto-explain.html#AUTO-EXPLAIN-CONFIGURATION-PARAMETERS-LOG-IO)
+setting report asynchronous I/O activity. PostgreSQL 19 also reports the amount
+of WAL written for full-page images in [`pg_stat_wal`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-WAL-VIEW),
+`EXPLAIN (ANALYZE, WAL)`, and in vacuum and analyze log events.
+
+Previously, PostgreSQL often required users to restart their server to enable
+[logical replication](https://www.postgresql.org/docs/19/logical-replication.html),
+which could be disruptive in production workloads. PostgreSQL 19 simplifies
+logical replication initialization by automatically raising the effective WAL
+level to `logical` when you create the first logical replication slot. You can
+see the WAL level in use with the new [`effective_wal_level`](https://www.postgresql.org/docs/19/runtime-config-preset.html#GUC-EFFECTIVE-WAL-LEVEL) setting.
+
+PostgreSQL 19 also adds logical replication of
+[sequence values](https://www.postgresql.org/docs/19/logical-replication-sequences.html),
+which you can publish using `FOR ALL SEQUENCES` with
+[`CREATE PUBLICATION`](https://www.postgresql.org/docs/19/sql-createpublication.html).
+`CREATE PUBLICATION` also adds an `EXCEPT` clause to exclude tables when
+publishing `FOR ALL TABLES`, and [`CREATE SUBSCRIPTION`](https://www.postgresql.org/docs/19/sql-createsubscription.html)
+can now get its connection settings from a foreign server, such as one defined
+with [`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html),
+using the `SERVER` clause. Additionally, the new
+[`retain_dead_tuples`](https://www.postgresql.org/docs/19/sql-createsubscription.html#SQL-CREATESUBSCRIPTION-PARAMS-WITH-RETAIN-DEAD-TUPLES)
+subscription option lets PostgreSQL detect updates that conflict with a
+concurrent delete, and these conflicts are counted in
+[`pg_stat_subscription_stats`](https://www.postgresql.org/docs/19/monitoring-stats.html#MONITORING-PG-STAT-SUBSCRIPTION-STATS).
+
+For applications that send reads to standbys, PostgreSQL 19 adds
+"read-your-writes" consistency with the new
+[`WAIT FOR LSN`](https://www.postgresql.org/docs/19/sql-wait.html) command. A
+session on a standby can use `WAIT FOR LSN` to wait until the standby has
+replayed the write-ahead log (WAL) up to a specific
+[log sequence number (LSN)](https://www.postgresql.org/docs/19/wal-internals.html)
+before running a query, so the application can read data it just wrote on the
+primary.
+
+PostgreSQL 19 also improves queries on foreign tables. With the new
+[`import_stats`](https://www.postgresql.org/docs/19/postgres-fdw.html#POSTGRES-FDW-OPTIONS-COST-ESTIMATION) option,
+[`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html) can
+import table statistics from the remote server when you run `ANALYZE`, instead
+of sampling rows from the remote table, which helps the query planner choose
+better plans.
+
+PostgreSQL 19 adds [`INSERT ... ON CONFLICT DO SELECT`](https://www.postgresql.org/docs/19/sql-insert.html#SQL-ON-CONFLICT),
+which lets the `RETURNING` clause return existing rows that conflict with an
+insert, simplifying the common "get or create" pattern.
+[`COPY`](https://www.postgresql.org/docs/19/sql-copy.html) can now output data
+as JSON, including as a single JSON array, and the
+[SQL/JSON path language](https://www.postgresql.org/docs/19/functions-json.html#FUNCTIONS-SQLJSON-PATH-OPERATORS)
+adds string methods such as `lower()`, `upper()`, `replace()`, `split_part()`,
+and `btrim()`. Additionally, the `lead()`, `lag()`, `first_value()`,
+`last_value()`, and `nth_value()` [window functions](https://www.postgresql.org/docs/19/functions-window.html)
+can now skip `NULL` values using `IGNORE NULLS`. The [`random()`](https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-TABLE) function can now also generate random dates
+and timestamps within a range.
+
+This release also makes many workloads faster without changes to your
+application. PostgreSQL 19 improves the performance of foreign key checks, which
+in testing made bulk inserts nearly 2x faster, and adds more query planner
+optimizations, such as converting `NOT IN` clauses to more efficient anti-joins
+when `NULL` values are not present, and performing
+[eager aggregation](https://www.postgresql.org/docs/19/runtime-config-query.html#GUC-ENABLE-EAGER-AGGREGATE)
+before joins to reduce the number of rows to process. PostgreSQL 19 also builds
+on the [asynchronous I/O](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-METHOD)
+subsystem added in PostgreSQL 18. When `io_method` is set to `worker` (the
+default), PostgreSQL now automatically adjusts the number of I/O workers between
+the new [`io_min_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MIN-WORKERS)
+and [`io_max_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MAX-WORKERS)
+settings, which replace the `io_workers` setting. There are also scalability
+improvements when using [`LISTEN`](https://www.postgresql.org/docs/19/sql-listen.html)
+and [`NOTIFY`](https://www.postgresql.org/docs/19/sql-notify.html) to
+exchange notifications in multi-channel workloads.
+
+Finally, the new [`password_expiration_warning_threshold`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-PASSWORD-EXPIRATION-WARNING-THRESHOLD)
+setting warns users when their password is about to expire.
+
+PostgreSQL 19 adds server-side support for
+[Server Name Indication (SNI)](https://www.postgresql.org/docs/19/ssl-tcp.html#SSL-SNI),
+letting a single PostgreSQL server present a different TLS certificate based on
+the hostname a client connects to. You can map hostnames to their certificates
+and keys in the new [`pg_hosts.conf`](https://www.postgresql.org/docs/19/runtime-config-file-locations.html#GUC-HOSTS-FILE)
+file. PostgreSQL 19 also now issues a warning after a successful `md5` password
+authentication, which you can turn off with the
+[`md5_password_warnings`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-MD5-PASSWORD-WARNINGS)
+setting. `md5` password authentication was deprecated in PostgreSQL 18 and will
+be removed in a future release. If you require password-based authentication,
+use [SCRAM authentication](https://www.postgresql.org/docs/19/auth-password.html).
+This release also removes support for RADIUS authentication.
+
+[Just-in-time compilation (JIT)](https://www.postgresql.org/docs/19/jit.html) is
+now disabled by default, as the cost estimates PostgreSQL used to decide when to
+use it proved unreliable. If you run many large analytical queries, you may want
+to enable JIT. When PostgreSQL is built with LZ4 support, the default
+[TOAST](https://www.postgresql.org/docs/19/storage-toast.html) compression
+method is now `lz4`.
+
+Many other new features and improvements have been added to PostgreSQL 19 that
+may also be helpful for your use cases. Please see the
+[release notes](https://www.postgresql.org/docs/19/release-19.html) for a
+complete list of new and changed features.
+
+[PostgreSQL](https://www.postgresql.org) is the world's most advanced open
+source database, with a global community of thousands of users, contributors,
+companies and organizations. Since its beginnings at the University of
+California, Berkeley over 40 years ago, PostgreSQL has continued with an
+unmatched pace of development. PostgreSQL's mature feature set not only matches
+top proprietary database systems, but exceeds them in advanced database
+features, extensibility, security, and stability.
+
+For explanations of the above features and others, please see the following
+resources:
+
+There are several ways you can download PostgreSQL 19, including:
+
+Other tools and extensions are available on the
+[PostgreSQL Extension Network](http://pgxn.org/).
+
+## Documentation
+
+PostgreSQL 19 comes with HTML documentation as well as man pages, and you can also browse the documentation online in both [HTML](https://www.postgresql.org/docs/19/) and [PDF](https://www.postgresql.org/files/documentation/pdf/19/postgresql-19-US.pdf) formats.
+
+PostgreSQL uses the [PostgreSQL License](https://www.postgresql.org/about/licence/),
+a BSD-like "permissive" license. This
+[OSI-certified license](http://www.opensource.org/licenses/postgresql/) is
+widely appreciated as flexible and business-friendly, since it does not restrict
+the use of PostgreSQL with commercial and proprietary applications. Together
+with multi-company support and public ownership of the code, our license makes
+PostgreSQL very popular with vendors wanting to embed a database in their own
+products without fear of fees, vendor lock-in, or changes in licensing terms.
+
+Website
+
+Postgres, PostgreSQL, and the Elephant Logo (Slonik) are all registered
+trademarks of the [PostgreSQL Community Association](https://www.postgres.ca).
+If you wish to use these marks, you must comply with the [trademark policy](https://www.postgresql.org/about/policies/trademarks/).
+
+PostgreSQL enjoys the support of numerous companies, who sponsor developers,
+provide hosting resources, and give us financial support. See our
+[sponsors](https://www.postgresql.org/about/sponsors/) page for some of these
+project supporters.
+
+There is also a large community of
+[companies offering PostgreSQL Support](https://www.postgresql.org/support/professional_support/),
+from individual consultants to multinational companies.
+
+If you wish to make a financial contribution to the PostgreSQL Global
+Development Group or one of the recognized community non-profit organizations,
+please visit our [donations](https://www.postgresql.org/about/donate/) page.

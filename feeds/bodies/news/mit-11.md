@@ -1,31 +1,83 @@
-“What you see is what you get” is a guiding principle for many software engineers — create programs where the content you’re editing looks the same as the final product. But when you’re using generative artificial intelligence systems to 3D print, say, a mug, you’ll likely get a cup that can’t hold your coffee. Why is that?
+The global building boom of power-hungry data centers is straining electrical grids, causing greater reliance on energy from polluting fossil fuels.
 
-The issue is that AI models understand how an object should look, but not how it works, leading to impractical designs that undermine an item’s intended use. Even if you want to fix these errors, the models are typically hard to edit, especially for users new to 3D design.
+Christina Delimitrou, a newly tenured associate professor at MIT, is fighting this environmental threat by rethinking how the computer servers and networking equipment inside those data centers operate.
 
-A new approach called “[InstructMesh](https://arxiv.org/abs/2608.28534)” makes it much easier to design and print household items, accessories, and robots that work in the real world. The design software, which was developed by researchers at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL), Google, and Northeastern University, can be prompted to generate a 3D design for a pair of glasses, for instance, and users can then highlight specific parts of the blueprint they’d like refined before 3D printing. It’s an AI-driven interface designed to understand how these designs should look and which edits experts and novices alike want to make, helping them create the objects they actually want to see.
+She and her group apply machine learning to make large-scale data centers more efficient, secure, and reliable. They redesign outdated cloud computing systems, develop methods to manage shared hardware resources, and create streamlined server architectures.
 
-CSAIL researchers used InstructMesh to put a personalized, creative spin on otherwise regular items. For example, the tool produced a mug that appears to be enveloped by a dragon, with its tail being the handle. It also fabricated a shiny blue whistle resembling a shell and a pair of glasses with butterfly wings spreading out just above the lens. Getting even more creative, it made an octopus-like dispenser, with liquids flowing out of each tentacle to distribute drinks into several cups at once.
+These advances allow data center operators to coax more computational power out of existing hardware.
 
-What makes InstructMesh so adept at following such unique prompts? It pairs Microsoft’s [TRELLIS](https://microsoft.github.io/TRELLIS.2/) system, which creates 3D models from text and image prompts, with the large language model (LLM) [GPT-4,](https://openai.com/index/gpt-4-research/) which supports ChatGPT — in other words, visual and textual knowledge combined.
+“If data centers are not utilized to the best of their capabilities, then they will burn much more power than they need to meet growing user demand,” says Delimitrou, the KDD Career Development Associate Professor in Communications and Technology in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL). “There is a lot of bloating, especially on the software side of these systems. If we can remove that bloating in a way that doesn’t compromise performance, then we won’t need to build as many new data centers.”
 
-“We wanted to bring together the talents of 3D generators and the reasoning skills of LLMs in an interactive space to make objects that people actually want,” says Faraz Faruqi SM ’22, PhD ’26, lead author on a [paper](https://arxiv.org/abs/2608.28534) presenting the project, graduate of the Department of Electrical Engineering and Computer Science, and recent CSAIL affiliate. “Language models are great at text and images, while TRELLIS’s talent lies in its ability to create 3D models, since it’s seen so many.”
+She also harnesses AI to help programmers find and fix problems in cloud-based applications, like music-streaming services or video conferencing systems. This eliminates application downtime that hampers performance and drains computational resources.
 
-InstructMesh’s strengths come in handy in other, more surprising areas. MIT scientists used the program to fabricate a knee brace that looks like denim to match a patient’s jeans. InstructMesh can even help create robots — that is, clever enclosures that house wireless components. The researchers made a “bristle bot” that resembles a colorful shrimp to demonstrate this. It has a motor hidden inside, and when switched on, it can slide across surfaces, sort of like a wind-up toy.
+“By managing resources more effectively in the cloud, the end user gets more predictable performance from the application running on their smartphone,” she adds.
 
-Faruqi and his colleagues found that InstructMesh could easily make their desired items. But what would someone who’s never 3D modeled anything think of their program? And could they really detect design flaws before fabrication?
+**Mathematical beginnings**
 
-The team has TRELLIS recreate popular 3D models found on [Thingiverse](https://www.thingiverse.com/), a platform home to millions of 3D printable models, to help them find out. Nearly 80 percent of the models it generated were structurally flawed in some way. CSAIL researchers then asked novices to identify and fix these issues in InstructMesh — and they were able to do both around 90 percent of the time, as reviewed by an expert. What these newcomers lacked in expertise, they made up for in intuition.
+Delimitrou grew up in a midsized town within the vast plains of northern Greece. Her early interest in math and science was sparked, in part, by the ancient history of her homeland, where Euclid and Pythagoras studied mathematical problems more than 2,000 years ago.
 
-InstructMesh scaffolds the actual modeling process, which previously required domain expertise in 3D modeling tools. “With manipulation happening in the latent space of the generative model, InstructMesh supports natural language description of issues, and creates interpretive changes in the geometry for the user to evaluate and approve,” says Faruqi.
+“In Greece, there is a long tradition of geometry,” she says.
 
-Users then created items resembling things like phone stands and vases, noting that InstructMesh was easy to use. They also found that InstructMesh enabled them to express a wide range of ideas, while the sliders gave them more precision to make certain tweaks, such as enlarging or extruding a particular part of the model.
+She also drew scientific inspiration from her parents. Her mother worked as a chemical engineer and her father as a pharmacist — and both encouraged their daughter’s innate curiosity.
 
-“The users got what they prompted for and easily tweaked designs where needed,” adds Faruqi. “What they saw is what they got, and the items worked as advertised, so to speak.”
+Her early affinity for math led Delimitrou to study computer engineering at the National Technical University of Athens, even though she didn’t know much about the field. She quickly gravitated toward courses that focused on the applied science of engineering.
 
-While users enjoyed using the InstructMesh, Faruqi has an even grander vision for the project. He now works at Google, where he may soon incorporate InstructMesh into an augmented reality (AR) platform. The idea: Prompt the system by explaining what you need using the context of your surroundings, then it’ll rapidly 3D print it (e.g., making a phone case that matches your wallet).
+For her diploma thesis — a project all students complete during their fifth and final year of study — she studied resource management in a computer when multiple applications are running at once.
 
-InstructMesh may also begin to incorporate physics simulations to model how your design may react to specific uses, such as whether a bowl breaks when dropped, and which materials would work best. The software might also integrate the more recent TRELLIS.2 to refine even smaller features in 3D models.
+“A lot of the challenges I was looking at then would get much harder if, instead of a single system, you had 100,000 of these systems. That was a problem that piqued my interest,” she says.
 
-Stefanie Mueller, an associate professor of electrical engineering and computer science (EECS) and mechanical engineering at MIT, and a member of CSAIL, is a senior author on the paper. Faruqi and Mueller wrote the paper with Google researchers Ahmed Katary ’23; Fabian Manhardt; Vrushank Phadnis MEng ’13, PhD ’20; Ruofei Du; and Federico Tombari. Other co-authors were Northeastern University Assistant Professor Megan Hofmann along with several CSAIL colleagues: Demircan Tas SM ’24 and SMArchS ’24, a PhD student in EECS and architecture; former visiting researcher Theresa Hradilak; Ning Zhang ’25, a graduate student in EECS; postdoc Jiaji Li; and Martin Nisser SM ’19, PhD ’24.
+Seeking to make a bigger impact as a researcher, Delimitrou pursued a graduate degree at Stanford University. She began tackling inefficiencies in cloud computing systems and large-scale data centers, which was a rapidly growing area of research.
 
-The researchers’ work was supported, in part, by Google and the MIT-HPI Collaborative Research Program. They will present it at the ACM Symposium on User Interface Software and Technology in November.
+Through that work, Delimitrou and her research mentor, Christos Kozyrakis, the Leonard Bosack and Sandy K. Lerner Professor of Engineering, realized many large computing systems were underutilized.
+
+“You would expect, with all the demand for these systems, that they should be running close to 100 percent capacity. But we found that most were running at only about 15 percent capacity,” she says. “This is not a resource-efficient or sustainable way of scaling these systems.”
+
+**Applying AI**
+
+To push that utilization closer to 100 percent, she began investigating machine-learning solutions to streamline cumbersome computational processes. Machine learning could automate resource management operations in the cloud, identifying solutions that developers might miss on their own.
+
+“Applying machine learning to solve a large-scale system problem was a novel approach at the time. It was a bit risky because people had not yet shown that these techniques would work,” Delimitrou says. “But empirical approaches require a lot of expertise, and the scale of the system is so large that it is difficult for users to manage. This is why machine learning is often the best solution.”
+
+After earning her PhD, Delimitrou continued this line of work as an assistant professor at Cornell University.
+
+One tool her group developed, Seer, uses deep learning to anticipate and prevent problems in web applications before they happen. This averts widespread slowdowns that may occur if a developer tries to fix a problem manually.
+
+As she delved deeper into cloud computing, Delimitrou observed that cloud applications were changing. Developers were now splitting applications into smaller pieces to spread across multiple servers, which increases the speed of deployment.
+
+“But the servers were not built for this new style of application design. So, I rethought some of my earlier work to build machine-learning systems for this new class of applications,” she says.
+
+To tackle these new challenges, she found herself collaborating more often with faculty members who had different software and hardware expertise. Those collaborations opened exciting new research areas.
+
+A few years later, she decided to join MIT because of the opportunity to collaborate with researchers at the top of their fields in hardware and software engineering. She became an assistant professor in EECS in 2022.
+
+**Creative approaches**
+
+At MIT, Delimitrou also enjoys the teaching aspect of her role. One of her favorite courses to teach is 6.191 (Computation Structure), a popular undergraduate class with about 350 students each semester.
+
+While it’s challenging to keep the course material fresh when the field constantly evolves, she strives to inspire creativity in her students.
+
+“I want the students to learn how to think and learn on their own. Part of that involves shifting away from formulaic assignments and making classes more open-ended. I’d rather give the students something to make them think more deeply,” she says.
+
+In the lab, a creative mindset helps Delimitrou and her team identify novel solutions to problems in cloud computing that others might overlook.
+
+For instance, she extended prior work on debugging problems in cloud applications to encompass not just errors in the code, but also security issues that can make user data vulnerable to hackers.
+
+She also uses AI to redesign software systems so they better fit the capabilities of existing hardware.
+
+“One of the challenges when it comes to applying AI to these systems is that the AI is not interpretable,” she says. “A lot of the work we are doing now involves adding explainability into these AI tools so people can get useful feedback from the system.”
+
+That not only helps developers ensure AI is giving the right answer, but also provides insights into how to design systems better in the future.
+
+She finds that studying these large-scale cloud computing systems is becoming more challenging because tech companies that operate data centers use proprietary hardware, unlike the commodity equipment of early cloud computing days, as well as software systems that can’t be accessed by academic teams. A solution that works in the lab might not work in the real world.
+
+To that end, Delimitrou and her group create clones of proprietary systems and applications. One tool they developed, called Ditto, mimics an application’s structure and performance characteristics, enabling a wide range of studies.
+
+She expects her work to continue shifting as machine-learning models become more advanced, opening new possibilities to boost application performance and hardware efficiency.
+
+“But you still have to use AI carefully. While it can greatly accelerate the application development side, we still need to audit it and be especially careful about how these models are applied so we don’t lose the ability to gain insights out of the solutions AI is giving,” she says.
+
+Outside the lab, Delimitrou enjoys spending time with her husband and 1-year-old daughter.
+
+While she doesn’t have as much time for hobbies these days, she also enjoys gardening and building an electrical toy train track for her daughter, as well as playing classical piano and painting nature scenes. She became interested in painting at Cornell, where she would often paint the many waterfalls near the campus.
+
+Whether she is working in the garden or painting, Delimitrou says she finds spending time outdoors to be a relaxing escape from the technical nature of her work, but also an important reminder of the role her research plays in sustainability.

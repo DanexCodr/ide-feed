@@ -3,18 +3,4 @@ Is your office empty today? Are your co-workers asleep at their desks? If so, th
 
 #### Related Articles
 
-[Fun Gifts For Geeks](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). | 
-
-* * *
-
-[PyTorch 2.15 Adds Flight Recorder](<https://www.i-programmer.info/news/105-artificial-intelligence/19275-pytorch-215-adds-flight-recorder.html>)  
-10/11/2026  
-PyTorch 2.15 has been released, with improvements including the promotion of its rewritten NCCL backend to default status, a new flight recorder for hang diagnostics, and improved hardware support.   
-
----  
-
-* * *
-
-[.NET 11 Released ](<https://www.i-programmer.info/news/89-net/19281-net-11-released-.html>)  
-12/11/2026  
-Microsoft has released .NET 11, with improvements across C# 15, ASP.NET Core, .NET MAUI, and Windows development. The version has hundreds of runtime optimizations, more responsive SDK tooling, and le [ ... ]
+[Fun Gifts For Geeks](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

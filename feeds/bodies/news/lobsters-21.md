@@ -1,74 +1,434 @@
-For a long time we have received repeated requests for, or questions about, a curl rewrite in rust. Often as a joke, but also seriously.
+After some [recent discussion](https://github.com/rust-lang/rust/issues/149359) on the topic of mutex poisoning and notably a [blog post](https://sunshowers.io/posts/on-poisoning/) that I
+thought was interesting, thoughtful, exhaustive, yet completely disagreed with, I wanted to comment
+on the debate myself. To me, poisoning-by-default is one of biggest mistakes that were made in the
+language, next to some others that are a story for a different time.
 
-In this modern world of AIs, we have only been waiting for someone to prove it possible and now it seems we don’t have to wait anymore.
+In short, I believe that Mutex poisoning is the wrong choice for most applications, as
 
-This fall seems to be the time of the curl-in-rust takes as we first saw [urlx](https://github.com/jonwiggins/urlx) appear a few months ago, claimed to be *a memory-safe, from-scratch reimplementation of curl and libcurl* and now in November [curl, rewritten in Rust](https://github.com/kov/curl) – *a rewrite of curl and libcurl in Rust*. This second one confusingly enough not even using a different name.
+- it significantly pessimises code performance in the general case
+- in addition to hampering readability
+- while encouraging bad code patterns to deal with its weirdness
+- in order to solve a niche problem
+- that doesn’t even solve the general problem.
 
-This latter one [claims to have spent 8,600 USD](https://claude.ai/artifact/K4BoWt35HQz1xWZBR3bMRD) to make it happen.
+## What is poisoning?
 
-## Writing code once was never the issue
+In theory, a mutex guards a critical section of the code. That code changes the state of a piece of
+data free from interference of concurrent threads, then releases the lock. That code might then
+encounter an error, and release the lock in the middle of doing its important work. For example:
 
-Writing code *once* was never the big deal with software and it still isn’t. Sure, it’s fascinating that you can make a set of agents accomplish this in only a few weeks but let’s face it: it could do this because all the AIs of the world have trained on curl code for years. curl is extremely well documented, there are hundreds of existing open source application using its API and there are thousands of test cases to verify the implementation.
+```
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+fn important(always_even: Arc<Mutex<i32>>) -> i32 {
+    // Invariant: always_even must always be even
+    let mut handle = always_even.lock().unwrap();
 
-The C code sits there and all the AI needs to do is convert it to rust, then polish until the tests work.
+    *handle += 1;
 
-## curl is the result of time
+    risky_operation();
 
-curl has come to be what it is thanks to many decisions, lots of time, many users, oceans of feedback and many iterations. Sure, recreating what curl is at any specific single moment in time is certainly doable. Doable, because we have made a perfect specification for that project.
+    *handle += 1;
 
-## Behind already
+    *handle
+}
 
-During the time these agents converted 185,000 lines of C code into 340,000 lines of Rust code (I counted), we merged over 300 commits in the actual curl project. We actually improved curl during these a little more than three weeks. A little over 200 bugfixes actually. 200 bugfixes that none of those rust rewrites have. We also fixed a few vulnerabilities. In another month we have done another 200 and maybe fixed a few more vulnerabilities. Will these clones keep up?
+fn risky_operation() {
+    if rng().next_u32() % 42 == 0 {
+        panic!();
+    }
+}
+```
 
-The constant tweaking, fixing, improving and extending is what makes a software project live, what makes it attractive to users and what makes it able to compete with alternatives.
+The following code will work fine most of the time, but if the dice roll doesn’t go our way, the
+`always_even` mutex gets unlocked in an invalid state. In Rust, today, poisoning exists to handle
+this. If a guard is released abnormally (while panicking), it records that this happened in a
+boolean. Any future calls to `lock()` will return `Err(PoisonError)`, which will trigger a panic
+when we unwrap it. The bad state is never observed and all is well.
 
-That fixing, and occasional new feature, is a direct result of a working community of users, contributors and maintainers. That goes way beyond the source code or which language that is used.
+You might have felt that the example I made up was somewhat contrived. That’s because it is. Real
+cases of this pattern can and do happen, but most of the use cases that involve mutexes are much
+simpler. Many critical sections are no longer than a variable assignment, or doesn’t have an invalid
+in-between state. There are cases in lower level programming where a mutex guards a piece of data
+that is not directly inside it, or is outside the view of the program entirely. In fact, I’ve
+written a wrapper for a C library that worked like that. Though I disagree with the notion that this
+is the common case.
 
-A primary reason it is hard to make a competing curl alternative is because of the development speed, the development team and the community around curl.  It is not because of the chosen language it is implemented in. Only curl can boast decades of ABI and API stability and prove that we know this and can do it well – over time. An alternative that pops up today might be able to do it as well, and *in a few decades we will know if they could*.
+I do recommend anyone [Rain’s blog](https://sunshowers.io/posts/on-poisoning/) on the matter, as she has some good examples of how
+you can cause violations of these critical sections (even without mutexes) and I wholeheartedly
+support the idea of a `Poison` wrapper for the use cases that need it. I suspect the domains she
+works on lend themselves more towards these issues compared to mine. Rust’s default behaviour should
+make the common case easy and the rare case possible.
 
-## C
+## Side-note: how mutexes work
 
-I know I’m repeating myself but: out of the 81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.
+This section is only tangentially related to the topic at hand, but I already wrote it and wasn’t
+ready to kill my darlings.<sup>[1](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:mutexes)</sup> Skip to [the next
+section](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#how-poisoning-harms-every-single-piece-of-code) to continue the discussion on poisoning.
 
-A Rust implementation of curl would thus still have had 67 of those vulnerabilities.
+In Rust, for most platforms, mutexes are implemented using the `futex`<sup>[2](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:futex)</sup> system call. It
+allows for operations to remain purely in user-space as long as the mutex in question isn’t
+contended, which is nice for performance reasons.
 
-## No rewrites
+Under the hood, a mutex is a simple 32-bit integer on most platforms even though it only holds three
+unique values:
 
-I don’t believe in rewrites into any language. I believe in constant and never-ending polishing, iterating and refactoring.
+- If it’s zero, the mutex is free and can be claimed by any thread by a simple atomic compare-exchange.
+- If it’s one, the mutex is held but there are no waiting threads. This is useful to know, as it means there are no threads that we need to wake up when releasing the mutex, and we can yet again remain in userspace.
+- If it’s two, the mutex is held and some other thread is waiting for it. This means some additional care should be taken when unlocking.
 
-## Those rewrites
+Rust implements this with a few atomic operations and the `futex_wait` call. Crucially, the path for
+locking a mutex that *isn’t* contended is a single atomic operation. The only operation that
+requires a context switch is `futex_wait`.
 
-I should add that I have not been in contact with any of the people behind these rewrites, and if there are two I bet there are more that I just haven’t seen yet. I only know of them because people have pasted me links to their repositories.
+Unlocking is even simpler. The thread that holds the mutex first releases the lock, then optionally,
+if there was an indication that the lock was contended, wakes any sleeping threads so they can try
+to acquire the lock.
 
-I don’t know what they will do with those projects going forward. Are they anything more than proof of concepts? I presume we will find out.
+## How poisoning harms every single piece of code
 
-They can of course follow along our commits and convert them to rust on the fly if they want – we only do about 11 commits per day on average. Or maybe they ignore the bugreports or maybe they take their projects in other directions?
+As discussed in too much detail above, (un)locking mutexes is cheap as long as they’re not
+contended, and when contended, they are at least cheap instruction wise. This is where poisoning
+mutexes get you.
 
-I wish them good luck whatever they decide!
+In short, being able to poison is a cost that is always paid, but seldom used. To start, poisoning
+is essentially implemented by adding an `AtomicBool` field to every `Mutex`. Due to alignment, this
+grows the size of every mutex by anywhere from zero bytes to an additional pointer. This isn’t
+terrible but for use cases where you have many mutexes guarding small objects, this can add up.
 
-## How do I feel about them?
+The real issue to me however is in code size. Let’s start with another contrived example, a function
+that reads its argument, copies it, and returns it. An idealised version of that would be the
+following.
 
-Several people asked me this.
+```
+1
+2
+3
+pub fn get_contents(val: &i32) -> i32 {
+    *val
+}
+```
 
-*Imitation is the sincerest form of flattery that mediocrity can pay to greatness*.  / Someone
+This compiles down to 2 instructions and a label. Copy the data into the register then return.
 
-I’m amused. A little puzzled. Fascinated. They spent their money and effort on *that?*
+```
+1
+2
+3
+example::check_contents::h197b180b47e24703:
+        mov     eax, dword ptr [rdi]
+        ret
+```
 
-1. ![](https://secure.gravatar.com/avatar/67dfb6f601466f7a3c644417d92bc76ccfedb6dc920710316cbe16684f074d82?s=68&d=monsterid&r=g) **Owen** says: .comment-author [November 17, 2026 at 07:44](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27581) .comment-metadata .comment-meta I find it quite interesting. I couldn’t possibly be part of the “just rewrite it in Rust” crowd, but I also do see the benefits in many cases. It feels like, while ideally it’d be good to have that effort put into curl itself and see things improved and fixed, the fact that it’s a problem space people are paying attention to at all is a Good Thing™?. I hope something useful comes of them, just so we’ve got something interesting and novel to look at, at least. Maybe it leads to better understanding of the big wonderful world of internet transfers. I appreciate the hubris – you’ve gotta start with blind, cocky optimism sometimes. 😛 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27581#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 17, 2026 at 14:50](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27582) .comment-metadata .comment-meta “81 vulnerabilities we have confirmed in curl so far during 2026, 14 were the result of mistakes that most likely would have been avoided had we used a memory-safe language such as rust. That’s 17.3%.” Nice, that sounds like very good motivation for a Rust rewrite. Something that is always missing from these post-hoc analyses is the changes and features that were never implemented because the language’s unsafety made it too expensive and risky (“that which is seen and that which is not seen”). A strong type system allows you to be much more scrappy and fearless. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27582#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 17, 2026 at 15:01](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27583) .comment-metadata .comment-meta @Jesse: I disagree. What makes you “fearless” in development is A) a good architecture and B) a good test suite combined with C) good test and development tools. We have all that. We’re not holding back features because of the language. Never did. If there’s anything, we have too many features and we do too much. But hey, that’s what curl is. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27583#respond) .comment-body .children
-    1. ![](https://secure.gravatar.com/avatar/0b0a66c8d5cad66042f4fa2ef05130152b8e65682e61c48b4484a043b1d98c55?s=68&d=monsterid&r=g) **[Jesse](https://linktr.ee/jesse.schalken)** says: .comment-author [November 18, 2026 at 10:55](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27596) .comment-metadata .comment-meta Isn’t a programming language just another development tool? We can talk about language capabilities just like any other. Types and tests go together as a pair of tools. Types can be validated incrementally in less than a second (eg in rust-analyzer), tests take seconds, minutes, sometimes hours for feedback. Tests can show the presence but not the absence of bugs, types prove the absence of whole classes of bugs but not their presence. Tests tell you about a specific execution, types reason about all possible executions. Test can validate any behaviour while types can only exclude bugs provable in its logic. The progress in programming languages has generally been towards stronger types, including lifetimes in Rust’s case. I don’t think its fair to say they have no advantages over tests. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27596#respond) .comment-body .children
-      1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 11:30](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27597) .comment-metadata .comment-meta @Jesse: different languages have different advantages and quirks, sure. I just meant that I don’t think the choice of language holds us back. .comment-content .comment-body
-  2. ![](https://secure.gravatar.com/avatar/7af2556d70ebdec658363896fcc23a2b17aeb51da7c5e5cb440e59af5c96788a?s=68&d=monsterid&r=g) **[grayhatter](https://gr.ht)** says: .comment-author [November 17, 2026 at 19:38](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27589) .comment-metadata .comment-meta > Nice, that sounds like very good motivation for a Rust rewrite. I agree; it is a good reason! But I feel like you’ve missed the forest for the single tree. This whole post is describing the value in curl being the maintainers that are willing to put in the time. A single observation doesn’t outweigh the reality that code is (and always has been) cheap. But maintainer time and effort is the important part. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27589#respond) .comment-body
-3. ![](https://secure.gravatar.com/avatar/dba025f411eb5dea75b2ac9d89b8299ba8ded7551da0ec0af415857312de2f7f?s=68&d=monsterid&r=g) **Jack** says: .comment-author [November 17, 2026 at 16:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27584) .comment-metadata .comment-meta cURL is one of the greatest examples of a project, C or otherwise, done right. It’s a stalwart of computing. It’s literally everywhere. It’s probably even in my toaster too, which is kind of scary now that I think about it. Jokes aside, you should really just ignore the people clamoring to rewrite it in Rust or Zig or whatever. I’m a huge Rust fan. I mainly program in Rust and a bit of C. This has nothing to do with rust per se and more to do with the internet being annoying. An AI powered rewrite or even a rewrite by hand misses what actually makes cURL so good. It’s that there is a talented team of maintainers who understand the code, understand the domain, and are dedicated to writing and maintaining curl. Rewrites lose all of this for temporary benefits, or worse it doesn’t have any benefits at all. There are AI and hand rolled postgres rewrites in Rust that are “faster” but it turns out they’re buggy messes that aren’t even durable. They’re faster because they’re broken. 🙂 So, I say this as a huge Rust fan who contributes to a plethora or open source Rust projects. Please ignore the “riir” in Rust crowd. It doesn’t represent most of us. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27584#respond) .comment-body
-4. ![](https://secure.gravatar.com/avatar/89c0c2a3cd1d8d2e7ae262a8b2967c5a214b80cb8f14d913519dcec0ac6ced68?s=68&d=monsterid&r=g) **Joonas Kuorilehto** says: .comment-author [November 17, 2026 at 16:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27585) .comment-metadata .comment-meta ” This latter one claims to have spent 8,600 USD to make it happen”. This is a wrong reading. They claim that amount in estimated API cost equivalent, but based on them running out of quota they use a subscription, which is a lot less cost. Not that it changes anything you said though. Thanks for keeping cURL going all these years. I doubt any of the clones are committed to similar maintainance quality and long term. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27585#respond) .comment-body
-5. ![](https://secure.gravatar.com/avatar/c4cb559cac461ae04977a38bc7c7e1779430589c4cae02e432f275fd7964fee6?s=68&d=monsterid&r=g) **[Vishal Pawar](https://vishalpawar.dev/utm?src=daniel_haxx)** says: .comment-author [November 17, 2026 at 18:00](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27587) .comment-metadata .comment-meta I really like what this post is talking about everyone can make a copy but who can maintain and keep on adding features in long term that is what makes it competing and survival of the copied software. Everyone knows how Cloudflare made a copy of Next.js and everyone started posting about it for few weeks and it is dead or it is copying features from Next.js to keep up with the Next.js as it’s replacement .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27587#respond) .comment-body
-6. ![](https://secure.gravatar.com/avatar/56be1d4b72a7e714a306e1894594615c37419ba7fab85792c32ff6b603f70b6f?s=68&d=monsterid&r=g) **Dàmian Lusq** says: .comment-author [November 17, 2026 at 19:05](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27588) .comment-metadata .comment-meta @Joonas The artifact mentions weekly limit only on 28/10, one week after the start of the rewrite, and not until the end of the experience, so it surely started with some heavy subscription, it may switched to token billing after to keep up with the work. “If the work ran on a subscription plan, this is what it would have cost on the API, not what was billed.” So yes, for sure, it at least been partially subsidized, and once Anthropic will switch to token billed usage (like OpenAI will do next month, because money), it would certainly cost $8.6k for any clone, except if some “super agents” becomes the new hype and would burn way more tokens… Again, “humans made computers for humans” is still a thing nowadays, and AI will not replacing communities tomorrow. It would have been interesting to see a clean C ? Rust ? C rewrite just to compare how the C could have been rewritten, just out of curiosity. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27588#respond) .comment-body
-7. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://tactica.xyz)** says: .comment-author [November 17, 2026 at 19:47](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27590) .comment-metadata .comment-meta It is november 2026. You can use formal verification with Verus to get rid of other 67 logic bugs and then use it continuously to avoid bugs at all! [https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/](https://microsoftedge.github.io/edgevr/posts/From-Bug-Hunting-to-Bug-Prevention-with-Rust-and-Verus/) No other language yet provide such an ecosystem for error prevention. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27590#respond) .comment-body
-8. ![](https://secure.gravatar.com/avatar/490f7fcfee38ddde609f8110024f5c8ba08f6e755beedb3c50b4235521e154f5?s=68&d=monsterid&r=g) **[Eser](https://www.techmedya.com/)** says: .comment-author [November 17, 2026 at 20:49](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27591) .comment-metadata .comment-meta This is such a wonderfully grounded perspective! It’s a great reminder that a software’s true strength lies in its community, history, and endless iterations—not just the language it’s written in. Thank you for everything you do for curl! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27591#respond) .comment-body
-9. ![](https://secure.gravatar.com/avatar/f39bb6563561842dff954d4f341291379777f29225784c0c2471ffd449f01c73?s=68&d=monsterid&r=g) **[Anton](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/tactica.xyz)** says: .comment-author [November 17, 2026 at 21:23](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27592) .comment-metadata .comment-meta AI + Verus tool allows you to automatically write formal proofs on your code and get rid of rest 67 issues. Rust has single best ecosystem to get rid of bugs! Happy to help is you ever decide to try and collect metrics on quality improvement! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27592#respond) .comment-body
-10. ![](https://secure.gravatar.com/avatar/59b98429498dc9d91e7c181d67441c6070887f50fc663b51c6cff64e6f0efdb0?s=68&d=monsterid&r=g) **Enne** says: .comment-author [November 17, 2026 at 22:19](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27593) .comment-metadata .comment-meta Similarly-shaped things used to happen at a much smaller scale on web 1.0. How many times I or my peers would share tarballs of our funny little webapps, only to be shown a few weeks later some proto-reactionary teenager trying so hard to impress his two or three followers with the website he “built” all on his lonesome in a day, and soon after that it’d be gone again in a fit of pique. Maybe these are the same people all aged up. Similarly-shaped things and all. But even those kids would have the sense to not brag that they gambled away thousands of dollars to put a Pyongyang Hotel in the metaverse. That’s just sad. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27593#respond) .comment-body
-11. ![](https://secure.gravatar.com/avatar/d26584a90e6abfffb1d8da05fbf6a44015692f85da05cf3bfd6581514220289b?s=68&d=monsterid&r=g) **Félix** says: .comment-author [November 18, 2026 at 08:28](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27594) .comment-metadata .comment-meta I you don’t know Rust well, what makes you confident about the exact number of issues that Rust would have prevented? C is a barebone language, Rust brings much more to the table than memory safety only: – Sane type system, especially with sum types – Better error handling (mostly consequence of the previous point) – Trait-based polymorphism (no such abstraction in C) – RAII – Async (especially useful for curl) Even users’ misusage can be prevented with a good set of types: make invalid states unrepresentable. BTW, we talk about Rust, but any functional language would do. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27594#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 18, 2026 at 08:34](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27595) .comment-metadata .comment-meta @Felix No one can know any exact number of problems curl would have had if written in another language. Not you, not I. What I do know though, and this is verifiable because all the details and data is public, is how many of the past curl vulnerabilities that were “C mistakes”. I think everything else in terms what other languages could do or not is mostly a distraction and “language religious talk”. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27595#respond) .comment-body
-12. ![](https://secure.gravatar.com/avatar/169e688ce4f4457968b144aa7c6dbee2fdc2a4cabfabcfefadaf40de425722ec?s=68&d=monsterid&r=g) **Gustavo Noronha** says: .comment-author [November 20, 2026 at 11:32](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27601) .comment-metadata .comment-meta The catch up on the new commits for the rewite is on the way, done locally but finishing some things first. And I will stay closer going forward. But more important than the bugs that will be fixed with the catch up are the ones that did not affect the rewrite because of language and design – will publish an analysis soon. I am tightening things further so that it becomes the majority as time goes by. .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27601#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [November 20, 2026 at 12:41](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/#comment-27602) .comment-metadata .comment-meta > The catch up on the new commits for the rewite is on the way Why? What’s the point? .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/17/actual-curl-rewrites-in-rust/comment-page-1/?replytocom=27602#respond) .comment-body
+Of course, this doesn’t work for any context that needs shared mutation, but we can consider it our
+baseline. Perfection would look like this. So, let’s ignore that atomic integers exist and add a
+mutex to this story. We will go over the generated assembly code for each, and you can compare the
+code in its entirety in [this Compiler Explorer overview](https://rust.godbolt.org/z/1jEP5MEGz).
+
+### Base case: Locking and unwrapping
+
+We can update the code above to actually use mutexes, and simply lock-then-unwrap the mutex.
+
+```
+1
+2
+3
+4
+5
+use std::sync::Mutex;
+
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock().unwrap()
+}
+```
+
+This compiles to a total of *147* lines of assembly which I’m not going to reproduce here in full.
+
+- 75 of those are specifically inlined to this particular function and cannot be reused.
+- About 45 those are monomorphised[3](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:monomorphised) for mutexes guarding an i32
+- The remainder is global program information and might be reused for other locks.
+
+To divide that up a different way, we have
+
+- code checking the poison status
+- code doing the mutex manipulation
+- code to initiate a poison in case of a panic
+- code for preparing to panic should we need to
+- code for displaying a panic
+- some dyn drop glue
+
+Most of this is inlined into the function. This in turn affects performance, as this limits how much
+of your “real” code fits in the CPU’s instruction cache. The laptop I’m writing this on has a paltry
+32KiB of instruction cache. Luckily we can do better.
+
+### Removing the panic
+
+Most of the code generated in the previous example had to do with setting up the panic, and checking
+the conditions. But we don’t care about panicking. We can simply acknowledge the `PoisonError` and
+continue. That looks as follows:
+
+```
+1
+2
+3
+4
+5
+6
+use std::sync::Mutex;
+use std::sync::PoisonError;
+
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+```
+
+This results in only 68 lines of assembly, which is much better, though all of it is inlined to our
+function. Compared to before, we’ve lost all panic related code. There’s still some unnecessary
+branching related to whether the mutex is poisoned, as well as a little dance to track poisoning in
+our function. Our function can never panic, but compiler optimisations currently do not remove the
+atomic loads and stores involved here. Nevertheless, if you want to target stable Rust *and* you
+don’t care about panics, this is what you should do at the moment.
+
+### The ideal: no poison handling at all
+
+In the current nightly builds of Rust, there are non-poisoning mutexes that can don’t have any of
+the overhead. We can optimise our code from above to make use of them.
+
+```
+1
+2
+3
+4
+5
+6
+7
+#![feature(nonpoison_mutex)]
+#![feature(sync_nonpoison)]
+use std::sync::nonpoison::Mutex;
+
+pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
+    *mutex.lock()
+}
+```
+
+No unwrapping, and it only results in 34 lines of assembly code. This is short enough for me to walk
+through it.
+
+```
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+example[da70a55c1c00d324]::check_contents:
+        push    rbp
+        push    rbx
+        push    rax
+        xor     ebp, ebp
+        mov     ecx, 1
+        xor     eax, eax
+        lock    cmpxchg dword ptr [rdi], ecx ; (1) check if mutex is held, and if not, claim it
+        jne     .contended ; (2) mutex was not zero, jump to contended case
+        mov     eax, dword ptr [rdi + 4] ;  (4) if not, load the value
+        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
+        cmp     ebp, 2 ; (6) check if there are other threads waiting
+        je      .exit_with_threads_waiting
+.fast_exit:
+        add     rsp, 8
+        pop     rbx
+        pop     rbp
+        ret
+.contended:
+        mov     rbx, rdi
+        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::lock_contended@GOTPCREL] ; (3) Perform the spin/futex_wait loop
+        mov     rdi, rbx ;
+        mov     eax, dword ptr [rdi + 4] ; (4) load the value
+        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
+        cmp     ebp, 2 ; (6) check if there are other threads waiting
+        jne     .fast_exit
+.exit_with_threads_waiting:
+        mov     ebx, eax
+        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::wake@GOTPCREL] ; (7) wake sleeping threads
+        mov     eax, ebx
+        add     rsp, 8
+        pop     rbx
+        pop     rbp
+        ret
+```
+
+I’ve added comments and labels to the assembly so the steps from the (un)locking flow charts become
+visible. As far as assembly code goes, it’s very readable and simple. Which, of course, is exactly
+what you want from fundamental library code.
+
+The additional logic checking the poison state, adding a destructor for the mutex guard, and, if you
+choose ergonomics, even panic machinery, significantly bloats the code of a rather fundamental
+operation.
+
+## Readability and good habits
+
+Besides the purely technical argument that poisoning makes all code larger and slower than it needs
+to be, there is a different one. [As discussed previously](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#removing-the-panic), code that doesn’t
+care about mutex poisoning should generally write:
+
+```
+1
+my_mutex.lock().unwrap_or_else(PoisonError::into_inner)
+```
+
+It’s reasonably efficient and available on stable Rust. But that whole `unwrap_or_else` part takes
+up more than half the line. No worry, you might say, we can make it shorter:
+
+```
+1
+my_mutex.lock().unwrap()
+```
+
+This works well enough. It’s less efficient than the previous example, but it’s nice and short. If
+your code never panics, it’s even perfectly safe. You might have spotted a load-bearing “if”
+already. It’s kind of hard to guarantee your code does not panic. Array indexing, integer division,
+and a whole host of other features might panic unexpectedly.
+
+This is hard for experienced developers, but for those learning it’s even worse. It also trains bad
+habits. Every time a beginner Rust developer writes `unwrap()` instead of handling their errors, a
+puppy steps on a Lego brick. Or [causes a widespread internet outage](https://blog.cloudflare.com/18-november-2025-outage/). One of the
+two, I forget which.
+
+We should not want to include APIs into the standard library that return a `Result` that is
+“expected” to be unwrapped. Infallible operations should not fail.
+
+## Inconsistency
+
+Poisoning protects against a task panicking in the middle of an invariant violation. But why must
+this be specific to mutexes? The example from before works just as well with a simple mutable
+borrow. Panics may still happen, and you may still [catch](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) them.
+
+```
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+fn important2(always_even: &mut i32) -> i32 {
+    // Invariant: always_even must always be even
+    *always_even += 1;
+
+    risky_operation();
+
+    *always_even += 1;
+
+    *always_even
+}
+```
+
+This is actually a fairly common problem. In a more recent blog post, [researchers at Microsoft
+highlight various places they’ve found where even the standard library gets this
+wrong](https://forge-blog.github.io/posts/rust-std-memory-safety/#pattern-1-trusting-code-not-to-panic).
+
+In most cases however, this is fine, as it is with the mutex example given in the beginning. You
+don’t need to poison this reference. But for applications where you do, it’s kinda nice to be able
+to.
+
+It’s not hard to imagine a wrapper that adds poisoning behaviour when you want to have it.
+Crucially, this needs to be an additive wrapper. You can add a poisoning system to something. You
+cannot strip out the poisoning system from a primitive that has it. Poison safety is important for
+the specific use cases that need it, but most do not.
+
+I don’t believe it’s worth it to saddle mutexes in particular with this overhead when the problem is
+near universal with any mutable state. State invariants are just hard that way.
+
+## Comparison to bounds checking
+
+One might draw a comparison between poison safety and buffer safety. In Rust, we always do bounds
+checking, relying on the compiler to optimise it out in cases it can be proven redundant. Can’t
+poison safety be the same? And the answer, it turns out, is no.
+
+The compiler cannot optimise poisoning away. It requires any mutex carry additional data to track
+it. *Maybe* the compiler can figure out one particular critical section cannot panic, and therefore
+it can leave out the setup and clean-up, but in general it cannot avoid checking the state. This is
+overhead that always applies, and hurts, especially in environments where code size is more
+restricted.
+
+## De facto standard workarounds
+
+In C++, there are a few choices in the standard that make certain containers less efficient than
+they could be<sup>[4](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:unordered_map)</sup>. Because of how standardisation works, the containers can never be
+“fixed”. This causes third party implementations, such as Abseil and Boost, to become the de facto
+standard.
+
+Mutexes in Rust suffer from the same problem. The standard library has poisoning, but people don’t
+want poisoning, so instead they opt for crates like [`parking_lot`](https://docs.rs/parking_lot/latest/parking_lot/). I believe this is
+bad for the ecosystem as a whole. When the standard library offers a feature, it should be an
+uncontroversially good choice, unless you are doing something hyper specific. We don’t have to be
+“batteries included” but the parts that are there should be a good fit.
+
+## In conclusion
+
+I started out writing this blog in response to a movement to change the default mutex behaviour in
+Rust. It seems to me there are three camps:
+
+1. Keep the status quo. std::sync::Mutex and friends will have poisoning.
+2. Make std::sync::Mutex propagate panics when poisoned.
+3. Add a non-poisoning variant std::sync::nonpoison::Mutex
+4. Replace std::sync::Mutex with std::sync::nonpoison::Mutex. Poisoning becomes opt-in.
+
+Rain’s blog argued for option 1. I believe we both agree that option 2 is a terrible idea. I think
+we should do at least option 3. Option 4 would be a good edition improvement, but it is also a
+significant compatibility issue, and even I find it hard to argue that it’s really worth it.
+
+Which is a roundabout way of saying that we really should stabilise `std::sync::nonpoison` and
+definitely should not make `std::sync::Mutex` panic by default.
+
+1. It is becoming apparent to me that I just like explaining mutexes and I don’t know what to do about that. [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:mutexes)
+2. Fast Userspace muTEX. See [`futex(2)`](https://man.archlinux.org/man/futex.2) for more on the system call and [`futex(7)`](https://man.archlinux.org/man/futex.7) for its semantics [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:futex)
+3. For generic definitions (e.g. `Mutex<T>`) the compiler must generate code for every unique `T` that gets used, and for loads of reasons often more than once per `T`. The compiler development docs have [a deeper explanation of monomorphisation](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:monomorphised)
+4. A famous example is `std::unordered_map`, which [suffers from being over-specified and that prevents more efficient implementations](https://bannalia.blogspot.com/2022/06/advancing-state-of-art-for.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:unordered_map)

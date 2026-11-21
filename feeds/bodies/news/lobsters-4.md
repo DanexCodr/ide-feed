@@ -1,35 +1,19 @@
-A few weeks ago Kev Quirk asked: [Do you use `:visited` on links?](https://kevquirk.com/do-you-use-visited-on-links) — and I said to myself: No! I don’t use visited links… but why *don’t* I use visited links?
+**San Francisco, Calif.** — On Friday, November 20, workers at [Internet Archive](https://archive.org/) announced their intent to form a union with the Communications Workers of America (CWA). They are seeking to join CWA Local 9415 in Oakland, California.
 
-TL;DR: I’ve gone and styled visited links, and they’re purple.
+In a letter sent this morning via email, members of the union’s organizing committee presented management with a request for voluntary recognition after a supermajority of eligible workers signed cards signaling their desires for union representation. Worker-organizers for the union have also simultaneously filed a petition for a union certification election with the National Labor Relations Board (NLRB); if Internet Archive grants the union’s request for voluntary recognition, organizers will withdraw the NLRB petition.
 
-## Blue and purple
+“We are forming a union because we care deeply about the Internet Archive, its patrons, and its place as a vital part of the internet ecosystem. Now more than ever, we want the Internet Archive to last for the generations to come,” **said organizing committee member Danielle Leard, a digitization technician for the Internet Archive**. “Sustaining workers long-term, through job security, livable wages, and sufficient benefits, goes hand-in-hand with sustaining the Archive long-term.”
 
-I did a cursory five minutes of research and found Wikipedia still styles visited links (blue to purple). [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/:visited) does too. As does the [GOV.UK design system](https://design-system.service.gov.uk/styles/links/) — they have a special class to opt-out of the visited style. [BBC News](https://www.bbc.co.uk/news) turns black links to grey, how emo.
+“Throughout the years, many of us have witnessed the significant extent to which the Internet Archive and its patrons benefit from some of the most talented, dedicated, and overall purpose-driven folks that we’ve had the privilege of working alongside,” **said organizing committee member Chelsea Richelle Smith, a patron services specialist at Internet Archive**. “At its core, we all share the collective desire to foster a workplace in which everyone thrives. We believe in continuing to build towards a democratic environment where the workers have a meaningful voice in the work that we do and the conditions under which that work is done, in alignment with each other and the organization’s overall mission.”
 
-I decided to style visited links within my `<main>` body copy. Which to be fair is most links but not the big headings on [my blog index](https://dbushell.com/blog/) for example. I was too intimidated to turn those purple. Maybe you can give me the courage to style those too?
+The Internet Archive is one of the world’s largest and oldest libraries of digitized media, with nearly 120 librarians, engineers, technicians, project managers, media specialists, facilities workers, and administrative staff making up the proposed unit. Together, Internet Archive workers ensure that the Archive remains a beacon of equitable knowledge to millions of users worldwide through several different services, such as the Wayback Machine, Open Library, and most recently, the digital preservation of government documents.
 
-It looked a bit weird at first but I like the [colourful additions](https://dbushell.com/2026/11/09/dark-mode/) to my blog.
+“In solidarity with workers across the country, we aim to model the practice of workplace democracy and the building of technology that benefits the public,” **said organizing committee member Will Howes, an engineer on the Internet Archive’s Wayback Machine**. “We organized the Internet Archive not only for each other as coworkers, but to show the tech and non-profit sectors what is possible. Any worker can and should believe that talking to their colleagues today is the first step towards improving their workplace conditions.”
 
-## Accessibility
+The union’s announcement marks the latest effort to democratize universal and free access to knowledge; in September, [U.S.-based Wikimedia Foundation workers secured union recognition with CWA](https://cwa-union.org/news/releases/wikimedia-foundation-workers-overwhelmingly-vote-form-union-cwa), and in the union’s vision statement, worker organizers cited the successful unionization efforts at the Free Software Foundation (FSF) and the Electronic Frontier Foundation (EFF) as inspirations for organizing.
 
-WCAG 2.2 guidelines have no requirement to differentiate visited from unvisited links. Regardless, visited links should meet all the same criteria applied to any link.
+“In a rapidly evolving technology landscape, collective action and strong workplace protections help ensure that workers are heard and respected,” **said CWA Local 9415 President Decovan Rhem**. “We are proud to stand strong with the Internet Archive workers to obtain union recognition and advocate for a positive, inclusive workplace.”
 
-There is one specific exception ([following this discussion](https://github.com/w3c/wcag/issues/905)). Because web browsers have strict style limitations and technical constraints due to [privacy concerns](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Selectors/Privacy_and_:visited):
+The union has launched a [petition](https://actionnetwork.org/petitions/internet-archive-petition/) to garner public support for voluntary recognition. For more updates, follow Internet Archive Labor Union-CWA Local 9415 (IALU-CWA) on [Bluesky](https://bsky.app/profile/ialucwa.bsky.social), Instagram, [Mastodon](https://mastodon.social/@IALUCWA), and Tumblr.
 
-> Where color alone distinguishes between visited and unvisited links, it does not result in a failure of this Success Criterion, even where the contrast between the two link colors is below 3:1.
->
-> [SC 1.4.1 Use of Color (Level A)](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html#:~:text=Most%20user%20agents,background%20%28SC%201.4.3%29)
-
-This means that a subtle contrast different in blue vs purple is not considered an accessibility failure under that rule.
-
-Web accessibility is all about ensuring a *comparable* experience for all users. Nothing can be perfectly accessible though. I think this small enhancement is fine, even if not everyone can see the difference. It’s a rare exception though. I’m conscious that too often excuses are made to ignore UX parity. I think any higher contrast or another visual indicator would be off-putting and impede readability. Forgoing any style doesn’t help anyone either. If blue and purple is good enough for those examples mentioned above, I’m on board.
-
-[Bryce Wray commented](https://kevquirk.com/do-you-use-visited-on-links#:~:text=Reply-,Bryce%20Wray) on Kev Quirk’s blog to note that Chromium browsers introduced [`:visited` link partitioning](https://developer.chrome.com/blog/visited-links) in 2025. I had no idea this was a thing!
-
-What do you think, do you care about visited link styles?
-
-## Bubbles
-
-I found Kev Quirk’s blog on [bubbles.town](https://bubbles.town/). Bubbles is a charming social RSS aggregator. It’s doing a great job at supporting small personal blogs and promoting non-toxic topics. Bubbles is far from perfect though. It probably needs a tech filter. It certainly needs more participation in comments and voting. The developer is actively working to improve the site and a community is growing, so that’s cool to see.
-
-I hope Bubbles can thrive and remain human. This is the web we need to bypass the dead web *Google et. al.* are gatekeeping. Let them wall themselves in with their slop!
+The Campaign to Organize Digital Employees (CODE-CWA) is a network of worker-organizers and their staff working every single day to build the voice and power necessary to ensure the future of the tech, game, and digital industries in the United States and Canada. CODE-CWA is a project of the Communications Workers of America, which represents hundreds of thousands of workers throughout tech, media, telecom, and other industries who stand together to fight for justice on the job and in our communities.

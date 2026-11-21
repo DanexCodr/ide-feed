@@ -1,208 +1,92 @@
-November 19, 2026 - The [PostgreSQL Global Development Group](https://www.postgresql.org)
-today announced the release of [PostgreSQL 19](https://www.postgresql.org/docs/19/release-19.html),
-the latest version of the world's most advanced open source database.
+Before we dive deeper, let's do a quick recap on Enroute's architecture. Enroute separates compute from storage, like many modern databases. A cluster has three parts:
 
-Mission-critical usage of PostgreSQL continues to rapidly rise, and
-PostgreSQL 19 responds to this by simplifying both administration and
-development for these workloads at scale. This release introduces the
-[`REPACK (CONCURRENTLY)`](https://www.postgresql.org/docs/19/sql-repack.html)
-command so users can optimize tables for their current workload without
-disruption to ongoing operations. PostgreSQL 19 gives users better control over
-plan stability and query performance with the new [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
-extension. Developers will find many delightful features in this release, from
-support for "read-your-writes" consistency on standbys to "get or create"
-behavior that saves a network round trip.
+- Compute nodes do the compute-intensive Git work: they receive pushes, validate packs and build them into layers, and serve clones and fetches. They use fast SSDs for caching, but are otherwise ephemeral and can be scaled out easily.
+- Ledger nodes keep one replicated log per repository. They require persistent disk storage. Each log tracks the respective repository's refs and the list of layers that make up its object database.
+- The bucket holds the data layers themselves, as well as some amount of metadata used for coordination.
 
-"For over 30 years, the global open source community has built PostgreSQL into a
-database that organizations trust with their most critical data," said
-Jonathan Katz, a member of the PostgreSQL core team. "PostgreSQL 19 continues
-that commitment to reliability, giving users new ways to manage their workloads
-without disruption and to build applications that span multiple systems."
+## Scaling Multi-Raft and the complexity that came with it
 
-PostgreSQL, an innovative data management system known for its reliability,
-robustness, and extensibility, benefits from 30 years of open source
-development from a global developer community and has become the preferred open
-source relational database for organizations of all sizes.
+When thinking about how many repositories we can fit on a single Enroute cluster, there are really two numbers to consider:
 
-Tables that receive many updates and deletes can build up unused space, known as
-"bloat," which can also significantly impact query performance. The
-`VACUUM FULL` and `CLUSTER` commands were previously used to handle this, but
-had tradeoffs, including preventing access to the table until the cleanup
-finished. PostgreSQL 19 introduces the [`REPACK`](https://www.postgresql.org/docs/19/sql-repack.html)
-command, which reclaims this space and can reorder a table's data to match an
-index, and with `REPACK (CONCURRENTLY)`, can do so without blocking reads or
-writes. `REPACK` replaces the `VACUUM FULL` and `CLUSTER` commands, both of
-which remain available for compatibility.
+1. Active repositories: Repositories that are receiving traffic, for either reads or writes (or both). How efficiently can we process requests that are made concurrently against many repositories? Are there any bottlenecks and if so, at what scale?
+2. Idle repositories: On a platform with hundreds of thousands of repositories, you can expect most of them to be idle at any moment. So it's also very relevant to measure and improve the overhead each idle repository adds, both in terms of work (I/O and CPU) as well as resources (disk space and memory footprint).
 
-The PostgreSQL query planner usually picks an efficient plan for each query, but
-the plan can change as your data changes, and sometimes the new plan is slower.
-PostgreSQL 19 adds the [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
-extension, which allows stabilization of plan choices and the ability to
-experiment with different plans using the "plan advice" mini-language. The companion
-[`pg_stash_advice`](https://www.postgresql.org/docs/19/pgstashadvice.html)
-extension stores advice and automatically applies it to queries based on their
-query identifier, so you can fix a slow plan without changing your application.
+While we had implemented some early optimizations already, two measurements showed where we still fell short:
 
-PostgreSQL 19 also helps [autovacuum](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM)
-keep up on busy systems. Autovacuum can now vacuum indexes using parallel
-workers, controlled by the new
-[`autovacuum_max_parallel_workers`](https://www.postgresql.org/docs/19/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-PARALLEL-WORKERS)
-setting, and uses a new [scoring system](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM-PRIORITY)
-to decide which tables to process first. Queries that read a table can now
-automatically mark pages as all-visible in the [visibility map](https://www.postgresql.org/docs/19/routine-vacuuming.html#VACUUM-FOR-VISIBILITY-MAP) during execution,
-reducing the work that future vacuums need to do. Additionally,
-[`vacuumdb --analyze-only`](https://www.postgresql.org/docs/19/app-vacuumdb.html)
-now analyzes partitioned tables when no tables are specified.
+- Between compute and ledger: following repositories. When starting to push from 8,000 towards 32,000 active repositories, tail latencies began to spike and pushes began to fail. The cause was simple: each compute node held one stream to a ledger for every repository it followed, and the streams ran out. This ended up being cheap to fix by multiplexing repository subscriptions over a fixed set of streams.
+- Between ledgers: agreeing on a leader. With 2,048 concurrent writers across 100,000 repositories, heartbeats began to run late, which caused followers to start elections by the thousands. Throughput fell to about 1,500 pushes per second and the 99th percentile rose to 83 seconds. Compared to the first, this is a deeper problem rooted in how Multi-Raft works.
 
-This release adds new views for monitoring workloads, including
-[`pg_stat_lock`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-LOCK-VIEW)
-for per-lock-type statistics, [`pg_stat_recovery`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-RECOVERY-VIEW)
-for recovery status, and [`pg_stat_autovacuum_scores`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-AUTOVACUUM-SCORES-VIEW)
-to show how autovacuum prioritizes tables. The new `IO` option for
-[`EXPLAIN ANALYZE`](https://www.postgresql.org/docs/19/sql-explain.html) and the
-matching [`auto_explain`](https://www.postgresql.org/docs/19/auto-explain.html#AUTO-EXPLAIN-CONFIGURATION-PARAMETERS-LOG-IO)
-setting report asynchronous I/O activity. PostgreSQL 19 also reports the amount
-of WAL written for full-page images in [`pg_stat_wal`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-WAL-VIEW),
-`EXPLAIN (ANALYZE, WAL)`, and in vacuum and analyze log events.
+Every repository's log was its own state machine on a separate Raft log. Raft keeps a leader alive with heartbeats and when it fails, replaces it with an election, so every log had its own timers, votes, pre-votes and leader. With hundreds of thousands of repositories, that machinery became the workload.
 
-Previously, PostgreSQL often required users to restart their server to enable
-[logical replication](https://www.postgresql.org/docs/19/logical-replication.html),
-which could be disruptive in production workloads. PostgreSQL 19 simplifies
-logical replication initialization by automatically raising the effective WAL
-level to `logical` when you create the first logical replication slot. You can
-see the WAL level in use with the new [`effective_wal_level`](https://www.postgresql.org/docs/19/runtime-config-preset.html#GUC-EFFECTIVE-WAL-LEVEL) setting.
+It turns out that mature Multi-Raft-based systems have a well-known toolbox for this, which we began to make use of as best as possible. We allowed idle logs to go to sleep, moved liveness from each log to the node, and we woke a failed node's logs only as they were needed, to prevent kicking off thousands of leader elections at the same time when a single node fails.
 
-PostgreSQL 19 also adds logical replication of
-[sequence values](https://www.postgresql.org/docs/19/logical-replication-sequences.html),
-which you can publish using `FOR ALL SEQUENCES` with
-[`CREATE PUBLICATION`](https://www.postgresql.org/docs/19/sql-createpublication.html).
-`CREATE PUBLICATION` also adds an `EXCEPT` clause to exclude tables when
-publishing `FOR ALL TABLES`, and [`CREATE SUBSCRIPTION`](https://www.postgresql.org/docs/19/sql-createsubscription.html)
-can now get its connection settings from a foreign server, such as one defined
-with [`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html),
-using the `SERVER` clause. Additionally, the new
-[`retain_dead_tuples`](https://www.postgresql.org/docs/19/sql-createsubscription.html#SQL-CREATESUBSCRIPTION-PARAMS-WITH-RETAIN-DEAD-TUPLES)
-subscription option lets PostgreSQL detect updates that conflict with a
-concurrent delete, and these conflicts are counted in
-[`pg_stat_subscription_stats`](https://www.postgresql.org/docs/19/monitoring-stats.html#MONITORING-PG-STAT-SUBSCRIPTION-STATS).
+These fixes worked. Together, they took the setup that had previously collapsed at 2,048 writers to about 14,000 pushes per second at 100,000 repositories with no failures.
 
-For applications that send reads to standbys, PostgreSQL 19 adds
-"read-your-writes" consistency with the new
-[`WAIT FOR LSN`](https://www.postgresql.org/docs/19/sql-wait.html) command. A
-session on a standby can use `WAIT FOR LSN` to wait until the standby has
-replayed the write-ahead log (WAL) up to a specific
-[log sequence number (LSN)](https://www.postgresql.org/docs/19/wal-internals.html)
-before running a query, so the application can read data it just wrote on the
-primary.
+However, taking a step back, it felt like we were just piling more complexity on top of the core Multi-Raft setup, which is already quite complex to start with. What's worse, this complexity was not only in code, but also directly translated into failure modes and edge cases.
 
-PostgreSQL 19 also improves queries on foreign tables. With the new
-[`import_stats`](https://www.postgresql.org/docs/19/postgres-fdw.html#POSTGRES-FDW-OPTIONS-COST-ESTIMATION) option,
-[`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html) can
-import table statistics from the remote server when you run `ANALYZE`, instead
-of sampling rows from the remote table, which helps the query planner choose
-better plans.
+In short, it became obvious that continuing on this path would lead to a system that would be much harder to understand and operate, which motivated us to start looking for alternatives.
 
-PostgreSQL 19 adds [`INSERT ... ON CONFLICT DO SELECT`](https://www.postgresql.org/docs/19/sql-insert.html#SQL-ON-CONFLICT),
-which lets the `RETURNING` clause return existing rows that conflict with an
-insert, simplifying the common "get or create" pattern.
-[`COPY`](https://www.postgresql.org/docs/19/sql-copy.html) can now output data
-as JSON, including as a single JSON array, and the
-[SQL/JSON path language](https://www.postgresql.org/docs/19/functions-json.html#FUNCTIONS-SQLJSON-PATH-OPERATORS)
-adds string methods such as `lower()`, `upper()`, `replace()`, `split_part()`,
-and `btrim()`. Additionally, the `lead()`, `lag()`, `first_value()`,
-`last_value()`, and `nth_value()` [window functions](https://www.postgresql.org/docs/19/functions-window.html)
-can now skip `NULL` values using `IGNORE NULLS`. The [`random()`](https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-TABLE) function can now also generate random dates
-and timestamps within a range.
+## The design: an appointed sequencer instead of an election
 
-This release also makes many workloads faster without changes to your
-application. PostgreSQL 19 improves the performance of foreign key checks, which
-in testing made bulk inserts nearly 2x faster, and adds more query planner
-optimizations, such as converting `NOT IN` clauses to more efficient anti-joins
-when `NULL` values are not present, and performing
-[eager aggregation](https://www.postgresql.org/docs/19/runtime-config-query.html#GUC-ENABLE-EAGER-AGGREGATE)
-before joins to reduce the number of rows to process. PostgreSQL 19 also builds
-on the [asynchronous I/O](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-METHOD)
-subsystem added in PostgreSQL 18. When `io_method` is set to `worker` (the
-default), PostgreSQL now automatically adjusts the number of I/O workers between
-the new [`io_min_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MIN-WORKERS)
-and [`io_max_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MAX-WORKERS)
-settings, which replace the `io_workers` setting. There are also scalability
-improvements when using [`LISTEN`](https://www.postgresql.org/docs/19/sql-listen.html)
-and [`NOTIFY`](https://www.postgresql.org/docs/19/sql-notify.html) to
-exchange notifications in multi-channel workloads.
+Looking at our setup at this point, most of the complexity came from the fact that we ran membership, and by extension leadership elections, on a per-repository basis. So we began looking at ways we could take leader election out of the per-repository log.
 
-Finally, the new [`password_expiration_warning_threshold`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-PASSWORD-EXPIRATION-WARNING-THRESHOLD)
-setting warns users when their password is about to expire.
+There are a number of systems that put an external configuration master in charge of their replicas today. Among all of those, we liked Vertical Paxos (Lamport, Malkhi and Zhou, 2009) the best. The key insight behind it is that if something outside the log decides who's responsible for deciding its entries, the log itself needs no timers at all.
 
-PostgreSQL 19 adds server-side support for
-[Server Name Indication (SNI)](https://www.postgresql.org/docs/19/ssl-tcp.html#SSL-SNI),
-letting a single PostgreSQL server present a different TLS certificate based on
-the hostname a client connects to. You can map hostnames to their certificates
-and keys in the new [`pg_hosts.conf`](https://www.postgresql.org/docs/19/runtime-config-file-locations.html#GUC-HOSTS-FILE)
-file. PostgreSQL 19 also now issues a warning after a successful `md5` password
-authentication, which you can turn off with the
-[`md5_password_warnings`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-MD5-PASSWORD-WARNINGS)
-setting. `md5` password authentication was deprecated in PostgreSQL 18 and will
-be removed in a future release. If you require password-based authentication,
-use [SCRAM authentication](https://www.postgresql.org/docs/19/auth-password.html).
-This release also removes support for RADIUS authentication.
+To apply this to Enroute, we introduced a singular "root log" that is responsible for tracking node membership per repository, while keeping the actual repository state inside each repository's log (which we'll call "shard log") and which is decided by a "sequencer" that's appointed via the root log.
 
-[Just-in-time compilation (JIT)](https://www.postgresql.org/docs/19/jit.html) is
-now disabled by default, as the cost estimates PostgreSQL used to decide when to
-use it proved unreliable. If you run many large analytical queries, you may want
-to enable JIT. When PostgreSQL is built with LZ4 support, the default
-[TOAST](https://www.postgresql.org/docs/19/storage-toast.html) compression
-method is now `lz4`.
+On top of this, we then kept the parts from Raft that already worked well, and adopted specific pieces from Vertical Paxos.
 
-Many other new features and improvements have been added to PostgreSQL 19 that
-may also be helpful for your use cases. Please see the
-[release notes](https://www.postgresql.org/docs/19/release-19.html) for a
-complete list of new and changed features.
+What we keep from Raft is everything about how a log is written:
 
-[PostgreSQL](https://www.postgresql.org) is the world's most advanced open
-source database, with a global community of thousands of users, contributors,
-companies and organizations. Since its beginnings at the University of
-California, Berkeley over 40 years ago, PostgreSQL has continued with an
-unmatched pace of development. PostgreSQL's mature feature set not only matches
-top proprietary database systems, but exceeds them in advanced database
-features, extensibility, security, and stability.
+- Replication. The sequencer appends entries and sends them to the replicas the way a Raft leader does, and a replica accepts an append only if its log matches up to that point.
+- The commit rule. An entry is committed once a majority holds it and it belongs to the sequencer's own term. A new sequencer starts its term with a no-op, as a Raft leader does.
+- Which replicas can take over. The replica with the most up-to-date log takes over. Raft enforces this through votes, while in our system, the root log applies the same rule to the answers it collects.
 
-For explanations of the above features and others, please see the following
-resources:
+What we adopt from Vertical Paxos is everything about how leadership changes:
 
-There are several ways you can download PostgreSQL 19, including:
+- An external system decides, not the replicas. In Vertical Paxos a configuration master outside the group names its leader and members. Our root log plays that role in Enroute, so shard log replicas never time out or campaign.
+- Fence the old before starting the new. The root log moves to a new shard log term only after a quorum of the old configuration has been sealed against the old one. That is what makes a failover safe without a lease or a clock.
+- Replica changes use the same step. A change of replicas is sealed on a quorum of the old replicas, and the old ones are dropped only once the new term has committed on the new.
 
-Other tools and extensions are available on the
-[PostgreSQL Extension Network](http://pgxn.org/).
+## The root log leader as a placement driver
 
-## Documentation
+In our Multi-Raft setup, every ledger node was a member of every repository's Raft group, so each log lived on all of them. That also meant adding a ledger node added a copy of every log, without any way to spread the load across more nodes.
 
-PostgreSQL 19 comes with HTML documentation as well as man pages, and you can also browse the documentation online in both [HTML](https://www.postgresql.org/docs/19/) and [PDF](https://www.postgresql.org/files/documentation/pdf/19/postgresql-19-US.pdf) formats.
+With this new design, thanks to the root log leader being in charge of appointing sequencers, it is straightforward to extend this responsibility to placement: The root log can now decide which ledger nodes to appoint as responsible for a certain shard log, which means we can distribute the responsibility for tracking repository metadata across a larger pool of ledger nodes.
 
-PostgreSQL uses the [PostgreSQL License](https://www.postgresql.org/about/licence/),
-a BSD-like "permissive" license. This
-[OSI-certified license](http://www.opensource.org/licenses/postgresql/) is
-widely appreciated as flexible and business-friendly, since it does not restrict
-the use of PostgreSQL with commercial and proprietary applications. Together
-with multi-company support and public ownership of the code, our license makes
-PostgreSQL very popular with vendors wanting to embed a database in their own
-products without fear of fees, vendor lock-in, or changes in licensing terms.
+Based on this idea, the root log leader we implemented is already capable of:
 
-Website
+- placing a new repository's three replicas in distinct zones (failure domains) first, then on the members holding the fewest logs;
+- replacing a replica whose node left, and adding replicas to logs created while fewer than three nodes were up;
+- moving a replica when two share a zone and a node in a missing zone is up, never moving the sequencer and moving a replica that is down first;
+- spreading sequencers after a failover by preferring replicas based on who sequences the fewest shard logs.
 
-Postgres, PostgreSQL, and the Elephant Logo (Slonik) are all registered
-trademarks of the [PostgreSQL Community Association](https://www.postgres.ca).
-If you wish to use these marks, you must comply with the [trademark policy](https://www.postgresql.org/about/policies/trademarks/).
+Our plan is to extend this placement logic further in upcoming releases to improve how Enroute balances load across ledger nodes and make this process more continuous rather than purely failover-driven.
 
-PostgreSQL enjoys the support of numerous companies, who sponsor developers,
-provide hosting resources, and give us financial support. See our
-[sponsors](https://www.postgresql.org/about/sponsors/) page for some of these
-project supporters.
+## How we checked it
 
-There is also a large community of
-[companies offering PostgreSQL Support](https://www.postgresql.org/support/professional_support/),
-from individual consultants to multinational companies.
+Consensus protocols can be treacherous, and so a new consensus protocol naturally deserves suspicion. This is where the simpler design pays off: without an election in every log, the protocol is small enough to put under a model checker, which Raft with our fixes layered on top was not. We tested our new design in two ways.
 
-If you wish to make a financial contribution to the PostgreSQL Global
-Development Group or one of the recognized community non-profit organizations,
-please visit our [donations](https://www.postgresql.org/about/donate/) page.
+**Model checking the code the engine runs.** The core protocol is written ("sans-IO" as the cool kids say) as a state machine without I/O: messages, proposals and clock ticks become inputs, and the pending messages and disk I/O tasks are output. This made it possible for us to use [Stateright](https://github.com/stateright/stateright) to exhaustively check the actual implementation rather than just a model, which simulates every possible interleaving of sequencers, appointments, reads, crashes and lost unsynced writes (within small bounds).
+
+**Jepsen against real processes.** Here, our previous investment in setting up a [Jepsen](https://jepsen.io) suite paid off. It drives Git clients while it partitions, kills and pauses nodes, with every ledger on [LazyFS](https://github.com/dsrhaslab/lazyfs) to simulate disk failures, while [Elle](https://github.com/jepsen-io/elle) checks ref reads for strict serializability. While working on our new consensus engine, it found two smaller non-safety-critical bugs not in the engine itself, but in how it integrated with the rest of the system (which is why the Stateright model checks didn't pick it up earlier). Luckily, both were easy to fix.
+
+## What the numbers show
+
+To find out how well these improvements worked, we tested our old implementation (0.3.0) against the new shard log based one (0.4.0), and grew each cluster in steps up to 100,000 repositories, and 0.4.0 on to 300,000.
+
+Two results stand out:
+
+1. Activity can spread across every repository. With 100,000 repositories hosted, we kept the push rate at 500 per second and spread it across more and more of them. At 32,000 active repositories, 0.3.0's p99 push time was 117 seconds. 0.4.0 took pushes across all 100,000 with a p99 of 47 ms. That is the follow stream fix from above at work.
+2. It holds at 300,000, with room to spare. 0.4.0 created all 300,000 repositories without a failed create, at 749 to 2,000 per second, where 0.3.0 managed 312 to 952. With 300,000 repositories in place, we have measured up to 24,000 pushes per second on 0.4, and the ledger nodes used only about 2.5 of their 4 cores.
+
+The real win however doesn't even show in these numbers: Enroute's consensus layer now has far fewer moving parts, which makes it much easier to understand, operate and extend in the future as we continue our scaling journey.
+
+## Where we'll push this next
+
+With the newly won headroom on the ledger tier, here are the directions we're thinking of taking it next:
+
+- A continuous placement driver based on a policy. The controller can already move any log in theory, but it only does so during failover. Next step is to make this a continuous optimization process: moving logs onto nodes with spare capacity and moving sequencers off busy nodes, with sensible thresholds and rate limits.
+- Root log learners. Today every ledger node is a voter in the root log. As clusters grow, we plan to keep three or five voters spread across zones and make the rest learners, so root commits stay cheap however many nodes there are. For the largest clusters, the root log could even move to a node type of its own.
+- Point-in-time restore. However unlikely, losing two of a log's three replicas means manually restoring from volume snapshots today. We are planning to ship ledger changes into S3 continuously so full clusters or selected repositories can be restored to any moment within a retention window.
+- Compute, the next bottleneck. Past 300,000 repositories, the next limit is compute again. You can already put a consistent-hashing router in front of the compute nodes, but we think Enroute can do better by routing internally, so that each compute node follows and caches only its share of repositories.
