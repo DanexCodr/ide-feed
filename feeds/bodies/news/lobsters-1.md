@@ -1,29 +1,29 @@
-I'm proud to announce the second release of Vim Classic, Vim
-		Classic 8.3.1, a stable, long-term support fork of the
-		ubiquitous text editor, maintained without the assistance of
-		generative AI tools.
+I love using [JJ](https://jj-vcs.dev) and recently I’ve found a cool way to handle TODOs that works for me.
 
-For more information about the motivations for this fork,
-		please read
-		[this blog post](https://drewdevault.com/2026/03/25/2026-03-25-Forking-vim.html).
+## In-Tree TODO is Kinda Annoying
 
-This release includes applicable Vim patches up to Vim
-		8.2.3237, including numerous bug fixes, minor features, and
-		compatibility improvements for Vim plugins. This release also
-		removes Python 2 support from Vim Classic.
+Usually I’ll put them in a `TODO.md` file which is pretty standard. But, I forget about this file quickly and am not very good at remembering to cross stuff off. Also since it’s in-tree I’ll often not want to update it, and then forget to do so later.
 
-Vim Classic is charityware, much like Vim, and we are happy to continue
-		supporting Bram's passion of providing for children in need in Uganda.
-		Switching from Vim to Vim Classic would be an opportune moment for you to
-		[make a donation](https://www.kuwasha.net/)!
+## Empty Commits to the Rescue
 
-You can download Vim Classic from SourceHut:
+JJ has a cool feature where you can make empty changes, and even write descriptions for them before actually doing work. So what if I just make all the stuff I wanna do later as empty commits?
 
-This release is signed with
-		[my PGP public key](https://drewdevault.com/publickey.txt).
-		Please subscribe to
-		[vim-classic-announce](https://lists.sr.ht/~sircmpwn/vim-classic-announce)
-		to be notified of important (actionable) news and releases in the future.
-		Last, but not least, let me extend a big "thanks!" to everyone who jumped in
-		to enthusiastically test Vim Classic, provide feedback, and contribute many
-		patches and backports to get this release done.
+![A JJ tree showing a branch of empty commits, the root is called “private: TODO base” and has many empty children with descriptions](https://bwc9876.dev/_astro/jj-todo-tree.CbZTp8jv_2gvqxu.webp)
+
+Pretty nice! When I want to start working on something I’ll rebase it out of my TODO tree and onto some other change.
+
+I need to rebase my “TODO base” forward when i make changes, but because it’s empty it will never have conflicts and can pretty easily move around.
+
+TODOs that depend on other TODOs also naturally fit here, I just make new empty commits on top of other empty commits.
+
+## Keeping Them Private
+
+I have `git.private-commits` configured to make sure nothing with the `private:` prefix will get pushed. This ensures my TODOs stay on my local system. Of course, there are benefits to not doing this.
+
+```
+# In Home Manager...
+
+programs.jujutsu.settings.git.private-commits = "description('private:*')";
+```
+
+Anyway that’s about it, not very ground breaking but something I like.

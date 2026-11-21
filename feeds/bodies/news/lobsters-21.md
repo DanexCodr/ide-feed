@@ -1,434 +1,392 @@
-After some [recent discussion](https://github.com/rust-lang/rust/issues/149359) on the topic of mutex poisoning and notably a [blog post](https://sunshowers.io/posts/on-poisoning/) that I
-thought was interesting, thoughtful, exhaustive, yet completely disagreed with, I wanted to comment
-on the debate myself. To me, poisoning-by-default is one of biggest mistakes that were made in the
-language, next to some others that are a story for a different time.
+`jj` provides primitives for version control that are simple to learn, but elegantly compose into powerful workflows. Features like automatic rebase and native undo soften the sharp edges of Git. Eventually, you’ll organically discover new powerful workflows that would be too cumbersome to attempt with most other VCS tools.
 
-In short, I believe that Mutex poisoning is the wrong choice for most applications, as
+If you work in a Git repository, you can try it today. Jujutsu and Git can be used [side-by-side in the same repository](https://docs.jj-vcs.dev/latest/git-experts/#git-can-be-used-side-by-side-in-the-same-repository), so you can try out `jj` on a `git` repo on your own, without fully ejecting from `git`.
 
-- it significantly pessimises code performance in the general case
-- in addition to hampering readability
-- while encouraging bad code patterns to deal with its weirdness
-- in order to solve a niche problem
-- that doesn’t even solve the general problem.
+Personally, I think `jj` considerably boosts my effectiveness, because it allows me to keep VCS bookkeeping out of my working memory. Automatic rebasing also makes stacked diff workflows quite easy, and reduces thrashing of my working memory. It’s also just a fun tool to use.
 
-## What is poisoning?
+Official installation instructions are [here](https://docs.jj-vcs.dev/latest/install-and-setup/), but here are a few common methods:
 
-In theory, a mutex guards a critical section of the code. That code changes the state of a piece of
-data free from interference of concurrent threads, then releases the lock. That code might then
-encounter an error, and release the lock in the middle of doing its important work. For example:
+In an existing `git` repository, run:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-fn important(always_even: Arc<Mutex<i32>>) -> i32 {
-    // Invariant: always_even must always be even
-    let mut handle = always_even.lock().unwrap();
+From here on, `jj` and `git` repo state will be synchronized automatically.
 
-    *handle += 1;
+To set your user details globally, run commands like these:
 
-    risky_operation();
+You can edit `jj`’s TOML configuration for your user in an editor with:
 
-    *handle += 1;
+In addition to the `--user` scope, `jj config` also has `--repo` and `--workspace` scopes. View the merged config with:
 
-    *handle
-}
+A **commit**, also called a **revision**, is essentially the same thing as a `git` commit. It represents a snapshot of repository state that descends from one or more parent repository snapshots. It is often visualized as a diff against a singular parent commit, or in the case of a merge commit, the diff against multiple parent commits once merged.
 
-fn risky_operation() {
-    if rng().next_u32() % 42 == 0 {
-        panic!();
-    }
-}
+When using a Git repo backend, the `jj` **commit ID** is the same as the `git` commit ID: a hash formatted as a hex string. In the output of `jj log` below, the hex hashes `2bea5e3d` and `849165bc` on the right are commit IDs.
+
+The IDs on the left hand side (`royxmykx` and `kpqxywon`) are **change IDs**, which are stable identifiers for logical changes as they physically evolve over time. We’ll discuss these more in the next section.
+
+Commit IDs and change IDs can be referenced in shorthand with an unambiguous (unique) prefix. `jj` helpfully highlights the shortest unique prefix of most IDs to make it easy to type them manually. For example,
+instead of copying and pasting `kpqxywon`, we can type in a prefix, down to the shortest unique prefix `k`.
+
+We can inspect the commit `2bea5e3d` with `jj show`, using its short prefix `2`.
+
+```bash
+$ jj show 2
+Commit ID: 2bea5e3d1992a60ba9ee52c6ce37c55adba9e8fb
+Change ID: royxmykxtrkrqppotnrvutxlvrvqyxmy
+Bookmarks: main main@git main@origin
+Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:10:46)
+Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:10:46)
+
+    Adjust config
+
+diff --git a/config.py b/config.py
+index 7366a4e31d..174ffea06b 100644
+--- a/config.py
++++ b/config.py
+@@ -1,1 +1,1 @@
+-DEFAULT_LIMIT = 10
++DEFAULT_LIMIT = 20
 ```
 
-The following code will work fine most of the time, but if the dice roll doesn’t go our way, the
-`always_even` mutex gets unlocked in an invalid state. In Rust, today, poisoning exists to handle
-this. If a guard is released abnormally (while panicking), it records that this happened in a
-boolean. Any future calls to `lock()` will return `Err(PoisonError)`, which will trigger a panic
-when we unwrap it. The bad state is never observed and all is well.
+Many folks configure a custom diff formatter, like [Delta](https://github.com/dandavison/delta). See [configuration docs](https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged) if you’re interested.
 
-You might have felt that the example I made up was somewhat contrived. That’s because it is. Real
-cases of this pattern can and do happen, but most of the use cases that involve mutexes are much
-simpler. Many critical sections are no longer than a variable assignment, or doesn’t have an invalid
-in-between state. There are cases in lower level programming where a mutex guards a piece of data
-that is not directly inside it, or is outside the view of the program entirely. In fact, I’ve
-written a wrapper for a C library that worked like that. Though I disagree with the notion that this
-is the common case.
+Let’s take another look at our commit graph:
 
-I do recommend anyone [Rain’s blog](https://sunshowers.io/posts/on-poisoning/) on the matter, as she has some good examples of how
-you can cause violations of these critical sections (even without mutexes) and I wholeheartedly
-support the idea of a `Poison` wrapper for the use cases that need it. I suspect the domains she
-works on lend themselves more towards these issues compared to mine. Rust’s default behaviour should
-make the common case easy and the rare case possible.
+On commit `849165bc`, you’ll see the symbol `@` on the graph node. This represents a snapshot of our **working copy**, or the code we have actually checked out in our local directory. We can inspect this special commit pointer in a variety of ways:
 
-## Side-note: how mutexes work
+`jj show` shows commit details and a diff, which is empty here.
+`$ jj show
+Commit ID: 849165bca19639dbd6ccb53e8c1340e78c36d59a
+Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
+Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:17:12)
+Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:17:12)
 
-This section is only tangentially related to the topic at hand, but I already wrote it and wasn’t
-ready to kill my darlings.<sup>[1](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:mutexes)</sup> Skip to [the next
-section](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#how-poisoning-harms-every-single-piece-of-code) to continue the discussion on poisoning.
+    (no description set)
 
-In Rust, for most platforms, mutexes are implemented using the `futex`<sup>[2](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:futex)</sup> system call. It
-allows for operations to remain purely in user-space as long as the mutex in question isn’t
-contended, which is nice for performance reasons.
+`
 
-Under the hood, a mutex is a simple 32-bit integer on most platforms even though it only holds three
-unique values:
+`jj diff` works much like `git diff`. Its output is empty here, since there are no changes in the current working copy relative to the parent commit.
 
-- If it’s zero, the mutex is free and can be claimed by any thread by a simple atomic compare-exchange.
-- If it’s one, the mutex is held but there are no waiting threads. This is useful to know, as it means there are no threads that we need to wake up when releasing the mutex, and we can yet again remain in userspace.
-- If it’s two, the mutex is held and some other thread is waiting for it. This means some additional care should be taken when unlocking.
-
-Rust implements this with a few atomic operations and the `futex_wait` call. Crucially, the path for
-locking a mutex that *isn’t* contended is a single atomic operation. The only operation that
-requires a context switch is `futex_wait`.
-
-Unlocking is even simpler. The thread that holds the mutex first releases the lock, then optionally,
-if there was an indication that the lock was contended, wakes any sleeping threads so they can try
-to acquire the lock.
-
-## How poisoning harms every single piece of code
-
-As discussed in too much detail above, (un)locking mutexes is cheap as long as they’re not
-contended, and when contended, they are at least cheap instruction wise. This is where poisoning
-mutexes get you.
-
-In short, being able to poison is a cost that is always paid, but seldom used. To start, poisoning
-is essentially implemented by adding an `AtomicBool` field to every `Mutex`. Due to alignment, this
-grows the size of every mutex by anywhere from zero bytes to an additional pointer. This isn’t
-terrible but for use cases where you have many mutexes guarding small objects, this can add up.
-
-The real issue to me however is in code size. Let’s start with another contrived example, a function
-that reads its argument, copies it, and returns it. An idealised version of that would be the
-following.
-
-```
-1
-2
-3
-pub fn get_contents(val: &i32) -> i32 {
-    *val
-}
+```bash
+$ jj diff
 ```
 
-This compiles down to 2 instructions and a label. Copy the data into the register then return.
+This output isn’t very interesting, since `@` has no changes. Let’s make an example change to see what happens. If we edit `main.py` and rerun `jj show`, we see this:
 
-```
-1
-2
-3
-example::check_contents::h197b180b47e24703:
-        mov     eax, dword ptr [rdi]
-        ret
-```
+```bash
+$ jj show
+Commit ID: 66b59f20c534705cfb753c722222290e9185b22c
+Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
+Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
+Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
 
-Of course, this doesn’t work for any context that needs shared mutation, but we can consider it our
-baseline. Perfection would look like this. So, let’s ignore that atomic integers exist and add a
-mutex to this story. We will go over the generated assembly code for each, and you can compare the
-code in its entirety in [this Compiler Explorer overview](https://rust.godbolt.org/z/1jEP5MEGz).
+    (no description set)
 
-### Base case: Locking and unwrapping
-
-We can update the code above to actually use mutexes, and simply lock-then-unwrap the mutex.
-
-```
-1
-2
-3
-4
-5
-use std::sync::Mutex;
-
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap()
-}
+diff --git a/main.py b/main.py
+new file mode 100644
+index 0000000000..c74cd2e0e0
+--- /dev/null
++++ b/main.py
+@@ -0,0 +1,2 @@ def my_new_feature():
++def my_new_feature():
++  pass
 ```
 
-This compiles to a total of *147* lines of assembly which I’m not going to reproduce here in full.
+You’ll notice several things have changed. The working copy has been automatically committed, and `@` is no longer marked `(empty)`. The new commit ID for `@` is `66b59f20`, since we’ve added changes, but the change ID for `66b59f20` is still `kpqxywon`. `jj` has no staging area like in `git`, so we don’t have to manually add files. When we run a `jj` command to inspect or modify repo state after editing files, `jj` automatically snapshots the working copy as a new physical commit for the relevant logical change.
 
-- 75 of those are specifically inlined to this particular function and cannot be reused.
-- About 45 those are monomorphised[3](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:monomorphised) for mutexes guarding an i32
-- The remainder is global program information and might be reused for other locks.
+Let’s give this change a description (also called a commit message). We can either run `jj desc`, which opens an editor, or provide it directly with `-m`.
 
-To divide that up a different way, we have
+Notice again that the commit ID has changed, since the hash covers the commit message, but the change ID has remained stable.
 
-- code checking the poison status
-- code doing the mutex manipulation
-- code to initiate a poison in case of a panic
-- code for preparing to panic should we need to
-- code for displaying a panic
-- some dyn drop glue
+Now, let’s say we’re ready to use this new feature, and we want to organize that change in a separate commit. We can create a new commit with `jj new`:
 
-Most of this is inlined into the function. This in turn affects performance, as this limits how much
-of your “real” code fits in the CPU’s instruction cache. The laptop I’m writing this on has a paltry
-32KiB of instruction cache. Luckily we can do better.
+We’ve created an empty change `nlrtlrxv` on top of `kpqxywon`. `jj status` reflects that we are editing this new revision which does not yet differ from its parent.
 
-### Removing the panic
+`jj commit` is a shorthand for this common `jj desc` and `jj new` combo. Let’s make another change to use our new feature, and commit it.
 
-Most of the code generated in the previous example had to do with setting up the panic, and checking
-the conditions. But we don’t care about panicking. We can simply acknowledge the `PoisonError` and
-continue. That looks as follows:
+To inspect the commit we just created (`n`), we can no longer use the bare `jj show`, which defaults to showing `@`. We have to pass the revision we want to inspect:
 
-```
-1
-2
-3
-4
-5
-6
-use std::sync::Mutex;
-use std::sync::PoisonError;
+```bash
+$ jj show n
+Commit ID: e1b066782aa1a565c1e5d38ef27a308aa58e7e4c
+Change ID: nlrtlrxvuuskxprvtuznquqzqzzwvnzk
+Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:41:30)
+Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:41:30)
 
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
+    Use the feature
+
+diff --git a/main.py b/main.py
+index c74cd2e0e0..0714ec450b 100644
+--- a/main.py
++++ b/main.py
+@@ -1,2 +1,4 @@ def my_new_feature():
+ def my_new_feature():
+   pass
++
++do_something(my_new_feature())
 ```
 
-This results in only 68 lines of assembly, which is much better, though all of it is inlined to our
-function. Compared to before, we’ve lost all panic related code. There’s still some unnecessary
-branching related to whether the mutex is poisoned, as well as a little dance to track poisoning in
-our function. Our function can never panic, but compiler optimisations currently do not remove the
-atomic loads and stores involved here. Nevertheless, if you want to target stable Rust *and* you
-don’t care about panics, this is what you should do at the moment.
+We can describe empty commits to record intent before starting work. Let’s create a new commit on top of `k` to remind ourselves that we need to document the feature.
 
-### The ideal: no poison handling at all
+A separate `jj desc` would also work just fine instead of the `-m` flag on `jj new`. Here’s the current commit graph:
 
-In the current nightly builds of Rust, there are non-poisoning mutexes that can don’t have any of
-the overhead. We can optimise our code from above to make use of them.
+Note how we’ve created branching commits without creating a named branch. This highlights a major difference between `jj`’s branchless model and `git`’s branch-centric model of organizing work streams. Instead of juggling your work-in-progress on branches, you work on a graph of commits. Once ready to share, you push branches to a Git forge from your commit graph (more on that later).
 
-```
-1
-2
-3
-4
-5
-6
-7
-#![feature(nonpoison_mutex)]
-#![feature(sync_nonpoison)]
-use std::sync::nonpoison::Mutex;
+## [Revsets](https://ethanlowman.com/posts/jj-primer/#revsets)
 
-pub fn check_contents(mutex: &Mutex<i32>) -> i32 {
-    *mutex.lock()
-}
-```
+A revset, an idea borrowed from Mercurial, is an expression that selects a set of revisions from the commit graph. Most `jj` commands accept revsets in their arguments. When we ran `jj new k`, the argument `k` was actually a trivial revset that resolved to the single change with ID `kpqxywon`. The `jj log` command has an `-r <REVSET>` flag that we can use to preview a revset. Some demonstrative examples follow.
 
-No unwrapping, and it only results in 34 lines of assembly code. This is short enough for me to walk
-through it.
+Parent of `@`:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-example[da70a55c1c00d324]::check_contents:
-        push    rbp
-        push    rbx
-        push    rax
-        xor     ebp, ebp
-        mov     ecx, 1
-        xor     eax, eax
-        lock    cmpxchg dword ptr [rdi], ecx ; (1) check if mutex is held, and if not, claim it
-        jne     .contended ; (2) mutex was not zero, jump to contended case
-        mov     eax, dword ptr [rdi + 4] ;  (4) if not, load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        je      .exit_with_threads_waiting
-.fast_exit:
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
-.contended:
-        mov     rbx, rdi
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::lock_contended@GOTPCREL] ; (3) Perform the spin/futex_wait loop
-        mov     rdi, rbx ;
-        mov     eax, dword ptr [rdi + 4] ; (4) load the value
-        xchg    dword ptr [rdi], ebp ; (5) unlock the mutex
-        cmp     ebp, 2 ; (6) check if there are other threads waiting
-        jne     .fast_exit
-.exit_with_threads_waiting:
-        mov     ebx, eax
-        call    qword ptr [rip + <std[3ebc094a278a8d54]::sys::sync::mutex::futex::Mutex>::wake@GOTPCREL] ; (7) wake sleeping threads
-        mov     eax, ebx
-        add     rsp, 8
-        pop     rbx
-        pop     rbp
-        ret
+Grandchildren of `r`:
+
+Commits between `r` and `@`, inclusive:
+
+Commit `k` and all descendants:
+
+Commits authored by `ethan@example.com` that also have ID `k` or `q`:
+
+I’ll defer to the official documentation for exhaustive detail. The [Revsets language](https://docs.jj-vcs.dev/latest/revsets/) specification is easily my most referenced `jj` documentation page, so I would recommend skimming it to see what’s possible.
+
+Let’s say in the course of documenting our feature in `qwyusntz` we realized we made a mistake in the implementation in parent change `kpqxywon`. We don’t need to manually commit or stash changes to switch tasks. We simply switch our working copy to `kpqxywon` with `jj edit`:
+
+Our working copy once again shows the changes from `kpqxywon`.
+
+```bash
+$ jj show
+Commit ID: 6b89ffb2a250f622a8638145d65fe8c9bb308dbf
+Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
+Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
+Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:33:23)
+
+    Implement the feature
+
+diff --git a/main.py b/main.py
+new file mode 100644
+index 0000000000..c74cd2e0e0
+--- /dev/null
++++ b/main.py
+@@ -0,0 +1,2 @@ def my_new_feature():
++def my_new_feature():
++  pass
 ```
 
-I’ve added comments and labels to the assembly so the steps from the (un)locking flow charts become
-visible. As far as assembly code goes, it’s very readable and simple. Which, of course, is exactly
-what you want from fundamental library code.
+`jj` hasn’t lost track of the changes above our working copy, including our most recent edits to `q`:
 
-The additional logic checking the poison state, adding a destructor for the mutex guard, and, if you
-choose ergonomics, even panic machinery, significantly bloats the code of a rather fundamental
-operation.
+Instead of switching commits with `jj edit k`, we could have run `jj edit @-`. The revset `@-` is evaluated before switching the working copy, so this moves to the parent commit. The built-in commands `jj next [--edit]` and `jj prev [--edit]` provide another way to move up and down a stack of commits.
 
-## Readability and good habits
+### [Automatic rebasing](https://ethanlowman.com/posts/jj-primer/#automatic-rebasing)
 
-Besides the purely technical argument that poisoning makes all code larger and slower than it needs
-to be, there is a different one. [As discussed previously](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#removing-the-panic), code that doesn’t
-care about mutex poisoning should generally write:
+If we edit files in the working copy, the descendant commits will be automatically rebased upon the next `jj` invocation. For example, if we edit `my_new_feature`’s implementation in `main.py` and then run `jj log`, we’ll see that changes `k`, `n`, and `q` all get new commit IDs. `jj` also tells us that it performed a rebase.
 
-```
-1
-my_mutex.lock().unwrap_or_else(PoisonError::into_inner)
-```
+If the automatic rebase happened to cause merge conflicts, `jj` doesn’t require us to fix them immediately, like `git rebase` would. Instead, `jj` records that the commit is conflicted and lets you carry on with your current task. This is massively helpful to reduce mental context switching, as your stacked commits grow more complex.
 
-It’s reasonably efficient and available on stable Rust. But that whole `unwrap_or_else` part takes
-up more than half the line. No worry, you might say, we can make it shorter:
+To view the conflicts, we can edit the conflicted commit…
 
-```
-1
-my_mutex.lock().unwrap()
+```bash
+$ jj edit n
+Working copy  (@) now at: nlrtlrxv e562bff4 (conflict) Use the feature
+Parent commit (@-)      : kpqxywon c501c0bd Implement the feature
+Added 0 files, modified 1 files, removed 0 files
+Warning: There are unresolved conflicts at these paths:
+main.py    2-sided conflict
 ```
 
-This works well enough. It’s less efficient than the previous example, but it’s nice and short. If
-your code never panics, it’s even perfectly safe. You might have spotted a load-bearing “if”
-already. It’s kind of hard to guarantee your code does not panic. Array indexing, integer division,
-and a whole host of other features might panic unexpectedly.
-
-This is hard for experienced developers, but for those learning it’s even worse. It also trains bad
-habits. Every time a beginner Rust developer writes `unwrap()` instead of handling their errors, a
-puppy steps on a Lego brick. Or [causes a widespread internet outage](https://blog.cloudflare.com/18-november-2025-outage/). One of the
-two, I forget which.
-
-We should not want to include APIs into the standard library that return a `Result` that is
-“expected” to be unwrapped. Infallible operations should not fail.
-
-## Inconsistency
-
-Poisoning protects against a task panicking in the middle of an invariant violation. But why must
-this be specific to mutexes? The example from before works just as well with a simple mutable
-borrow. Panics may still happen, and you may still [catch](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) them.
+And inspect `main.py`.
 
 ```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-fn important2(always_even: &mut i32) -> i32 {
-    // Invariant: always_even must always be even
-    *always_even += 1;
+def my_new_feature():
+  print("Hello from the new feature!")
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: kpqxywon d9f35831 "Implement the feature" (parents of rebased revision)
+\\\\\\\        to: kpqxywon c501c0bd "Implement the feature" (rebase destination)
+-  pass
++  return 42
++++++++ nlrtlrxv 41a43a84 "Use the feature" (rebased revision)
+  pass
 
-    risky_operation();
+do_something(my_new_feature())
+>>>>>>> conflict 1 of 1 ends
 
-    *always_even += 1;
-
-    *always_even
-}
 ```
 
-This is actually a fairly common problem. In a more recent blog post, [researchers at Microsoft
-highlight various places they’ve found where even the standard library gets this
-wrong](https://forge-blog.github.io/posts/rust-std-memory-safety/#pattern-1-trusting-code-not-to-panic).
+In a text editor, we can resolve these conflicts, and the next time we run any `jj` command, we’ll see that `jj` has marked the commit as unconflicted:
 
-In most cases however, this is fine, as it is with the mutex example given in the beginning. You
-don’t need to poison this reference. But for applications where you do, it’s kinda nice to be able
-to.
+Let’s say we made a mistake in that conflict resolution, and we want to undo it. In `git`, undoing an action, if it’s even possible, is often complicated. In `jj`, we can always run `jj undo`:
 
-It’s not hard to imagine a wrapper that adds poisoning behaviour when you want to have it.
-Crucially, this needs to be an additive wrapper. You can add a poisoning system to something. You
-cannot strip out the poisoning system from a primitive that has it. Poison safety is important for
-the specific use cases that need it, but most do not.
+```bash
+$ jj undo
+Undid operation: 35beb0741f17 (2026-11-15 13:08:39) snapshot working copy
+Restored to operation: f134ca987b59 (2026-11-15 13:07:18) edit commit e562bff4876f3ea76248c3f730e9e74d3e28e8a0
+Working copy  (@) now at: nlrtlrxv e562bff4 (conflict) Use the feature
+Parent commit (@-)      : kpqxywon c501c0bd Implement the feature
+Added 0 files, modified 1 files, removed 0 files
+Warning: There are unresolved conflicts at these paths:
+main.py    2-sided conflict
+New conflicts appeared in 1 commits:
+  nlrtlrxv e562bff4 (conflict) Use the feature
+Hint: To resolve the conflicts, start by creating a commit on top of
+the conflicted commit:
+  jj new nlrtlrxv
+Then use `jj resolve`, or edit the conflict markers in the file directly.
+Once the conflicts are resolved, you can inspect the result with `jj diff`.
+Then run `jj squash` to move the resolution into the conflicted commit.
+```
 
-I don’t believe it’s worth it to saddle mutexes in particular with this overhead when the problem is
-near universal with any mutable state. State invariants are just hard that way.
+More generally, `jj` maintains a history of all actions in `jj op log`. We can inspect this log and `jj op restore` to a point in that history, or `jj op revert` an individual operation. If the `jj undo` itself was a mistake, we can `jj redo`.
 
-## Comparison to bounds checking
+The `Hint` in the output above is a bit of a spoiler for our next topic, the squash workflow.
 
-One might draw a comparison between poison safety and buffer safety. In Rust, we always do bounds
-checking, relying on the compiler to optimise it out in cases it can be proven redundant. Can’t
-poison safety be the same? And the answer, it turns out, is no.
+## [Squash workflow](https://ethanlowman.com/posts/jj-primer/#squash-workflow)
 
-The compiler cannot optimise poisoning away. It requires any mutex carry additional data to track
-it. *Maybe* the compiler can figure out one particular critical section cannot panic, and therefore
-it can leave out the setup and clean-up, but in general it cannot avoid checking the state. This is
-overhead that always applies, and hurts, especially in environments where code size is more
-restricted.
+Editing commits that have descendants can sometimes feel sketchy. If you’re iterating on a large diff that has left your working memory, it would be nice to separate your new changes from the existing diff. For example, we might like to inspect the diff that resolves a rebase conflict in isolation.
 
-## De facto standard workarounds
+Let’s follow the instructions from the above output. We first create a new commit on top of the conflicted commit:
 
-In C++, there are a few choices in the standard that make certain containers less efficient than
-they could be<sup>[4](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fn:unordered_map)</sup>. Because of how standardisation works, the containers can never be
-“fixed”. This causes third party implementations, such as Abseil and Boost, to become the de facto
-standard.
+Now we can resolve the conflicts in `main.py` in our editor, and rerun `jj log`:
 
-Mutexes in Rust suffer from the same problem. The standard library has poisoning, but people don’t
-want poisoning, so instead they opt for crates like [`parking_lot`](https://docs.rs/parking_lot/latest/parking_lot/). I believe this is
-bad for the ecosystem as a whole. When the standard library offers a feature, it should be an
-uncontroversially good choice, unless you are doing something hyper specific. We don’t have to be
-“batteries included” but the parts that are there should be a good fit.
+We can inspect the diff in `@` if we like, and when we’re happy with the conflict resolution, we can squash it into the parent commit:
 
-## In conclusion
+The conflict is now resolved, and we can continue our work.
 
-I started out writing this blog in response to a movement to change the default mutex behaviour in
-Rust. It seems to me there are three camps:
+One of the powerful qualities of `jj` is that it makes diffs malleable like clay. With automatic rebase and the confidence inspired by `jj undo`, we can move, combine, drop, and split diffs with ease.
 
-1. Keep the status quo. std::sync::Mutex and friends will have poisoning.
-2. Make std::sync::Mutex propagate panics when poisoned.
-3. Add a non-poisoning variant std::sync::nonpoison::Mutex
-4. Replace std::sync::Mutex with std::sync::nonpoison::Mutex. Poisoning becomes opt-in.
+Let’s try a few operations on our current commit graph. Here’s the starting point.
 
-Rain’s blog argued for option 1. I believe we both agree that option 2 is a terrible idea. I think
-we should do at least option 3. Option 4 would be a good edition improvement, but it is also a
-significant compatibility issue, and even I find it hard to argue that it’s really worth it.
+### [Rebase](https://ethanlowman.com/posts/jj-primer/#rebase)
 
-Which is a roundabout way of saying that we really should stabilise `std::sync::nonpoison` and
-definitely should not make `std::sync::Mutex` panic by default.
+Let’s use `jj rebase` to coerce our branching commit graph into a linear history. Let’s say the documentation commit (`q`) should go between the implementation (`k`) and the usage (`n`). We could accomplish this by moving `nlrtlrxv` (and its empty descendant) on top of `qwyusntz`:
 
-1. It is becoming apparent to me that I just like explaining mutexes and I don’t know what to do about that. [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:mutexes)
-2. Fast Userspace muTEX. See [`futex(2)`](https://man.archlinux.org/man/futex.2) for more on the system call and [`futex(7)`](https://man.archlinux.org/man/futex.7) for its semantics [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:futex)
-3. For generic definitions (e.g. `Mutex<T>`) the compiler must generate code for every unique `T` that gets used, and for loads of reasons often more than once per `T`. The compiler development docs have [a deeper explanation of monomorphisation](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:monomorphised)
-4. A famous example is `std::unordered_map`, which [suffers from being over-specified and that prevents more efficient implementations](https://bannalia.blogspot.com/2022/06/advancing-state-of-art-for.html). [↩︎](https://bertptrs.nl/2026/11/16/mutex-poisoning-is-not-for-everyone.html#fnref:unordered_map)
+Another way to accomplish the same effect would be to use `jj rebase -r q --before n`. Many `jj` commands have multiple ways to specify revsets. `jj rebase --help` documents these well.
+
+Since arguments to `jj rebase` flags are all revsets, we can write a revset that selects a sequence of commits or commit subgraph, and move it elsewhere in the graph.
+
+If we wanted to insert a commit below `k`, the most direct way is `jj new --before k`, but for demonstration purposes, we could alternatively create a new commit on top of `r` and rebase `k::` on top:
+
+If you enjoy using TUIs, `jj arrange` provides a commit graph editor similar to `git rebase -i` for reordering commits.
+
+### [Squash](https://ethanlowman.com/posts/jj-primer/#squash)
+
+If we decided documentation should be in the same commit as implementation, we can squash:
+
+`jj` will open an editor and give us a chance to write a combined commit message.
+
+### [Abandon](https://ethanlowman.com/posts/jj-primer/#abandon)
+
+To drop a commit from the graph, we can use `jj abandon`. Let’s drop the preparation commit:
+
+To abandon parts of a commit (hunks or changes to whole files), we can use the `jj diffedit` TUI (see [docs](https://docs.jj-vcs.dev/latest/cli-reference/#jj-diffedit)).
+
+### [Split](https://ethanlowman.com/posts/jj-primer/#split)
+
+The `jj split` TUI allows us to take a commit and split it into two consecutive commits by selecting which files or hunks should go in the first. Let’s use it to split up implementation and documentation again with `jj split -r k`:
+
+The [jj-hunk](https://github.com/laulauland/jj-hunk) project provides a means to automate commit splitting. If you are so inclined, agents are quite good at using this tool to split up commits into a sequence of smaller changes for easier review.
+
+## [Bookmarks and Git branches](https://ethanlowman.com/posts/jj-primer/#bookmarks-and-git-branches)
+
+`jj` does not have a native concept of a branch, but it does have a primitive called bookmarks that map to Git branches. When we need to manipulate Git branches, we do it by way of bookmarks.
+
+You can go pretty far using Git without realizing this, but a Git branch is just a pointer to a commit. `jj` explicitly models bookmarks this way. `jj` bookmarks are essentially a named label attached to a commit that we can move around as we modify our commit graph, and push to/pull from a remote.
+
+We’ll discuss a few basic workflows around Git branches below, but you can find a more complete guide in the `jj` docs on [Working with GitHub](https://docs.jj-vcs.dev/latest/github/).
+
+Assuming we initialized `jj` in a git repository that has remotes, we should have some output for `jj git remote list`.
+
+Since `jj` is branchless, the commits we’ve created locally don’t have a branch name. Luckily, `jj` doesn’t require us to pick one, and generates one for us. Generated branch names free you from thinking of a unique branch name so you can instead focus on writing a good commit message (usually the more durable descriptor of a change).
+
+To create a generated bookmark for change ID `nlrtlrxv` and push up a corresponding Git branch, we can run a command like the following:
+
+Now `jj log` shows our change with a correspondingly named bookmark `push-nlrtlrxvuusk` associated:
+
+We’re free to create a PR from this branch on GitHub now. You can customize the bookmark naming scheme with the `git_push_bookmark` template config documented [here](https://docs.jj-vcs.dev/latest/config/#generated-bookmark-names-on-push). It’s a common pattern to format branch names like `<author name>/<change ID>`.
+
+Since `jj git push -c` creates a branch name that corresponds to a change ID, it seems to encourage one evolving change per PR. I think it’s usually best to lean into these ergonomics, and have one change per PR.
+
+To update a branch, the general process is to either squash commits into a change that is already bookmarked, or create new commits and move the bookmark forward.
+
+If you choose to squash commits into an existing bookmark (recommended to keep one change per PR), the flow is as follows.
+
+We now see `push-nlrtlrxvuusk` has an asterisk next to it, indicating it has changes that haven’t been pushed to the remote. So let’s push them.
+`$ jj git push -b push-nlrtlrxvuusk
+Changes to push to origin:
+  bookmark: push-nlrtlrxvuusk [move sideways from b1284f61c417 to aeb869aef99b]
+`
+
+The remote branch now reflects the new changes. The above output says that we moved the branch sideways from one commit to another commit, which reflects that we did a force-push. `jj git push` runs the equivalent of a `git push --force-with-lease`, so if you’re ever unclear about what a push operation would do, you can use the `jj git push --dry-run` flag. `jj` protects you against most dangerous force pushes refusing to rewrite a configurable revset of immutable commits. The default immutable revset is sensible, but you can make it more or less conservative by [configuring your own immutable heads](https://docs.jj-vcs.dev/latest/config/#set-of-immutable-commits).
+
+In this flow, we add new commits on top of our bookmark and then move the bookmark to point to our new commit.
+
+Then make our edits.
+
+The bookmark does not automatically move to our new commit. This is the biggest difference between bookmarks and Git branches. For now `push-nlrtlrxvuusk` still points at the commit below:
+
+There are several ways to move the bookmark to the new commit. The easiest is probably `jj bookmark advance`, which moves the closest bookmark to the given commit:
+
+Now we’re ready to push the moved bookmark.
+
+```bash
+$ jj git push -b push-nlrtlrxvuusk
+Changes to push to origin:
+  bookmark: push-nlrtlrxvuusk [move forward from aeb869aef99b to 2341ee4aa554]
+```
+
+Since `jj` is branchless, strictly speaking, we don’t “check out” a branch, but we can create a commit on top of a remote branch. First do the equivalent of a `git fetch`, importing remote bookmarks:
+
+```bash
+$ jj git fetch
+```
+
+And create a new empty commit on top of the remote branch:
+
+Our working copy now contains all the commits on the remote branch. However, if we were to drop back to `git`, we see that from `git`’s perspective, we’re in a [detached head](https://git-scm.com/docs/git-checkout#_detached_head) state, not on any branch.
+
+```bash
+$ git status
+Not currently on any branch.
+nothing to commit, working tree clean
+```
+
+This is because `jj` is editing a commit above a bookmark, and does not have an equivalent to `git`’s “current branch” state.
+
+Syncing with the trunk (e.g. `main`) is just a specific example of this flow. We would `jj git fetch` to update our `main` to the upstream `main`, and then rebase our commits on top. For example, the following would rebase `my-branch` on top of a new `main`:
+
+```
+jj rebase -b my-branch -o main
+```
+
+`jj` commit graph manipulation is easiest when you have a live commit graph on screen. There are different ways you can accomplish this.
+
+[jjui](https://github.com/idursun/jjui) is a TUI for `jj` that allows you to edit the visual graph directly. I have not personally used this, but I know people who like it.
+
+I prefer to have an always-live `jj log` in the corner of my screen by way of [viddy](https://github.com/sachaos/viddy) (a nicer version of `watch` that supports color):
+
+I recommend filtering down this log to a revset that represents your current work. Here’s a starting point:
+
+```
+visible() & (trunk() | (tracked_remote_bookmarks() & ~::trunk()) | (mutable() & mine())::)
+```
+
+You might also consider trying my experimental project [jj-stamp](https://github.com/ethanal/jj-stamp), which is a local code review GUI for the squash workflow. Even if you don’t use the squash review workflow, it makes a pretty good diff viewer with a live `jj log` on the side and a terminal for running `jj` operations.
+
+One of the biggest productivity gains from `jj` comes in its ability to support stacked PR workflows. This merits its own post, so I’ll keep it short.
+
+Large changes are easier to understand when they’re broken up into a series of logical steps. Breaking up a large change into smaller sequential atoms of review makes the whole change easier to understand. Stacked PRs attempt to leverage this fact to optimize merge throughput, while simultaneously removing pipeline stalls in the review process.
+
+Let’s say we’re building a new feature. We can decide we want to split up implementation into three stages:
+
+1. Refactor to make the feature easier to implement
+2. Implement the feature
+3. Use the feature in another system
+
+`jj`’s ability to work on stacked changes with automatic rebase is a natural fit for implementing these three stages. Each of the three stages maps to a single commit, each with an associated bookmark/branch/PR:
+
+After you implement the first change, you can put up a PR for review and immediately start working on the next change. Your work stream becomes a long queue where you pop off the bottom as PRs are ready to merge and push to the top, with no pipeline stalls.
+
+It’s pretty easy to manually set up small PR stacks with `jj` and GitHub, but once you get hooked on the technique (making stacks 5–10 PRs deep), you’ll want a tool. `jj-pancake` is my entry into the ring of stacked PR tools. More on that soon.
+
+- Official Jujutsu docs. I most often refer to the revset spec.
+- Steve Klabnik’s `jj` tutorial was my first introduction to jj. I don’t think it’s maintained as a durable resource (and I don’t promise mine will be!), but it’s still a good read.
+- I follow the jj releases RSS feed. Lately the releases have been packed with new features. Overall jj is quite stable, but the occasional bug is fixed promptly.
+- The Jujutsu discord is active and friendly!
+- The blog of East River Source Control, a company that is building a new forge and code review platform intended to support Jujutsu well. The creator of Jujutsu, Martin von Zweigbergk, has joined as the CTO, and they have lots of other smart people as well. Perhaps a successor to GitHub one day? I’m rooting for them.
+- My personal `jj` config. You might find some useful aliases or tricks here, but I haven’t attempted to make it readable.
+- The `jj` config of Austin Seipp, a jj maintainer. Cool tricks lie within.

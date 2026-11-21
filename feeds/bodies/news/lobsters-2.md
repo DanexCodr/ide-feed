@@ -1,99 +1,156 @@
-I’m pleased to announce a new source control tool, [jj-musubi](https://www.serpentine.com/software/jj-musubi/), that
-live-syncs copies of a Jujutsu (`jj`) repository across multiple machines. Every time jj
-snapshots my work, jj-musubi syncs it to every machine in moments, and also commits, rebases,
-fetches, and so on.
+- C++26 technical work, originally completed in March, was reopened and is now recompleted: The anticipated plan is to reissue the updated C++26 document for a second approval ballot.
+- Most of the six-day meeting was devoted to addressing a second set of international comments for C++26, primarily on the contracts language feature.
+- Adopted this week for draft C++29: break label; continue label;, std::ranges::any_view, views::slice, and more…
 
-This simple capability is surprisingly powerful.
+## Overview
 
-- I often work on one machine, and build or test on others. Now they get my changes as I make them, and I don’t need to remember whether I was editing on my laptop or someplace else.
-- If I fetch changes from or push changes to upstream, all of my copies stay up to date.
+Today, the ISO C++ committee completed technical work on C++26 for a second time in beautiful Búzios, Rio de Janeiro, Brazil (hybrid online via Zoom).
 
-jj-musubi makes repos on multiple machines feel like jj workspaces (worktrees if you speak git).
+As I [reported in March](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/), the ISO C++ committee completed technical work on C++26 at our March meeting; following that, we held [the first meeting of C++29 in June](https://herbsutter.com/2026/06/13/brno-trip-report/). Since then, the approval (Draft International Standard, or DIS) ballot for C++26 was held but, for the first time, did not pass unanimously and was sent back to the ISO C++ committee with additional international comments to address, mostly about the contracts feature (`pre`, `post`, and `contract_assert`). So this week we addressed the additional comments on C++26, including by adopting an extension to contracts and providing a detailed rationale and timeline to inform national bodies of the history and process by which contracts were developed, concerns heard repeatedly, and decisions made. The committee is now producing an updated final document that is anticipated to be sent out for its second international approval (DIS) ballot and final editorial work, anticipated to be published in the near future by ISO.
 
-It’s intended for use by one person who works across several machines, so it has no security
-model (or rather, that *is* the extent of its security model).
+This meeting was hosted by **C++ Alliance**. Thank you to everyone involved and especially to **Matheus Izvekov**, who took the lead in making the arrangements! Our hosts arranged for high-quality facilities for our six-day meeting from Monday through Saturday. We had about 220 attendees, split about 35%/65% in-person/remote-Zoom, formally representing 27 nations. (The higher-than-usual percentage of remote participation was partly because of the U.S. aviation ground stop that disrupted air travel just as experts were trying to fly to the ISO C++ meeting.) At each meeting we have new guest attendees, and this time there were 13 new guests, mostly in person, in addition to new attendees who are official national body representatives. To all of them, once again welcome!
 
-## Things you can do[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#things-you-can-do)
+[The committee](https://isocpp.org/std/the-committee) currently has 22 active subgroups, but this time fewer of them met throughout the week than usual as we focused on the additional C++26 comments.
 
-Jujutsu already treats the working copy as a commit. Running `jj status` records a snapshot of
-my edits in that commit, which jj-musubi then syncs to my other machines. I like to have my
-shell prompt run `jj status`, so in practice I rarely have to think about snapshots.
+## C++26, take 2
 
-jj-musubi does not write to the working copy. Each machine has its own working copy and
-workspaces as usual, so syncs of commits, snapshots, and rewrites can bring in new history while
-a build is running, without changing the files under it. On a laptop, I can work offline, and my
-machine will sync when I’m back on the network.
+The most controversial feature in C++26 is contracts: `pre`, `post`, and `contract_assert`. The committee already had strong consensus, and as of the end of this meeting has still stronger consensus, on including the feature in C++26, but we spent most of this meeting rehearing contracts concerns and working hard again to address them.
 
-This has also proven handy when I have agents working on several machines. I can give each agent
-its own jj workspace on different systems, then run `jj diff -r devbox/agent-1@` on the laptop
-to see what one of them has done so far. If one finds a bug that another needs to fix, they can
-coordinate and see each other’s work without overhead.
+Here is some history (much of this repeated from [my March trip report](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/)): In February 2025, when we took the plenary poll to adopt contracts in the C++26 working draft (“merge it to trunk”), the vote was:
 
-## Ephemeral uses[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#ephemeral-uses)
+**87.7%** in favor:opposed — 100 in favor, 14 opposed, and 12 abstaining
 
-jj-musubi refers to a collection of copies of a repo as a *hive*.
+After that, the concerns were all deeply rediscussed for the last four meetings of the original C++26 cycle thanks to thoughtful and high-quality technical papers explaining the objections; all of those papers continued to be fully heard, often for multiple days and at many telecons between meetings, with some contracts fixes adopted.
 
-I often run agents in temporary disposable VMs. jj-musubi supports this by allowing an agent to
-*lease* its repo’s membership in the hive: if it doesn’t renew that lease in time, its repo gets
-forgotten about, so temporary repos or vanished containers can’t just stack up and clutter
-things.
+At our meeting in March 2026, when we took the plenary poll to finalize and ship the C++26 standard, the vote was non-unanimous primarily because of the sustained concerns about contracts:
 
-## Why I wanted this[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#why-i-wanted-this)
+**90.5%** in favor:opposed — 114 in favor, 12 opposed, and 3 abstaining
 
-Back when I was at Meta, I kicked off the project that became Sapling and Mononoke. Sapling’s
-Commit Cloud gives engineers there a similar way to move work between machines, and Google
-engineers have something similar with an internal jj server.
+As I reported in March: After extensive scrutiny, the ISO C++ committee still wanted C++26 with contracts, and so contracts stayed in C++26 for the ISO DIS ballot.
 
-Since then, I’d missed that everyday convenience for the machines I already use, and felt like I
-could get it without massive infrastructure or hosting. With jj-musubi, one machine runs a hub,
-and daemons exchange jj history with it over SSH. That’s almost as lightweight as you can get.
+Our past ISO C++ DIS approval ballots have always been unanimous. No national bodies (NBs) objected to balloting this C++26 DIS ballot. However, during the ISO DIS process, additional late concerns were raised about contracts, including from five NBs that raised contracts concerns for the first time and voted Disapprove on C++26 because of them (see also my paper [P4454R0](https://isocpp.org/files/papers/P4454R0.pdf) section 2.3). The result, which surprised nearly everyone, was that the first DIS was not approved.
 
-## Safety[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#safety)
+Therefore we spent most of the week in Búzios rehearing the NB comments on the DIS, which were mostly about contracts. One requested extension to contracts was adopted in response to NB comments (see next section). Other suggested changes were not adopted, notably the request by multiple comments to remove contracts from C++26; the committee discussed, revoted, and reaffirmed it wants to retain contracts in C++26.
 
-What’s tricky is getting concurrent work *right*. That’s already hard in any distributed source
-control system, and when syncs are live *and* we plan for disconnected work in an unreliable
-network, the difficulty goes way up.
+This week, the vote to reship the C++26 standard with the changes to C++26 adopted at this meeting, including an additional extension to contracts in response to the international comments and retaining contracts as part of C++26, was:
 
-As a user, I shouldn’t have to care about when exactly I can safely close my laptop after
-finishing an edit; all of my changes should make it through either just before I close it, or
-right after I reopen. No work should get lost or corrupted in the presence of interrupts,
-resends, delays, or machines sleeping, and the system should stay reliable even when machines go
-offline forever.
+**92.5%** in favor:opposed — 111 in favor, 9 opposed, and 8 abstaining
 
-I used Lean to prove key properties of jj-musubi’s network protocol, and tests compare the Rust
-code against that model. An extensive body of other tests run real jj repositories through
-concurrent edits, interrupted syncs, hub restarts, and a myriad of other nasty situations.
-Mutation and adversarial testing ensure that when bugs are injected, sensible things happen. The
-[safety guide](https://www.serpentine.com/software/jj-musubi/safety/) details all the checks (and the parts I don’t yet cover).
+Thank you again to everyone in the committee who has been working hard together to discuss and address these concerns, including all week long again this week!
 
-## Concurrent edits without commits…!?[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#concurrent-edits-without-commits)
+## Changes to C++26 adopted this week (and for draft C++29)
 
-It might sound spooky or dangerous to be able to see in-progress work on one machine from
-another. How can that be safe?
+For C++26, we adopted four main papers and fixed some editorial issues. All of these changes were also adopted for draft C++29, which keeps the standards work in sync rather than forking.
 
-If you use jj in multiple workspaces, you’re already used to the novelty of being able to check
-out the same change in two workspaces and modify it. jj simply marks the change as divergent,
-but it won’t update either working copy with changes from the other until you decide to, e.g. by
-calling `jj workspace update-stale`. In jj, dealing with divergent versions of a change is
-similar to any other kind of conflicted merge.
+The primary change to contracts was to adopt **[P4451R2 “Early Adoption of an Always-Enforced Label”](http://isocpp.org/files/papers/P4451R2.pdf)** by **Joshua Berne** (in a similar spirit to Romania’s paper [P3911R2 “Make Contracts Reliably Non-Ignorable”](https://isocpp.org/files/papers/P3911R2.html)).  Thanks, Romania and Josh!
 
-jj-musubi uses jj’s existing workspace machinery, so everything will feel familiar. The only
-difference is that when you run jj-musubi, a workspace’s name is prefixed with the name of the
-machine it lives on.
+This paper addresses what several NBs told the committee was their primary request for contracts: It is a pure extension that gives programmers a way to express in source code that a specific contract is always enforced, guaranteeing that “program execution will not continue past the contract assertion if it is violated, regardless of the semantics of other contract assertions” that various parts of the program may be built with. This is forward-compatible with proposals like [P3400R5](http://isocpp.org/files/papers/P3400R5.pdf) being considered for C++29.
 
-## Try it[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#try-it)
+From the paper:
 
-Start with e.g. a laptop and another machine that’s always on (let’s call it `devbox`), with a
-copy of a jj repo on each. On each machine, [download the
-binary](https://github.com/bos/jj-musubi/releases/) or build it yourself:
-
-```sh
-cargo install --locked jj-musubi
 ```
 
-Run `musubi hub` on `devbox`; it will keep your sync data in `~/musubi-hub`. In the laptop’s
-repo, run `musubi create --hub devbox`. In `devbox`’s repo, run `musubi join`.
+#include <contracts>
 
-I provide [builds for Linux, macOS and Windows](https://github.com/bos/jj-musubi/releases/), and the [quick start](https://www.serpentine.com/software/jj-musubi/get-started/)
-walks through setup and the first sync. If you try it and something surprises you, I’d like to
-[hear about it](https://github.com/bos/jj-musubi/issues).
+int f(int x)
+    pre<std::contracts::controls::enforced>(x > 0)
+    post<std::contracts::controls::enforced>(r : r > 0)
+{
+    contract_assert<std::contracts::controls::enforced>(x > 0);
+    return x;
+}
+
+// Because the label is found by ordinary name lookup,
+// a namespace alias or a using-directive works as well:
+
+namespace scc = std::contracts::controls;
+
+int h(int x)
+    pre<scc::enforced>(x > 0)
+    post<scc::enforced>(r : r > 0)
+{
+    contract_assert<scc::enforced>(x > 0);
+    return x;
+}
+
+using namespace std::contracts::controls;
+
+int g(int x)
+    pre<enforced>(x > 0)
+    post<enforced>(r : r > 0)
+{
+    contract_assert<enforced>(x > 0);
+    return x;
+}
+```
+
+We also adopted the following for C++26:
+
+**[P4466R2 “Selectively transparent *using-declarators* (response to FI-067)”](https://isocpp.org/files/papers/P4466R2.html)** by **Dan Katz and Tomasz Kamiński** addresses a ballot comment to make reflection work more consistently with modules (especially module `std`), while leaving room for intended fuller support for `using`-alias reflection in C++29. Thank you, Dan and Tomasz!
+
+**[P4453R1 “Memory allocation with senders/receivers; a response to IE-133”](https://isocpp.org/files/papers/P4453R1.html)** by **Dietmar Kühl and Lucian Radu Teodorescu** addresses a ballot comment to offer more flexible control over memory allocation with std::execution. Much appreciated, Dietmar and Lucian!
+
+**[P3861R1 “Pragmatic approach to standard structural types”](https://isocpp.org/files/papers/P3861R0.pdf)** by **Corentin Jabot** makes reflection more useful. Thanks, Corentin! This paper allows more use of `string_view`, `span`, and `tuple`, including to use them as template parameters and to create type-safe strings at compile time that can be used at execution time.
+
+## Adopted for C++29: Core language changes/features
+
+We actually also did some work on C++29! Here are some highlights.
+
+> *These links are to the most recent public version of each paper. If a paper was tweaked at the meeting before being approved, the link tracks and will automatically find the updated version as soon as it’s uploaded to the public site.*
+>
+> *Several of the adopted language and library additions are already supported today in major C++ implementations. “Adopted for C++29” doesn’t mean “have to wait until 2029 or later to start seeing some support in real compilers / standard libraries.”*
+
+In addition to fixing a list of issues, we adopted five papers for the C++29 core language, including the following…
+
+**[P0085R5 “Oo… adding a coherent character sequence to begin octal-literals”](http://wg21.link/p0085)** by **Jolly Chen, Axel Naumann, Michael Jonker** (all of CERN) gets the award for “most patient paper adopted at this meeting” — thanks, Jolly, Axel, and Michael! Its initial revision was published in 2015, and this week we adopted it: Finally, portable C++ will support “`0o`” (zero, lowercase-O) and “`0O`” (zero, uppercase-O) as a way to introduce octal literals, and the old prefix “`0`” is deprecated for that purpose.
+
+**[P3568R4 “`break label;` and `continue label;`”](http://wg21.link/p3568)** by **Jan Schultke** adds labeled `break` and `continue` to draft standard C++. Thanks, Jan! A loop can now be preceded by a “`label:`” (or more than one) that names it, and can be a target for `break` and `continue` to say which of a set of nested loops is intended. Here is an example from the updated standard wording itself (lightly edited):
+
+```
+
+a: b: while (/* ... */) {
+  a: a: c: for (/* ... */) {
+    break;          // OK, terminates enclosing for loop
+    break a;        // OK, same
+    break b;        // OK, terminates enclosing while loop
+    y: { break y; } // error: y is not a breakable statement
+  }
+  break c;          // error: c is not an enclosing statement
+}
+```
+
+We also added several other language extensions and improvements.
+
+## Adopted for C++29: Standard library changes/features
+
+In addition to fixing a list of issues, we adopted seven papers for the C++29 standard library, including the following…
+
+**[P3411R7 “`any_view`”](http://wg21.link/p3411)** by **Hui Xie, Louis Dionne, S. Levent Yilmaz, and Patrick Roberts** adds the type-erased `std::ranges::any_view` to the standard library. Thank you, authors! The paper’s abstract summarizes it well: “That type-erased view allows customizing the traversal category of the view, its value type and a few other properties. For example:”
+
+```
+
+class MyClass {
+    std::unordered_map<Key, Widget> widgets_;
+public:
+    std::ranges::any_view<Widget> getWidgets();
+};
+
+std::ranges::any_view<Widget> MyClass::getWidgets() {
+    return widgets_ | std::views::values
+                    | std::views::filter(myFilter);
+}
+```
+
+**[P3216R6 “`views::slice`”](http://wg21.link/p3216)** by **Hewill Kang** adds the `views::slice` adaptor to the draft C++29 ranges library. Thanks, Hewill! This provides a standard way to extract a contiguous subrange from a sequence by specifying a start index and an end index. It is also the first adaptor that takes two parameters (start and end).
+
+**[P4189R0 “get()ing the pointer from optional”](http://wg21.link/p4189)** by **Nevin Liber** provides a portable way to get a pointer to the contained object of a `std::optional` by adding the `.get_ptr()` member function. Thank you, Nevin!
+
+We also added several other library extensions and improvements.
+
+## Wrapping up
+
+Thank you again to the about 220 experts who attended in person and online at this week’s meeting, and the many more who participate in standardization through their national bodies!
+
+But we’re not slowing down… we’ll continue to have subgroup Zoom meetings, and then our next full meeting will be in [Istanbul, Türkiye, in March](https://isocpp.org/files/papers/N5057.pdf), where we’ll continue adding features to C++29. I look forward to seeing many of you there.
+
+Thank you to everyone reading this for your interest and support for C++ and its standardization.
