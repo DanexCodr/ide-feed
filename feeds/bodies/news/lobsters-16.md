@@ -1,19 +1,99 @@
-**San Francisco, Calif.** — On Friday, November 20, workers at [Internet Archive](https://archive.org/) announced their intent to form a union with the Communications Workers of America (CWA). They are seeking to join CWA Local 9415 in Oakland, California.
+I’m pleased to announce a new source control tool, [jj-musubi](https://www.serpentine.com/software/jj-musubi/), that
+live-syncs copies of a Jujutsu (`jj`) repository across multiple machines. Every time jj
+snapshots my work, jj-musubi syncs it to every machine in moments, and also commits, rebases,
+fetches, and so on.
 
-In a letter sent this morning via email, members of the union’s organizing committee presented management with a request for voluntary recognition after a supermajority of eligible workers signed cards signaling their desires for union representation. Worker-organizers for the union have also simultaneously filed a petition for a union certification election with the National Labor Relations Board (NLRB); if Internet Archive grants the union’s request for voluntary recognition, organizers will withdraw the NLRB petition.
+This simple capability is surprisingly powerful.
 
-“We are forming a union because we care deeply about the Internet Archive, its patrons, and its place as a vital part of the internet ecosystem. Now more than ever, we want the Internet Archive to last for the generations to come,” **said organizing committee member Danielle Leard, a digitization technician for the Internet Archive**. “Sustaining workers long-term, through job security, livable wages, and sufficient benefits, goes hand-in-hand with sustaining the Archive long-term.”
+- I often work on one machine, and build or test on others. Now they get my changes as I make them, and I don’t need to remember whether I was editing on my laptop or someplace else.
+- If I fetch changes from or push changes to upstream, all of my copies stay up to date.
 
-“Throughout the years, many of us have witnessed the significant extent to which the Internet Archive and its patrons benefit from some of the most talented, dedicated, and overall purpose-driven folks that we’ve had the privilege of working alongside,” **said organizing committee member Chelsea Richelle Smith, a patron services specialist at Internet Archive**. “At its core, we all share the collective desire to foster a workplace in which everyone thrives. We believe in continuing to build towards a democratic environment where the workers have a meaningful voice in the work that we do and the conditions under which that work is done, in alignment with each other and the organization’s overall mission.”
+jj-musubi makes repos on multiple machines feel like jj workspaces (worktrees if you speak git).
 
-The Internet Archive is one of the world’s largest and oldest libraries of digitized media, with nearly 120 librarians, engineers, technicians, project managers, media specialists, facilities workers, and administrative staff making up the proposed unit. Together, Internet Archive workers ensure that the Archive remains a beacon of equitable knowledge to millions of users worldwide through several different services, such as the Wayback Machine, Open Library, and most recently, the digital preservation of government documents.
+It’s intended for use by one person who works across several machines, so it has no security
+model (or rather, that *is* the extent of its security model).
 
-“In solidarity with workers across the country, we aim to model the practice of workplace democracy and the building of technology that benefits the public,” **said organizing committee member Will Howes, an engineer on the Internet Archive’s Wayback Machine**. “We organized the Internet Archive not only for each other as coworkers, but to show the tech and non-profit sectors what is possible. Any worker can and should believe that talking to their colleagues today is the first step towards improving their workplace conditions.”
+## Things you can do[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#things-you-can-do)
 
-The union’s announcement marks the latest effort to democratize universal and free access to knowledge; in September, [U.S.-based Wikimedia Foundation workers secured union recognition with CWA](https://cwa-union.org/news/releases/wikimedia-foundation-workers-overwhelmingly-vote-form-union-cwa), and in the union’s vision statement, worker organizers cited the successful unionization efforts at the Free Software Foundation (FSF) and the Electronic Frontier Foundation (EFF) as inspirations for organizing.
+Jujutsu already treats the working copy as a commit. Running `jj status` records a snapshot of
+my edits in that commit, which jj-musubi then syncs to my other machines. I like to have my
+shell prompt run `jj status`, so in practice I rarely have to think about snapshots.
 
-“In a rapidly evolving technology landscape, collective action and strong workplace protections help ensure that workers are heard and respected,” **said CWA Local 9415 President Decovan Rhem**. “We are proud to stand strong with the Internet Archive workers to obtain union recognition and advocate for a positive, inclusive workplace.”
+jj-musubi does not write to the working copy. Each machine has its own working copy and
+workspaces as usual, so syncs of commits, snapshots, and rewrites can bring in new history while
+a build is running, without changing the files under it. On a laptop, I can work offline, and my
+machine will sync when I’m back on the network.
 
-The union has launched a [petition](https://actionnetwork.org/petitions/internet-archive-petition/) to garner public support for voluntary recognition. For more updates, follow Internet Archive Labor Union-CWA Local 9415 (IALU-CWA) on [Bluesky](https://bsky.app/profile/ialucwa.bsky.social), Instagram, [Mastodon](https://mastodon.social/@IALUCWA), and Tumblr.
+This has also proven handy when I have agents working on several machines. I can give each agent
+its own jj workspace on different systems, then run `jj diff -r devbox/agent-1@` on the laptop
+to see what one of them has done so far. If one finds a bug that another needs to fix, they can
+coordinate and see each other’s work without overhead.
 
-The Campaign to Organize Digital Employees (CODE-CWA) is a network of worker-organizers and their staff working every single day to build the voice and power necessary to ensure the future of the tech, game, and digital industries in the United States and Canada. CODE-CWA is a project of the Communications Workers of America, which represents hundreds of thousands of workers throughout tech, media, telecom, and other industries who stand together to fight for justice on the job and in our communities.
+## Ephemeral uses[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#ephemeral-uses)
+
+jj-musubi refers to a collection of copies of a repo as a *hive*.
+
+I often run agents in temporary disposable VMs. jj-musubi supports this by allowing an agent to
+*lease* its repo’s membership in the hive: if it doesn’t renew that lease in time, its repo gets
+forgotten about, so temporary repos or vanished containers can’t just stack up and clutter
+things.
+
+## Why I wanted this[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#why-i-wanted-this)
+
+Back when I was at Meta, I kicked off the project that became Sapling and Mononoke. Sapling’s
+Commit Cloud gives engineers there a similar way to move work between machines, and Google
+engineers have something similar with an internal jj server.
+
+Since then, I’d missed that everyday convenience for the machines I already use, and felt like I
+could get it without massive infrastructure or hosting. With jj-musubi, one machine runs a hub,
+and daemons exchange jj history with it over SSH. That’s almost as lightweight as you can get.
+
+## Safety[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#safety)
+
+What’s tricky is getting concurrent work *right*. That’s already hard in any distributed source
+control system, and when syncs are live *and* we plan for disconnected work in an unreliable
+network, the difficulty goes way up.
+
+As a user, I shouldn’t have to care about when exactly I can safely close my laptop after
+finishing an edit; all of my changes should make it through either just before I close it, or
+right after I reopen. No work should get lost or corrupted in the presence of interrupts,
+resends, delays, or machines sleeping, and the system should stay reliable even when machines go
+offline forever.
+
+I used Lean to prove key properties of jj-musubi’s network protocol, and tests compare the Rust
+code against that model. An extensive body of other tests run real jj repositories through
+concurrent edits, interrupted syncs, hub restarts, and a myriad of other nasty situations.
+Mutation and adversarial testing ensure that when bugs are injected, sensible things happen. The
+[safety guide](https://www.serpentine.com/software/jj-musubi/safety/) details all the checks (and the parts I don’t yet cover).
+
+## Concurrent edits without commits…!?[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#concurrent-edits-without-commits)
+
+It might sound spooky or dangerous to be able to see in-progress work on one machine from
+another. How can that be safe?
+
+If you use jj in multiple workspaces, you’re already used to the novelty of being able to check
+out the same change in two workspaces and modify it. jj simply marks the change as divergent,
+but it won’t update either working copy with changes from the other until you decide to, e.g. by
+calling `jj workspace update-stale`. In jj, dealing with divergent versions of a change is
+similar to any other kind of conflicted merge.
+
+jj-musubi uses jj’s existing workspace machinery, so everything will feel familiar. The only
+difference is that when you run jj-musubi, a workspace’s name is prefixed with the name of the
+machine it lives on.
+
+## Try it[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#try-it)
+
+Start with e.g. a laptop and another machine that’s always on (let’s call it `devbox`), with a
+copy of a jj repo on each. On each machine, [download the
+binary](https://github.com/bos/jj-musubi/releases/) or build it yourself:
+
+```sh
+cargo install --locked jj-musubi
+```
+
+Run `musubi hub` on `devbox`; it will keep your sync data in `~/musubi-hub`. In the laptop’s
+repo, run `musubi create --hub devbox`. In `devbox`’s repo, run `musubi join`.
+
+I provide [builds for Linux, macOS and Windows](https://github.com/bos/jj-musubi/releases/), and the [quick start](https://www.serpentine.com/software/jj-musubi/get-started/)
+walks through setup and the first sync. If you try it and something surprises you, I’d like to
+[hear about it](https://github.com/bos/jj-musubi/issues).

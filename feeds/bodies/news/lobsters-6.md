@@ -1,47 +1,115 @@
-last christmas i was incredibly bored and decided to bring my old minecraft server scanner [slowstack](https://sipacid.com/projects/slowstack/) back to life. i originally made it to find [liveoverflow’s ctf server](https://www.youtube.com/watch?v=Ekcseve-mOg&list=PLhixgUqwRTjwvBI-hmbZ2rpkAl4lutnJG). it’s basically just a port scanner with the minecraft protocol hooked up to it: it scans the internet for minecraft servers and displays them in a pretty format on a website.
+SQLite is one of my favorite database technologies. It's a full SQL database, designed as an embeddable library, that stores all its data in a single file. The `sqlite3` command line tool is great too. You point it at a file and run queries. There's no server to run.
 
-a few months into running this project, i noticed someone had registered an account with a @mojang.com email address and thought: surely that can’t be the real mojang? am i in trouble? within the next few days i received an email from mojang. to my surprise, they weren’t asking me to shut my project down, but rather asking if i could help them debug an issue with my api. attached was a screenshot of their “investigation tool”.
+At the other end of the spectrum is Postgres. It's the most capable general purpose SQL database, trusted in production at scale, and is something of an industry standard. With that comes complexity, starting with the fact that it's client-server.
 
-![a screenshot of mojang’s investigation tool](https://sipacid.com/_astro/investigation-tool.B5CzpuYH_Z12RXIP.webp)
+SQLite is a natural fit for software that needs a database but isn't meant to be deployed in the cloud at scale: desktop apps, self-hosted tools, things you run locally. These applications can use SQLite and manage it themselves, so you barely know there's a database involved.
 
-their tool showed that mojang was also using other services like mcscans and the one from [cornbread2100](https://cornbread2100.com). at this point i still had no clue what they were using the data for, but i didn’t really care, because i had mojang, the company behind minecraft, as one of my users, which to me was really cool. so of course i helped them fix their issue.
+So when you find self-hostable open source software you'd like to run on your own computer, it can be daunting when it says it requires Postgres. Now you're responsible for setting up a database and getting it ready for the software to use.
 
-## banned servers
+Sure, you can run Postgres in Docker, and plenty of projects recommend it. But now you have two dependencies. If you don't already have Docker, you have to install it, which can mean a VM and a daemon on your machine. Then you have to run Postgres in it and make sure it's running whenever you use the software. That's a lot just to try something you don't know you want yet.
 
-though my views on mojang did eventually change. one day i stumbled upon [this reddit post](https://reddit.com/r/MinecraftServer/comments/1vwi3nb) where op talked about getting an email from mojang, forwarded by their isp, saying their minecraft server violated mojang’s guidelines.
+Wouldn't it be great to have the SQLite experience, but with Postgres?
 
-now this wouldn’t be that weird if they were hosting a gambling server, but in this case it was just a private server for friends and this was not the only instance. there were more posts from people having a somewhat similar experience. even a popular server provider had been getting emails from mojang because their customers’ minecraft servers were violating mojang’s guidelines, and all of this started around the same time mojang registered their account on my website.
+That's 
+              [miniPG](https://progrium.github.io/minipg/)
+              . It isn't Postgres as a library. There's already a WASM project for that, reasonably called [PGlite](https://pglite.dev/). miniPG is closer to the SQLite CLI: a single program that embeds a full Postgres server and client, wrapped up so you can use it the way you'd use `sqlite3`. Point it at a path, that path becomes the database, and you can run queries against it right away. There's no server to set up or keep running.
 
-after reading all this i was convinced that mojang had been using my data to ban minecraft servers. to confirm my suspicion, i looked through the logs and indeed found mojang searching for inappropriate server descriptions, such as the n-word, “pussy” and much more.
+Jumping into a new Postgres database to try something out or debug it is now easier than using Postgres in a Docker container, and you don't need Docker at all. And miniPG still provides a fully functional Postgres server for software that needs one. In many cases, you can just launch an open source program that looks for its Postgres config in the environment with miniPG.
 
-![a screenshot of mojang searching for inappropriate text in the website logs](https://sipacid.com/_astro/inappropriate-server-logs.BKApNBeW_Z1MFr1F.webp)
+## miniPG in 30 seconds
 
-now you might be thinking “but how can we trust people from reddit?” well, we don’t have to. mojang publishes [a hashed list](https://sessionserver.mojang.com/blockedservers) of banned ip addresses and domains/subdomains. cross-referencing that with my scanner’s data turned up some fun ones. mojang banned a server whose favicon was a blahaj and whose description was just “faggot”, and another that does nothing but quote lil wayne.
+miniPG comes as a single, self-contained executable. You can just point it at a directory and run a query. There's no server to start, nothing to configure, and the result comes back immediately.
 
-yes, most of the servers mojang has banned using my data were *technically* violating their guidelines. their [guidelines](https://www.minecraft.net/en-us/usage-guidelines) state that you can’t be “unlawful, deceptive, obscene, harmful, or abusive”, servers that make money have to be “suitable for audiences of all ages”, and the [community standards](https://www.minecraft.net/en-us/community-standards) have a “zero-tolerance policy towards hate speech”. none of it actually mentions motds, server descriptions or the blocklist, though.
+```
+minipg ./mydb "create table notes (id serial, body text)"
+minipg ./mydb "insert into notes (body) values ('hello')"
+minipg ./mydb "select * from notes"
+```
 
-that said, these servers could have been banned for violating the guidelines in some more serious way that we don’t know of. so, to rule that out, i asked some of my friends to set up private, whitelisted servers with minor “inappropriate” server descriptions, and within a week their servers were also banned by mojang.
+That directory is the database. When nothing is using it, it's just files on disk. You can copy it, back it up, or delete it.
 
-## but why would they use third-party services?
+This is actually real Postgres, not a compatibility layer, and this binary compiles to Mac, Windows, and Linux.
 
-great question. surely they could just use all of the telemetry that they have been collecting; after all, it’s their software. unless, of course, they never collected that data in the first place. but it’s just one claude prompt. surely they could add the telemetry to their game, unless for whatever privacy reasons they can’t do that. really makes you wonder why they are using third-party services instead of just handling this like any other company.
+When some software expects a Postgres server, miniPG can be one:
 
-for a while, i just ignored the issue. i mean, yeah, kids’ minecraft servers were getting banned because of some friendly banter, but servers from nazis and racists were also getting banned, so i told myself “it’s whatever” and stopped looking at it.
+```
+minipg serve ./mydb -p 5432
+```
 
-that was until about two months ago, when i got an email from mojang suggesting i should also start scanning the ipv4 space for minecraft bedrock servers. up until then i’d only been scanning for the java edition, because that is what i mostly played on.
+Like I mentioned before, it can even launch programs with environment variables that configure it for this Postgres database:
 
-![a screenshot of mojang suggesting i should implement bedrock support for the server scanner](https://sipacid.com/_astro/bedrock-support.BPT4hZW9_1TvzdC.webp)
+```
+minipg run ./mydb -- some-tool
+```
 
-really mojang? have you thought about adding telemetry to your server executables instead of asking some unemployed loser to get the data for you? i obviously *love* doing charity work, so i immediately started refactoring the codebase to add bedrock support :)
+When the program is terminated, there's no database daemon to leave around or remember to stop. Only the data itself is kept right there on disk, ready to be used next time.
 
-## please give me all of your data
+Instructions for getting it and even an interactive demo are available on the 
+              [miniPG website](https://progrium.github.io/minipg/)
+              .
 
-a few weeks later, after handling dozens of forwarded abuse complaints from people who don’t know what a firewall is (and the occasional upset university), i didn’t feel like dealing with them anymore and shut it all down, with 24 hours’ notice. i even emailed mojang to let them know, which they responded to by asking for data exports and (indirectly) the source code of the project.
+## Who is it for?
 
-![a screenshot of mojang asking for data exports and source code](https://sipacid.com/_astro/data-exports-source-code.3FC4NwGk_Z1CPaas.webp)
+Software people, from developers to open source power users, and agents too, can use miniPG whenever they'd reach for SQLite but need Postgres.
 
-no, mojang, you can’t “snag” my data. if you want a minecraft server scanner, just use [matscan](https://github.com/mat-1/matscan) or pipe masscan output to a shitty python script. or, you know, offer to cover my hosting costs and i *might* reconsider.
+- Running software that only supports Postgres. This is what got me started. Self-hosting a tool shouldn't always mean operating a database server first.
+- Embedding Postgres in your own programs. If your tool needs Postgres, and PGlite doesn't cut it, you can ship and use miniPG. Users who don't care won't have to think about it, and users who want control can use it like sqlite3 to work with their data.
+- SQLite-style apps that need Postgres features. JSONB, full text search, window functions, extensions like pgvector or PostGIS. Postgres does so much more than SQLite, but it often wasn't worth the dependency.
+- Learning and experimenting with Postgres. No server, no config. Point it at a directory and start typing SQL.
+- Tests, local dev, and agents. A throwaway database per test, or a local copy of the same database you run in production, without Docker. Agents can spin up a real Postgres for a task and throw it away when they're done.
 
-## closing and final thoughts
+This really makes Postgres more viable for scenarios it wasn't before. I'd love to hear the use cases I haven't thought of.
 
-mojang using third-party services that port scan the internet to ban private minecraft servers is insane. if the data were collected via telemetry, it’d still be insane but not as insane. instead, a company owned by microsoft is getting its data for free from random hobbyists like me, and the people getting banned just get a scary email from their isp.
+## Embedding Real Postgres
+
+miniPG is the result of several attempts at embedding real Postgres into a standalone, cross platform binary.
+
+### Attempt 1: PGlite
+
+The obvious place to start was [PGlite](https://pglite.dev/). The name says it all, and in a sense it delivers: it's Postgres compiled to WebAssembly. In Go, you can load the module with the wazero runtime, run Postgres inside your program, and have your app connect to it. That's very close to the SQLite library experience.
+
+Brad Fitzpatrick even made a 
+              [proof of concept](https://github.com/bradfitz/gopglite)
+              that does this in a way that makes PGlite work as a driver for the standard Go SQL package.
+
+The catch is that PGlite only supports a single connection and a single session. Software written for a real Postgres server often assumes it can have more. A common pattern is to start a transaction, then make another query on a separate connection before committing. With only one connection, that second query waits for a transaction that's waiting on it. The app I was trying to run deadlocked.
+
+### Attempt 2: a VM in a webview
+
+If I needed real Postgres, I could run real Postgres in a virtual machine I could embed. I have a soft spot for using webviews as portable containers, so I ran [v86](https://github.com/copy/v86), an x86 emulator for the browser, inside one, and booted a full Postgres server in it.
+
+The rest was plumbing. The headless webview opens a WebSocket back to the host program. Postgres connections are tunneled through it, and Postgres writes its data to a mount served over the same socket. The benefit of this approach is whatever platform the host program runs on, Postgres is always the same build running in the same VM.
+
+I even built 
+              [webframe](https://github.com/tractordev/webframe)
+              for this, a library and CLI for running a native system webview headlessly.
+
+The result was a proof of concept I called postgres-standalone: one binary, any platform, give it a port and a data directory, and you get a full Postgres server. It worked!
+
+However, it was also an order of magnitude slower than native. Postgres in a VM in WebAssembly in a browser. Initializing and checking a database took a while. In the best case, on my M3 MacBook, it took 7 seconds before it would accept a connection.
+
+I'd already written a design doc for the SQLite-style CLI: give it a directory, run a query, no server to run. On this stack, though, every `SELECT *` would sit there for 7 seconds first. That ruins the experience, so I had to shelve it. I had proven that embeddable Postgres was possible, just not pleasant.
+
+### Attempt 3: Hyper9
+
+Later, for unrelated reasons, I built 
+              [Hyper9](https://github.com/progrium/hyper9)
+              . Inspired by system API translation, an approach that Wine and Valve's Proton are built on, combined with a unique way to use hypervisors, Hyper9 lets you run Plan 9 executables at near native speed on all platforms.
+
+I'll be posting more about Plan 9 soon, but with a little extra magic, I was able to run the same Postgres at near native speed, in isolation, on all platforms. It's effectively the same approach as the previous attempt, but now without the slowdown.
+
+Startup went from 7 seconds to 800ms. So I dusted off the design doc and built it. PGlite was taken, so postgres-standalone became miniPG.
+
+## What it isn't
+
+miniPG isn't a replacement for real Postgres deployments. If you're running in the cloud, using replicas, or serving many users over many connections, use Postgres the normal way.
+
+miniPG is for local, single-user programs: the places SQLite would fit, but you need Postgres.
+
+That said, go ahead and see how far you can push it!
+
+## Try it
+
+I'd really like to see how miniPG holds up in the wild, especially across different platforms and architectures. Please try it and tell me what breaks.
+
+If this works, it proves a model that goes well beyond Postgres: taking complicated systems and packaging them as a single binary for more specific use cases. That's the part I find most exciting, and it's one of many new possibilities Hyper9 enables.

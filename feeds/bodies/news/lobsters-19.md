@@ -1,94 +1,147 @@
-This change introduces several new features needed to build a small collection
-of packages from the Opam repository which I've been manually porting to
-Alice's package format in [alice-ports](https://github.com/alicecaml/alice-ports).
+> The primary benefit from [subscribing to LWN](https://lwn.net/Promo/nst-nag5/subscribe)
+>        is helping to keep us publishing, but, beyond that, subscribers get
+>        immediate access to all site content and access to a number of extra
+>        site features.  Please sign up today!
 
-## [New Features](https://www.alicecaml.org/blog/alice-v0-6-0/#new-features)
+The final talk at Kangrejos 2026 was about the removal of the C implementation
+of Android's
+[Binder driver](https://source.android.com/docs/core/architecture/ipc/binder-overview), the primary interprocess communication mechanism
+used on Android devices. Carlos Llamas announced that he had deleted the C
+code to general applause, and then shared some insights about what went into
+replacing the C implementation. Alice Ryhl, who has worked on the Rust
+implementation for some years, added her own thoughts about what the most
+difficult and interesting parts of the transition were.
 
-### [Access built-in modules from the standard library](https://www.alicecaml.org/blog/alice-v0-6-0/#access-built-in-modules-from-the-standard-library)
+Binder was added to the kernel in 2008, Llamas said, as an interprocess
+communication mechanism for Android devices. Its design originated in
+[BeOS](https://en.wikipedia.org/wiki/BeOS), but
+it has grown significantly since then. It provides a rich set of operations for
+allowing processes to communicate with the minimum amount of overhead. It also,
+therefore, presents a large attack surface for Android. Many complicated chained
+attacks against Android have involved Binder at one step or another, Llamas
+explained. Google's internal "red team" (the team dedicated to proactive
+security research) deemed Binder to be the most vulnerability-dense component in
+the entire operating system, with more CVEs per line than anywhere else.
 
-Alice packages may now refer to modules from the standard library which are
-excluded from the prelude, such as `Unix` and `Str`. A new `builtins` section
-in `Alice.kdl` can be used to list the built-in modules a package can access:
+That made it an obvious candidate for porting to Rust, Llamas said. Binder was the first user
+of Rust in the kernel, he added, although Ryhl did not
+[publicly post](https://lwn.net/ml/linux-kernel/20231101-rust-binder-v1-0-08ba9197f637@google.com/) the first version
+of what became the Rust implementation [until 2023](https://lwn.net/Articles/953116/), well after the Rust experiment started
+in 2021. All told, the effort took more than
+five years. Binder is used for every single screen touch, permission check,
+and cross-application message on Android, which runs on more than three billion
+devices. In total, it works out to hundreds of billions of Binder transactions
+per second, globally, he added. That scale meant that even the smallest discrepancy between the
+interface provided by the C version and the one provided by the Rust version
+would cause problems and regressions for some use case.
 
-```
-package {
-  name foo
-  version "0.1.0"
+One particularly tricky aspect has been performance, Ryhl said. Throughput
+doesn't matter that much; what matters is the tail latencies. Most
+screen frames on Android have a Binder transaction in the critical path of the
+frame, she explained. So, a difference of two microseconds on average is not a
+real problem, but if Binder is ever twenty milliseconds slower, even once
+in a while, people will notice and care.
 
-  builtins {
-    unix
-  }
-}
-```
+The actual algorithms that the C and Rust implementations use are identical, she
+continued, so there are no large differences in throughput. But, because Rust
+handles locking differently, there were problems with the tail latency
+from lock contention that she had to debug. For example, one user-reported
+traceback showed Binder attempting to take a mutex that was held by another
+process. That process was preempted, and did not resume executing for twenty
+milliseconds, well past the sixteen millisecond budget to render a single frame.
 
-Packages may include C source files in their `src` directory. All C files will
-be compiled and linked into the resulting executable when building a project.
-The ability to compile C code raises the question of how to pass custom linker
-arguments to the C compiler, and this is addressed with another new feature:
-config scripts.
+It was a classic case of priority inversion. To solve the problem in Binder, Ryhl moved
+as many operations out from under the lock as possible, and was able
+to replace it with a spinlock, which made the problem go away. The equivalent
+lock in the C implementation was already a spinlock: "I deviated from C
+Binder, and *pow*. It has eighteen years of accumulated quirks."
 
-### [Config Scripts](https://www.alicecaml.org/blog/alice-v0-6-0/#config-scripts)
+Eventually, however, the Rust implementation was good enough for most use cases.
+And the C implementation was still producing new vulnerabilities every time
+someone tried to introduce a new feature. Eventually, Llamas and Ryhl decided to
+only add new features to the Rust implementation, in order to motivate people to
+switch and to avoid headaches from the C implementation. That policy has
+resulted in the Rust version becoming faster than the C version,
+because Ryhl was able to introduce an algorithmic improvement that reduced the
+number of needed system calls, a change that had been considered too complex for
+the C implementation. Now that the C implementation has been deleted, there are
+more of those coming, she promised.
 
-A package may include a config script in a file named `config.ml` file in the
-package's root directory (next to `Alice.kdl`). The `config.ml` file is
-compiled and executed as the first step of building a package, and any lines in
-its standard output beginning with `alice:` are interpreted by Alice as
-directives that can influence the build. Currently the only supported
-directives are `alice:print_endline` which prints a message, and
-`alice:add_c_linker_args` which adds C linker arguments.
+Another area that proved difficult was dealing with tracepoints. Users aren't
+supposed to rely on the presence or behavior of most kernel-internal
+tracepoints, but they do. This meant that Ryhl had to copy
+the existing tracepoints in Binder as a de facto part of the driver's API. That
+even extended into some of the data structures involved in the driver. In one
+case, she said, there was a reference-counted structure that had a slightly
+different reference count in the Rust implementation, because the Rust code was
+holding an additional pointer to the structure. That turned out to be a
+problem for one particular piece of client code, since it relied on checking the
+reference count via a tracepoint in order to determine when the C implementation
+had reached a particular state.
 
-Config scripts can depend on other packages, and also access built-in modules
-from the standard library. This can be configured in `Alice.kdl`:
+There was also a lot of toolchain support needed, Ryhl continued. The Rust
+implementation had to work with kernel address-space layout randomization
+(KASLR), control-flow integrity (CFI), and profile-guided optimization.
+Production Android kernels are built with all of those enabled, and since they impact code
+generation, the Rust code needed to account for them.
 
-```
-package {
-  name bar
-  version "0.1.0"
+Llamas then went into more detail about the deployment plan that will be used
+to convert users to the Rust implementation. A major problem with just rolling
+the Rust implementation out is the existence of
+[vendor hooks](https://lwn.net/Articles/1098493/): custom
+tracepoints used to inject vendor-specific behavior into the kernel. The Rust
+implementation of Binder was not able to reproduce those in every case, and
+therefore many vendors are stuck on the C implementation until they update their
+code. That's going to be a slow process.
 
-  config_script {
-    dependencies {
-      foo path="../foo"
-    }
+Old stable
+versions of the kernel will continue to have the C Binder, and receive security
+fixes, which gives the various Android vendors a little bit of leeway until
+they're forced to update. After the conference, the patch removing the C
+implementation
+[was merged](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fd2bc059ed46) as part of the 7.4 merge window, so that is the
+version past which the Rust implementation is required. 7.3 is the designated
+long-term-support release for 2026.
 
-    builtins {
-      str
-    }
-  }
-}
-```
+One person asked whether this would pose a problem for people compiling
+the kernel with GCC. Miguel Ojeda responded that many distributions are using a
+workaround for the current lack of Rust support in GCC: they are building
+the C side of the kernel with GCC, and the Rust side with LLVM. He said that he
+had advised against compiling the kernel in that way, because it is "a
+complete hack", though people who use it are unlikely to complain about
+being forced onto Clang. Greg Kroah-Hartman added that it will take months or
+years to learn about anyone who has problems with the Rust version of the
+driver, given how slowly Android vendors update their kernels. Furthermore, the
+removal is a single patch that can be cleanly reverted, if someone needs
+to continue using the C version.
 
-Config scripts are expected to be run only once each time they are compiled
-because their output can be trivially cached in the build directory. For this
-reason it's faster to compile config scripts with the bytecode compiler rather
-than the native compiler, and of course this means compiling all their
-dependencies with the bytecode compiler too.
+Llamas thought that it was worth considering what the removal process should
+look like for other code that gets ported to Rust. He asked what people thought
+should happen to the C version of converted drivers on long-term-support
+branches. Ojeda said that the process would be exactly the same as the existing
+policy for replaced C code. The only difference
+between Rust and C in long-term-support releases is that the Rust maintainers
+backport fixes for soundness problems, he said.
+Kroah-Hartman told Llamas not to worry about code that has been replaced:
+"Just delete it. I take patches for subsystems that have been deleted. It's
+fine."
 
-### [Packages can be built with the bytecode compiler](https://www.alicecaml.org/blog/alice-v0-6-0/#packages-can-be-built-with-the-bytecode-compiler)
+With that declaration, the session, the conference, and the presence of the C
+Binder driver in the kernel were all over. Binder is the first nontrivial component
+in the
+kernel to be ported to Rust, and its journey has revealed several pitfalls that
+don't apply to new drivers written in Rust from scratch. Still, the most
+difficult problems were not Rust-specific; they were the compatibility problems
+that any rewrite would face. Whether any other kernel components will find the hassle
+of a rewrite worth it, and how long they will take to accomplish it, remains to
+be seen.
 
-This was a necessary feature for allowing config scripts to be built with the
-bytecode compiler, but it might also be something people find useful to
-integrate into their workflow, since the bytecode compiler backend is generally
-faster than the native backend (but of course the executables it produces are
-generally slower to run).
+[ Thanks to the Linux Foundation, LWN's travel sponsor, for supporting my travel
+to Kangrejos. ]
 
-Commands that compile code (e.g. `alice build`, `alice run`) now take a
-`--backend` argument which can be passed `native` or `bytecode`. The default is
-`native`.
+| Index entries for this article |  |
+| --- | --- |
+| [Conference](https://lwn.net/Archives/ConferenceIndex/) | [Kangrejos/2026](https://lwn.net/Archives/ConferenceIndex/#Kangrejos-2026) |
 
-On Windows, Alice v0.6.0 can be installed with [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
-
-On macOS and Linux, the latest version of Alice can be installed with [Homebrew](https://brew.sh):
-
-Alternatively, on macOS and Linux, Alice v0.6.0 can be installed by running the [install script](https://www.alicecaml.org/install/#install-script):
-
-On NixOS, Alice v0.6.0 can be installed via the flake
-`github:alicecaml/alice#alice_0_6_0.default`, e.g.:
-
-Read more about installing Alice [here](https://www.alicecaml.org/install/).
-
-- Add --bin flag as an alias for --exe in arguments to alice new.
-- Build output includes duration.
-- Add support for config scripts. If a package has a config.ml file at its top level, Alice will build and run that file before compiling the package and parse directives from its stdout that can affect how the package is built. Currently this mechanism can be used to print messages and to add c linker args.
-- Add "--backend" argument to for choosing the compiler backend. Alice builds with the native backend by defdault, but now supports the bytecode backend too if --backend bytecode is passed.
-- Add a builtins field to manifests for listing the modules from the standard library to make available to the project. By default new projects will specify unix and str here.
-- Basic support for packages including C code. All .c files in the src directory will be compiled and linked into the library or executable defined in the project.
+**Note**: you can avoid this step in the future by logging
+        into your LWN account.

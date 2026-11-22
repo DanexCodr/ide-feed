@@ -1,96 +1,149 @@
-At Antithesis, we love finding bugs in distributed systems. But Antithesis can also help *eliminate* certain classes of bugs by using a combination of AI and formal methods to *prove* the correctness of complex design choices.
+A [sorted set](https://valkey.io/topics/sorted-sets/) can spend more memory describing how its elements are ordered than storing the elements themselves.
 
-In this post, we demonstrate the paradigm on two [Raft](https://raft.github.io/) implementations, production libraries from [etcd](https://github.com/etcd-io/raft/) and [HashiCorp](https://github.com/hashicorp/raft). Although they’re implementing the same protocol, there are significant differences in the approaches the two use. We used AI, TLA+, and Antithesis to formally model the two libraries with trace validation. We iterated between model checking, Antithesis testing, and proof attempts, each of which exposed bugs in the code or gaps in the model. We patched bugs and refined the model until it was provable, *and* until every test run was conformant.
+In Valkey 9.2 that changes: the skiplist is replaced by a high-fanout B+ tree variant called **fbtree**.
 
-Our model handles several extensions to the core Raft algorithm including pre-votes, snapshots, leadership transfers, and, for etcd-raft only: read indexes for linearizability, async storage writes, and membership changes (where etcd’s implementation [intentionally deviates](https://github.com/etcd-io/raft/blob/v3.7.0/doc.go#L262-L270) from the Raft paper).
+fbtree combines the high fanout and contiguous storage of a conventional B+ tree with several optimizations designed for Valkey's workload and memory allocator, including feature-based lookups, SIMD searches, linked leaves, and fast paths for sequential inserts and pops.
+In a 5-million-member test, it reduced per-member memory overhead by 36–43%, saving up to 109 MB.
 
-**The final proofs establish core Raft safety properties such as Election Safety, Leader Completeness, and State-Machine Safety**. In other words, our process established that once we applied the workarounds and fixes needed, **the specific designs** (scoped to the features we modeled) embodied in HashiCorp Raft and etcd-raft actually offer the same guarantees that the Raft paper does. We make the artifacts available for open review:
+Let's take a look at why this change happened and how it works.
 
-Earlier this year, we wrote about how [we keep finding bugs in every major Raft implementation we test](https://antithesis.com/blog/2026/finding-bugs-in-raft-implementations/) with Antithesis. This was surprising, because the underlying Raft protocol has been extensively studied, formally specified, and rigorously proven correct (under a set of assumptions). In that post, we pointed out that many implementations subtly deviate from those assumptions, re-design the algorithm for performance, and/or extend the core Raft protocol with unverified extensions – thereby introducing bugs.
+## Why replace the skiplist?
 
-Since then, advances in AI have made [automated theorem proving](https://openai.com/index/navier-stokes-solution/) and [formal verification of complex systems](https://www.anthropic.com/research/formal-verification) much more scalable, making it feasible to connect a specification to its implementation. So we set out to formally verify not just the core Raft protocol, but the specific designs implemented by production Raft libraries, incorporating custom data structures, different modes of concurrency, and various extensions such as pre-votes, leadership transfers, snapshots, and (in the case of etcd-raft) membership changes.
+Large sorted sets that exceed the [listpack threshold](https://valkey.io/blog/secret-life-of-data/) are backed by a skiplist paired with a hashtable (smaller sorted sets use a compact listpack representation that stores elements sequentially in contiguous memory).
+The hashtable gives O(1) lookups by member, while the skiplist gives O(log n) ordered lookups by rank or score.
+That pairing is architecturally simple, but the skiplist carries a significant memory cost.
+It stores exactly one element per node, scattered across memory as separate allocations connected by pointers.
 
-A key challenge in applying formal methods is to identify a level of abstraction that both allows us to reason mathematically about desired properties, *and* bridges the gap between specification and implementation. We are not yet at the point of reasoning directly at the level of assembly instructions or even programming language semantics in order to verify distributed safety properties in production systems.
+### Memory overhead
 
-The most widely used approach models the software as a state-transition system in a specification language such as [TLA+](https://lamport.azurewebsites.net/tla/tla.html), and checks invariants over these transitions for finite state spaces. TLA+ models can either be hand-written by experts, or these days, inferred directly from the code using AI. This approach has its [own limitations](https://buttondown.com/hillelwayne/archive/llms-are-bad-at-vibing-specifications/), but is increasingly [popular](https://zfhuang99.github.io/github%20copilot/formal%20verification/tla+/2025/05/24/ai-revolution-in-distributed-systems.html). The next challenge, then, is showing that the [TLA+ model corresponds](https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs) to the actual software [that will run in production](https://www.datadoghq.com/blog/engineering/continuous-formal-spec-validation/).
+Valkey's skiplist pays for this in raw memory.
+Every node carries a backward pointer (8B), plus an average of 1.33 levels of forward pointers and span values, since skiplists are probabilistic (each node has a 25% chance of gaining another level).
+Each level costs 8B for the pointer plus 8B for the span value, giving around 29B of pointer and span overhead per node.
+Add the 8B score, and the total reaches roughly 37B per node before accounting for the member string.
 
-For our demonstration, we used Claude Fable 5.2 to automatically infer TLA+ models from the implementations of HashiCorp Raft and etcd-raft and then manually reviewed the safety properties declared in the specifications.
+![Skiplist structure showing one heap allocation per sorted-set member](https://valkey.io/blog/from-skiplist-to-b+tree/images/skiplist-structure.svg)
 
-The etcd-raft repository has a [TLA+ model](https://github.com/etcd-io/raft/tree/v3.7.0/tla) crafted for trace validation that is now out of date, and is not designed for ease of proof. The [Specular project](https://github.com/specular-org) [produced models of etcd-raft and hashicorp-raft](https://github.com/specular-org/specula-case-studies), but those models are designed for trace validation, not ease of proof, and the [TLAPS leaderboard](https://specular-org.github.io/tlaps-bench-website/) indicates that they remain unsolved as of 20 Nov 2026.
+![Layout of a skiplist node with two levels and a 20-byte member](https://valkey.io/blog/from-skiplist-to-b+tree/images/zskiplistNode-struct-layout.svg)
 
-We had to manually provide guidance on which features to model or leave out, what scenarios to specify for model checking, and make one refinement to the auto-generated safety properties. While [AI is generally bad at inferring properties](https://newsletter.pragmaticengineer.com/p/formal-methods-with-hillel-wayne), in this case we simply instructed the agent to express the core safety properties defined in the [Raft paper](https://raft.github.io/raft.pdf).
+### Cache misses and dependent fetches
 
-That’s where Antithesis helps.
+Modern CPUs use a hierarchy of hardware caches (L1, L2, and L3) to keep frequently accessed data close to the processor.
+These caches are much smaller and faster than main memory (RAM), so when the CPU cannot find the data it needs in its cache, it must fetch it from a slower level of the memory hierarchy.
+As a rough illustration, an L1 cache hit can take about 1 ns, while a DRAM access can take around 100 ns.
+A dependent memory access can leave the core waiting; actual latency and how much work can be hidden vary by system and workload <sup>[1](https://valkey.io/blog/from-skiplist-to-b+tree/#1)</sup>.
 
-We used the recently launched [Antithesis plugin](https://github.com/antithesishq/antithesis-plugin) to automatically set up a test cluster, an input-generating workload designed to handle all the features captured in the model, and assertions that correspond to the model’s safety properties. The software was then tested under fault injection while being fed random inputs, exercising various code paths and thread / message interleavings.
+Each node in the skiplist is a separate allocation, potentially scattered wherever the heap happened to place it, so following the structure can require repeatedly fetching data from unrelated memory locations.
+Because each step can determine where the next step goes, these fetches are dependent, resulting in more round trips through the memory hierarchy.
+A 2025 study of concurrent in-memory indexes found that, on its tested workloads, traditional skiplists experienced roughly 2.4–4.8× more cache misses than a comparable B-tree, with 2–8× lower throughput <sup>[2](https://valkey.io/blog/from-skiplist-to-b+tree/#2)</sup> (testing different data structure implementations, not Valkey).
 
-For this demonstration, we developed a lightweight [trace validation](https://arxiv.org/abs/2404.16075) kit that allowed the software running in Antithesis to emit structured log events that correspond to state transitions in the TLA+ specification. Any test execution that produced a trace that did not conform to some path in the model got flagged. A non-conformant trace could indicate incorrect instrumentation of the trace logging itself, or more seriously, a modeling error or a real bug in the system. We instructed our AI agent to diagnose which one of these it might be, [using Antithesis as necessary](https://antithesis.com/blog/2026/time-traveling-agents/), and continue iterating until the traces and the inferred model converged.
+## What replaced it: fbtree
 
-For both Raft models, the specification expresses the following safety properties, taken directly from the [Raft paper](https://raft.github.io/raft.pdf):
+A B+ tree keeps entries sorted in fixed-size nodes: leaf nodes hold the entries, or pointers to them, and inner nodes hold just enough routing data to pick which child to descend into.
+Packing many entries into each node addresses both problems above: far less per-member pointer overhead, and far fewer dependent fetches per lookup.
 
-- Election Safety: at most one leader can be elected in a given term.
-- Log Matching: if two logs have an entry with the same index and term, they agree on every entry up to that index.
-- Leader Completeness: a leader’s log contains every entry committed in earlier terms.
-- State Machine Safety: no two nodes apply different entries at the same index to their state machine (the state machine itself is not modeled).
+![fbtree architecture showing members packed in leaf arrays and routing data stored in inner nodes](https://valkey.io/blog/from-skiplist-to-b+tree/images/fbtree-architecture.svg)
 
-Before trying to prove anything, we verified that these invariants hold on bounded instances using TLC, the standard TLA+ model checker. These instances, also synthesized by our AI agent, specify various bounds: clusters are usually three nodes, a single client value, at most a couple of terms of leader election, logs that are limited to a few entries, with only a handful of network messages in flight. These bounds sound tiny, but they’re sufficient to create several interesting cases: competing elections, a deposed leader still replicating, log entries overwritten and re-replicated, crashes in the middle of an operation, etc. We also model checked various configurations of the Raft libraries, e.g. with pre-vote or snapshotting features enabled and disabled. These “small” instances can reach a state space of over 1.6 million states, which TLC explores exhaustively. We also included some larger problems which were only checked via random simulation. If model checking triggered a safety violation, we attempted to reproduce it as an assertion failure locally or in Antithesis; if the software couldn’t exhibit the behavior, the model had to be tightened.
+### Memory layout
 
-Overall, our process was an iterative loop consisting of model checking (flagging invariant violations), trace validation (flagging deviations), model refinement (to fix design flaws or conformance), and software patching (to fix bugs).
+fbtree, short for Feature B+ Tree, uses a 61-way fanout: each node can hold up to 61 entries or child pointers.
+Leaf and inner nodes are sized to fit jemalloc allocation classes without wasting space on 64-bit builds; on supported 32-bit builds, `innerNode` is rounded up to the 1280-byte class.
 
-In some ways, this approach is similar to and inspired by [Specular](https://arxiv.org/abs/2607.25333). However, given their goal of finding bugs, Specular’s approach involved using AI to identify buggy scenarios before writing models, which meant that [static analysis was doing a lot of the heavy lifting](https://github.com/specular-org/Specular/issues/176). In contrast, our models are intended to be more general and prove safety of the full design.
+![Layout of an fbtree leaf node with 61 slots](https://valkey.io/blog/from-skiplist-to-b+tree/images/fbtree-leaf-struct.svg)
 
-Along the way, we encountered bugs in both systems, including previously known open issues such as [hashicorp/raft#695](https://github.com/hashicorp/raft/issues/695) and [etcd-io/raft#551](https://github.com/etcd-io/raft/issues/551), as well as new ones such as [hashicorp/raft#746](https://github.com/hashicorp/raft/issues/746) and [etcd-io/raft#558](https://github.com/etcd-io/raft/issues/558). In our internal repository, we applied a total of 7 patches across the two implementations. In each case, our goal was to make the system and model pass both verification and validation.
+![Layout of an fbtree inner node with 61-way fanout](https://valkey.io/blog/from-skiplist-to-b+tree/images/fbtree-inner-node.svg)
 
-We also encountered a few additional crash bugs, but those don’t violate safety.
+A 512-byte leaf holds up to 61 value pointers, so 61 members share one node instead of each getting its own.
+Instead of storing the score and member separately, fbtree stores them together as a single packed value: the normalized 8-byte score followed by the member bytes.
+This keeps the data needed for comparisons together and removes another level of pointer indirection.
 
-But bounded model checking only shows the absence of bugs in a small state space. The only way to get assurance for unbounded input sizes is via rigorous mathematical proof.
+![Memory layout comparison between a skiplist and fbtree for 61 consecutive sorted set members](https://valkey.io/blog/from-skiplist-to-b+tree/images/allocations-to-scale.svg)
 
-There are two good techniques for proving invariants correct for the whole specification: using a theorem prover integrated into TLA+ called [TLAPS](https://proofs.tlapl.us/doc/web/content/Home.html), or by translating the model into [Veil](https://veil.dev/), a library for the [Lean](https://lean-lang.org/) proof assistant for modeling state-transition systems. We used both, delegating the task of proof construction to Claude Fable 5.2.
+### Fewer memory fetches
 
-We used Veil’s official tla-to-veil LLM skill for the model translation, and the recommended approach of validating this via bounded equivalence checking, using TLC and Veil’s own model checker, on our previously stored instances.
+The skiplist's 25%-per-level rule gives it an effective branching factor of about 4, while fbtree's fanout is 61.
+Both structures retain O(log n) search complexity, but the B+ tree has substantially fewer levels to traverse and therefore fewer opportunities for expensive memory fetches.
 
-Ideally, a TLAPS proof provides the best assurance, since it can attest to safety properties defined on the TLA+ model itself. However, we decided to translate TLA+ to Veil and attempt proofs in Lean. Why? As described in the previous section, our process was extremely iterative, involving several steps of model refinement. We wanted to use the proof engine as additional feedback in that process, feeding it any candidate specifications on which bounded model checking and trace validation both succeeded. We found Lean’s interactive tactic paradigm, predictable performance, and persistent kernel-checked proof terms to be key benefits in this iterative process.
+A modern CPU can also fetch several adjacent cache lines efficiently when the data is laid out contiguously, thanks in part to the way memory is accessed and to hardware prefetching <sup>[1](https://valkey.io/blog/from-skiplist-to-b+tree/#1)</sup>.
+Therefore a B+ tree node that spans a few cache lines can be read efficiently as the CPU scans its contents.
 
-On one occasion, a model of etcd-raft’s membership change as implemented could not be proven correct, [revealing a complex bug](https://github.com/etcd-io/raft/issues/558) whose trigger was beyond the state space that bounded model checking explores. In such situations, we could use the Antithesis plugin to attempt to synthesize a workload to reproduce the counter-example.
+![Animated diagram comparing skiplist and fbtree with 3,721 items. To insert an item, skiplist takes 19 fetches while fbtree takes 7.](https://valkey.io/blog/from-skiplist-to-b+tree/images/skiplist-v-fbtree-insert-animated.svg)
 
-Antithesis also helped in the proof construction process. When working on challenging parts of the proof, Claude hypothesized several intermediate invariants which if true would lead to a straightforward proof strategy. The agent then used Antithesis to [quickly check](https://antithesis.com/blog/2026/streaming-results/) if those invariants held true in test runs, and discarded them if run-time assertions failed. Antithesis thus made the proof construction phase more efficient.
+### Optimizations
 
-Once we converged on a state where the safety properties were fully provable in Lean and the model was passing trace validation with Antithesis, we froze the specification and asked agents to prove the same invariants on the TLA+ spec directly with TLAPS. This last step wasn’t strictly necessary, but eliminated any shadow of doubt concerning the Lean proofs and the TLA+ spec.
+On top of that structure, fbtree adds optimizations aimed at specific operations.
 
-End-to-end, the work on each library cost less than $1,200 in Claude Fable tokens and approximately 2000 Antithesis compute-hours.
+In a B+ tree keyed by variable-length strings, such as sorted set members, picking a child means comparing the lookup against each child’s anchor, the largest member in that child, and reading those strings costs memory fetches.
+fbtree's inner nodes store each anchor along with a small four-byte "feature."
+Because the anchors often share a common prefix, fbtree stores that shared prefix separately and uses the four feature bytes to distinguish the children.
+The implementation can then compare those features in parallel using SIMD, often identifying the correct child before fetching the child node itself.
+If the features uniquely identify a child, the search can descend immediately; otherwise, they still narrow the range that needs a full binary search.
 
-Note that our final proofs verify formal models of the implementation, not the code itself. However, we can gain confidence about the model’s fidelity based on the trace validation performed with the extensive test coverage that Antithesis provides, including fault injection such as network partitions and node crashes. To strengthen assurance even further, our iterative process involved several steps of [*mutation testing*](https://antithesis.com/blog/2026/mutation-testing/), including: mutating the specification to check that the proofs fall through, mutating stored test logs to ensure that trace validation fails, and mutating the software itself to ensure that everything breaks.
+![Diagram showing an inner node's feature bytes narrowing a lookup for "i love valkey!" from 61 possible children to a single match without reading a full anchor string](https://valkey.io/blog/from-skiplist-to-b+tree/images/inner-node-traversal.svg)
 
-The models still make several assumptions about the environment, which limits the reach of verification. For example, both Raft libraries provide pluggable interfaces for local persistent storage. In our test workloads, we use [BoltDB](https://github.com/boltdb/bolt) for storage and the models assume that no single write (e.g., a log entry or tuple of raft state) is ever torn or corrupted, which BoltDB guarantees. A crash can still fall between two writes.
+Range commands such as `ZRANGE` walk the set in order.
+fbtree links its leaf nodes in a doubly-linked list, so a scan can move from leaf to leaf without climbing back up the tree.
+The skiplist requests an item, waits to receive it, and only knows the next item to fetch when it's received the first.
+The B+ tree can work on up to 61 items in parallel, and while it works on those it can fetch the next leaf node with the next 61 items.
 
-Our work also leaves out several library features which we have not modeled, such as lease-based reads for etcd-raft (because it depends on wall-clock timing), async heartbeats for hashicorp-raft (because it is known to be [very](https://github.com/hashicorp/raft/issues/666) [very](https://github.com/hashicorp/raft/issues/695) [buggy](https://github.com/hashicorp/raft/issues/742); [really](https://github.com/hashicorp/raft/issues/717)), and membership changes for hashicorp-raft (because we were exhausted from patching bugs in the simpler core). Finally, we only verify safety properties and ignore liveness in this prototype. A comprehensive list of assumptions and limitations is provided in the associated artifact’s README.
+Commands such as `ZPOPMIN` work at the ends of the set.
+fbtree caches its leftmost and rightmost leaves, so finding them is O(1), as in a skiplist, instead of O(log n).
+This keeps pop and append operations at parity rather than regressing.
 
-Given our reputation as “a fuzzing company”, formal methods might seem like an odd direction for us to explore. But we see ourselves less as “a fuzzing company” and more as a **correctness company**. We need a wide range of different approaches if we want to build truly robust systems. Each technique compensates for the weaknesses of the others. Moreover, they amplify each other’s strengths. The first property-based testing framework, [QuickCheck](https://dl.acm.org/doi/pdf/10.1145/351240.351266), derived test inputs from a function’s static type. Many of our customers use both testing and formal methods, so we want to make the two techniques work better together.
+Range deletions remove a contiguous run of members, and fbtree handles them without rebuilding the surrounding structure.
 
-The biggest weakness of formal specification is that it proves the *design* correct, but doesn’t guarantee that the code we implemented actually matches the design. Trace validation uses the strengths of tests to compensate for the core weakness of formal specification. Validation works best if our tests can reach wildly unusual system states, which aligns well with our core technology.
+## What actually changed for you
 
-How formal specification can help testing is relatively less explored, but there are some opportunities here too. We often find that newcomers to property-based testing struggle to describe the properties for their system. But they can describe a high-level outline of what the system essentially does. With trace validation, we can potentially turn that outline *into* a property to test!
+Functionally, nothing changes.
 
-All that said, **this is an early research project.** We could easily map trace logs to spec behaviors because the code and spec were at roughly the same level of abstraction, with a close correlation between lines of Go and lines of TLA+. Most real-world specs, though, are two levels of abstraction above the code they model. This is because 1) TLA+ can do things impossible in a real system, like make truly arbitrary nondeterministic choices, and 2) the spec can simplify implementation details that don’t affect the essential design. These features make specification more powerful, but also make trace validation harder.
+The change is internal: sorted set commands and their behavior remain unchanged.
+The one visible difference is that `OBJECT ENCODING` returns `btree` instead of `skiplist` for a large sorted set.
+If you have monitoring, tests, or tooling that checks for the literal string `skiplist`, that's one place to update.
+Small sorted sets under the listpack threshold are unaffected either way, since they never used the skiplist encoding to begin with.
 
-Think of this as us demonstrating a medicine works on mice, but we haven’t yet done a human trial. More work is needed, work which we’re now doing at Antithesis. Stay tuned to see where it ends up.
+## Benchmarks
 
-In formal specification (like with TLA+), we write highly abstract blueprints, or specifications, of systems and find bugs in those blueprints directly. Once we’ve found and fixed all the bugs, we can be confident our real system isn’t going to have certain design issues.
+### Memory efficiency
 
-But how do we know that the code we write actually corresponds to the design we verified? This is one of the big unsolved problems of formal specification, and the solution we used here **trace validation** (also called “trace checking”). This was first publicly described in the MongoDB paper [*eXtreme Modeling in Practice*](https://arxiv.org/pdf/2006.00915). The authors took logged events in the production system, converted them into a sequence of states, and checked if that sequence was possible in the blueprint. If not possible, then the implementation must be doing something forbidden by the blueprint, so there is a divergence between the implementation and spec.
+The numbers below compare only the ordered index: skiplist versus fbtree, with the hashtable and member embedding unchanged.
 
-It’s easier to see this with a concrete example. Say we have this pseudocode as our specification:
+Inserting 5 million 20-byte members sequentially reduced per-member memory overhead, excluding the member data itself, from 50.3B to 28.5B, a **43% reduction**.
+The same 5 million members inserted in random order reduced per-member overhead from 50.3B to 32.0B, a **36% reduction**.
 
-By `either-or`, I mean that exactly one of the two will happen each iteration, but the decision logic is an implementation detail I don’t care about. This spec also has the property that, after every loop iteration, `passed + failed == i`.
+The smaller reduction comes from random insertion leaving more partially filled nodes than sequential insertion.
 
-Now here’s one conforming implementation:
+For the 5-million-member set in this test, that is roughly 109 MB saved with sequential inserts and 92 MB with random inserts.
+The savings are per member, not per byte stored, so the relative reduction in total memory is largest for sets with many small members and shrinks as member size grows.
 
-While the practical way this works is very different than just arbitrary incrementing variables, it’s still the same thing in essence, and we should expect that every sensor either gets added to the set or marked as broken. To do trace validation, we first add some logs to the code:
+### Command performance
 
-We run this program and it prints “loop passed loop failed”. We can convert that to a behavior of the spec. If we denote a state as `(i, passed, failed)`, the corresponding sequence of states would be `[(0, 0, 0), (1, 0, 0), (1, 1, 0), (2, 1, 0), (2, 1, 1)]`. That is valid under the behavior, so this trace conforms to the spec.
+The benchmarks below were measured on [PR #4206](https://github.com/valkey-io/valkey/pull/4206)’s `oi/pr3-fbtree-v2` branch and were not rerun for the merged commit.
+They were run on a Graviton3 c7g.metal system with 64 cores, nine I/O threads, a pipeline depth of 10, and a 3-million-member sorted set.
+Each test was repeated five times; the reported confidence intervals were ≤2% for all commands except `ZRANDMEMBER`.
 
-Now if we make a diverging change like this:
+The same underlying design changes also improve throughput for several sorted set operations:
 
-It’s now possible to run this and see the logs “loop loop”. The corresponding behavior, `[(0, 0, 0), (1, 0, 0), (2, 0, 0)]` is impossible in the spec, so this would fail trace checking and reveal a divergence between the code and spec.
+| Command | Workload | Throughput improvement |
+| --- | --- | --- |
+| `ZADD` | Score update (all hits) | +105% |
+| `ZREM` | 50/50 random add/remove | +76% |
+| `ZCOUNT` | Score-range count | +27% |
+| `ZRANK` | Point rank lookup | +19% |
+| `ZRANGE` | 100-element rank scan | +6% |
+| `ZRANDMEMBER` | 100 random samples | +2% |
+| `ZSCORE` | Point score lookup | +2% |
+| `ZRANGEBYSCORE` | 100-element score scan | +1% |
+| `ZPOPMIN` | Pop min + append new member | ~0% |
 
-That’s how it all works in principle, anyway. There’s a lot of technical challenges with getting this working practically. For example, how are we supposed to know that a network timeout may give us an invalid trace, and how are we actually supposed to trigger it? And the answer to that is a combination of the techniques that we use in Antithesis: **deterministic simulation testing** and **fuzzing**. But those are things that we talk about in detail in other articles.
+`ZADD` and `ZREM` reposition elements in the tree, so they gain the most from fbtree's shallower structure and fewer pointer updates.
+Range operations see smaller gains because once the index traversal becomes cheap, producing and returning the requested elements becomes a larger part of the total cost.
+`ZSCORE` and `ZRANDMEMBER` barely move because they use the hashtable, not the ordered index.
+
+## Test Valkey 9.2 before GA
+
+The important takeaway: **the commands didn't change**, but in our tests large sorted sets carried 36–43% less per-member overhead, and `ZADD` and `ZREM` throughput rose 105% and 76%.
+
+The goal wasn't simply to make the data structure faster in isolation: the implementation was repeatedly benchmarked against the existing skiplist through the full Valkey server, with optimizations added until fbtree matched or exceeded the skiplist across the tested sorted set commands.
+
+Valkey 9.2 is currently in release-candidate testing.
+Before GA, try the [9.2 release candidate](https://valkey.io/download/9.2/) with your real workload, especially if large sorted sets or commands such as `ZADD`, `ZREM`, `ZRANK`, or `ZCOUNT` are important to you.
+Your testing and feedback can help surface issues before the final release, so [open an issue](https://github.com/valkey-io/valkey/issues) with anything you find.
