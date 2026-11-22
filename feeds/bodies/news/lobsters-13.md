@@ -1,48 +1,115 @@
-Today we launched a change that has been a long time in the making: The updated website for [freedesktop.org](https://www.freedesktop.org/), as well as the refreshed [wiki.freedesktop.org](https://wiki.freedesktop.org/) are live now!
+SQLite is one of my favorite database technologies. It's a full SQL database, designed as an embeddable library, that stores all its data in a single file. The `sqlite3` command line tool is great too. You point it at a file and run queries. There's no server to run.
 
-You can read the announcement [here](https://www.freedesktop.org/news/2026/new-website-and-wiki/), this blog post elaborates a bit on it and on the background of the changes, as well as future plans.
+At the other end of the spectrum is Postgres. It's the most capable general purpose SQL database, trusted in production at scale, and is something of an industry standard. With that comes complexity, starting with the fact that it's client-server.
 
-### Why change anything?
+SQLite is a natural fit for software that needs a database but isn't meant to be deployed in the cloud at scale: desktop apps, self-hosted tools, things you run locally. These applications can use SQLite and manage it themselves, so you barely know there's a database involved.
 
-The freedesktop.org website has been a wiki for a long time, which definitely was the right call in its inception. A wiki is very much in spirit of Freedesktop’s [mission statement](https://www.freedesktop.org/mission-statement/) to foster collaboration between desktop environments and to be a place to create de-facto standards.
+So when you find self-hostable open source software you'd like to run on your own computer, it can be daunting when it says it requires Postgres. Now you're responsible for setting up a database and getting it ready for the software to use.
 
-However, over the years, working with the wiki became a bit of an issue: Not only did we face multiple spam-apocalypses (which in part motivated the switch to IkiWiki in 2013 and resulted in us heavily restricting write access to the wiki), but it also meant that official project information, finished specifications, half-finished proposals and pages nobody had touched in fifteen years were all sitting next to each other.
+Sure, you can run Postgres in Docker, and plenty of projects recommend it. But now you have two dependencies. If you don't already have Docker, you have to install it, which can mean a VM and a daemon on your machine. Then you have to run Postgres in it and make sure it's running whenever you use the software. That's a lot just to try something you don't know you want yet.
 
-Since 2000 when Freedesktop.org was started, the project has grown so much and has had so many associated projects and specifications over the decades that it is now very difficult for new people to get an overview what is current and what state the software projects and specifications hosted by Freedesktop.org are in.
+Wouldn't it be great to have the SQLite experience, but with Postgres?
 
-Having only a wiki as a large and somewhat disorganized pile of information did not help with that issue, so I worked to split things up: We now have a website as well as a wiki, using different designs to distinguish the two, and serving different purposes.
+That's 
+              [miniPG](https://progrium.github.io/minipg/)
+              . It isn't Postgres as a library. There's already a WASM project for that, reasonably called [PGlite](https://pglite.dev/). miniPG is closer to the SQLite CLI: a single program that embeds a full Postgres server and client, wrapped up so you can use it the way you'd use `sqlite3`. Point it at a path, that path becomes the database, and you can run queries against it right away. There's no server to set up or keep running.
 
-### Website & website plans
+Jumping into a new Postgres database to try something out or debug it is now easier than using Postgres in a Docker container, and you don't need Docker at all. And miniPG still provides a fully functional Postgres server for software that needs one. In many cases, you can just launch an open source program that looks for its Postgres config in the environment with miniPG.
 
-The website at [www.freedesktop.org](https://www.freedesktop.org/) will be the place for “official”, or rather, more curated information. Now that the new website is live, its content is still largely that of the old wiki. Over the next weeks, I will be working on cleaning up its contents and listings. For example, I will clearly split active projects from archived ones, add missing ones, and also work towards synchronizing the specifications hosted on the former wiki / website with the ones listed on [specifications.fd.o](https://specifications.freedesktop.org/).
+## miniPG in 30 seconds
 
-So, basically I will do an inventory check of Freedesktop. That work has already started, but until now, I could not make any public changes to not disrupt workflows or make my own future work harder by having diverging information in two places (website & wiki).
+miniPG comes as a single, self-contained executable. You can just point it at a directory and run a query. There's no server to start, nothing to configure, and the result comes back immediately.
 
-I also wanted to make it easier for people to find information on how to [get involved](https://www.freedesktop.org/community/) with Freedesktop and associated projects, so the new website now has a more discoverable section for that.
+```
+minipg ./mydb "create table notes (id serial, body text)"
+minipg ./mydb "insert into notes (body) values ('hello')"
+minipg ./mydb "select * from notes"
+```
 
-The new website is a static site hosted via GitLab Pages and using [Pelican](https://getpelican.com/). You can [view its sources](https://gitlab.freedesktop.org/freedesktop/fdo-website) if you like.
+That directory is the database. When nothing is using it, it's just files on disk. You can copy it, back it up, or delete it.
 
-### Wiki changes
+This is actually real Postgres, not a compatibility layer, and this binary compiles to Mac, Windows, and Linux.
 
-Of course, we also still want to keep the Wiki and all of its rich history around! It remains the easy-to-edit place for collaboration on upcoming projects and specifications.
+When some software expects a Postgres server, miniPG can be one:
 
-Wiki edits must now [happen through GitLab](https://gitlab.freedesktop.org/freedesktop/fdo-wiki) instead of the old [IkiWiki](https://ikiwiki.info/) web interface. While this sounds like an additional barrier to edit the wiki, it is significantly easier than requesting an account on *annarchy* to edit the old Wiki through the web interface. It also still allows us to keep the existing history as well as spam protection measures. In order to use the wiki with GitLab Pages and to keep the history easily accessible and readable, I rewrote the Git history of the wiki to make it pretend that all changes always happened in a `content` subdirectory. So, if commit signatures are missing and hashes are different: That is the only reason why. There have been no content changes or other metadata changes (and we still have a copy of the pristine wiki Git repository).
+```
+minipg serve ./mydb -p 5432
+```
 
-For the fd.o wiki, we are now also using Hari’s IkiWiki template that is already in use on the X.org website and which is much easier on the eyes.
+Like I mentioned before, it can even launch programs with environment variables that configure it for this Postgres database:
 
-### Next steps
+```
+minipg run ./mydb -- some-tool
+```
 
-At the moment, I am mostly concerned with ensuring that the change has not broken any existing links and all systems keep working. After that, the wiki 🡘 website deduplication work will start and we can modernize both the content of the website and wiki.
+When the program is terminated, there's no database daemon to leave around or remember to stop. Only the data itself is kept right there on disk, ready to be used next time.
 
-If you find a broken link, an outdated page or anything else that looks wrong, please [file an issue](https://gitlab.freedesktop.org/freedesktop/fdo-website/-/issues) or, even better, open a merge request.  
-For the wiki, you are very welcome to just fix or otherwise update the page directly.
+Instructions for getting it and even an interactive demo are available on the 
+              [miniPG website](https://progrium.github.io/minipg/)
+              .
 
-I did reach out to all wiki editors and projects impacted by this change in advance, but since there are so many people and projects involved, it is always possible to miss someone or something. If you found a bug, need edit permissions, or need help with anything, don’t hesitate to ping me: You can find me as `ximion` in OFTC’s `#freedesktop` IRC channel, in the very recently created [#xdg-specs](https://matrix.to/#/#xdg-specs:matrix.org) channel on the Freedesktop Matrix space, or you can email me.
+## Who is it for?
 
-### Thank you!
+Software people, from developers to open source power users, and agents too, can use miniPG whenever they'd reach for SQLite but need Postgres.
 
-I do want to echo the announcement news post here: None of Freedesktop.org would exist without the people who filled it with life over the years and who worked on cross-desktop collaborative projects. I have read through a lot of wiki history and old project pages over the recent months, and it feels amazing to know how much work and passion people have poured into the projects and collaborative efforts over the years – no matter if they were successes in the end, or remained experiments. I am very thankful for all current, past and future editors of the website and wiki, as well as all project maintainers and contributors.
+- Running software that only supports Postgres. This is what got me started. Self-hosting a tool shouldn't always mean operating a database server first.
+- Embedding Postgres in your own programs. If your tool needs Postgres, and PGlite doesn't cut it, you can ship and use miniPG. Users who don't care won't have to think about it, and users who want control can use it like sqlite3 to work with their data.
+- SQLite-style apps that need Postgres features. JSONB, full text search, window functions, extensions like pgvector or PostGIS. Postgres does so much more than SQLite, but it often wasn't worth the dependency.
+- Learning and experimenting with Postgres. No server, no config. Point it at a directory and start typing SQL.
+- Tests, local dev, and agents. A throwaway database per test, or a local copy of the same database you run in production, without Docker. Agents can spin up a real Postgres for a task and throw it away when they're done.
 
-I also want to thank the [Sovereign Tech Agency](https://www.sovereign.tech/) once more for supporting me in their fellowship program as a maintainer, which enabled me to work on this task [among other things](https://blog.tenstral.net/2026/08/sovereign-tech-fellowship-for-freedesktop-tasks.html).
+This really makes Postgres more viable for scenarios it wasn't before. I'd love to hear the use cases I haven't thought of.
 
-Thanks to all contributors, in whichever way you contribute to our free desktop ecosystem!
+## Embedding Real Postgres
+
+miniPG is the result of several attempts at embedding real Postgres into a standalone, cross platform binary.
+
+### Attempt 1: PGlite
+
+The obvious place to start was [PGlite](https://pglite.dev/). The name says it all, and in a sense it delivers: it's Postgres compiled to WebAssembly. In Go, you can load the module with the wazero runtime, run Postgres inside your program, and have your app connect to it. That's very close to the SQLite library experience.
+
+Brad Fitzpatrick even made a 
+              [proof of concept](https://github.com/bradfitz/gopglite)
+              that does this in a way that makes PGlite work as a driver for the standard Go SQL package.
+
+The catch is that PGlite only supports a single connection and a single session. Software written for a real Postgres server often assumes it can have more. A common pattern is to start a transaction, then make another query on a separate connection before committing. With only one connection, that second query waits for a transaction that's waiting on it. The app I was trying to run deadlocked.
+
+### Attempt 2: a VM in a webview
+
+If I needed real Postgres, I could run real Postgres in a virtual machine I could embed. I have a soft spot for using webviews as portable containers, so I ran [v86](https://github.com/copy/v86), an x86 emulator for the browser, inside one, and booted a full Postgres server in it.
+
+The rest was plumbing. The headless webview opens a WebSocket back to the host program. Postgres connections are tunneled through it, and Postgres writes its data to a mount served over the same socket. The benefit of this approach is whatever platform the host program runs on, Postgres is always the same build running in the same VM.
+
+I even built 
+              [webframe](https://github.com/tractordev/webframe)
+              for this, a library and CLI for running a native system webview headlessly.
+
+The result was a proof of concept I called postgres-standalone: one binary, any platform, give it a port and a data directory, and you get a full Postgres server. It worked!
+
+However, it was also an order of magnitude slower than native. Postgres in a VM in WebAssembly in a browser. Initializing and checking a database took a while. In the best case, on my M3 MacBook, it took 7 seconds before it would accept a connection.
+
+I'd already written a design doc for the SQLite-style CLI: give it a directory, run a query, no server to run. On this stack, though, every `SELECT *` would sit there for 7 seconds first. That ruins the experience, so I had to shelve it. I had proven that embeddable Postgres was possible, just not pleasant.
+
+### Attempt 3: Hyper9
+
+Later, for unrelated reasons, I built 
+              [Hyper9](https://github.com/progrium/hyper9)
+              . Inspired by system API translation, an approach that Wine and Valve's Proton are built on, combined with a unique way to use hypervisors, Hyper9 lets you run Plan 9 executables at near native speed on all platforms.
+
+I'll be posting more about Plan 9 soon, but with a little extra magic, I was able to run the same Postgres at near native speed, in isolation, on all platforms. It's effectively the same approach as the previous attempt, but now without the slowdown.
+
+Startup went from 7 seconds to 800ms. So I dusted off the design doc and built it. PGlite was taken, so postgres-standalone became miniPG.
+
+## What it isn't
+
+miniPG isn't a replacement for real Postgres deployments. If you're running in the cloud, using replicas, or serving many users over many connections, use Postgres the normal way.
+
+miniPG is for local, single-user programs: the places SQLite would fit, but you need Postgres.
+
+That said, go ahead and see how far you can push it!
+
+## Try it
+
+I'd really like to see how miniPG holds up in the wild, especially across different platforms and architectures. Please try it and tell me what breaks.
+
+If this works, it proves a model that goes well beyond Postgres: taking complicated systems and packaging them as a single binary for more specific use cases. That's the part I find most exciting, and it's one of many new possibilities Hyper9 enables.

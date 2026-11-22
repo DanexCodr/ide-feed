@@ -168,5 +168,3 @@ We expect implementations of system languages to be quite comparable in performa
 ## Acknowledgements
 
 Thanks to Nico Burns for reviewing an earlier draft of this post.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50593737)

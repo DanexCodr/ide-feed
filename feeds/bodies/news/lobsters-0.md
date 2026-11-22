@@ -1,9 +1,66 @@
-Researchers planted 2 million digital tripwires in requests sent through a sprawling network of AI services to find out what happened to sensitive information entrusted to them. What they discovered was an ecosystem that leaked highly sensitive data like a sieve.
+TL;DR: GitHub Actions accepts several invalid YAML productions, making it
+difficult (read: impossible) to parse some real-world action and workflow
+definitions with a properly conforming YAML parser.
 
-The exposure was found through an ingenious experiment designed to test if sensitive information can leak through the vast chain of widely used AI services and how that information is exploited when it does. Many of today’s AI apps use services such as [OpenRouter](https://openrouter.ai) or [Vercel](https://vercel.com/) that act as brokers. These “AI routers,” sometimes also known as “AI gateways,” receive large numbers of prompts sent from AI app end users and route them to an available inference engine based on criteria such as the one charging the lowest price or being best suited for the given task. Instead of using Anthropic, OpenAI, or another big provider, the developer hires an AI router to find the most suitable model.
+This is related to [zizmor#1116](https://github.com/zizmorcore/zizmor/issues/1116), which has been bugging me for a year and a half.
 
-**Update, Nov 21:** Posts on both [Hacker News](https://news.ycombinator.com/item?id=50585962) and [X](https://x.com/michael_chomsky/status/2124008002571428224) report that OpenRouter has sent customers an email notifying them that some of their prompts may have been read. OpenRouter cited the research and said that it received a report that the potential exposure involved prompts sent to MiniMax, a China-based model provider. OpenRouter said the researchers’ planted URLs were accessed whether the prompts were sent to MiniMax directly or through three other resellers: AtlasCloud, Novita, and StreamLake. OpenRouter has removed a “Zero Data Retention” label from MiniMax-model endpoints. Hat tip: [Sulat.com](https://news.sulat.com/2026/11/21/openrouter-minimax-prompts/).
+Last April, a user reported that [zizmor](https://docs.zizmor.sh) was rejecting a workflow containing
+a step that looks like this:
 
-## Security breaches, prompt theft, and privacy violations
+```yaml
+- name: Create NPM Remote Repository JSON
+  uses: jsdaniell/create-json@v1.2.3
+  with:
+    name: "npm-remote-template.json"
+    json: '{
+      "key": "npm-remote",
+      "rclass": "remote",
+      "packageType": "npm",
+      "url": "https://registry.npmjs.org"
+    }'
+```
 
-To test for potential leakage, researcher HD Moore assembled a collection of Amazon Web Services access keys, functioning credentials tied to empty AWS accounts, passwords for services such as SSH, and unique URLs, DNS names, and private git repository references. None of the secrets had ever been used before, and he controlled the infrastructure that received any requests using the credentials. He then seeded each secret into exactly one prompt sent to a single provider. In the event any of the secrets were leaked, these “canaries”—so called because they resemble the role of that bird when taken into coal mines—would allow Moore to identify each link in the chain that was responsible.
+Apart from the use of a multi-line flow-style string for the `json:` key, nothing particularly
+stands out about this step.
+
+Except: it isn't valid YAML! YAML says this about flow-style nodes that are nested inside
+of a block-style parent collection (read: map or array):
+
+> Flow nodes must be indented by at least one more space than the parent block collection.
+> Note that flow nodes may begin on a following line.
+>
+> *Source*: [YAML 1.2.2 § 8.2.3](https://yaml.org/spec/1.2.2/#823-block-nodes)
+
+That means the *correct* syntax is instead:
+
+```yaml
+- name: Create NPM Remote Repository JSON
+  uses: jsdaniell/create-json@v1.2.3
+  with:
+    name: "npm-remote-template.json"
+    json: '{
+      "key": "npm-remote",
+      "rclass": "remote",
+      "packageType": "npm",
+      "url": "https://registry.npmjs.org"
+     }'
+```
+
+The difference is barely visible:
+
+YAML is a big and complicated spec, so it didn't even occur to me that this *was*
+invalid. Instead, I opened [tree-sitter-yaml#36](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/36) to "fix" it. I've now
+opened [tree-sitter-yaml#51](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/51) to revert that misbegotten fix.
+
+On GitHub's side, I'm not sure if they have a clean path towards spec
+conformance here. Much of the code behind Actions is proprietary,
+but it seems likely that the underlying parser on their end is [YamlDotNet](https://www.nuget.org/packages/yamldotnet/).
+
+Actions [appears to use YamlDotNet 5.3.0](https://github.com/actions/runner/blob/7e211dc69c347b78fc398e630e74facb11a13235/src/Sdk/Sdk.csproj#L29), which was [released in 2018](https://github.com/aaubry/YamlDotNet/releases/tag/v5.3.0).
+However, even upgrading to the newest version (18.1.0 as of writing)
+wouldn't fix this particular bug, since it's [still present](https://github.com/aaubry/YamlDotNet/blob/748334a8fa7c227740018b284b71ad95cc6b7fc7/YamlDotNet/Core/Scanner.cs#L1841-L1844) on that
+version (note the `!isSingleQuoted` guard).
+
+My best guess is that a 2020 patch ([YamlDotNet#467](https://github.com/aaubry/YamlDotNet/pull/467)) only fixed the double-quoted
+form because YAML's official test suite only tests rule 8.2.3 with a double-quoted
+string, despite it applying to both forms.

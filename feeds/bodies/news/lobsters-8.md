@@ -1,180 +1,176 @@
-In a [previous post](https://joshua.hu/wtf-google-feedburner-cache-problem-atom-rss), I talked about how Google’s [Chrome Releases blog](https://chromereleases.googleblog.com/) was serving stale results on its Atom feed, and had set up a redirect from its RSS feed (which was serving up-to-date results) to … the stale Atom feed. This meant results were up to a few days old. This was particularly annoying because my [CCBot](https://joshua.hu/ccbot-chrome-checker-bot-googlechromereleases-chromium-updates) parsed the blog’s feed to notify me (Opera!) about Chromium vulnerabilities which were fixed. When I wrote that post, the Atom feed was days behind:
+I’ve created a new little tool to help run and manage scripts in a folder tree, called
+            [scriptura](https://git.alin.ovh/scriptura). It is based on the idea behind
+            [sd](https://github.com/ianthehenry/sd)
+            and is made for fish users.
 
-```
-$ date
-Sun Feb 23 22:33:37 AEDT 2025
-$ curl --silent "https://feeds.feedburner.com/GoogleChromeReleases" | grep -o '2025-02-..' | sort -n | head -n5
-2025-02-16
-2025-02-13
-2025-02-13
-2025-02-13
-2025-02-13
-```
+Given a script folder like so:
 
-And the RSS feed (which historically was serving fresh results) was redirecting to the Atom feed:
-
-```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default'
-HTTP/2 302
-location: http://feeds.feedburner.com/GoogleChromeReleases
+```console
+$ set -x SCRIPTURA_ROOT ~/scripts
+$ tree ~/scripts
+~/scripts
+├── os
+│   └── update
+│       ├── linde
+│       └── r5 -> linde
+└── scriptura
+    └── tree
 ```
 
-Well, lo and behold, a few days ago I came to discover that the RSS feed could still be accessed, if you added a secret parameter, `?redirect=false`:
+If I type in
+            `scriptura run os update linde`, it will run the script at
+            `~/scripts/os/update/linde`, whilst providing tab completion for each element. Pressing tab after a script has been resolved will first add
+            `--`
+            to clearly show the end of the script part of the command line, then use the default shell filename completion.
 
-```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-HTTP/2 200
-cross-origin-resource-policy: cross-origin
-server: blogger-renderd
-x-content-type-options: nosniff
-x-xss-protection: 0
-x-frame-options: SAMEORIGIN
-date: Sat, 21 Nov 2026 22:20:58 GMT
-expires: Sat, 21 Nov 2026 22:20:59 GMT
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 14:45:03 GMT
-content-type: application/atom+xml; charset=UTF-8
-age: 0
-alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-accept-ranges: none
-vary: Accept-Encoding
+```console
+$ scriptura run os update linde -- <tab>
+bin/        flake.nix  LICENSES/  private/    scripts/  system/
+flake.lock  lib/       packages/  REUSE.toml  secrets/  user/
 ```
 
-Since we can now pull in fresh results from the Chrome Releases blog, it means that CCBot can start working properly again. Its source is still [on GitHub](https://github.com/MegaManSec/CCBot), and I’m sure Opera still uses it (lol).
+The usage information gives more detail on what can be done.
 
-## Caching with If-Modified-Since
+```console
+$ scriptura
+Usage: scriptura <subcommand> <script_name>
+SCRIPTURA_ROOT: ~/scripts
 
-In terms of the [feed caching problem](https://joshua.hu/google-feedburner-broken-caching-if-modified-since) I also previously wrote about, where the Feedburner Atom feed refused any caching techniques which RSS feeds typically allow to be utilized, it turns out the `redirect=false` feed supports them. Sort of.
+Subcommands:
 
-Feedburner itself hasn’t changed at all. It still doesn’t send an `ETag`, it still ignores `If-Modified-Since`, and it still tells everybody not to cache anything:
+  run          Run a script
+  help         Display help information
+  new          Create new script
+  edit         Edit existing script
+  which        Display script path
+  cat          Display script content
+  cmd          Execute shell command from target directory
 
-```
-$ hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' 'https://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/2 200
-content-type: text/xml; charset=utf-8
-feedburnerv2:
-last-modified: Sat, 21 Nov 2026 15:27:08 GMT
-cache-control: no-cache, no-store, max-age=0, must-revalidate
-pragma: no-cache
-expires: Mon, 01 Jan 1990 00:00:00 GMT
-date: Sat, 21 Nov 2026 22:35:16 GMT
-```
+User Subcommands:
 
-It’s also still serving outdated results. For example, on the 30th of October, a post published at 07:58 PT was still missing from the Feedburner feed nearly two hours later.
+  tree         print a tree of files under $SCRIPTURA_ROOT
 
-The `redirect=false` feed, on the other hand, does respond with `304 Not Modified`. Sometimes. Because of course it’s inconsistent. The same request, with an `If-Modified-Since` in the future, made twelve times in a row:
+Scripts:
 
-```
-$ URL='https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-$ for i in $(seq 12); do hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL" | tr -d '\r' | grep -iE '^(http|date|age)' | paste -sd ' ' -; done
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:17 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:18 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:19 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:20 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:21 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
+os ...       -- os commands
 ```
 
-Looking at the `date` and `age` headers, we see the first request in each second gets a full `200`, and every request after it in that same second gets a `304` with an `age: 0` header.
+## Typing shortcuts
 
-`age` is the header a cache adds when it answers with its own stored copy instead of asking the server behind it. The feed is served with `cache-control: public, must-revalidate, proxy-revalidate, max-age=1`, so whatever sits in front of Blogger’s `blogger-renderd` server (presumably some Google frontend) is allowed to keep a copy for one second. While that copy is fresh, the cache handles the `If-Modified-Since` itself, correctly, and replies with a `304`. Once it has expired, the request goes through to `blogger-renderd`, which ignores `If-Modified-Since` completely and sends back the whole feed.
+To reduce the amount of typing required, I have set the following aliases.
 
-Adding a cache-busting parameter to the URL makes every request miss the cache, and then it’s a `200` every single time:
-
-```
-$ for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL&nocache=$RANDOM"; done; echo
-200 200 200 200 200 200 200 200 200 200
+```fish
+alias sfm="scriptura"
+alias sf="scriptura run"
 ```
 
-So for anything that polls the feed every few minutes, the one-second copy will always have expired by the time the next request comes in, and `If-Modified-Since` never gets a `304`.
+The fish completion system handles these well:
+            `sf <tab>`
+            will show me scripts to be run, whereas
+            `sfm`
+            will show me the subcommands of the tool.
 
-## Caching with If-None-Match
+## Documenting scripts
 
-What’s also interesting is that `If-None-Match` *does* work on the `redirect=false` feed. The catch is that you get an `ETag` if and only if you ask for a compressed response (wtf). Without `Accept-Encoding: gzip`, there’s no `ETag` at all:
+To aid documentation,
+            `scriptura`
+            will look in a couple of places:
 
-```
-$ hcurl "$URL"
-HTTP/2 200
-server: blogger-renderd
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
-```
+1. an adjacent file with the .help extension
+2. comments inside the script (currently only supports one comment syntax #) Additionally, folders can be documented by adding a file called help. This information is then provided during tab completion, via the help subcommand or when listing scripts (the default action if a the command line does not resolve to a script).
 
-And with it:
+## Language support
 
-```
-$ hcurl --compressed "$URL"
-HTTP/2 200
-content-encoding: gzip
-server: blogger-renderd
-content-length: 57817
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-etag: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
-```
+Whilst scriptura is written in fish, scripts don’t have to be; it’s just the default.
+            `scriptura new`
+            will create scripts with a fish shebang, which can be freely edited. I also plan to add a command-line option to set a different interpreter.
 
-Asking for only `br` or `zstd` doesn’t help, because the server doesn’t support them, so it sends the feed uncompressed, without an `ETag`.
+## Changes from sd
 
-Once you have the `ETag`, sending it back in `If-None-Match` gets a `304` every time, even with the cache-busting parameter (so these all come from `blogger-renderd` itself), and with or without `--compressed`:
+The
+            [blog post version of
+              `sd`](https://ianthehenry.com/posts/sd-my-script-directory/)
+            and the version
+            [published to Github](https://github.com/ianthehenry/sd)
+            already differ in that the blog post version uses subcommands like
+            `sd new`, whereas the Github version uses flags for actions that don’t involve running a script (e.g.
+            `sd --new`). I prefer the subcommand style, at least when there is a short alias to the
+            `run`
+            subcommand.
 
-```
-$ for i in $(seq 10); do curl -s --compressed -o /dev/null -w '%{http_code} ' -H 'if-none-match: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"' "$URL&nocache=$RANDOM"; done; echo
-304 304 304 304 304 304 304 304 304 304
-```
+Additionally, I’ve added some new features.
 
-This saves quite a bit, which I had originally intended and wanted to do. The full feed is 1,725,860 bytes uncompressed and 57,817 bytes gzipped, and a `304` is practically nothing. Feedburner still sends 55,792 gzipped bytes (1,615,960 uncompressed) every time.
+## New features
 
-## Where the redirect came from
+### Tab completion after
+            `new`
 
-All of this is different to what I found in my original post. Back then, the blogger.com URL was still served by the old GData API (that’s what the `sunset` and `link` headers in that post were about), and it answered `If-Modified-Since` with a `304`. Those headers are gone now, and the responses come from `server: blogger-renderd` (see the `redirect=false` response at the start of this post), which is the same server that handles the blog’s own feeds on chromereleases.googleblog.com.
+The
+            `new`
+            subcommand invokes the underlying command’s tab-completion after a script name is given:
 
-That’s probably also the real reason for the redirect in my last post. The documentation I quoted in my original post said that the old GData feed URLs would keep working, but that “the response is the same as blogspot.com feeds”. The Chrome Releases blog’s own feeds were already redirecting to Feedburner at the time (that’s Blogger’s “Post feed redirect URL” setting), so once the GData API was finally switched off, the blogger.com URL started redirecting too. So it probably wasn’t me emailing Feedburner’s support after all, too bad.
-
-`redirect=false` is how you get around that setting, and it’s not quite as undocumented as I originally thought: a [Feedburner help page about Google Webmaster Tools](https://support.google.com/feedburner/answer/97090) mentions `http://mybloggerblog.blogspot.com/feeds/posts/default?redirect=false` as a feed URL format that “should always work” for Blogger users.
-
-Oh, and the “RSS feed” I’ve been talking about in these posts is actually an Atom feed (`content-type: application/atom+xml`), and the real RSS version is accessed with `?alt=rss&redirect=false`, which behaves exactly the same way on both blogger.com and chromereleases.googleblog.com.
-
-## Redirecting to plain HTTP
-
-Another interesting thing is that every one of the blog’s feed URLs redirects to `http://feeds.feedburner.com/GoogleChromeReleases`, with `http`, not `https`, even when the feed itself was requested over https:
-
-```
-$ hcurl 'https://chromereleases.googleblog.com/feeds/posts/default'
-HTTP/2 302
-server: blogger-renderd
-location: http://feeds.feedburner.com/GoogleChromeReleases
+```console
+$ scriptura new mac svc restart -- launchctl k<tab>
+kickstart  (Forces an existing service to start)
+kill    (Sends a signal to the service instance)
 ```
 
-That means a feed reader that starts off on `https://chromereleases.googleblog.com/feeds/posts/default` gets downgraded to plain HTTP when it follows the redirect, and instead of sending it back to https, Feedburner just serves the whole feed over plain HTTP:
+### Run ad-hoc commands in the script root
 
-```
-$ hcurl 'http://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/1.1 200 OK
-Content-Type: text/xml; charset=utf-8
+```console
+$ scriptura cmd tree
 ```
 
-In other words, anything subscribed to one of the Chrome Releases blog’s own feed links gets Chrome’s security release announcements unencrypted, and anybody on the network path can change them, like adding a fake release post, or removing a real security update so something like CCBot never sees it.
+will run the
+            `tree`
+            command with the working directory set to
+            `$SCRIPTURA_ROOT`.
 
-## Which feed URL to use
+### Custom subcommands
 
-So, to sum it all up:
+One thing that I thought would be useful is a
+            `tree`
+            subcommand. However, I don’t want to force that on any other potential users. Whilst I could have settled with the
+            `cmd`
+            subcommand mentioned in the previous section, I decided I wanted it to be even easier.
+Scripts under the special
+            *scriptura*
+            subdirectory are exposed as subcommands, which pass flags to the underlying command and interpret positional arguments as script path components:
 
-| URL | `If-Modified-Since` | `If-None-Match` | Up to date? |
-| --- | --- | --- | --- |
-| `feeds.feedburner.com/GoogleChromeReleases` | Ignored | No `ETag` | Not always (hours, or days, behind) |
-| `/feeds/posts/default` and `?alt=rss`, on chromereleases.googleblog.com or blogger.com | n/a (302 to Feedburner, over HTTP) | n/a | n/a |
-| The same URLs with `redirect=false` | Only from the one-second cache | Works, if you ask for gzip to get the `ETag` | Yes |
+```console
+# create a new script at ~/scripts/scriptura/tree which just calls tree
+$ scriptura new scriptura tree -- tree
+$ scriptura tree
+.
+├── os
+│   └── update
+│       ├── linde
+│       └── r5 -> linde
+└── scriptura
+    └── tree
 
-So, if you’re polling a Blogger feed that’s redirected to Feedburner, use `?redirect=false`, ask for gzip, keep the `ETag`, and send it back as `If-None-Match`. Python’s `requests` (as used by CCBot) already asks for gzip by default, so it’s only the last two you need to do yourself.
+4 directories, 3 files
+$ scriptura tree -L1 os
+os
+└── update
 
-In other news, CCBot 1.1.2 has been published!
+2 directories, 0 files
+```
+
+## Motivation
+
+Recently, I found
+            [sd](https://github.com/ianthehenry/sd), which is designed to help run and manage scripts under a specific directory tree.
+
+There are two reasons I’m not using this tool directly:
+
+- It’s called sd, which is a name that’s already taken on my system by another tool: sd (sed alternative).
+- It doesn’t ship with completions for the fish shell. There was a gist with these, but it seems to have disappeared. The completions are, in my opinion, the biggest feature.
+
+Also, I expected a fish implementation to be easier to read and write, as well as not requiring so many external command calls.
+
+In the introductory
+            [blog post](https://ianthehenry.com/posts/sd-my-script-directory/), Ian writes
+            It’s not really a thing. It’s more of an idea. You can implement it yourself in one sitting, if you want..
+
+It took me more than one sitting, but I enjoyed it.
