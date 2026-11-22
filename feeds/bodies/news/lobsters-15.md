@@ -1,208 +1,99 @@
-November 19, 2026 - The [PostgreSQL Global Development Group](https://www.postgresql.org)
-today announced the release of [PostgreSQL 19](https://www.postgresql.org/docs/19/release-19.html),
-the latest version of the world's most advanced open source database.
+I’m pleased to announce a new source control tool, [jj-musubi](https://www.serpentine.com/software/jj-musubi/), that
+live-syncs copies of a Jujutsu (`jj`) repository across multiple machines. Every time jj
+snapshots my work, jj-musubi syncs it to every machine in moments, and also commits, rebases,
+fetches, and so on.
 
-Mission-critical usage of PostgreSQL continues to rapidly rise, and
-PostgreSQL 19 responds to this by simplifying both administration and
-development for these workloads at scale. This release introduces the
-[`REPACK (CONCURRENTLY)`](https://www.postgresql.org/docs/19/sql-repack.html)
-command so users can optimize tables for their current workload without
-disruption to ongoing operations. PostgreSQL 19 gives users better control over
-plan stability and query performance with the new [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
-extension. Developers will find many delightful features in this release, from
-support for "read-your-writes" consistency on standbys to "get or create"
-behavior that saves a network round trip.
+This simple capability is surprisingly powerful.
 
-"For over 30 years, the global open source community has built PostgreSQL into a
-database that organizations trust with their most critical data," said
-Jonathan Katz, a member of the PostgreSQL core team. "PostgreSQL 19 continues
-that commitment to reliability, giving users new ways to manage their workloads
-without disruption and to build applications that span multiple systems."
+- I often work on one machine, and build or test on others. Now they get my changes as I make them, and I don’t need to remember whether I was editing on my laptop or someplace else.
+- If I fetch changes from or push changes to upstream, all of my copies stay up to date.
 
-PostgreSQL, an innovative data management system known for its reliability,
-robustness, and extensibility, benefits from 30 years of open source
-development from a global developer community and has become the preferred open
-source relational database for organizations of all sizes.
+jj-musubi makes repos on multiple machines feel like jj workspaces (worktrees if you speak git).
 
-Tables that receive many updates and deletes can build up unused space, known as
-"bloat," which can also significantly impact query performance. The
-`VACUUM FULL` and `CLUSTER` commands were previously used to handle this, but
-had tradeoffs, including preventing access to the table until the cleanup
-finished. PostgreSQL 19 introduces the [`REPACK`](https://www.postgresql.org/docs/19/sql-repack.html)
-command, which reclaims this space and can reorder a table's data to match an
-index, and with `REPACK (CONCURRENTLY)`, can do so without blocking reads or
-writes. `REPACK` replaces the `VACUUM FULL` and `CLUSTER` commands, both of
-which remain available for compatibility.
+It’s intended for use by one person who works across several machines, so it has no security
+model (or rather, that *is* the extent of its security model).
 
-The PostgreSQL query planner usually picks an efficient plan for each query, but
-the plan can change as your data changes, and sometimes the new plan is slower.
-PostgreSQL 19 adds the [`pg_plan_advice`](https://www.postgresql.org/docs/19/pgplanadvice.html)
-extension, which allows stabilization of plan choices and the ability to
-experiment with different plans using the "plan advice" mini-language. The companion
-[`pg_stash_advice`](https://www.postgresql.org/docs/19/pgstashadvice.html)
-extension stores advice and automatically applies it to queries based on their
-query identifier, so you can fix a slow plan without changing your application.
+## Things you can do[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#things-you-can-do)
 
-PostgreSQL 19 also helps [autovacuum](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM)
-keep up on busy systems. Autovacuum can now vacuum indexes using parallel
-workers, controlled by the new
-[`autovacuum_max_parallel_workers`](https://www.postgresql.org/docs/19/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-PARALLEL-WORKERS)
-setting, and uses a new [scoring system](https://www.postgresql.org/docs/19/routine-vacuuming.html#AUTOVACUUM-PRIORITY)
-to decide which tables to process first. Queries that read a table can now
-automatically mark pages as all-visible in the [visibility map](https://www.postgresql.org/docs/19/routine-vacuuming.html#VACUUM-FOR-VISIBILITY-MAP) during execution,
-reducing the work that future vacuums need to do. Additionally,
-[`vacuumdb --analyze-only`](https://www.postgresql.org/docs/19/app-vacuumdb.html)
-now analyzes partitioned tables when no tables are specified.
+Jujutsu already treats the working copy as a commit. Running `jj status` records a snapshot of
+my edits in that commit, which jj-musubi then syncs to my other machines. I like to have my
+shell prompt run `jj status`, so in practice I rarely have to think about snapshots.
 
-This release adds new views for monitoring workloads, including
-[`pg_stat_lock`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-LOCK-VIEW)
-for per-lock-type statistics, [`pg_stat_recovery`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-RECOVERY-VIEW)
-for recovery status, and [`pg_stat_autovacuum_scores`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-AUTOVACUUM-SCORES-VIEW)
-to show how autovacuum prioritizes tables. The new `IO` option for
-[`EXPLAIN ANALYZE`](https://www.postgresql.org/docs/19/sql-explain.html) and the
-matching [`auto_explain`](https://www.postgresql.org/docs/19/auto-explain.html#AUTO-EXPLAIN-CONFIGURATION-PARAMETERS-LOG-IO)
-setting report asynchronous I/O activity. PostgreSQL 19 also reports the amount
-of WAL written for full-page images in [`pg_stat_wal`](https://www.postgresql.org/docs/19/monitoring-stats.html#PG-STAT-WAL-VIEW),
-`EXPLAIN (ANALYZE, WAL)`, and in vacuum and analyze log events.
+jj-musubi does not write to the working copy. Each machine has its own working copy and
+workspaces as usual, so syncs of commits, snapshots, and rewrites can bring in new history while
+a build is running, without changing the files under it. On a laptop, I can work offline, and my
+machine will sync when I’m back on the network.
 
-Previously, PostgreSQL often required users to restart their server to enable
-[logical replication](https://www.postgresql.org/docs/19/logical-replication.html),
-which could be disruptive in production workloads. PostgreSQL 19 simplifies
-logical replication initialization by automatically raising the effective WAL
-level to `logical` when you create the first logical replication slot. You can
-see the WAL level in use with the new [`effective_wal_level`](https://www.postgresql.org/docs/19/runtime-config-preset.html#GUC-EFFECTIVE-WAL-LEVEL) setting.
+This has also proven handy when I have agents working on several machines. I can give each agent
+its own jj workspace on different systems, then run `jj diff -r devbox/agent-1@` on the laptop
+to see what one of them has done so far. If one finds a bug that another needs to fix, they can
+coordinate and see each other’s work without overhead.
 
-PostgreSQL 19 also adds logical replication of
-[sequence values](https://www.postgresql.org/docs/19/logical-replication-sequences.html),
-which you can publish using `FOR ALL SEQUENCES` with
-[`CREATE PUBLICATION`](https://www.postgresql.org/docs/19/sql-createpublication.html).
-`CREATE PUBLICATION` also adds an `EXCEPT` clause to exclude tables when
-publishing `FOR ALL TABLES`, and [`CREATE SUBSCRIPTION`](https://www.postgresql.org/docs/19/sql-createsubscription.html)
-can now get its connection settings from a foreign server, such as one defined
-with [`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html),
-using the `SERVER` clause. Additionally, the new
-[`retain_dead_tuples`](https://www.postgresql.org/docs/19/sql-createsubscription.html#SQL-CREATESUBSCRIPTION-PARAMS-WITH-RETAIN-DEAD-TUPLES)
-subscription option lets PostgreSQL detect updates that conflict with a
-concurrent delete, and these conflicts are counted in
-[`pg_stat_subscription_stats`](https://www.postgresql.org/docs/19/monitoring-stats.html#MONITORING-PG-STAT-SUBSCRIPTION-STATS).
+## Ephemeral uses[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#ephemeral-uses)
 
-For applications that send reads to standbys, PostgreSQL 19 adds
-"read-your-writes" consistency with the new
-[`WAIT FOR LSN`](https://www.postgresql.org/docs/19/sql-wait.html) command. A
-session on a standby can use `WAIT FOR LSN` to wait until the standby has
-replayed the write-ahead log (WAL) up to a specific
-[log sequence number (LSN)](https://www.postgresql.org/docs/19/wal-internals.html)
-before running a query, so the application can read data it just wrote on the
-primary.
+jj-musubi refers to a collection of copies of a repo as a *hive*.
 
-PostgreSQL 19 also improves queries on foreign tables. With the new
-[`import_stats`](https://www.postgresql.org/docs/19/postgres-fdw.html#POSTGRES-FDW-OPTIONS-COST-ESTIMATION) option,
-[`postgres_fdw`](https://www.postgresql.org/docs/19/postgres-fdw.html) can
-import table statistics from the remote server when you run `ANALYZE`, instead
-of sampling rows from the remote table, which helps the query planner choose
-better plans.
+I often run agents in temporary disposable VMs. jj-musubi supports this by allowing an agent to
+*lease* its repo’s membership in the hive: if it doesn’t renew that lease in time, its repo gets
+forgotten about, so temporary repos or vanished containers can’t just stack up and clutter
+things.
 
-PostgreSQL 19 adds [`INSERT ... ON CONFLICT DO SELECT`](https://www.postgresql.org/docs/19/sql-insert.html#SQL-ON-CONFLICT),
-which lets the `RETURNING` clause return existing rows that conflict with an
-insert, simplifying the common "get or create" pattern.
-[`COPY`](https://www.postgresql.org/docs/19/sql-copy.html) can now output data
-as JSON, including as a single JSON array, and the
-[SQL/JSON path language](https://www.postgresql.org/docs/19/functions-json.html#FUNCTIONS-SQLJSON-PATH-OPERATORS)
-adds string methods such as `lower()`, `upper()`, `replace()`, `split_part()`,
-and `btrim()`. Additionally, the `lead()`, `lag()`, `first_value()`,
-`last_value()`, and `nth_value()` [window functions](https://www.postgresql.org/docs/19/functions-window.html)
-can now skip `NULL` values using `IGNORE NULLS`. The [`random()`](https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-TABLE) function can now also generate random dates
-and timestamps within a range.
+## Why I wanted this[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#why-i-wanted-this)
 
-This release also makes many workloads faster without changes to your
-application. PostgreSQL 19 improves the performance of foreign key checks, which
-in testing made bulk inserts nearly 2x faster, and adds more query planner
-optimizations, such as converting `NOT IN` clauses to more efficient anti-joins
-when `NULL` values are not present, and performing
-[eager aggregation](https://www.postgresql.org/docs/19/runtime-config-query.html#GUC-ENABLE-EAGER-AGGREGATE)
-before joins to reduce the number of rows to process. PostgreSQL 19 also builds
-on the [asynchronous I/O](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-METHOD)
-subsystem added in PostgreSQL 18. When `io_method` is set to `worker` (the
-default), PostgreSQL now automatically adjusts the number of I/O workers between
-the new [`io_min_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MIN-WORKERS)
-and [`io_max_workers`](https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MAX-WORKERS)
-settings, which replace the `io_workers` setting. There are also scalability
-improvements when using [`LISTEN`](https://www.postgresql.org/docs/19/sql-listen.html)
-and [`NOTIFY`](https://www.postgresql.org/docs/19/sql-notify.html) to
-exchange notifications in multi-channel workloads.
+Back when I was at Meta, I kicked off the project that became Sapling and Mononoke. Sapling’s
+Commit Cloud gives engineers there a similar way to move work between machines, and Google
+engineers have something similar with an internal jj server.
 
-Finally, the new [`password_expiration_warning_threshold`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-PASSWORD-EXPIRATION-WARNING-THRESHOLD)
-setting warns users when their password is about to expire.
+Since then, I’d missed that everyday convenience for the machines I already use, and felt like I
+could get it without massive infrastructure or hosting. With jj-musubi, one machine runs a hub,
+and daemons exchange jj history with it over SSH. That’s almost as lightweight as you can get.
 
-PostgreSQL 19 adds server-side support for
-[Server Name Indication (SNI)](https://www.postgresql.org/docs/19/ssl-tcp.html#SSL-SNI),
-letting a single PostgreSQL server present a different TLS certificate based on
-the hostname a client connects to. You can map hostnames to their certificates
-and keys in the new [`pg_hosts.conf`](https://www.postgresql.org/docs/19/runtime-config-file-locations.html#GUC-HOSTS-FILE)
-file. PostgreSQL 19 also now issues a warning after a successful `md5` password
-authentication, which you can turn off with the
-[`md5_password_warnings`](https://www.postgresql.org/docs/19/runtime-config-connection.html#GUC-MD5-PASSWORD-WARNINGS)
-setting. `md5` password authentication was deprecated in PostgreSQL 18 and will
-be removed in a future release. If you require password-based authentication,
-use [SCRAM authentication](https://www.postgresql.org/docs/19/auth-password.html).
-This release also removes support for RADIUS authentication.
+## Safety[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#safety)
 
-[Just-in-time compilation (JIT)](https://www.postgresql.org/docs/19/jit.html) is
-now disabled by default, as the cost estimates PostgreSQL used to decide when to
-use it proved unreliable. If you run many large analytical queries, you may want
-to enable JIT. When PostgreSQL is built with LZ4 support, the default
-[TOAST](https://www.postgresql.org/docs/19/storage-toast.html) compression
-method is now `lz4`.
+What’s tricky is getting concurrent work *right*. That’s already hard in any distributed source
+control system, and when syncs are live *and* we plan for disconnected work in an unreliable
+network, the difficulty goes way up.
 
-Many other new features and improvements have been added to PostgreSQL 19 that
-may also be helpful for your use cases. Please see the
-[release notes](https://www.postgresql.org/docs/19/release-19.html) for a
-complete list of new and changed features.
+As a user, I shouldn’t have to care about when exactly I can safely close my laptop after
+finishing an edit; all of my changes should make it through either just before I close it, or
+right after I reopen. No work should get lost or corrupted in the presence of interrupts,
+resends, delays, or machines sleeping, and the system should stay reliable even when machines go
+offline forever.
 
-[PostgreSQL](https://www.postgresql.org) is the world's most advanced open
-source database, with a global community of thousands of users, contributors,
-companies and organizations. Since its beginnings at the University of
-California, Berkeley over 40 years ago, PostgreSQL has continued with an
-unmatched pace of development. PostgreSQL's mature feature set not only matches
-top proprietary database systems, but exceeds them in advanced database
-features, extensibility, security, and stability.
+I used Lean to prove key properties of jj-musubi’s network protocol, and tests compare the Rust
+code against that model. An extensive body of other tests run real jj repositories through
+concurrent edits, interrupted syncs, hub restarts, and a myriad of other nasty situations.
+Mutation and adversarial testing ensure that when bugs are injected, sensible things happen. The
+[safety guide](https://www.serpentine.com/software/jj-musubi/safety/) details all the checks (and the parts I don’t yet cover).
 
-For explanations of the above features and others, please see the following
-resources:
+## Concurrent edits without commits…!?[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#concurrent-edits-without-commits)
 
-There are several ways you can download PostgreSQL 19, including:
+It might sound spooky or dangerous to be able to see in-progress work on one machine from
+another. How can that be safe?
 
-Other tools and extensions are available on the
-[PostgreSQL Extension Network](http://pgxn.org/).
+If you use jj in multiple workspaces, you’re already used to the novelty of being able to check
+out the same change in two workspaces and modify it. jj simply marks the change as divergent,
+but it won’t update either working copy with changes from the other until you decide to, e.g. by
+calling `jj workspace update-stale`. In jj, dealing with divergent versions of a change is
+similar to any other kind of conflicted merge.
 
-## Documentation
+jj-musubi uses jj’s existing workspace machinery, so everything will feel familiar. The only
+difference is that when you run jj-musubi, a workspace’s name is prefixed with the name of the
+machine it lives on.
 
-PostgreSQL 19 comes with HTML documentation as well as man pages, and you can also browse the documentation online in both [HTML](https://www.postgresql.org/docs/19/) and [PDF](https://www.postgresql.org/files/documentation/pdf/19/postgresql-19-US.pdf) formats.
+## Try it[#](https://www.serpentine.com/posts/2026/announcing-jj-musubi/#try-it)
 
-PostgreSQL uses the [PostgreSQL License](https://www.postgresql.org/about/licence/),
-a BSD-like "permissive" license. This
-[OSI-certified license](http://www.opensource.org/licenses/postgresql/) is
-widely appreciated as flexible and business-friendly, since it does not restrict
-the use of PostgreSQL with commercial and proprietary applications. Together
-with multi-company support and public ownership of the code, our license makes
-PostgreSQL very popular with vendors wanting to embed a database in their own
-products without fear of fees, vendor lock-in, or changes in licensing terms.
+Start with e.g. a laptop and another machine that’s always on (let’s call it `devbox`), with a
+copy of a jj repo on each. On each machine, [download the
+binary](https://github.com/bos/jj-musubi/releases/) or build it yourself:
 
-Website
+```sh
+cargo install --locked jj-musubi
+```
 
-Postgres, PostgreSQL, and the Elephant Logo (Slonik) are all registered
-trademarks of the [PostgreSQL Community Association](https://www.postgres.ca).
-If you wish to use these marks, you must comply with the [trademark policy](https://www.postgresql.org/about/policies/trademarks/).
+Run `musubi hub` on `devbox`; it will keep your sync data in `~/musubi-hub`. In the laptop’s
+repo, run `musubi create --hub devbox`. In `devbox`’s repo, run `musubi join`.
 
-PostgreSQL enjoys the support of numerous companies, who sponsor developers,
-provide hosting resources, and give us financial support. See our
-[sponsors](https://www.postgresql.org/about/sponsors/) page for some of these
-project supporters.
-
-There is also a large community of
-[companies offering PostgreSQL Support](https://www.postgresql.org/support/professional_support/),
-from individual consultants to multinational companies.
-
-If you wish to make a financial contribution to the PostgreSQL Global
-Development Group or one of the recognized community non-profit organizations,
-please visit our [donations](https://www.postgresql.org/about/donate/) page.
+I provide [builds for Linux, macOS and Windows](https://github.com/bos/jj-musubi/releases/), and the [quick start](https://www.serpentine.com/software/jj-musubi/get-started/)
+walks through setup and the first sync. If you try it and something surprises you, I’d like to
+[hear about it](https://github.com/bos/jj-musubi/issues).

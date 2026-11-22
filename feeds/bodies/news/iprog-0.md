@@ -1,6 +1,105 @@
-Is your office empty today? Are your co-workers asleep at their desks? If so, the release of _**Grand Theft Auto VI**_ after a thirteen- year interval might well be the reason.    
-[](<https://link.amazon/B0cnsOeNY>) This is an event that fans have been anticipating for months if not years, and the facts and figures are almost unbelievable. The new version cost $1bn and has been developed by a team of 5,000 employed or contracted by [Rockstar North](<https://www.rockstarnorth.com/>), a Scottish studio based in Edinburgh. Pre-release orders of the game are estimated to already have surpassed $1.5 billion, according to market intelligence firm Sensor Tower. This exceeds an earlier estimate of $1 billion in pre-release advance orders which itself was nearly twice the amount _Call of Duty: Modern Warfare II_ , the best-selling game in the US in 2022, had made at the same time before its launch. The figures on the debit side are equally astounding. One estimate quoted in the International Business Times gave a total for economic costs at $1 billion in lost productivity based on forecasts of 1.5 million U.S. workers calling in sick or taking a holiday.  Schools around the world are offering incentives such as entry into a raffle to win Amazon vouchers in what is likely to be an unsuccessful bid to persuade pupils not to take the rest of the week off to play the game. Organizations are expecting an outbreak of 'GTA Flu', as workers mysteriously fall ill, just as the game becomes playable.  There are numerous threads on Reddit discussing the best excuses for missing work, though many people have planned ahead. One manager said two thirds of the people on his team who are gamers have applied for leave and he's granted it. Another said he'd approved his entire team being off from today till Saturday, adding: _"We worked a Saturday and 2 extra hours each day Monday-Thursday to get ahead of our work. My boss is also off. I'm the only one at work."_ My favorite response on Reddit in a thread about how to find a good excuse was: _"There's like 28 years till gta 7, i don't want to finish it in a week and wait 27 years and 51 weeks. I ain't rushing it."_ So will your time off/suspicious flu/zoned-out weekend be worth it? Initial reviews from journalists who've had early access to the game seem glowing, with people describing GTA VI as a masterpiece, and saying they've never played anything quite like it. It's not often that a software release occupies so many column inches in the mainstream media, or among 'normal' people rather than the tech community. If you're a games developer with a great idea, remember that GTA I, created by DMA Design in Dundee before becoming part of Rockstar Games, only cost around $1 million.  Keep at it, one day you too could bring the world to a halt and overload global internet traffic.  In case you've not already got your copy follow these links to do so: [](<https://link.amazon/B0bRW9DBL>)
+Every day I Programmer has new material written by programmers, for programmers. This digest gives a summary of the latest content, which this week includes an extract from **Programmers Guide To Containers.** If you've not yet adopted containerization its a good way to discover the practicalities. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **November 12 - 18, 2026** | 
 
-#### Related Articles
+### Featured Articles  
 
-[Fun Gifts For Geeks](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+---  
+
+* * *
+
+[ Programmers Guide To Containers - How Containers Work ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>)   
+18 Nov  |  Mike James    
+[ ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>) Containers seem mysterious technology, but in fact they are very simple indeed - on Linux at least! <ASIN:B0HKY1GQ5K>  
+
+* * *
+
+[ Gene Amdahl ](<https://www.i-programmer.info/history/8-people/300-gene-amdahl.html>)   
+16 Nov  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/history/8-people/300-gene-amdahl.html>) Gene Amdahl is a legend who made logic design cool and out did IBM in building advanced computers. He was born on November 16, 1933 and his first computer, the Wisconsin Integrally Synchronized Computer (WISC), was very advanced for its time (1951).  
+
+### Programming News and Views  
+
+* * *
+
+[ Chrome Ships HTML-in-Canvas: Closing The Loop! ](<https://www.i-programmer.info/news/191-htmlcss/19292-chrome-ships-html-in-canvas-closing-the-loop.html>)   
+18 Nov  |  Ian Elliot    
+[ ](<https://www.i-programmer.info/news/191-htmlcss/19292-chrome-ships-html-in-canvas-closing-the-loop.html>) If you want proof that the world of software is insane, you need look no further than the news that Google Chrome now comes with HTML-in-Canvas. How many rendering options does one app need? <ASIN:1871962625>  
+
+* * *
+
+[ Unsettling Results of Stack Overflow Developer Survey 2026 ](<https://www.i-programmer.info/news/99-professional/19276-stack-overflow-developer-survey-2026.html>)   
+18 Nov  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/99-professional/19276-stack-overflow-developer-survey-2026.html>) The Stack Overflow that as developers we used to rely on for the answers to our day-to-day queries was among the first casualties of generative AI. It is, however, continuing to function, even though its previous role as the prime resource for answers has been usurped by AI chatbots and its annual survey has things to tell us about the current developer landscape.  
+
+* * *
+
+[ Red Hat Developer 2.1 Adds New Plugin Architectures ](<https://www.i-programmer.info/news/90-tools/19289-red-hat-developer-21-adds-new-plugin-architectures.html>)   
+17 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/90-tools/19289-red-hat-developer-21-adds-new-plugin-architectures.html>) Red Hat has released Red Hat Developer Hub 2.1, the latest version of its developer portal. This version expands release support to a 10-month lifecycle window, has a modernized plugin architecture and increases the support for agent-assisted development.  
+
+* * *
+
+[ GitHub Copilot App for Beginners - The Course ](<https://www.i-programmer.info/news/90-tools/19290-github-copilot-app-for-beginners-the-course-.html>)   
+17 Nov  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/90-tools/19290-github-copilot-app-for-beginners-the-course-.html>) **GitHub Copilot App for Beginners** is a free, hands-on course, designed to teach developers how to direct, supervise, and review AI coding agents using the desktop GitHub Copilot App.  
+
+* * *
+
+[ Amazon Releases AWS Emulator ](<https://www.i-programmer.info/news/80-java/19288-amazon-releases-aws-emulator.html>)   
+16 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/80-java/19288-amazon-releases-aws-emulator.html>) Amazon has released an AWS Emulator that can be used to build and test AWS applications locally on a developer's machine or in a continuous integration (CI) environment.  
+
+* * *
+
+[ BlimpMate: AI-Assistant In a Helium Balloon ](<https://www.i-programmer.info/news/105-artificial-intelligence/19286-blimpmate-ai-assistant-in-a-helium-balloon.html>)   
+15 Nov  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19286-blimpmate-ai-assistant-in-a-helium-balloon.html>) Meet BlimpMate, described as a flying display robot designed for calm and persistent interaction in indoor environments.  
+
+* * *
+
+[ Fun Gifts For Geeks ](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>)   
+13 Nov  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>) I hope that, like us, you're avoiding the increasing amount of stuff on the Web and social media about how to ensure the perfect Thanksgiving/Holiday Season. You are? Great. Here's another article to shout "It's too early" at. Sadly, it's not that long before you'll be looking for the wrapping paper and cursing because that must-have toy is out of stock.  
+
+* * *
+
+[ What Happened At Percona Live 2026 ](<https://www.i-programmer.info/news/80-java/19284-what-happened-at-percona-live-2026.html>)   
+13 Nov  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/80-java/19284-what-happened-at-percona-live-2026.html>) This year the Percona Live conference took place from September 9-11 in Amsterdam. We provide an overview of this year's event.  
+
+* * *
+
+[ .NET 11 Released ](<https://www.i-programmer.info/news/89-net/19281-net-11-released-.html>)   
+12 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/89-net/19281-net-11-released-.html>) Microsoft has released .NET 11, with improvements across C# 15, ASP.NET Core, .NET MAUI, and Windows development. The version has hundreds of runtime optimizations, more responsive SDK tooling, and less overhead in everyday commands.  
+
+* * *
+
+[ Torvalds Says AI-Driven Linux Patching Slowing ](<https://www.i-programmer.info/news/149-security/19282-torvalds-says-ai-driven-linux-patching-slowing-.html>)   
+12 Nov  |  Alex Denham    
+[ ](<https://www.i-programmer.info/news/149-security/19282-torvalds-says-ai-driven-linux-patching-slowing-.html>) While the current news is dominated by yet another round of patching driven by problems discovered by AI, Linus Torvalds says things might be getting better.  
+
+### Book Watch  
+
+* * *
+
+[ Site Reliability Engineering, 2nd Ed ](<https://www.i-programmer.info/book-watch-archive/19293-site-reliability-engineering-2nd-ed.html>)   
+
+In this revised second edition of a book subtitled "How Google Runs Production Systems", key members of Google's Site Reliability Engineering (SRE) team explore the company's current SRE practices and explain how they've evolved in the decade since the book's initial publication. Betsy Beyer at al discuss the techniques used for applying reliability to the entire user journey for consumer, enterprise, and infrastructure systems, with fresh insights on engineering techniques, organizational processes, and case studies to help promote and implement greater reliability throughout the engineering lifecycle. <ASIN:B0GTYSKFKY >  
+
+* * *
+
+[ Algorithms for Validation (MIT Press) ](<https://www.i-programmer.info/book-watch-archive/19287-algorithms-for-validation-mit-press.html>)   
+
+This book presents a variety of computational methods for validating autonomous systems, introducing the underlying mathematical problem formulations and the algorithms for solving them. With unifying techniques from multiple fields under a common validation framework, Mykel J. Kochenderfer, Sydney M. Katz, Anthony L. Corso and Robert J. Moss provide advanced objective strategies for validation. <ASIN:0262056011 >  
+
+* * *
+
+[ Big Math: The Hidden Codes That Run Our World (Little, Brown and Company) ](<https://www.i-programmer.info/book-watch-archive/19283-big-math-the-hidden-codes-that-run-our-world-little-brown-and-company.html>)   
+
+This book tells the story of how a handful of surprisingly simple mathematical ideas have sparked today's technological breakthroughs, from Netflix's recommendation algorithm to medical imaging to artificial intelligence and beyond. However, Steven Strogatz and Alex Townsend argue that the same ideas are also slipping further and further from our understanding, with potentially earth-shaking consequences. They examine how math is in every photo you post to Instagram, every Google search you make, and every answer you get back from ChatGPT; how it routes our packages and planes, maps social networks, and predicts the weather. Big Math is quietly running our world. <ASIN:0316581585 >  
+
+I Programmer has reported news for over 15 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

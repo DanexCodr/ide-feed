@@ -1,392 +1,181 @@
-`jj` provides primitives for version control that are simple to learn, but elegantly compose into powerful workflows. Features like automatic rebase and native undo soften the sharp edges of Git. Eventually, you’ll organically discover new powerful workflows that would be too cumbersome to attempt with most other VCS tools.
+It’s been a little bit quiet around these parts; sorry about that. I’ve been really busy for the past fifteen months with a major project that I am finally ready to formally release. So I’d like to talk about that project, and also a potted history of AI and Emacs.
 
-If you work in a Git repository, you can try it today. Jujutsu and Git can be used [side-by-side in the same repository](https://docs.jj-vcs.dev/latest/git-experts/#git-can-be-used-side-by-side-in-the-same-repository), so you can try out `jj` on a `git` repo on your own, without fully ejecting from `git`.
+It’s called [DreamCoder](https://www.dreamcoder.ai), an AI coding harness that is very different from the ones you’re probably familiar with already.
 
-Personally, I think `jj` considerably boosts my effectiveness, because it allows me to keep VCS bookkeeping out of my working memory. Automatic rebasing also makes stacked diff workflows quite easy, and reduces thrashing of my working memory. It’s also just a fun tool to use.
+I installed Claude Code a few days after its first release some time in May 2025. I put some coins in the slot machine and I put it to work building a complex piece of enterprise middleware I’d built several times in my career. Wow.. watching this thing chomp its way through the project with that chaotic, early Sonnet energy. It was far, far from perfect; it required a lot of human steering, input and correction, but the speed advantage was undeniable, and seeing it jump between disparate programming languages, frameworks and theoretical and practical programming from one turn to the next was just such a sight to behold.
 
-Official installation instructions are [here](https://docs.jj-vcs.dev/latest/install-and-setup/), but here are a few common methods:
+One thing that struck me with Claude Code is that it was the first terminal application I’d used in a long time. I found it an odd choice for a coding agent; then everyone else copied them and made their own terminal coding agents.
 
-In an existing `git` repository, run:
+Why on earth do I have to stare at a shoe rack-sized terminal window to do this? Sure there are GUI versions also; but the terminal interface remains the primary modality for most of these tools. Most GUIs, and most harnesses now have them also, are second-class citizens. And they all look the same. A boring sidebar with chat headings and a chat pane is what most of them look like.
 
-From here on, `jj` and `git` repo state will be synchronized automatically.
+But a serious coder needs more than that. Even a casual user will bristle when they try to copy and paste multi-line text in a terminal.
 
-To set your user details globally, run commands like these:
+So in May 2025 I decreed that I would build a better harness, and surely now that I have AI this should not take more than 2 or 3 months to build.
 
-You can edit `jj`’s TOML configuration for your user in an editor with:
+And so, after 15 months of work, and endless UI and backend iterations, culminating in a successful beta test, I am now ready to release DreamCoder, which is I think the acme of what a coding harness should be.
 
-In addition to the `--user` scope, `jj config` also has `--repo` and `--workspace` scopes. View the merged config with:
+Before I get into the meat and potatoes of all of that, I want to talk about AI history and Emacs’s role in it.
 
-A **commit**, also called a **revision**, is essentially the same thing as a `git` commit. It represents a snapshot of repository state that descends from one or more parent repository snapshots. It is often visualized as a diff against a singular parent commit, or in the case of a merge commit, the diff against multiple parent commits once merged.
+Let’s roll back time to the 1950s.
 
-When using a Git repo backend, the `jj` **commit ID** is the same as the `git` commit ID: a hash formatted as a hex string. In the output of `jj log` below, the hex hashes `2bea5e3d` and `849165bc` on the right are commit IDs.
+## Past
 
-The IDs on the left hand side (`royxmykx` and `kpqxywon`) are **change IDs**, which are stable identifiers for logical changes as they physically evolve over time. We’ll discuss these more in the next section.
+Emacs and LISP, if you did not know, both have a special place in the annals of AI history.
 
-Commit IDs and change IDs can be referenced in shorthand with an unambiguous (unique) prefix. `jj` helpfully highlights the shortest unique prefix of most IDs to make it easy to type them manually. For example,
-instead of copying and pasting `kpqxywon`, we can type in a prefix, down to the shortest unique prefix `k`.
+John McCarthy was an AI researcher at MIT, and in the 1950s he set out to create the *Advice Taker*, a piece of software that envelops a framework for what a basic human should know that he called *commonsense reasoning* using “mathematical logic”. His postulation was that if we can express with symbolic precision all the aspects of what constitutes humanity like ordinary facts about life, that we can set in motion the rudiments of AI.
 
-We can inspect the commit `2bea5e3d` with `jj show`, using its short prefix `2`.
+In the 50s there was little in the way of computer software that could do this. To formalize such a system you need a lot of data, rigorously formatted, and a method of manipulating the data. The data and code itself may intertwine *recursively*, and so an ordinary programming language would not work.
 
-```bash
-$ jj show 2
-Commit ID: 2bea5e3d1992a60ba9ee52c6ce37c55adba9e8fb
-Change ID: royxmykxtrkrqppotnrvutxlvrvqyxmy
-Bookmarks: main main@git main@origin
-Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:10:46)
-Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:10:46)
+To help him achieve this, McCarthy created the LISt Processing (LISP) language made up of two facets: M-expressions, a functional language in the vein of Algol; and S-expressions, designed for symbolic data representation, and never intended as a method of writing code. S-expressions were dolled up with parentheses. M-expressions meanwhile used square brackets to visually separate the two. Uniquely, the language specification had an *eval* feature that would prove that the language is also a universal Turing machine… if only McCarthy had the means to do so. It was theoretical because McCarthy lacked, in time, staff and money, what he needed build this recursive evaluator that can take as input its own world state and evaluate it alongside new expressions, a fact made even more apparent by the sheer complexity of his M-expression language and the limited resources he had at the time.
 
-    Adjust config
+Steve Russell who worked with him proved him wrong the way most young people do: by just doing it. Russell wrote the first LISP Interpreter with a working *eval* function, but M-expressions got sidelined; the imperative, procedural nature of programming got squished into S-expressions instead. They had to hand roll the language on paper then punch it into cards and then batch run them. Eliding M-expressions was a simple matter of pragmatism. And so LISP was born. And through several accidents of history, M-expressions never gained traction. M-expressions live on in Wolfram’s Mathematica, but few other places.
 
-diff --git a/config.py b/config.py
-index 7366a4e31d..174ffea06b 100644
---- a/config.py
-+++ b/config.py
-@@ -1,1 +1,1 @@
--DEFAULT_LIMIT = 10
-+DEFAULT_LIMIT = 20
-```
+Much later, McCarthy eventually conceded that,
 
-Many folks configure a custom diff formatter, like [Delta](https://github.com/dandavison/delta). See [configuration docs](https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged) if you’re interested.
+> “One can even conjecture that LISP owes its survival specifically to the fact that its programs are lists, which everyone, including me, has regarded as a disadvantage.”
 
-Let’s take another look at our commit graph:
+S-expressions were always intended as the storage format with a bridge language to manipulate them. But by pushing evaluation into the same symbolic representation format as the data, we have what we call LISP today. That is why LISP is so unique. Consider a simple calculator. `(+ 2 2)` can simultaneously represent an expression that we want to compute, *two plus two*, or perhaps a ledger of record of a calculation we have already done.
 
-On commit `849165bc`, you’ll see the symbol `@` on the graph node. This represents a snapshot of our **working copy**, or the code we have actually checked out in our local directory. We can inspect this special commit pointer in a variety of ways:
+McCarthy never built the Advice Taker in its purest form. He and his team ran into many philosophical, mathematical and computational walls that kept them occupied for a long time.
 
-`jj show` shows commit details and a diff, which is empty here.
-`$ jj show
-Commit ID: 849165bca19639dbd6ccb53e8c1340e78c36d59a
-Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
-Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:17:12)
-Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:17:12)
+The idea behind the Advice Taker was simple. If you want to go somewhere in your car, you can symbolically express this by building a chain of narrative facts – kinda like a flowchart, but as small snippets of rules and facts, not as one grand design.
 
-    (no description set)
-
-`
-
-`jj diff` works much like `git diff`. Its output is empty here, since there are no changes in the current working copy relative to the parent commit.
-
-```bash
-$ jj diff
-```
-
-This output isn’t very interesting, since `@` has no changes. Let’s make an example change to see what happens. If we edit `main.py` and rerun `jj show`, we see this:
-
-```bash
-$ jj show
-Commit ID: 66b59f20c534705cfb753c722222290e9185b22c
-Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
-Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
-Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
-
-    (no description set)
-
-diff --git a/main.py b/main.py
-new file mode 100644
-index 0000000000..c74cd2e0e0
---- /dev/null
-+++ b/main.py
-@@ -0,0 +1,2 @@ def my_new_feature():
-+def my_new_feature():
-+  pass
-```
-
-You’ll notice several things have changed. The working copy has been automatically committed, and `@` is no longer marked `(empty)`. The new commit ID for `@` is `66b59f20`, since we’ve added changes, but the change ID for `66b59f20` is still `kpqxywon`. `jj` has no staging area like in `git`, so we don’t have to manually add files. When we run a `jj` command to inspect or modify repo state after editing files, `jj` automatically snapshots the working copy as a new physical commit for the relevant logical change.
-
-Let’s give this change a description (also called a commit message). We can either run `jj desc`, which opens an editor, or provide it directly with `-m`.
-
-Notice again that the commit ID has changed, since the hash covers the commit message, but the change ID has remained stable.
-
-Now, let’s say we’re ready to use this new feature, and we want to organize that change in a separate commit. We can create a new commit with `jj new`:
-
-We’ve created an empty change `nlrtlrxv` on top of `kpqxywon`. `jj status` reflects that we are editing this new revision which does not yet differ from its parent.
-
-`jj commit` is a shorthand for this common `jj desc` and `jj new` combo. Let’s make another change to use our new feature, and commit it.
-
-To inspect the commit we just created (`n`), we can no longer use the bare `jj show`, which defaults to showing `@`. We have to pass the revision we want to inspect:
-
-```bash
-$ jj show n
-Commit ID: e1b066782aa1a565c1e5d38ef27a308aa58e7e4c
-Change ID: nlrtlrxvuuskxprvtuznquqzqzzwvnzk
-Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:41:30)
-Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:41:30)
-
-    Use the feature
-
-diff --git a/main.py b/main.py
-index c74cd2e0e0..0714ec450b 100644
---- a/main.py
-+++ b/main.py
-@@ -1,2 +1,4 @@ def my_new_feature():
- def my_new_feature():
-   pass
-+
-+do_something(my_new_feature())
-```
-
-We can describe empty commits to record intent before starting work. Let’s create a new commit on top of `k` to remind ourselves that we need to document the feature.
-
-A separate `jj desc` would also work just fine instead of the `-m` flag on `jj new`. Here’s the current commit graph:
-
-Note how we’ve created branching commits without creating a named branch. This highlights a major difference between `jj`’s branchless model and `git`’s branch-centric model of organizing work streams. Instead of juggling your work-in-progress on branches, you work on a graph of commits. Once ready to share, you push branches to a Git forge from your commit graph (more on that later).
-
-## [Revsets](https://ethanlowman.com/posts/jj-primer/#revsets)
-
-A revset, an idea borrowed from Mercurial, is an expression that selects a set of revisions from the commit graph. Most `jj` commands accept revsets in their arguments. When we ran `jj new k`, the argument `k` was actually a trivial revset that resolved to the single change with ID `kpqxywon`. The `jj log` command has an `-r <REVSET>` flag that we can use to preview a revset. Some demonstrative examples follow.
-
-Parent of `@`:
-
-Grandchildren of `r`:
-
-Commits between `r` and `@`, inclusive:
-
-Commit `k` and all descendants:
-
-Commits authored by `ethan@example.com` that also have ID `k` or `q`:
-
-I’ll defer to the official documentation for exhaustive detail. The [Revsets language](https://docs.jj-vcs.dev/latest/revsets/) specification is easily my most referenced `jj` documentation page, so I would recommend skimming it to see what’s possible.
-
-Let’s say in the course of documenting our feature in `qwyusntz` we realized we made a mistake in the implementation in parent change `kpqxywon`. We don’t need to manually commit or stash changes to switch tasks. We simply switch our working copy to `kpqxywon` with `jj edit`:
-
-Our working copy once again shows the changes from `kpqxywon`.
-
-```bash
-$ jj show
-Commit ID: 6b89ffb2a250f622a8638145d65fe8c9bb308dbf
-Change ID: kpqxywonksrltlrkyqukqqsxpltznztk
-Author   : Ethan Lowman <ethan@example.com> (2026-11-15 12:26:43)
-Committer: Ethan Lowman <ethan@example.com> (2026-11-15 12:33:23)
-
-    Implement the feature
-
-diff --git a/main.py b/main.py
-new file mode 100644
-index 0000000000..c74cd2e0e0
---- /dev/null
-+++ b/main.py
-@@ -0,0 +1,2 @@ def my_new_feature():
-+def my_new_feature():
-+  pass
-```
-
-`jj` hasn’t lost track of the changes above our working copy, including our most recent edits to `q`:
-
-Instead of switching commits with `jj edit k`, we could have run `jj edit @-`. The revset `@-` is evaluated before switching the working copy, so this moves to the parent commit. The built-in commands `jj next [--edit]` and `jj prev [--edit]` provide another way to move up and down a stack of commits.
-
-### [Automatic rebasing](https://ethanlowman.com/posts/jj-primer/#automatic-rebasing)
-
-If we edit files in the working copy, the descendant commits will be automatically rebased upon the next `jj` invocation. For example, if we edit `my_new_feature`’s implementation in `main.py` and then run `jj log`, we’ll see that changes `k`, `n`, and `q` all get new commit IDs. `jj` also tells us that it performed a rebase.
-
-If the automatic rebase happened to cause merge conflicts, `jj` doesn’t require us to fix them immediately, like `git rebase` would. Instead, `jj` records that the commit is conflicted and lets you carry on with your current task. This is massively helpful to reduce mental context switching, as your stacked commits grow more complex.
-
-To view the conflicts, we can edit the conflicted commit…
-
-```bash
-$ jj edit n
-Working copy  (@) now at: nlrtlrxv e562bff4 (conflict) Use the feature
-Parent commit (@-)      : kpqxywon c501c0bd Implement the feature
-Added 0 files, modified 1 files, removed 0 files
-Warning: There are unresolved conflicts at these paths:
-main.py    2-sided conflict
-```
-
-And inspect `main.py`.
+The system would automatically resolve ambiguities, and all the logician had to do was capture the microcosm of the world he wished to represent:
 
 ```
-def my_new_feature():
-  print("Hello from the new feature!")
-<<<<<<< conflict 1 of 1
-%%%%%%% diff from: kpqxywon d9f35831 "Implement the feature" (parents of rebased revision)
-\\\\\\\        to: kpqxywon c501c0bd "Implement the feature" (rebase destination)
--  pass
-+  return 42
-+++++++ nlrtlrxv 41a43a84 "Use the feature" (rebased revision)
-  pass
+(at me home)
 
-do_something(my_new_feature())
->>>>>>> conflict 1 of 1 ends
-
+(walkable home car)
+(walkable home driveway)
+(drivable car shop)
 ```
 
-In a text editor, we can resolve these conflicts, and the next time we run any `jj` command, we’ll see that `jj` has marked the commit as unconflicted:
+And so on. If you’re a student of Computer Science you’ll see echoes of Prolog here. The intent was simple: if we can symbolically express the world around us, we can *advise* that symbolic world with real-life facts, and have the automaton that uses this reified symbolic world change with it.
 
-Let’s say we made a mistake in that conflict resolution, and we want to undo it. In `git`, undoing an action, if it’s even possible, is often complicated. In `jj`, we can always run `jj undo`:
+But the axiomatic complexity of a world model would never survive an encounter with a 3-year-old child. Every axiom you write begets a new one — so you can walk to your front door? Well what if the door is locked? Or what if your car is parked on the street and not in your drive way?
 
-```bash
-$ jj undo
-Undid operation: 35beb0741f17 (2026-11-15 13:08:39) snapshot working copy
-Restored to operation: f134ca987b59 (2026-11-15 13:07:18) edit commit e562bff4876f3ea76248c3f730e9e74d3e28e8a0
-Working copy  (@) now at: nlrtlrxv e562bff4 (conflict) Use the feature
-Parent commit (@-)      : kpqxywon c501c0bd Implement the feature
-Added 0 files, modified 1 files, removed 0 files
-Warning: There are unresolved conflicts at these paths:
-main.py    2-sided conflict
-New conflicts appeared in 1 commits:
-  nlrtlrxv e562bff4 (conflict) Use the feature
-Hint: To resolve the conflicts, start by creating a commit on top of
-the conflicted commit:
-  jj new nlrtlrxv
-Then use `jj resolve`, or edit the conflict markers in the file directly.
-Once the conflicts are resolved, you can inspect the result with `jj diff`.
-Then run `jj squash` to move the resolution into the conflicted commit.
-```
+A rules-based order of the world is a tender, beautiful one; but it is hard to build. It’s a fractal of ever-more specific and pedantic rules that conspire against you, just as you think you have a soluble world, typed and ready.
 
-More generally, `jj` maintains a history of all actions in `jj op log`. We can inspect this log and `jj op restore` to a point in that history, or `jj op revert` an individual operation. If the `jj undo` itself was a mistake, we can `jj redo`.
+Anyone who has ever written Prolog knows exactly what *that* feels like!
 
-The `Hint` in the output above is a bit of a spoiler for our next topic, the squash workflow.
+I have my own personal story to add to this. In the 90s as a teenager I got a summer internship at a business that built banking software. They clearly didn’t know what to do with us teenaged interns, so on our first day they crammed us in a room and split us into teams and told us to build a flow chart for assembling a bike. Team exercise or something. Best one wins. We were told to be as specific and explicit as possible and account for as many conditions as we could think of, and the poor employees who had to mind us did their best to help. I distinctly recall losing because in my flowchart I forgot to open the box the disassembled bike came in.
 
-## [Squash workflow](https://ethanlowman.com/posts/jj-primer/#squash-workflow)
+McCarthy meanwhile eventually moved on and set up his own AI lab at Stanford, but the *idea* of the Advice Taker lived on.
 
-Editing commits that have descendants can sometimes feel sketchy. If you’re iterating on a large diff that has left your working memory, it would be nice to separate your new changes from the existing diff. For example, we might like to inspect the diff that resolves a rebase conflict in isolation.
+In the late 70s Stallman and Steele create EMACS (Editing MACroS), also at MIT’s AI Lab, a set of building blocks on top of TECO, a famously inscrutable text editor. TECO did not update the screen by default; you had to toggle that on and hope your edits worked. You typed out terse keyboard commands, crossed your fingers and hoped you got it right, and then you patiently waited for your text manipulation to take effect. Rinse and repeat until you got what you wanted.
 
-Let’s follow the instructions from the above output. We first create a new commit on top of the conflicted commit:
+Stallman and Steele wanted more: they wanted macros so they could automate tedium of typing all that line noise. This strand of augmentation and later on self-modification is of course a unifying theme in Emacs today. The history of Emacs is long; but its outcome is known to us. I am typing this very article in Richard Stallman’s Emacs.
 
-Now we can resolve the conflicts in `main.py` in our editor, and rerun `jj log`:
+McCarthy’s Advice Taker left its mark in a subtle but indelible way. Warren Teitelman built the ADVISE system in his thesis with a cool title that reads like something out of a pulpy 1970s sci-fi novella: *PILOT: A Step Toward Man-Computer Symbiosis*. Teitelman, he later said, was deeply inspired by McCarthy’s original idea of *advising systems*.
 
-We can inspect the diff in `@` if we like, and when we’re happy with the conflict resolution, we can squash it into the parent commit:
+In his thesis, he describes a method of arresting a function call and inserting code before or after it is run. He was tired of editing other people’s LISP code by hand, and wanted a way of modifying their code without touching it directly. He built and rebuilt his system several times over the years, culminating in his ADVISE system in Interlisp, a structured editor and language runtime for manipulating LISP code and data. Interlisp eschewed plain text files; instead, you manipulated the *tree* at a high level of abstraction with explicit instructions like “move X list to Y position”. You can see my own attempts at merging structured editing with plaintext editing in [Combobulate](https://www.masteringemacs.org/article/combobulate-structured-movement-editing-treesitter).
 
-The conflict is now resolved, and we can continue our work.
+MIT AI hackers eventually implemented Teitelman’s ADVISE system from his PILOT thesis in their own versions of Emacs. Later, it was canonized in Chalupsky’s own 1992 re-implementation in Emacs Lisp that lives on (`M-x find-library advice.el`) as one of Emacs’s *advice* systems to this day.
 
-One of the powerful qualities of `jj` is that it makes diffs malleable like clay. With automatic rebase and the confidence inspired by `jj undo`, we can move, combine, drop, and split diffs with ease.
+What began as an idea for expressing automata using symbolism in an as-yet theoretical language in the 1950s culminated in a system for dynamically altering functions in GNU Emacs in the 1990s. What an unlikely lineage and history.
 
-Let’s try a few operations on our current commit graph. Here’s the starting point.
+### A cast-iron system made of stern rules cannot spawn general intelligence.
 
-### [Rebase](https://ethanlowman.com/posts/jj-primer/#rebase)
+Symbolism and AI did not end with advising functions. There were many attempts at symbolic intelligence. Terry Winograd’s *SHRDLU*; Marvin Minsky’s *Frame Systems*; and even Emacs’s ELIZA-style `M-x doctor` all make use of symbolic “AI”.
 
-Let’s use `jj rebase` to coerce our branching commit graph into a linear history. Let’s say the documentation commit (`q`) should go between the implementation (`k`) and the usage (`n`). We could accomplish this by moving `nlrtlrxv` (and its empty descendant) on top of `qwyusntz`:
+None of them brought us closer to the AI that proponents of symbolic AI hoped they would.
 
-Another way to accomplish the same effect would be to use `jj rebase -r q --before n`. Many `jj` commands have multiple ways to specify revsets. `jj rebase --help` documents these well.
+In hindsight that seems obvious.
 
-Since arguments to `jj rebase` flags are all revsets, we can write a revset that selects a sequence of commits or commit subgraph, and move it elsewhere in the graph.
+Writing a LISP macro *just so* will not produce artificial intelligence; nor will a carefully crafted web of rules and symbolic algebra suddenly spark intelligence. We know that today, but for a generation of computer scientists it felt like the future we have all read about in science fiction novels: a perfect, logical intelligence. A *positronic brain*. Robby the Robot; HAL 9000; C-3PO; Data; or the Speedies and Cuties from *I, Robot.* The unifying theme of these science fiction stories is they are automatons that follow strict rules — they obey Asimov’s three Laws of Robotics.
 
-If we wanted to insert a commit below `k`, the most direct way is `jj new --before k`, but for demonstration purposes, we could alternatively create a new commit on top of `r` and rebase `k::` on top:
+Every turn of hardware and software brought them ever closer to one day realizing the vision of an artificial intelligence, captured in neat axioms and LISP S-expressions, and modified in tools like Emacs.
 
-If you enjoy using TUIs, `jj arrange` provides a commit graph editor similar to `git rebase -i` for reordering commits.
+It is surprising that symbolic AI, the vanguard movement for artificial intelligence, would instead dissipate into the wider body of Computer Science and programming as tools, languages and concepts, but not survive as a viable method of achieving AI.
 
-### [Squash](https://ethanlowman.com/posts/jj-primer/#squash)
+Perhaps we always knew. Because at some point – even if we never really fully internalized it – we discovered that a ductile system that is shaped by its master’s desires is a tool that survives the ages because it remains eternally useful.
 
-If we decided documentation should be in the same commit as implementation, we can squash:
+A cast-iron system made of stern rules cannot spawn general intelligence.
 
-`jj` will open an editor and give us a chance to write a combined commit message.
+For all the mathematical purity, beauty even, of the idea of a clockwork mind that is introspectable and malleable and its behavior expressed as S-expressions and interpreted by elegant algorithms and honed macros, we can, through the benefit of hindsight – now that we *do* have AI through other means – see that it was not to be.
 
-### [Abandon](https://ethanlowman.com/posts/jj-primer/#abandon)
+The argument in favor of ductility is especially poignant when you learn of *the Connectionists*, which sounds like a bad 1960s band, but was in fact a loose coalition of people who believed firmly that neural networks, not symbolic AI, were the path to success. The *Connectionist* viewpoint was *deeply* unpopular in AI academia of that era, and funding for it was scarce.
 
-To drop a commit from the graph, we can use `jj abandon`. Let’s drop the preparation commit:
+Frank Rosenblatt invented the Perceptron, a foundational concept in neural networks, in 1957. Before Rosenblatt died in 1971, Marvin Minsky, an authority in the AI movement at MIT and a leading proponent of Symbolism, knifed the idea of Perceptrons and neural networks in a book he co-authored with Seymour Papert. They named the book, which they also dedicated to Rosenblatt, *Perceptrons*. The book deftly explains the mathematics of Perceptrons but undercuts their possible utility by showing that a single-layer Perceptron cannot represent an XOR gate. It was a deliberately obtuse reading of what neural networks could and could not do. With one additional hidden layer, a network *can* represent an XOR gate. It was a sneaky thrust of the stiletto: Minsky’s claims were overstated. A fact that was not lost on anybody in the Symbolic or Connectionist camps.
 
-To abandon parts of a commit (hunks or changes to whole files), we can use the `jj diffedit` TUI (see [docs](https://docs.jj-vcs.dev/latest/cli-reference/#jj-diffedit)).
+It’s disputed if the Perceptrons book led to the first AI winter in the 1970s. It certainly did not help. But funding for many AI research paths dried up in the 1970s.
 
-### [Split](https://ethanlowman.com/posts/jj-primer/#split)
+The Connectionist movement was vindicated in the long run. They lost the battle then, but they won the war, and the fruits of their research eventually gave us AI.
 
-The `jj split` TUI allows us to take a commit and split it into two consecutive commits by selecting which files or hunks should go in the first. Let’s use it to split up implementation and documentation again with `jj split -r k`:
+The ductility we so prize in our software and tools today is antithetical to a strict, symbolic world model spun of axioms and facts that we hoped would one day birth AI. Yet to try and give birth to this world they had to build the most ductile tools of them all: LISP and, from that, also software like Emacs. The ultimate hacker’s tool.
 
-The [jj-hunk](https://github.com/laulauland/jj-hunk) project provides a means to automate commit splitting. If you are so inclined, agents are quite good at using this tool to split up commits into a sequence of smaller changes for easier review.
+It is ironic then that a neural network, a crude facsimile of how a brain works, a construct that is by its nature ductile and malleable, won out in the end.
 
-## [Bookmarks and Git branches](https://ethanlowman.com/posts/jj-primer/#bookmarks-and-git-branches)
+So I feel a profound sadness that I started out programming DreamCoder in Emacs, the most extensible editor in the world, by hand back in May 2025, only to see DreamCoder write itself… in DreamCoder today.
 
-`jj` does not have a native concept of a branch, but it does have a primitive called bookmarks that map to Git branches. When we need to manipulate Git branches, we do it by way of bookmarks.
+## Future
 
-You can go pretty far using Git without realizing this, but a Git branch is just a pointer to a commit. `jj` explicitly models bookmarks this way. `jj` bookmarks are essentially a named label attached to a commit that we can move around as we modify our commit graph, and push to/pull from a remote.
+I am still sad, but I also know that our industry completely reinvents itself every decade or two. This is my second career upheaval. Most programmers today have not been around long enough to go through it themselves. So I feel for them that this especially massive quake is their first encounter with how unsentimental our industry is.
 
-We’ll discuss a few basic workflows around Git branches below, but you can find a more complete guide in the `jj` docs on [Working with GitHub](https://docs.jj-vcs.dev/latest/github/).
+But for all the sadness, I wake up every day with a feeling of optimism that I have not felt in a very long time.
 
-Assuming we initialized `jj` in a git repository that has remotes, we should have some output for `jj git remote list`.
+I finally get to build again, no longer weighed down by my decades of knowledge and experience that held my ambition in check. I truly have not felt this liberated since I was a teenager programming in Delphi, blissfully unaware that the things I was busy building were impossible for a self-taught teenager to ever realize. I see this reflection in others: the best programmers I know also love AI. Amateurs also revel in AI’s capabilities, happy that they can finally solve problems they could never afford to pay a programmer to do for them.
 
-Since `jj` is branchless, the commits we’ve created locally don’t have a branch name. Luckily, `jj` doesn’t require us to pick one, and generates one for us. Generated branch names free you from thinking of a unique branch name so you can instead focus on writing a good commit message (usually the more durable descriptor of a change).
+I must admit that building software has, over the years, gotten a lot more complex, with an ever-larger share of that work being repetitive tedium. This is more so with hobby software – as I do not get paid to do it, so I do not have a moral duty to see it through – where I’d do all the fun bits leaving just the enervating, boring and soul-crushing parts behind. Do you have a projects folder full of sad, abandoned projects like I do?
 
-To create a generated bookmark for change ID `nlrtlrxv` and push up a corresponding Git branch, we can run a command like the following:
+Now I can craft in abundance. AI has freed up a lot of toil but I somehow still find myself busy all day doing real work.
 
-Now `jj log` shows our change with a correspondingly named bookmark `push-nlrtlrxvuusk` associated:
+Building a coding harness is perhaps the closest I will get to the optimism all those researchers and scientists must have felt in the 1970s and 1980s. They hoped that with a little bit more work, their logical rules would kindle a new intelligence. Fifty years on, and I can simply tell DreamCoder to improve itself and watch as it changes before me. I can ask the AI running inside it to analyze the changes I have made to its tools and prompt and have it adjust them accordingly. It feels like science fiction; the very thing the researchers of yesterday strove to build. Yet we really do live in this reality now.
 
-We’re free to create a PR from this branch on GitHub now. You can customize the bookmark naming scheme with the `git_push_bookmark` template config documented [here](https://docs.jj-vcs.dev/latest/config/#generated-bookmark-names-on-push). It’s a common pattern to format branch names like `<author name>/<change ID>`.
+### Taste is a scarce, human resource.
 
-Since `jj git push -c` creates a branch name that corresponds to a change ID, it seems to encourage one evolving change per PR. I think it’s usually best to lean into these ergonomics, and have one change per PR.
+So. [DreamCoder](https://www.dreamcoder.ai). Let me address the 900 lb gnu in the room: DreamCoder is not an Emacs-related application. The reason is unfortunately one of economics and access: I want to build an AI coding harness for everyone. But don’t worry: I have some cool plans for DreamCoder + Emacs, and AI + Emacs more generally going forward. So stay tuned.
 
-To update a branch, the general process is to either squash commits into a change that is already bookmarked, or create new commits and move the bookmark forward.
+But what about all those other coding harnesses? Well, most of those harnesses all suffer from the same mistakes. It is a problem that is not unique to coding harnesses or the people who make them, but a constraint *we* all labor under, and one that is not easily replaced by AI:
 
-If you choose to squash commits into an existing bookmark (recommended to keep one change per PR), the flow is as follows.
+Taste is a scarce, human resource.
 
-We now see `push-nlrtlrxvuusk` has an asterisk next to it, indicating it has changes that haven’t been pushed to the remote. So let’s push them.
-`$ jj git push -b push-nlrtlrxvuusk
-Changes to push to origin:
-  bookmark: push-nlrtlrxvuusk [move sideways from b1284f61c417 to aeb869aef99b]
-`
+And for all the bounty of AI, it still requires a human to persevere and to see things through. One thing intensive use of AI coding has taught me is that we’re going to need a lot of computer programmers who know what they’re doing going forward. I believe this is so, because let us be honest, most people do not want to program computers, even if that computer can actually do the bulk of the work for them. It requires a steady hand to build reliable software; that has not changed.
 
-The remote branch now reflects the new changes. The above output says that we moved the branch sideways from one commit to another commit, which reflects that we did a force-push. `jj git push` runs the equivalent of a `git push --force-with-lease`, so if you’re ever unclear about what a push operation would do, you can use the `jj git push --dry-run` flag. `jj` protects you against most dangerous force pushes refusing to rewrite a configurable revset of immutable commits. The default immutable revset is sensible, but you can make it more or less conservative by [configuring your own immutable heads](https://docs.jj-vcs.dev/latest/config/#set-of-immutable-commits).
+Therefore, if we programmers have to spend a lot of our time interacting with AI, then the tool we do it with should be ‘human-centric’ in its design, and it should take advantage of all the modern features we have at our disposal.
 
-In this flow, we add new commits on top of our bookmark and then move the bookmark to point to our new commit.
+Back in May 2025 I took a look at all the tooling and said “no, thank you.” Today I look at the landscape and I feel pretty much the same.
 
-Then make our edits.
+And I think I am not the only one who feels that way. Most of these coding harnesses, to me, feel bristly. They shouldn’t be; but they are like that because we are at an important inflection point where no one really knows what the future looks like. We’re all just… fumbling around a bit. It’s an exciting time to build software, even if we don’t quite know what the world will look like a few years hence.
 
-The bookmark does not automatically move to our new commit. This is the biggest difference between bookmarks and Git branches. For now `push-nlrtlrxvuusk` still points at the commit below:
+One thing I am adamant about is that DreamCoder must be a powerful, frontier-class coding harness. That means it should have all the features you’d expect from that: backgroundable sub agents, MCP servers, cache efficiency, and all that stuff. Check.
 
-There are several ways to move the bookmark to the new commit. The easiest is probably `jj bookmark advance`, which moves the closest bookmark to the given commit:
+But that stuff quickly recedes into the background because, you know, it just works. Day to day you will dart between chats and terminals and whatnot, and you need an interface that accommodates that. Emacs is a tiling window manager; so is DreamCoder. DreamCoder’s window manager is a little bit cleverer than most window managers as every pane has a minimum, comfortable and maximum size. The window manager will therefore ensure windows always fit snugly on your screen, and you’ll never end up in a situation where windows are tiny and unreadable. It has a sophisticated constraint satisfaction solver that tries to balance your demand for a new window (“open a terminal”) with the challenge of keeping your visible panes roughly the same size. If DreamCoder can’t wedge in a new pane, it’ll punt one to the hidden window bar. Just click it to resurface it, or hover it to see what it’s doing; it’s a live view.
 
-Now we’re ready to push the moved bookmark.
+Because of my Emacs roots, I think a good tool must be keyboard-friendly. Because it runs on a browser you get the mouse for free of course. But smacking the tab button over and over is a frustrating user experience in complex webapps, and doubly so a tiling window manager: where exactly are you going to end up when you tab from one window to the next? To combat that, I built an avy-style window and “point of interest” selector for chats. Tap a key and pick from a selection of “embark”-like actions such as clicking links or opening pictures. It’s a work in progress, but I think it works well.
 
-```bash
-$ jj git push -b push-nlrtlrxvuusk
-Changes to push to origin:
-  bookmark: push-nlrtlrxvuusk [move forward from aeb869aef99b to 2341ee4aa554]
-```
+Most high-volume operations like opening and creating panes is done through a Helm-like interface with search-as-you-type. It’s really efficient, of course. And it works with a mouse also; which is sort of the point. The keyboard’s there for those who want it, and the mouse for regular folk who are just getting started. One unique feature of the design, which admittedly I am still exploring privately, is that everything is stored as Javascript objects (on account of running in your browser) so it’s not too much of a leap to build “macros” that prefill most of these dialog windows, leaving behind just the fields you want to edit.
 
-Since `jj` is branchless, strictly speaking, we don’t “check out” a branch, but we can create a commit on top of a remote branch. First do the equivalent of a `git fetch`, importing remote bookmarks:
+But yeah. With DreamCoder I want to take the best of Emacs and its coterie of third-party packages and bring some of that with me. The world is still not ready for an Emacs-shaped future, sadly, so that is why DreamCoder is a standalone application and a web frontend.
 
-```bash
-$ jj git fetch
-```
+Another thing that drives me wild: I see people with tmux running 10 claude codes (or codex, or…) cycling between them like a duck gallery at a carnival to see if one of them is done working, or if it needs human intervention.
 
-And create a new empty commit on top of the remote branch:
+So there’s two things to unpack here: one is running lots of things in parallel, and the other is observability. You need insight into what is going on: is an AI jammed because it’s awaiting an answer or a tool safety prompt? Perhaps you’ve parked a bunch of chats pending some conversations with coworkers or other work that must finish first.
 
-Our working copy now contains all the commits on the remote branch. However, if we were to drop back to `git`, we see that from `git`’s perspective, we’re in a [detached head](https://git-scm.com/docs/git-checkout#_detached_head) state, not on any branch.
+In DreamCoder you have workspaces. They’re like virtual desktops (or window configurations in Emacs lingo): a snapshot view of panes as you want em. As you can see from the screenshots, panes expand to fill all the space. So if you want more space, you can: resize them (with the mouse or keyboard); shuffle them to a named workspace; or float them so they sit on top of the other windows.
 
-```bash
-$ git status
-Not currently on any branch.
-nothing to commit, working tree clean
-```
+But if you’ve got a lot of things happening in multiple workspaces, it’s hard to keep tabs on that. That’s why DreamCoder has a big, honking minimap in the top-right corner. One for each workspace. The minimap is a miniature of your actual layout. Each pane in the map gently pulses when it’s working, and it makes it abundantly clear when it’s blocked. When there’s nothing to do, it’s green.
 
-This is because `jj` is editing a commit above a bookmark, and does not have an equivalent to `git`’s “current branch” state.
+Because workspaces and panes are distinct things you interact with, it must be easy to navigate between them.
 
-Syncing with the trunk (e.g. `main`) is just a specific example of this flow. We would `jj git fetch` to update our `main` to the upstream `main`, and then rebase our commits on top. For example, the following would rebase `my-branch` on top of a new `main`:
+I also wanted full-on, optional Emacs key bindings, but that is… pretty much impossible to properly build. Browsers lock you out of some rather important Emacs button combinations. Sadly that feature is parked until I can solve it on all major browsers without breaking your normal browser keys.
 
-```
-jj rebase -b my-branch -o main
-```
+That’s not to say it doesn’t have Emacs-inspired key bindings. Most global actions are reachable with `Alt+x`, akin to `M-x`; local, pane-specific ones with `Alt+c`. `Alt+m` activates keyboard mode: you can now type the number of the named pane to jump to it; or WASD to switch the active pane in that cardinal direction.
 
-`jj` commit graph manipulation is easiest when you have a live commit graph on screen. There are different ways you can accomplish this.
+Support for open weight models like Qwen, Gemma, Deepseek, GLM, etc. is also very important to me. They work so well. I’m really surprised, here in late 2026, just how capable *small* models are at local-only development compared to just one year ago. Qwen 3.8 27B, for example, is fantastically good for its size. You can do a *lot* of good software development with it if you’re a capable hand yourself. Bigger models equal more auto piloting; but that Qwen model? Wow. So local models work great. In fact I think the future is local for a lot of use cases. Intelligence is fast approaching a cost where it will be too cheap to meter. If you remember the personal computer revolution in the 1980s and 1990s, then there are definitely echoes of that here.
 
-[jjui](https://github.com/idursun/jjui) is a TUI for `jj` that allows you to edit the visual graph directly. I have not personally used this, but I know people who like it.
+If you’ve been holding off on local models then I do recommend you reconsider. Small ones like Qwen 3.8 27B (or its cousin, Flash Next) can run well on a high-end gaming rig or Mac, or with a little investment if you do not have that. If you have a dinky old computer and you’re cash starved, then not *all* hope is lost. Turn to the potato agronomists on twitter: give twitter’s AI, Grok, what you have and what you can reasonably spend and tell it to track down the cutting edge setup for your rig. This is no lie the fastest, easiest way to catch up to the cutting edge of self-hosted inference today. Five minutes.
 
-I prefer to have an always-live `jj log` in the corner of my screen by way of [viddy](https://github.com/sachaos/viddy) (a nicer version of `watch` that supports color):
+### Coding harnesses are the IDEs of the future
 
-I recommend filtering down this log to a revset that represents your current work. Here’s a starting point:
+As I’ve been building DreamCoder, I have come to the belief I’m not just building a coding harness. Coding harnesses are an IDE for the future; it will do more than just display a chat window for coding agent work. DreamCoder does more than that already. It’s going the way of Emacs in that it’ll consume a wide range of adjacent workflows and tools. But I have only just gotten started. I am brimming with ideas I’m building in parallel, but they take time because as I said it’s not about the code; it’s just one small facet of building something that works well. But you know that already: it’s always the last mile.
 
-```
-visible() & (trunk() | (tracked_remote_bookmarks() & ~::trunk()) | (mutable() & mine())::)
-```
+DreamCoder is the most ambitious, technically complex and advanced software project I have ever built in my life. And that’s just the beginning. I’m not done. I’ve barely started. I will be blogging about this going forward, in addition to my usual Emacs scribblings.
 
-You might also consider trying my experimental project [jj-stamp](https://github.com/ethanal/jj-stamp), which is a local code review GUI for the squash workflow. Even if you don’t use the squash review workflow, it makes a pretty good diff viewer with a live `jj log` on the side and a terminal for running `jj` operations.
+In fact, the thing I’m currently grinding away at is a world-class pentest and cybersecurity suite in DreamCoder. Every single bit of software we have ever written is vulnerable; we have many rough years ahead of us. Just look at the crippling vulnerabilities coming out every day now almost. Even the most security conscious person is going to find themselves on the wrong side for no other reason than we depend on packages that were mature and stable and assumed to be secure. DreamCoder can do its bit to help catch many of most obvious weaknesses, especially as new software is minted every day that also needs thorough testing.
 
-One of the biggest productivity gains from `jj` comes in its ability to support stacked PR workflows. This merits its own post, so I’ll keep it short.
+To round it off, I would like to formally invite you to join me in making DreamCoder better by [trying it out](https://www.dreamcoder.ai). It’s great. It’s not a toy; it’s not a demo; and it’s not a weekend prototype. It’s a frontier coding harness that has most of what you’d expect: MCP, backgroundable sub agents and shell commands, terminal windows, skills, hooks, 99% cache hit, it runs for days, and an interactive UI for all of it. There’s a handy dandy importer for your Pi, OpenCode or Codex configs also to help you get started. A couple of clicks and your model settings are set up in DreamCoder. Ready to go.
 
-Large changes are easier to understand when they’re broken up into a series of logical steps. Breaking up a large change into smaller sequential atoms of review makes the whole change easier to understand. Stacked PRs attempt to leverage this fact to optimize merge throughput, while simultaneously removing pipeline stalls in the review process.
+Please do e-mail me your thoughts (`(rot13 "zvpxrl@znfgrevatrznpf.bet")`) on AI, coding harnesses, what you’ve built with it, and what you think more generally about where our world is heading. I’m keen to hear from you.
 
-Let’s say we’re building a new feature. We can decide we want to split up implementation into three stages:
-
-1. Refactor to make the feature easier to implement
-2. Implement the feature
-3. Use the feature in another system
-
-`jj`’s ability to work on stacked changes with automatic rebase is a natural fit for implementing these three stages. Each of the three stages maps to a single commit, each with an associated bookmark/branch/PR:
-
-After you implement the first change, you can put up a PR for review and immediately start working on the next change. Your work stream becomes a long queue where you pop off the bottom as PRs are ready to merge and push to the top, with no pipeline stalls.
-
-It’s pretty easy to manually set up small PR stacks with `jj` and GitHub, but once you get hooked on the technique (making stacks 5–10 PRs deep), you’ll want a tool. `jj-pancake` is my entry into the ring of stacked PR tools. More on that soon.
-
-- Official Jujutsu docs. I most often refer to the revset spec.
-- Steve Klabnik’s `jj` tutorial was my first introduction to jj. I don’t think it’s maintained as a durable resource (and I don’t promise mine will be!), but it’s still a good read.
-- I follow the jj releases RSS feed. Lately the releases have been packed with new features. Overall jj is quite stable, but the occasional bug is fixed promptly.
-- The Jujutsu discord is active and friendly!
-- The blog of East River Source Control, a company that is building a new forge and code review platform intended to support Jujutsu well. The creator of Jujutsu, Martin von Zweigbergk, has joined as the CTO, and they have lots of other smart people as well. Perhaps a successor to GitHub one day? I’m rooting for them.
-- My personal `jj` config. You might find some useful aliases or tricks here, but I haven’t attempted to make it readable.
-- The `jj` config of Austin Seipp, a jj maintainer. Cool tricks lie within.
+And if you want to hear more from me on the technical aspects of AI, building coding harnesses, and more, then do sign up for the [DreamCoder newsletter](https://www.masteringemacs.org/article/announcing-dreamcoder#newsletter) below.

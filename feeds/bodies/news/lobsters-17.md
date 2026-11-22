@@ -1,96 +1,144 @@
-At Antithesis, we love finding bugs in distributed systems. But Antithesis can also help *eliminate* certain classes of bugs by using a combination of AI and formal methods to *prove* the correctness of complex design choices.
+> With a subscription to LWN, you can stay current with what is happening in the Linux and free-software community and take advantage of subscriber-only site features.  We are pleased to offer you **[a free trial subscription](https://lwn.net/Promo/nst-trial1/claim)**, no credit card required, so that you can see for yourself.  Please, join us!
 
-In this post, we demonstrate the paradigm on two [Raft](https://raft.github.io/) implementations, production libraries from [etcd](https://github.com/etcd-io/raft/) and [HashiCorp](https://github.com/hashicorp/raft). Although they’re implementing the same protocol, there are significant differences in the approaches the two use. We used AI, TLA+, and Antithesis to formally model the two libraries with trace validation. We iterated between model checking, Antithesis testing, and proof attempts, each of which exposed bugs in the code or gaps in the model. We patched bugs and refined the model until it was provable, *and* until every test run was conformant.
+The final talk at Kangrejos 2026 was about the removal of the C implementation
+of Android's
+[Binder driver](https://source.android.com/docs/core/architecture/ipc/binder-overview), the primary interprocess communication mechanism
+used on Android devices. Carlos Llamas announced that he had deleted the C
+code to general applause, and then shared some insights about what went into
+replacing the C implementation. Alice Ryhl, who has worked on the Rust
+implementation for some years, added her own thoughts about what the most
+difficult and interesting parts of the transition were.
 
-Our model handles several extensions to the core Raft algorithm including pre-votes, snapshots, leadership transfers, and, for etcd-raft only: read indexes for linearizability, async storage writes, and membership changes (where etcd’s implementation [intentionally deviates](https://github.com/etcd-io/raft/blob/v3.7.0/doc.go#L262-L270) from the Raft paper).
+Binder was added to the kernel in 2008, Llamas said, as an interprocess
+communication mechanism for Android devices. Its design originated in
+[BeOS](https://en.wikipedia.org/wiki/BeOS), but
+it has grown significantly since then. It provides a rich set of operations for
+allowing processes to communicate with the minimum amount of overhead. It also,
+therefore, presents a large attack surface for Android. Many complicated chained
+attacks against Android have involved Binder at one step or another, Llamas
+explained. Google's internal "red team" (the team dedicated to proactive
+security research) deemed Binder to be the most vulnerability-dense component in
+the entire operating system, with more CVEs per line than anywhere else.
 
-**The final proofs establish core Raft safety properties such as Election Safety, Leader Completeness, and State-Machine Safety**. In other words, our process established that once we applied the workarounds and fixes needed, **the specific designs** (scoped to the features we modeled) embodied in HashiCorp Raft and etcd-raft actually offer the same guarantees that the Raft paper does. We make the artifacts available for open review:
+That made it an obvious candidate for porting to Rust, Llamas said. Binder was the first user
+of Rust in the kernel, he added, although Ryhl did not
+[publicly post](https://lwn.net/ml/linux-kernel/20231101-rust-binder-v1-0-08ba9197f637@google.com/) the first version
+of what became the Rust implementation [until 2023](https://lwn.net/Articles/953116/), well after the Rust experiment started
+in 2021. All told, the effort took more than
+five years. Binder is used for every single screen touch, permission check,
+and cross-application message on Android, which runs on more than three billion
+devices. In total, it works out to hundreds of billions of Binder transactions
+per second, globally, he added. That scale meant that even the smallest discrepancy between the
+interface provided by the C version and the one provided by the Rust version
+would cause problems and regressions for some use case.
 
-Earlier this year, we wrote about how [we keep finding bugs in every major Raft implementation we test](https://antithesis.com/blog/2026/finding-bugs-in-raft-implementations/) with Antithesis. This was surprising, because the underlying Raft protocol has been extensively studied, formally specified, and rigorously proven correct (under a set of assumptions). In that post, we pointed out that many implementations subtly deviate from those assumptions, re-design the algorithm for performance, and/or extend the core Raft protocol with unverified extensions – thereby introducing bugs.
+One particularly tricky aspect has been performance, Ryhl said. Throughput
+doesn't matter that much; what matters is the tail latencies. Most
+screen frames on Android have a Binder transaction in the critical path of the
+frame, she explained. So, a difference of two microseconds on average is not a
+real problem, but if Binder is ever twenty milliseconds slower, even once
+in a while, people will notice and care.
 
-Since then, advances in AI have made [automated theorem proving](https://openai.com/index/navier-stokes-solution/) and [formal verification of complex systems](https://www.anthropic.com/research/formal-verification) much more scalable, making it feasible to connect a specification to its implementation. So we set out to formally verify not just the core Raft protocol, but the specific designs implemented by production Raft libraries, incorporating custom data structures, different modes of concurrency, and various extensions such as pre-votes, leadership transfers, snapshots, and (in the case of etcd-raft) membership changes.
+The actual algorithms that the C and Rust implementations use are identical, she
+continued, so there are no large differences in throughput. But, because Rust
+handles locking differently, there were problems with the tail latency
+from lock contention that she had to debug. For example, one user-reported
+traceback showed Binder attempting to take a mutex that was held by another
+process. That process was preempted, and did not resume executing for twenty
+milliseconds, well past the sixteen millisecond budget to render a single frame.
 
-A key challenge in applying formal methods is to identify a level of abstraction that both allows us to reason mathematically about desired properties, *and* bridges the gap between specification and implementation. We are not yet at the point of reasoning directly at the level of assembly instructions or even programming language semantics in order to verify distributed safety properties in production systems.
+It was a classic case of priority inversion. To solve the problem in Binder, Ryhl moved
+as many operations out from under the lock as possible, and was able
+to replace it with a spinlock, which made the problem go away. The equivalent
+lock in the C implementation was already a spinlock: "I deviated from C
+Binder, and *pow*. It has eighteen years of accumulated quirks."
 
-The most widely used approach models the software as a state-transition system in a specification language such as [TLA+](https://lamport.azurewebsites.net/tla/tla.html), and checks invariants over these transitions for finite state spaces. TLA+ models can either be hand-written by experts, or these days, inferred directly from the code using AI. This approach has its [own limitations](https://buttondown.com/hillelwayne/archive/llms-are-bad-at-vibing-specifications/), but is increasingly [popular](https://zfhuang99.github.io/github%20copilot/formal%20verification/tla+/2025/05/24/ai-revolution-in-distributed-systems.html). The next challenge, then, is showing that the [TLA+ model corresponds](https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs) to the actual software [that will run in production](https://www.datadoghq.com/blog/engineering/continuous-formal-spec-validation/).
+Eventually, however, the Rust implementation was good enough for most use cases.
+And the C implementation was still producing new vulnerabilities every time
+someone tried to introduce a new feature. Eventually, Llamas and Ryhl decided to
+only add new features to the Rust implementation, in order to motivate people to
+switch and to avoid headaches from the C implementation. That policy has
+resulted in the Rust version becoming faster than the C version,
+because Ryhl was able to introduce an algorithmic improvement that reduced the
+number of needed system calls, a change that had been considered too complex for
+the C implementation. Now that the C implementation has been deleted, there are
+more of those coming, she promised.
 
-For our demonstration, we used Claude Fable 5.2 to automatically infer TLA+ models from the implementations of HashiCorp Raft and etcd-raft and then manually reviewed the safety properties declared in the specifications.
+Another area that proved difficult was dealing with tracepoints. Users aren't
+supposed to rely on the presence or behavior of most kernel-internal
+tracepoints, but they do. This meant that Ryhl had to copy
+the existing tracepoints in Binder as a de facto part of the driver's API. That
+even extended into some of the data structures involved in the driver. In one
+case, she said, there was a reference-counted structure that had a slightly
+different reference count in the Rust implementation, because the Rust code was
+holding an additional pointer to the structure. That turned out to be a
+problem for one particular piece of client code, since it relied on checking the
+reference count via a tracepoint in order to determine when the C implementation
+had reached a particular state.
 
-The etcd-raft repository has a [TLA+ model](https://github.com/etcd-io/raft/tree/v3.7.0/tla) crafted for trace validation that is now out of date, and is not designed for ease of proof. The [Specular project](https://github.com/specular-org) [produced models of etcd-raft and hashicorp-raft](https://github.com/specular-org/specula-case-studies), but those models are designed for trace validation, not ease of proof, and the [TLAPS leaderboard](https://specular-org.github.io/tlaps-bench-website/) indicates that they remain unsolved as of 20 Nov 2026.
+There was also a lot of toolchain support needed, Ryhl continued. The Rust
+implementation had to work with kernel address-space layout randomization
+(KASLR), control-flow integrity (CFI), and profile-guided optimization.
+Production Android kernels are built with all of those enabled, and since they impact code
+generation, the Rust code needed to account for them.
 
-We had to manually provide guidance on which features to model or leave out, what scenarios to specify for model checking, and make one refinement to the auto-generated safety properties. While [AI is generally bad at inferring properties](https://newsletter.pragmaticengineer.com/p/formal-methods-with-hillel-wayne), in this case we simply instructed the agent to express the core safety properties defined in the [Raft paper](https://raft.github.io/raft.pdf).
+Llamas then went into more detail about the deployment plan that will be used
+to convert users to the Rust implementation. A major problem with just rolling
+the Rust implementation out is the existence of
+[vendor hooks](https://lwn.net/Articles/1098493/): custom
+tracepoints used to inject vendor-specific behavior into the kernel. The Rust
+implementation of Binder was not able to reproduce those in every case, and
+therefore many vendors are stuck on the C implementation until they update their
+code. That's going to be a slow process.
 
-That’s where Antithesis helps.
+Old stable
+versions of the kernel will continue to have the C Binder, and receive security
+fixes, which gives the various Android vendors a little bit of leeway until
+they're forced to update. After the conference, the patch removing the C
+implementation
+[was merged](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fd2bc059ed46) as part of the 7.4 merge window, so that is the
+version past which the Rust implementation is required. 7.3 is the designated
+long-term-support release for 2026.
 
-We used the recently launched [Antithesis plugin](https://github.com/antithesishq/antithesis-plugin) to automatically set up a test cluster, an input-generating workload designed to handle all the features captured in the model, and assertions that correspond to the model’s safety properties. The software was then tested under fault injection while being fed random inputs, exercising various code paths and thread / message interleavings.
+One person asked whether this would pose a problem for people compiling
+the kernel with GCC. Miguel Ojeda responded that many distributions are using a
+workaround for the current lack of Rust support in GCC: they are building
+the C side of the kernel with GCC, and the Rust side with LLVM. He said that he
+had advised against compiling the kernel in that way, because it is "a
+complete hack", though people who use it are unlikely to complain about
+being forced onto Clang. Greg Kroah-Hartman added that it will take months or
+years to learn about anyone who has problems with the Rust version of the
+driver, given how slowly Android vendors update their kernels. Furthermore, the
+removal is a single patch that can be cleanly reverted, if someone needs
+to continue using the C version.
 
-For this demonstration, we developed a lightweight [trace validation](https://arxiv.org/abs/2404.16075) kit that allowed the software running in Antithesis to emit structured log events that correspond to state transitions in the TLA+ specification. Any test execution that produced a trace that did not conform to some path in the model got flagged. A non-conformant trace could indicate incorrect instrumentation of the trace logging itself, or more seriously, a modeling error or a real bug in the system. We instructed our AI agent to diagnose which one of these it might be, [using Antithesis as necessary](https://antithesis.com/blog/2026/time-traveling-agents/), and continue iterating until the traces and the inferred model converged.
+Llamas thought that it was worth considering what the removal process should
+look like for other code that gets ported to Rust. He asked what people thought
+should happen to the C version of converted drivers on long-term-support
+branches. Ojeda said that the process would be exactly the same as the existing
+policy for replaced C code. The only difference
+between Rust and C in long-term-support releases is that the Rust maintainers
+backport fixes for soundness problems, he said.
+Kroah-Hartman told Llamas not to worry about code that has been replaced:
+"Just delete it. I take patches for subsystems that have been deleted. It's
+fine."
 
-For both Raft models, the specification expresses the following safety properties, taken directly from the [Raft paper](https://raft.github.io/raft.pdf):
+With that declaration, the session, the conference, and the presence of the C
+Binder driver in the kernel were all over. Binder is the first nontrivial component
+in the
+kernel to be ported to Rust, and its journey has revealed several pitfalls that
+don't apply to new drivers written in Rust from scratch. Still, the most
+difficult problems were not Rust-specific; they were the compatibility problems
+that any rewrite would face. Whether any other kernel components will find the hassle
+of a rewrite worth it, and how long they will take to accomplish it, remains to
+be seen.
 
-- Election Safety: at most one leader can be elected in a given term.
-- Log Matching: if two logs have an entry with the same index and term, they agree on every entry up to that index.
-- Leader Completeness: a leader’s log contains every entry committed in earlier terms.
-- State Machine Safety: no two nodes apply different entries at the same index to their state machine (the state machine itself is not modeled).
+[ Thanks to the Linux Foundation, LWN's travel sponsor, for supporting my travel
+to Kangrejos. ]
 
-Before trying to prove anything, we verified that these invariants hold on bounded instances using TLC, the standard TLA+ model checker. These instances, also synthesized by our AI agent, specify various bounds: clusters are usually three nodes, a single client value, at most a couple of terms of leader election, logs that are limited to a few entries, with only a handful of network messages in flight. These bounds sound tiny, but they’re sufficient to create several interesting cases: competing elections, a deposed leader still replicating, log entries overwritten and re-replicated, crashes in the middle of an operation, etc. We also model checked various configurations of the Raft libraries, e.g. with pre-vote or snapshotting features enabled and disabled. These “small” instances can reach a state space of over 1.6 million states, which TLC explores exhaustively. We also included some larger problems which were only checked via random simulation. If model checking triggered a safety violation, we attempted to reproduce it as an assertion failure locally or in Antithesis; if the software couldn’t exhibit the behavior, the model had to be tightened.
+| Index entries for this article |  |
+| --- | --- |
+| [Conference](https://lwn.net/Archives/ConferenceIndex/) | [Kangrejos/2026](https://lwn.net/Archives/ConferenceIndex/#Kangrejos-2026) |
 
-Overall, our process was an iterative loop consisting of model checking (flagging invariant violations), trace validation (flagging deviations), model refinement (to fix design flaws or conformance), and software patching (to fix bugs).
-
-In some ways, this approach is similar to and inspired by [Specular](https://arxiv.org/abs/2607.25333). However, given their goal of finding bugs, Specular’s approach involved using AI to identify buggy scenarios before writing models, which meant that [static analysis was doing a lot of the heavy lifting](https://github.com/specular-org/Specular/issues/176). In contrast, our models are intended to be more general and prove safety of the full design.
-
-Along the way, we encountered bugs in both systems, including previously known open issues such as [hashicorp/raft#695](https://github.com/hashicorp/raft/issues/695) and [etcd-io/raft#551](https://github.com/etcd-io/raft/issues/551), as well as new ones such as [hashicorp/raft#746](https://github.com/hashicorp/raft/issues/746) and [etcd-io/raft#558](https://github.com/etcd-io/raft/issues/558). In our internal repository, we applied a total of 7 patches across the two implementations. In each case, our goal was to make the system and model pass both verification and validation.
-
-We also encountered a few additional crash bugs, but those don’t violate safety.
-
-But bounded model checking only shows the absence of bugs in a small state space. The only way to get assurance for unbounded input sizes is via rigorous mathematical proof.
-
-There are two good techniques for proving invariants correct for the whole specification: using a theorem prover integrated into TLA+ called [TLAPS](https://proofs.tlapl.us/doc/web/content/Home.html), or by translating the model into [Veil](https://veil.dev/), a library for the [Lean](https://lean-lang.org/) proof assistant for modeling state-transition systems. We used both, delegating the task of proof construction to Claude Fable 5.2.
-
-We used Veil’s official tla-to-veil LLM skill for the model translation, and the recommended approach of validating this via bounded equivalence checking, using TLC and Veil’s own model checker, on our previously stored instances.
-
-Ideally, a TLAPS proof provides the best assurance, since it can attest to safety properties defined on the TLA+ model itself. However, we decided to translate TLA+ to Veil and attempt proofs in Lean. Why? As described in the previous section, our process was extremely iterative, involving several steps of model refinement. We wanted to use the proof engine as additional feedback in that process, feeding it any candidate specifications on which bounded model checking and trace validation both succeeded. We found Lean’s interactive tactic paradigm, predictable performance, and persistent kernel-checked proof terms to be key benefits in this iterative process.
-
-On one occasion, a model of etcd-raft’s membership change as implemented could not be proven correct, [revealing a complex bug](https://github.com/etcd-io/raft/issues/558) whose trigger was beyond the state space that bounded model checking explores. In such situations, we could use the Antithesis plugin to attempt to synthesize a workload to reproduce the counter-example.
-
-Antithesis also helped in the proof construction process. When working on challenging parts of the proof, Claude hypothesized several intermediate invariants which if true would lead to a straightforward proof strategy. The agent then used Antithesis to [quickly check](https://antithesis.com/blog/2026/streaming-results/) if those invariants held true in test runs, and discarded them if run-time assertions failed. Antithesis thus made the proof construction phase more efficient.
-
-Once we converged on a state where the safety properties were fully provable in Lean and the model was passing trace validation with Antithesis, we froze the specification and asked agents to prove the same invariants on the TLA+ spec directly with TLAPS. This last step wasn’t strictly necessary, but eliminated any shadow of doubt concerning the Lean proofs and the TLA+ spec.
-
-End-to-end, the work on each library cost less than $1,200 in Claude Fable tokens and approximately 2000 Antithesis compute-hours.
-
-Note that our final proofs verify formal models of the implementation, not the code itself. However, we can gain confidence about the model’s fidelity based on the trace validation performed with the extensive test coverage that Antithesis provides, including fault injection such as network partitions and node crashes. To strengthen assurance even further, our iterative process involved several steps of [*mutation testing*](https://antithesis.com/blog/2026/mutation-testing/), including: mutating the specification to check that the proofs fall through, mutating stored test logs to ensure that trace validation fails, and mutating the software itself to ensure that everything breaks.
-
-The models still make several assumptions about the environment, which limits the reach of verification. For example, both Raft libraries provide pluggable interfaces for local persistent storage. In our test workloads, we use [BoltDB](https://github.com/boltdb/bolt) for storage and the models assume that no single write (e.g., a log entry or tuple of raft state) is ever torn or corrupted, which BoltDB guarantees. A crash can still fall between two writes.
-
-Our work also leaves out several library features which we have not modeled, such as lease-based reads for etcd-raft (because it depends on wall-clock timing), async heartbeats for hashicorp-raft (because it is known to be [very](https://github.com/hashicorp/raft/issues/666) [very](https://github.com/hashicorp/raft/issues/695) [buggy](https://github.com/hashicorp/raft/issues/742); [really](https://github.com/hashicorp/raft/issues/717)), and membership changes for hashicorp-raft (because we were exhausted from patching bugs in the simpler core). Finally, we only verify safety properties and ignore liveness in this prototype. A comprehensive list of assumptions and limitations is provided in the associated artifact’s README.
-
-Given our reputation as “a fuzzing company”, formal methods might seem like an odd direction for us to explore. But we see ourselves less as “a fuzzing company” and more as a **correctness company**. We need a wide range of different approaches if we want to build truly robust systems. Each technique compensates for the weaknesses of the others. Moreover, they amplify each other’s strengths. The first property-based testing framework, [QuickCheck](https://dl.acm.org/doi/pdf/10.1145/351240.351266), derived test inputs from a function’s static type. Many of our customers use both testing and formal methods, so we want to make the two techniques work better together.
-
-The biggest weakness of formal specification is that it proves the *design* correct, but doesn’t guarantee that the code we implemented actually matches the design. Trace validation uses the strengths of tests to compensate for the core weakness of formal specification. Validation works best if our tests can reach wildly unusual system states, which aligns well with our core technology.
-
-How formal specification can help testing is relatively less explored, but there are some opportunities here too. We often find that newcomers to property-based testing struggle to describe the properties for their system. But they can describe a high-level outline of what the system essentially does. With trace validation, we can potentially turn that outline *into* a property to test!
-
-All that said, **this is an early research project.** We could easily map trace logs to spec behaviors because the code and spec were at roughly the same level of abstraction, with a close correlation between lines of Go and lines of TLA+. Most real-world specs, though, are two levels of abstraction above the code they model. This is because 1) TLA+ can do things impossible in a real system, like make truly arbitrary nondeterministic choices, and 2) the spec can simplify implementation details that don’t affect the essential design. These features make specification more powerful, but also make trace validation harder.
-
-Think of this as us demonstrating a medicine works on mice, but we haven’t yet done a human trial. More work is needed, work which we’re now doing at Antithesis. Stay tuned to see where it ends up.
-
-In formal specification (like with TLA+), we write highly abstract blueprints, or specifications, of systems and find bugs in those blueprints directly. Once we’ve found and fixed all the bugs, we can be confident our real system isn’t going to have certain design issues.
-
-But how do we know that the code we write actually corresponds to the design we verified? This is one of the big unsolved problems of formal specification, and the solution we used here **trace validation** (also called “trace checking”). This was first publicly described in the MongoDB paper [*eXtreme Modeling in Practice*](https://arxiv.org/pdf/2006.00915). The authors took logged events in the production system, converted them into a sequence of states, and checked if that sequence was possible in the blueprint. If not possible, then the implementation must be doing something forbidden by the blueprint, so there is a divergence between the implementation and spec.
-
-It’s easier to see this with a concrete example. Say we have this pseudocode as our specification:
-
-By `either-or`, I mean that exactly one of the two will happen each iteration, but the decision logic is an implementation detail I don’t care about. This spec also has the property that, after every loop iteration, `passed + failed == i`.
-
-Now here’s one conforming implementation:
-
-While the practical way this works is very different than just arbitrary incrementing variables, it’s still the same thing in essence, and we should expect that every sensor either gets added to the set or marked as broken. To do trace validation, we first add some logs to the code:
-
-We run this program and it prints “loop passed loop failed”. We can convert that to a behavior of the spec. If we denote a state as `(i, passed, failed)`, the corresponding sequence of states would be `[(0, 0, 0), (1, 0, 0), (1, 1, 0), (2, 1, 0), (2, 1, 1)]`. That is valid under the behavior, so this trace conforms to the spec.
-
-Now if we make a diverging change like this:
-
-It’s now possible to run this and see the logs “loop loop”. The corresponding behavior, `[(0, 0, 0), (1, 0, 0), (2, 0, 0)]` is impossible in the spec, so this would fail trace checking and reveal a divergence between the code and spec.
-
-That’s how it all works in principle, anyway. There’s a lot of technical challenges with getting this working practically. For example, how are we supposed to know that a network timeout may give us an invalid trace, and how are we actually supposed to trigger it? And the answer to that is a combination of the techniques that we use in Antithesis: **deterministic simulation testing** and **fuzzing**. But those are things that we talk about in detail in other articles.
+**Note**: you can avoid this step in the future by logging
+        into your LWN account.

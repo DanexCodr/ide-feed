@@ -1,210 +1,35 @@
-Server stamps encode all the parameters required to connect to a secure DNS server as a single string.  
+A few weeks ago Kev Quirk asked: [Do you use `:visited` on links?](https://kevquirk.com/do-you-use-visited-on-links) — and I said to myself: No! I don’t use visited links… but why *don’t* I use visited links?
 
-Think about stamps as QR code, but for DNS.
+TL;DR: I’ve gone and styled visited links, and they’re purple.
 
-## Online DNS stamp calculator
+## Blue and purple
 
-Stamps can be quickly viewed/modified/created using this [VueJS component](https://github.com/jedisct1/vue-dnsstamp).
+I did a cursory five minutes of research and found Wikipedia still styles visited links (blue to purple). [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/:visited) does too. As does the [GOV.UK design system](https://design-system.service.gov.uk/styles/links/) — they have a special class to opt-out of the visited style. [BBC News](https://www.bbc.co.uk/news) turns black links to grey, how emo.
 
-An online demo is accessible here: [https://stamps.dnscrypt.info](https://stamps.dnscrypt.info)
+I decided to style visited links within my `<main>` body copy. Which to be fair is most links but not the big headings on [my blog index](https://dbushell.com/blog/) for example. I was too intimidated to turn those purple. Maybe you can give me the courage to style those too?
 
-An example list of [public secure DNS resolvers](https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/public-resolvers.md), with their DNS stamps.
+It looked a bit weird at first but I like the [colourful additions](https://dbushell.com/2026/11/09/dark-mode/) to my blog.
 
-## Common definitions
+## Accessibility
 
-- a || b is the concatenation of a and b
-- a | b is the result of the logical OR operation between a and b.
-- len(x) is a single byte representation of the length of x, in bytes. Strings don’t have to be zero-terminated and do not require invidual encoding.
-- vlen(x) is equal to len(x) if x is the last element of a set, and 0x80 | len(x) if there are more elements in the set.
-- LP(x) is len(x) || x, i.e x prefixed by its length.
-- VLP(x1, x2, ...xn) encodes a set, as vlen(x1) || x1 || vlen(x2) || x2 ... || vlen(xn) || xn. Since vlen(xn) == len(xn) (length of the last element doesn’t have the high bit set), for a set with a single element, we have VLP(x) == LP(x).
-- [ Q ] means that Q is optional.
-- base64url(s) is the URL-safe base64 encoding of s. None of the parameters are individually base64-encoded. Base64-encoding is only applied once, on the entire concatenation of all length-prefixed parameters.
+WCAG 2.2 guidelines have no requirement to differentiate visited from unvisited links. Regardless, visited links should meet all the same criteria applied to any link.
 
-## Encoding examples:
+There is one specific exception ([following this discussion](https://github.com/w3c/wcag/issues/905)). Because web browsers have strict style limitations and technical constraints due to [privacy concerns](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Selectors/Privacy_and_:visited):
 
-- LP("10.0.0.1") is [ 0x08, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x30, 0x2e, 0x31 ]
-- VLP("10.0.0.1", "10.0.0.2") evaluates to [ 0x88, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x30, 0x2e, 0x31, 0x08, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x30, 0x2e, 0x32 ]
-- base64url(VLP("10.0.0.1", "10.0.0.2")) is iDEwLjAuMC4xCDEwLjAuMC4y
+> Where color alone distinguishes between visited and unvisited links, it does not result in a failure of this Success Criterion, even where the contrast between the two link colors is below 3:1.
+>
+> [SC 1.4.1 Use of Color (Level A)](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html#:~:text=Most%20user%20agents,background%20%28SC%201.4.3%29)
 
-## DNSCrypt stamps
+This means that a subtle contrast different in blue vs purple is not considered an accessibility failure under that rule.
 
-Format:
+Web accessibility is all about ensuring a *comparable* experience for all users. Nothing can be perfectly accessible though. I think this small enhancement is fine, even if not everyone can see the difference. It’s a rare exception though. I’m conscious that too often excuses are made to ignore UX parity. I think any higher contrast or another visual indicator would be off-putting and impede readability. Forgoing any style doesn’t help anyone either. If blue and purple is good enough for those examples mentioned above, I’m on board.
 
-```text
-"sdns://" || base64url(0x01 || props || LP(addr [:port]) || LP(pk) || LP(providerName))
-```
+[Bryce Wray commented](https://kevquirk.com/do-you-use-visited-on-links#:~:text=Reply-,Bryce%20Wray) on Kev Quirk’s blog to note that Chromium browsers introduced [`:visited` link partitioning](https://developer.chrome.com/blog/visited-links) in 2025. I had no idea this was a thing!
 
-`0x01` is the protocol identifier for DNSCrypt.
+What do you think, do you care about visited link styles?
 
-`props` is a little-endian 64 bit value that represents informal properties about the resolver. It is a logical `OR` combination of the following values:
+## Bubbles
 
-- 1: the server supports DNSSEC
-- 2: the server doesn’t keep logs
-- 4: the server doesn’t intentionally block domains
+I found Kev Quirk’s blog on [bubbles.town](https://bubbles.town/). Bubbles is a charming social RSS aggregator. It’s doing a great job at supporting small personal blogs and promoting non-toxic topics. Bubbles is far from perfect though. It probably needs a tech filter. It certainly needs more participation in comments and voting. The developer is actively working to improve the site and a community is growing, so that’s cool to see.
 
-For example, a server that supports DNSSEC, stores logs, but doesn’t block anything on its own should set `props` as the following 8 bytes sequence: `[ 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]`.
-
-`addr` is the IP address, as a string, with a port number if the server is not accessible over the standard port for the protocol (443).  
-
-IPv6 strings must be included in square brackets: `[fe80::6d6d:f72c:3ad:60b8]`. Scopes are permitted.
-
-`pk` is the DNSCrypt provider’s Ed25519 public key, as 32 raw bytes.
-
-`providerName` is the DNSCrypt provider name.
-
-## DNS-over-HTTPS stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x02 || props || LP(addr) || VLP(hash1, hash2, ...hashn) ||
-                       LP(hostname [:port]) || LP(path)
-                       [ || VLP(bootstrap_ip1, bootstrap_ip2, ...bootstrap_ipn) ])
-```
-
-`addr` is the IP address of the server.  
-
-It can be an empty string. In that case, the host name will be resolved to an IP address using another resolver.
-
-`hashi` is the SHA256 digest of one of the TBS certificate found in the validation chain,  
-
-typically the certificate used to sign the resolver’s certificate. Multiple hashes can  
-
-be provided for seamless rotations.
-
-`hostname` is the server host name which will also be used as a SNI name. If the host name contains characters outside the URL-permitted range, these characters should be sent as-is, without any extra encoding (neither URL-encoded nor punycode).  
-
-The port number is optional, and is assumed to be `443` if missing.
-
-`path` is the absolute URI path, such as `/dns-query`.
-
-`bootstrap_ipi` are IP addresses of recommended resolvers accessible over standard DNS  
-
-in order to resolve `hostname`. This is optional, and clients can ignore this information.
-
-## DNS-over-TLS stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x03 || props || LP(addr) || VLP(hash1, hash2, ...hashn) ||
-                       LP(hostname [:port]) ||
-                       [ || VLP(bootstrap_ip1, bootstrap_ip2, ...bootstrap_ipn) ])
-```
-
-`addr` is the IP address of the server.  
-
-It can be an empty string. In that case, the host name will be resolved to an IP address using another resolver.
-
-IPv6 strings must be included in square brackets: `[fe80::6d6d:f72c:3ad:60b8]`. Scopes are permitted.
-
-`hashi` is the SHA256 digest of one of the TBS certificate found in the validation chain,  
-
-typically the certificate used to sign the resolver’s certificate.  Multiple hashes can  
-
-be provided for seamless rotations.
-
-`hostname` is the server host name which will also be used as a SNI name.  
-
-The port number is optional, and is assumed to be `443` if missing.
-
-`bootstrap_ipi` are IP addresses of recommended resolvers accessible over standard DNS  
-
-in order to resolve `hostname`. This is optional, and clients can ignore this information.
-
-## DNS-over-QUIC stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x04 || props || LP(addr) || VLP(hash1, hash2, ...hashn) ||
-                       LP(hostname [:port]) ||
-                       [ || VLP(bootstrap_ip1, bootstrap_ip2, ...bootstrap_ipn) ])
-```
-
-`addr` is the IP address of the server.  
-
-It can be an empty string. In that case, the host name will be resolved to an IP address using another resolver.
-
-IPv6 strings must be included in square brackets: `[fe80::6d6d:f72c:3ad:60b8]`. Scopes are permitted.
-
-`hashi` is the SHA256 digest of one of the TBS certificate found in the validation chain,  
-
-typically the certificate used to sign the resolver’s certificate.  Multiple hashes can  
-
-be provided for seamless rotations.
-
-`hostname` is the server host name which will also be used as a SNI name.  
-
-The port number is optional, and is assumed to be `443` if missing.
-
-`bootstrap_ipi` are IP addresses of recommended resolvers accessible over standard DNS  
-
-in order to resolve `hostname`. This is optional, and clients can ignore this information.
-
-## Oblivious DoH target stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x05 || props || LP(hostname [:port]) || LP(path))
-```
-
-`hostname` is the server host name which, for relays, will also be used as a SNI name. If the host name contains characters outside the URL-permitted range, these characters should be sent as-is, without any extra encoding (neither URL-encoded nor punycode).  
-
-The port number is optional, and is assumed to be `443` if missing.
-
-`path` is the absolute URI path, such as `/dns-query`.
-
-## Anonymized DNSCrypt relay stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x81 || LP(addr))
-```
-
-`0x81` is the protocol identifier for a DNSCrypt relay.
-
-addr is the IP address and port, as a string. IPv6 strings must be included in square brackets: `[fe80::6d6d:f72c:3ad:60b8]:443`.
-
-## Oblivious DoH relay stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x85 || props || LP(addr) || VLP(hash1, hash2, ...hashn) ||
-                       LP(hostname [:port]) || LP(path)
-                       [ || VLP(bootstrap_ip1, bootstrap_ip2, ...bootstrap_ipn) ])
-```
-
-`0x85` is the protocol identifier for an oDoH relay.
-
-`addr` is the IP address of the server.  
-
-It can be an empty string. In that case, the host name will be resolved to an IP address using another resolver.
-
-`hashi` is the SHA256 digest of one of the TBS certificate found in the validation chain,  
-
-typically the certificate used to sign the resolver’s certificate.  Multiple hashes can  
-
-be provided for seamless rotations.
-
-`hostname` is the server host name which, for relays, will also be used as a SNI name. If the host name contains characters outside the URL-permitted range, these characters should be sent as-is, without any extra encoding (neither URL-encoded nor punycode).  
-
-The port number is optional, and is assumed to be `443` if missing.
-
-`path` is the absolute URI path, such as `/dns-query`.
-
-`bootstrap_ipi` are IP addresses of recommended resolvers accessible over standard DNS in order to resolve `hostname` and get the oDoH target public key. This is optional, and clients can ignore this information.
-
-## Plain DNS stamps
-
-Format:
-
-```text
-"sdns://" || base64url(0x00 || props || LP(addr [:port]))
-```
-
-`addr` is the IP address of the server. IPv6 strings must be included in square brackets: `[fe80::6d6d:f72c:3ad:60b8]`.
+I hope Bubbles can thrive and remain human. This is the web we need to bypass the dead web *Google et. al.* are gatekeeping. Let them wall themselves in with their slop!

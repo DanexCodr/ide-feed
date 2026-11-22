@@ -1,148 +1,48 @@
-> Subscriptions are the lifeblood of LWN.net.  If you appreciate this
-> content and would like to see more of it, your subscription will
-> help to ensure that LWN continues to thrive.  Please visit
-> [this page](https://lwn.net/Promo/nst-nag1/subscribe) to join up and keep LWN on
-> the net.
+Today we launched a change that has been a long time in the making: The updated website for [freedesktop.org](https://www.freedesktop.org/), as well as the refreshed [wiki.freedesktop.org](https://wiki.freedesktop.org/) are live now!
 
-The final talk at Kangrejos 2026 was about the removal of the C implementation
-of Android's
-[Binder driver](https://source.android.com/docs/core/architecture/ipc/binder-overview), the primary interprocess communication mechanism
-used on Android devices. Carlos Llamas announced that he had deleted the C
-code to general applause, and then shared some insights about what went into
-replacing the C implementation. Alice Ryhl, who has worked on the Rust
-implementation for some years, added her own thoughts about what the most
-difficult and interesting parts of the transition were.
+You can read the announcement [here](https://www.freedesktop.org/news/2026/new-website-and-wiki/), this blog post elaborates a bit on it and on the background of the changes, as well as future plans.
 
-Binder was added to the kernel in 2008, Llamas said, as an interprocess
-communication mechanism for Android devices. Its design originated in
-[BeOS](https://en.wikipedia.org/wiki/BeOS), but
-it has grown significantly since then. It provides a rich set of operations for
-allowing processes to communicate with the minimum amount of overhead. It also,
-therefore, presents a large attack surface for Android. Many complicated chained
-attacks against Android have involved Binder at one step or another, Llamas
-explained. Google's internal "red team" (the team dedicated to proactive
-security research) deemed Binder to be the most vulnerability-dense component in
-the entire operating system, with more CVEs per line than anywhere else.
+### Why change anything?
 
-That made it an obvious candidate for porting to Rust, Llamas said. Binder was the first user
-of Rust in the kernel, he added, although Ryhl did not
-[publicly post](https://lwn.net/ml/linux-kernel/20231101-rust-binder-v1-0-08ba9197f637@google.com/) the first version
-of what became the Rust implementation [until 2023](https://lwn.net/Articles/953116/), well after the Rust experiment started
-in 2021. All told, the effort took more than
-five years. Binder is used for every single screen touch, permission check,
-and cross-application message on Android, which runs on more than three billion
-devices. In total, it works out to hundreds of billions of Binder transactions
-per second, globally, he added. That scale meant that even the smallest discrepancy between the
-interface provided by the C version and the one provided by the Rust version
-would cause problems and regressions for some use case.
+The freedesktop.org website has been a wiki for a long time, which definitely was the right call in its inception. A wiki is very much in spirit of Freedesktop’s [mission statement](https://www.freedesktop.org/mission-statement/) to foster collaboration between desktop environments and to be a place to create de-facto standards.
 
-One particularly tricky aspect has been performance, Ryhl said. Throughput
-doesn't matter that much; what matters is the tail latencies. Most
-screen frames on Android have a Binder transaction in the critical path of the
-frame, she explained. So, a difference of two microseconds on average is not a
-real problem, but if Binder is ever twenty milliseconds slower, even once
-in a while, people will notice and care.
+However, over the years, working with the wiki became a bit of an issue: Not only did we face multiple spam-apocalypses (which in part motivated the switch to IkiWiki in 2013 and resulted in us heavily restricting write access to the wiki), but it also meant that official project information, finished specifications, half-finished proposals and pages nobody had touched in fifteen years were all sitting next to each other.
 
-The actual algorithms that the C and Rust implementations use are identical, she
-continued, so there are no large differences in throughput. But, because Rust
-handles locking differently, there were problems with the tail latency
-from lock contention that she had to debug. For example, one user-reported
-traceback showed Binder attempting to take a mutex that was held by another
-process. That process was preempted, and did not resume executing for twenty
-milliseconds, well past the sixteen millisecond budget to render a single frame.
+Since 2000 when Freedesktop.org was started, the project has grown so much and has had so many associated projects and specifications over the decades that it is now very difficult for new people to get an overview what is current and what state the software projects and specifications hosted by Freedesktop.org are in.
 
-It was a classic case of priority inversion. To solve the problem in Binder, Ryhl moved
-as many operations out from under the lock as possible, and was able
-to replace it with a spinlock, which made the problem go away. The equivalent
-lock in the C implementation was already a spinlock: "I deviated from C
-Binder, and *pow*. It has eighteen years of accumulated quirks."
+Having only a wiki as a large and somewhat disorganized pile of information did not help with that issue, so I worked to split things up: We now have a website as well as a wiki, using different designs to distinguish the two, and serving different purposes.
 
-Eventually, however, the Rust implementation was good enough for most use cases.
-And the C implementation was still producing new vulnerabilities every time
-someone tried to introduce a new feature. Eventually, Llamas and Ryhl decided to
-only add new features to the Rust implementation, in order to motivate people to
-switch and to avoid headaches from the C implementation. That policy has
-resulted in the Rust version becoming faster than the C version,
-because Ryhl was able to introduce an algorithmic improvement that reduced the
-number of needed system calls, a change that had been considered too complex for
-the C implementation. Now that the C implementation has been deleted, there are
-more of those coming, she promised.
+### Website & website plans
 
-Another area that proved difficult was dealing with tracepoints. Users aren't
-supposed to rely on the presence or behavior of most kernel-internal
-tracepoints, but they do. This meant that Ryhl had to copy
-the existing tracepoints in Binder as a de facto part of the driver's API. That
-even extended into some of the data structures involved in the driver. In one
-case, she said, there was a reference-counted structure that had a slightly
-different reference count in the Rust implementation, because the Rust code was
-holding an additional pointer to the structure. That turned out to be a
-problem for one particular piece of client code, since it relied on checking the
-reference count via a tracepoint in order to determine when the C implementation
-had reached a particular state.
+The website at [www.freedesktop.org](https://www.freedesktop.org/) will be the place for “official”, or rather, more curated information. Now that the new website is live, its content is still largely that of the old wiki. Over the next weeks, I will be working on cleaning up its contents and listings. For example, I will clearly split active projects from archived ones, add missing ones, and also work towards synchronizing the specifications hosted on the former wiki / website with the ones listed on [specifications.fd.o](https://specifications.freedesktop.org/).
 
-There was also a lot of toolchain support needed, Ryhl continued. The Rust
-implementation had to work with kernel address-space layout randomization
-(KASLR), control-flow integrity (CFI), and profile-guided optimization.
-Production Android kernels are built with all of those enabled, and since they impact code
-generation, the Rust code needed to account for them.
+So, basically I will do an inventory check of Freedesktop. That work has already started, but until now, I could not make any public changes to not disrupt workflows or make my own future work harder by having diverging information in two places (website & wiki).
 
-Llamas then went into more detail about the deployment plan that will be used
-to convert users to the Rust implementation. A major problem with just rolling
-the Rust implementation out is the existence of
-[vendor hooks](https://lwn.net/Articles/1098493/): custom
-tracepoints used to inject vendor-specific behavior into the kernel. The Rust
-implementation of Binder was not able to reproduce those in every case, and
-therefore many vendors are stuck on the C implementation until they update their
-code. That's going to be a slow process.
+I also wanted to make it easier for people to find information on how to [get involved](https://www.freedesktop.org/community/) with Freedesktop and associated projects, so the new website now has a more discoverable section for that.
 
-Old stable
-versions of the kernel will continue to have the C Binder, and receive security
-fixes, which gives the various Android vendors a little bit of leeway until
-they're forced to update. After the conference, the patch removing the C
-implementation
-[was merged](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fd2bc059ed46) as part of the 7.4 merge window, so that is the
-version past which the Rust implementation is required. 7.3 is the designated
-long-term-support release for 2026.
+The new website is a static site hosted via GitLab Pages and using [Pelican](https://getpelican.com/). You can [view its sources](https://gitlab.freedesktop.org/freedesktop/fdo-website) if you like.
 
-One person asked whether this would pose a problem for people compiling
-the kernel with GCC. Miguel Ojeda responded that many distributions are using a
-workaround for the current lack of Rust support in GCC: they are building
-the C side of the kernel with GCC, and the Rust side with LLVM. He said that he
-had advised against compiling the kernel in that way, because it is "a
-complete hack", though people who use it are unlikely to complain about
-being forced onto Clang. Greg Kroah-Hartman added that it will take months or
-years to learn about anyone who has problems with the Rust version of the
-driver, given how slowly Android vendors update their kernels. Furthermore, the
-removal is a single patch that can be cleanly reverted, if someone needs
-to continue using the C version.
+### Wiki changes
 
-Llamas thought that it was worth considering what the removal process should
-look like for other code that gets ported to Rust. He asked what people thought
-should happen to the C version of converted drivers on long-term-support
-branches. Ojeda said that the process would be exactly the same as the existing
-policy for replaced C code. The only difference
-between Rust and C in long-term-support releases is that the Rust maintainers
-backport fixes for soundness problems, he said.
-Kroah-Hartman told Llamas not to worry about code that has been replaced:
-"Just delete it. I take patches for subsystems that have been deleted. It's
-fine."
+Of course, we also still want to keep the Wiki and all of its rich history around! It remains the easy-to-edit place for collaboration on upcoming projects and specifications.
 
-With that declaration, the session, the conference, and the presence of the C
-Binder driver in the kernel were all over. Binder is the first nontrivial component
-in the
-kernel to be ported to Rust, and its journey has revealed several pitfalls that
-don't apply to new drivers written in Rust from scratch. Still, the most
-difficult problems were not Rust-specific; they were the compatibility problems
-that any rewrite would face. Whether any other kernel components will find the hassle
-of a rewrite worth it, and how long they will take to accomplish it, remains to
-be seen.
+Wiki edits must now [happen through GitLab](https://gitlab.freedesktop.org/freedesktop/fdo-wiki) instead of the old [IkiWiki](https://ikiwiki.info/) web interface. While this sounds like an additional barrier to edit the wiki, it is significantly easier than requesting an account on *annarchy* to edit the old Wiki through the web interface. It also still allows us to keep the existing history as well as spam protection measures. In order to use the wiki with GitLab Pages and to keep the history easily accessible and readable, I rewrote the Git history of the wiki to make it pretend that all changes always happened in a `content` subdirectory. So, if commit signatures are missing and hashes are different: That is the only reason why. There have been no content changes or other metadata changes (and we still have a copy of the pristine wiki Git repository).
 
-[ Thanks to the Linux Foundation, LWN's travel sponsor, for supporting my travel
-to Kangrejos. ]
+For the fd.o wiki, we are now also using Hari’s IkiWiki template that is already in use on the X.org website and which is much easier on the eyes.
 
-| Index entries for this article |  |
-| --- | --- |
-| [Conference](https://lwn.net/Archives/ConferenceIndex/) | [Kangrejos/2026](https://lwn.net/Archives/ConferenceIndex/#Kangrejos-2026) |
+### Next steps
 
-**Note**: you can avoid this step in the future by logging
-        into your LWN account.
+At the moment, I am mostly concerned with ensuring that the change has not broken any existing links and all systems keep working. After that, the wiki 🡘 website deduplication work will start and we can modernize both the content of the website and wiki.
+
+If you find a broken link, an outdated page or anything else that looks wrong, please [file an issue](https://gitlab.freedesktop.org/freedesktop/fdo-website/-/issues) or, even better, open a merge request.  
+For the wiki, you are very welcome to just fix or otherwise update the page directly.
+
+I did reach out to all wiki editors and projects impacted by this change in advance, but since there are so many people and projects involved, it is always possible to miss someone or something. If you found a bug, need edit permissions, or need help with anything, don’t hesitate to ping me: You can find me as `ximion` in OFTC’s `#freedesktop` IRC channel, in the very recently created [#xdg-specs](https://matrix.to/#/#xdg-specs:matrix.org) channel on the Freedesktop Matrix space, or you can email me.
+
+### Thank you!
+
+I do want to echo the announcement news post here: None of Freedesktop.org would exist without the people who filled it with life over the years and who worked on cross-desktop collaborative projects. I have read through a lot of wiki history and old project pages over the recent months, and it feels amazing to know how much work and passion people have poured into the projects and collaborative efforts over the years – no matter if they were successes in the end, or remained experiments. I am very thankful for all current, past and future editors of the website and wiki, as well as all project maintainers and contributors.
+
+I also want to thank the [Sovereign Tech Agency](https://www.sovereign.tech/) once more for supporting me in their fellowship program as a maintainer, which enabled me to work on this task [among other things](https://blog.tenstral.net/2026/08/sovereign-tech-fellowship-for-freedesktop-tasks.html).
+
+Thanks to all contributors, in whichever way you contribute to our free desktop ecosystem!

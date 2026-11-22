@@ -1,54 +1,19 @@
-In the beginning, my garage door opener worked fine. When the door opened or closed, I would get a notification. If I'm away from home and the door opens, something weird is going down. The "myQ" app generally worked although it was encrusted with ads:
+**San Francisco, Calif.** — On Friday, November 20, workers at [Internet Archive](https://archive.org/) announced their intent to form a union with the Communications Workers of America (CWA). They are seeking to join CWA Local 9415 in Oakland, California.
 
-![Screenshot 2026-10-16 at 14](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/25-1.webp)
+In a letter sent this morning via email, members of the union’s organizing committee presented management with a request for voluntary recognition after a supermajority of eligible workers signed cards signaling their desires for union representation. Worker-organizers for the union have also simultaneously filed a petition for a union certification election with the National Labor Relations Board (NLRB); if Internet Archive grants the union’s request for voluntary recognition, organizers will withdraw the NLRB petition.
 
-I continued using it because I trusted that notifications were meaningful...
+“We are forming a union because we care deeply about the Internet Archive, its patrons, and its place as a vital part of the internet ecosystem. Now more than ever, we want the Internet Archive to last for the generations to come,” **said organizing committee member Danielle Leard, a digitization technician for the Internet Archive**. “Sustaining workers long-term, through job security, livable wages, and sufficient benefits, goes hand-in-hand with sustaining the Archive long-term.”
 
-...until recently (October 2026):
+“Throughout the years, many of us have witnessed the significant extent to which the Internet Archive and its patrons benefit from some of the most talented, dedicated, and overall purpose-driven folks that we’ve had the privilege of working alongside,” **said organizing committee member Chelsea Richelle Smith, a patron services specialist at Internet Archive**. “At its core, we all share the collective desire to foster a workplace in which everyone thrives. We believe in continuing to build towards a democratic environment where the workers have a meaningful voice in the work that we do and the conditions under which that work is done, in alignment with each other and the organization’s overall mission.”
 
-![Screenshot 2026-10-16 at 13](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/45-1.webp)
+The Internet Archive is one of the world’s largest and oldest libraries of digitized media, with nearly 120 librarians, engineers, technicians, project managers, media specialists, facilities workers, and administrative staff making up the proposed unit. Together, Internet Archive workers ensure that the Archive remains a beacon of equitable knowledge to millions of users worldwide through several different services, such as the Wayback Machine, Open Library, and most recently, the digital preservation of government documents.
 
-This is un-fucking-acceptable. As in, absolutely fucking not.
+“In solidarity with workers across the country, we aim to model the practice of workplace democracy and the building of technology that benefits the public,” **said organizing committee member Will Howes, an engineer on the Internet Archive’s Wayback Machine**. “We organized the Internet Archive not only for each other as coworkers, but to show the tech and non-profit sectors what is possible. Any worker can and should believe that talking to their colleagues today is the first step towards improving their workplace conditions.”
 
-The manufacturer (Chamberlain) cut off third-party access to its APIs (via myQ) in late 2023. In response, I purchased a pair of [ratgdo32](https://ratcloud.llc/products/ratgdo32) devices to opt out of the bullshit.
+The union’s announcement marks the latest effort to democratize universal and free access to knowledge; in September, [U.S.-based Wikimedia Foundation workers secured union recognition with CWA](https://cwa-union.org/news/releases/wikimedia-foundation-workers-overwhelmingly-vote-form-union-cwa), and in the union’s vision statement, worker organizers cited the successful unionization efforts at the Free Software Foundation (FSF) and the Electronic Frontier Foundation (EFF) as inspirations for organizing.
 
-> ratgdo is a WiFi control board for your garage door opener that works over your local network using ESP Home or HomeKit
+“In a rapidly evolving technology landscape, collective action and strong workplace protections help ensure that workers are heard and respected,” **said CWA Local 9415 President Decovan Rhem**. “We are proud to stand strong with the Internet Archive workers to obtain union recognition and advocate for a positive, inclusive workplace.”
 
-The device is a ~$62 board from ratcloud llc running open-source firmware that wires to the opener's existing terminals and speaks LiftMaster's Security+ 2.0 protocol locally.
+The union has launched a [petition](https://actionnetwork.org/petitions/internet-archive-petition/) to garner public support for voluntary recognition. For more updates, follow Internet Archive Labor Union-CWA Local 9415 (IALU-CWA) on [Bluesky](https://bsky.app/profile/ialucwa.bsky.social), Instagram, [Mastodon](https://mastodon.social/@IALUCWA), and Tumblr.
 
-![order](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/order.webp)
-
-These were easy enough to hook up. I won't reproduce the instructions here.
-
-The bundle included six black wires, an auxiliary harness I didn’t need.
-
-![bundle](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/bundle.webp)
-
-My router hands each board a fixed address at 192.168.0.192 and 192.168.0.245. Apple's HomeKit just worked and I'm able to control them with voice commands: “Hey Siri, open Door 1”
-
-![homekit](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/homekit.webp)
-
-When I was growing up, my father wired a mercury switch onto our garage door that lit up a light in the hallway when we'd left the garage door open. This was a valuable signal that helped our family avoid accidentally leaving the door open overnight. Since the ratgdo32 has a JSON status endpoint, I was able to rebuild Dad's solution in software with Slack:
-
-![Screenshot 2026-11-01 at 12](https://bear-images.sfo2.cdn.digitaloceanspaces.com/harrisonpage/17-1.webp)
-
-The script runs at night checking for an open door:
-
-```
-*/10 21-23,0-5 * * *  garage-watch
-```
-
-The repo maintainer made my day when I submitted a [tiny pull request](https://github.com/ratgdo/homekit-ratgdo32/pull/233): "Simple and useful. Happy to merge this. Thank you."
-
-Both boards are now reachable over my Tailscale network, so my monitoring software can load /healthcheck. This required a custom route:
-
-```
-/Applications/Tailscale.app/Contents/MacOS/Tailscale set \
-  --advertise-routes=192.168.0.192/32,192.168.0.245/32
-```
-
-After approving the route, my monitoring software can verify the hardware is working.
-
-Everything runs locally with no cloud, and notifications now say who opened the door which myQ never did.
-
-To anyone at Chamberlain responsible for myQ, I offer my sincerest Fuck You.
+The Campaign to Organize Digital Employees (CODE-CWA) is a network of worker-organizers and their staff working every single day to build the voice and power necessary to ensure the future of the tech, game, and digital industries in the United States and Canada. CODE-CWA is a project of the Communications Workers of America, which represents hundreds of thousands of workers throughout tech, media, telecom, and other industries who stand together to fight for justice on the job and in our communities.
