@@ -1,48 +1,156 @@
-Today we launched a change that has been a long time in the making: The updated website for [freedesktop.org](https://www.freedesktop.org/), as well as the refreshed [wiki.freedesktop.org](https://wiki.freedesktop.org/) are live now!
+- C++26 technical work, originally completed in March, was reopened and is now recompleted: The anticipated plan is to reissue the updated C++26 document for a second approval ballot.
+- Most of the six-day meeting was devoted to addressing a second set of international comments for C++26, primarily on the contracts language feature.
+- Adopted this week for draft C++29: break label; continue label;, std::ranges::any_view, views::slice, and more…
 
-You can read the announcement [here](https://www.freedesktop.org/news/2026/new-website-and-wiki/), this blog post elaborates a bit on it and on the background of the changes, as well as future plans.
+## Overview
 
-### Why change anything?
+Today, the ISO C++ committee completed technical work on C++26 for a second time in beautiful Búzios, Rio de Janeiro, Brazil (hybrid online via Zoom).
 
-The freedesktop.org website has been a wiki for a long time, which definitely was the right call in its inception. A wiki is very much in spirit of Freedesktop’s [mission statement](https://www.freedesktop.org/mission-statement/) to foster collaboration between desktop environments and to be a place to create de-facto standards.
+As I [reported in March](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/), the ISO C++ committee completed technical work on C++26 at our March meeting; following that, we held [the first meeting of C++29 in June](https://herbsutter.com/2026/06/13/brno-trip-report/). Since then, the approval (Draft International Standard, or DIS) ballot for C++26 was held but, for the first time, did not pass unanimously and was sent back to the ISO C++ committee with additional international comments to address, mostly about the contracts feature (`pre`, `post`, and `contract_assert`). So this week we addressed the additional comments on C++26, including by adopting an extension to contracts and providing a detailed rationale and timeline to inform national bodies of the history and process by which contracts were developed, concerns heard repeatedly, and decisions made. The committee is now producing an updated final document that is anticipated to be sent out for its second international approval (DIS) ballot and final editorial work, anticipated to be published in the near future by ISO.
 
-However, over the years, working with the wiki became a bit of an issue: Not only did we face multiple spam-apocalypses (which in part motivated the switch to IkiWiki in 2013 and resulted in us heavily restricting write access to the wiki), but it also meant that official project information, finished specifications, half-finished proposals and pages nobody had touched in fifteen years were all sitting next to each other.
+This meeting was hosted by **C++ Alliance**. Thank you to everyone involved and especially to **Matheus Izvekov**, who took the lead in making the arrangements! Our hosts arranged for high-quality facilities for our six-day meeting from Monday through Saturday. We had about 220 attendees, split about 35%/65% in-person/remote-Zoom, formally representing 27 nations. (The higher-than-usual percentage of remote participation was partly because of the U.S. aviation ground stop that disrupted air travel just as experts were trying to fly to the ISO C++ meeting.) At each meeting we have new guest attendees, and this time there were 13 new guests, mostly in person, in addition to new attendees who are official national body representatives. To all of them, once again welcome!
 
-Since 2000 when Freedesktop.org was started, the project has grown so much and has had so many associated projects and specifications over the decades that it is now very difficult for new people to get an overview what is current and what state the software projects and specifications hosted by Freedesktop.org are in.
+[The committee](https://isocpp.org/std/the-committee) currently has 22 active subgroups, but this time fewer of them met throughout the week than usual as we focused on the additional C++26 comments.
 
-Having only a wiki as a large and somewhat disorganized pile of information did not help with that issue, so I worked to split things up: We now have a website as well as a wiki, using different designs to distinguish the two, and serving different purposes.
+## C++26, take 2
 
-### Website & website plans
+The most controversial feature in C++26 is contracts: `pre`, `post`, and `contract_assert`. The committee already had strong consensus, and as of the end of this meeting has still stronger consensus, on including the feature in C++26, but we spent most of this meeting rehearing contracts concerns and working hard again to address them.
 
-The website at [www.freedesktop.org](https://www.freedesktop.org/) will be the place for “official”, or rather, more curated information. Now that the new website is live, its content is still largely that of the old wiki. Over the next weeks, I will be working on cleaning up its contents and listings. For example, I will clearly split active projects from archived ones, add missing ones, and also work towards synchronizing the specifications hosted on the former wiki / website with the ones listed on [specifications.fd.o](https://specifications.freedesktop.org/).
+Here is some history (much of this repeated from [my March trip report](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/)): In February 2025, when we took the plenary poll to adopt contracts in the C++26 working draft (“merge it to trunk”), the vote was:
 
-So, basically I will do an inventory check of Freedesktop. That work has already started, but until now, I could not make any public changes to not disrupt workflows or make my own future work harder by having diverging information in two places (website & wiki).
+**87.7%** in favor:opposed — 100 in favor, 14 opposed, and 12 abstaining
 
-I also wanted to make it easier for people to find information on how to [get involved](https://www.freedesktop.org/community/) with Freedesktop and associated projects, so the new website now has a more discoverable section for that.
+After that, the concerns were all deeply rediscussed for the last four meetings of the original C++26 cycle thanks to thoughtful and high-quality technical papers explaining the objections; all of those papers continued to be fully heard, often for multiple days and at many telecons between meetings, with some contracts fixes adopted.
 
-The new website is a static site hosted via GitLab Pages and using [Pelican](https://getpelican.com/). You can [view its sources](https://gitlab.freedesktop.org/freedesktop/fdo-website) if you like.
+At our meeting in March 2026, when we took the plenary poll to finalize and ship the C++26 standard, the vote was non-unanimous primarily because of the sustained concerns about contracts:
 
-### Wiki changes
+**90.5%** in favor:opposed — 114 in favor, 12 opposed, and 3 abstaining
 
-Of course, we also still want to keep the Wiki and all of its rich history around! It remains the easy-to-edit place for collaboration on upcoming projects and specifications.
+As I reported in March: After extensive scrutiny, the ISO C++ committee still wanted C++26 with contracts, and so contracts stayed in C++26 for the ISO DIS ballot.
 
-Wiki edits must now [happen through GitLab](https://gitlab.freedesktop.org/freedesktop/fdo-wiki) instead of the old [IkiWiki](https://ikiwiki.info/) web interface. While this sounds like an additional barrier to edit the wiki, it is significantly easier than requesting an account on *annarchy* to edit the old Wiki through the web interface. It also still allows us to keep the existing history as well as spam protection measures. In order to use the wiki with GitLab Pages and to keep the history easily accessible and readable, I rewrote the Git history of the wiki to make it pretend that all changes always happened in a `content` subdirectory. So, if commit signatures are missing and hashes are different: That is the only reason why. There have been no content changes or other metadata changes (and we still have a copy of the pristine wiki Git repository).
+Our past ISO C++ DIS approval ballots have always been unanimous. No national bodies (NBs) objected to balloting this C++26 DIS document that included contracts. However, during the ISO DIS process, additional late concerns were raised about contracts, including from five NBs that raised contracts concerns for the first time and voted Disapprove on C++26 because of them (see also my paper [P4454R0](https://isocpp.org/files/papers/P4454R0.pdf) section 2.3). The result, which surprised nearly everyone, was that the first DIS was not approved.
 
-For the fd.o wiki, we are now also using Hari’s IkiWiki template that is already in use on the X.org website and which is much easier on the eyes.
+Therefore we spent most of the week in Búzios rehearing the NB comments on the DIS, which were mostly about contracts. One requested extension to contracts was adopted in response to NB comments (see next section). Other suggested changes were not adopted, notably the request by multiple comments to remove contracts from C++26; the committee discussed, revoted, and reaffirmed it wants to retain contracts in C++26.
 
-### Next steps
+This week, the vote to reship the C++26 standard with the changes to C++26 adopted at this meeting, including an additional extension to contracts in response to the international comments and retaining contracts as part of C++26, was:
 
-At the moment, I am mostly concerned with ensuring that the change has not broken any existing links and all systems keep working. After that, the wiki 🡘 website deduplication work will start and we can modernize both the content of the website and wiki.
+**92.5%** in favor:opposed — 111 in favor, 9 opposed, and 8 abstaining
 
-If you find a broken link, an outdated page or anything else that looks wrong, please [file an issue](https://gitlab.freedesktop.org/freedesktop/fdo-website/-/issues) or, even better, open a merge request.  
-For the wiki, you are very welcome to just fix or otherwise update the page directly.
+Thank you again to everyone in the committee who has been working hard together to discuss and address these concerns, including all week long again this week!
 
-I did reach out to all wiki editors and projects impacted by this change in advance, but since there are so many people and projects involved, it is always possible to miss someone or something. If you found a bug, need edit permissions, or need help with anything, don’t hesitate to ping me: You can find me as `ximion` in OFTC’s `#freedesktop` IRC channel, in the very recently created [#xdg-specs](https://matrix.to/#/#xdg-specs:matrix.org) channel on the Freedesktop Matrix space, or you can email me.
+## Changes to C++26 adopted this week (and for draft C++29)
 
-### Thank you!
+For C++26, we adopted four main papers and fixed some editorial issues. All of these changes were also adopted for draft C++29, which keeps the standards work in sync rather than forking.
 
-I do want to echo the announcement news post here: None of Freedesktop.org would exist without the people who filled it with life over the years and who worked on cross-desktop collaborative projects. I have read through a lot of wiki history and old project pages over the recent months, and it feels amazing to know how much work and passion people have poured into the projects and collaborative efforts over the years – no matter if they were successes in the end, or remained experiments. I am very thankful for all current, past and future editors of the website and wiki, as well as all project maintainers and contributors.
+The primary change to contracts was to adopt **[P4451R2 “Early Adoption of an Always-Enforced Label”](http://isocpp.org/files/papers/P4451R2.pdf)** by **Joshua Berne** (in a similar spirit to Romania’s paper [P3911R2 “Make Contracts Reliably Non-Ignorable”](https://isocpp.org/files/papers/P3911R2.html)).  Thanks, Romania and Josh!
 
-I also want to thank the [Sovereign Tech Agency](https://www.sovereign.tech/) once more for supporting me in their fellowship program as a maintainer, which enabled me to work on this task [among other things](https://blog.tenstral.net/2026/08/sovereign-tech-fellowship-for-freedesktop-tasks.html).
+This paper addresses what several NBs told the committee was their primary request for contracts: It is a pure extension that gives programmers a way to express in source code that a specific contract is always enforced, guaranteeing that “program execution will not continue past the contract assertion if it is violated, regardless of the semantics of other contract assertions” that various parts of the program may be built with. This is forward-compatible with proposals like [P3400R5](http://isocpp.org/files/papers/P3400R5.pdf) being considered for C++29.
 
-Thanks to all contributors, in whichever way you contribute to our free desktop ecosystem!
+From the paper:
+
+```
+
+#include <contracts>
+
+int f(int x)
+    pre<std::contracts::controls::enforced>(x > 0)
+    post<std::contracts::controls::enforced>(r : r > 0)
+{
+    contract_assert<std::contracts::controls::enforced>(x > 0);
+    return x;
+}
+
+// Because the label is found by ordinary name lookup,
+// a namespace alias or a using-directive works as well:
+
+namespace scc = std::contracts::controls;
+
+int h(int x)
+    pre<scc::enforced>(x > 0)
+    post<scc::enforced>(r : r > 0)
+{
+    contract_assert<scc::enforced>(x > 0);
+    return x;
+}
+
+using namespace std::contracts::controls;
+
+int g(int x)
+    pre<enforced>(x > 0)
+    post<enforced>(r : r > 0)
+{
+    contract_assert<enforced>(x > 0);
+    return x;
+}
+```
+
+We also adopted the following for C++26:
+
+**[P4466R2 “Selectively transparent *using-declarators* (response to FI-067)”](https://isocpp.org/files/papers/P4466R2.html)** by **Dan Katz and Tomasz Kamiński** addresses a ballot comment to make reflection work more consistently with modules (especially module `std`), while leaving room for intended fuller support for `using`-alias reflection in C++29. Thank you, Dan and Tomasz!
+
+**[P4453R1 “Memory allocation with senders/receivers; a response to IE-133”](https://isocpp.org/files/papers/P4453R1.html)** by **Dietmar Kühl and Lucian Radu Teodorescu** addresses a ballot comment to offer more flexible control over memory allocation with std::execution. Much appreciated, Dietmar and Lucian!
+
+**[P3861R1 “Pragmatic approach to standard structural types”](https://isocpp.org/files/papers/P3861R0.pdf)** by **Corentin Jabot** makes reflection more useful. Thanks, Corentin! This paper allows more use of `string_view`, `span`, and `tuple`, including to use them as template parameters and to create type-safe strings at compile time that can be used at execution time.
+
+## Adopted for C++29: Core language changes/features
+
+We actually also did some work on C++29! Here are some highlights.
+
+> *These links are to the most recent public version of each paper. If a paper was tweaked at the meeting before being approved, the link tracks and will automatically find the updated version as soon as it’s uploaded to the public site.*
+>
+> *Several of the adopted language and library additions are already supported today in major C++ implementations. “Adopted for C++29” doesn’t mean “have to wait until 2029 or later to start seeing some support in real compilers / standard libraries.”*
+
+In addition to fixing a list of issues, we adopted five papers for the C++29 core language, including the following…
+
+**[P0085R5 “Oo… adding a coherent character sequence to begin octal-literals”](http://wg21.link/p0085)** by **Jolly Chen, Axel Naumann, Michael Jonker** (all of CERN) gets the award for “most patient paper adopted at this meeting” — thanks, Jolly, Axel, and Michael! Its initial revision was published in 2015, and this week we adopted it: Finally, portable C++ will support “`0o`” (zero, lowercase-O) and “`0O`” (zero, uppercase-O) as a way to introduce octal literals, and the old prefix “`0`” is deprecated for that purpose.
+
+**[P3568R4 “`break label;` and `continue label;`”](http://wg21.link/p3568)** by **Jan Schultke** adds labeled `break` and `continue` to draft standard C++. Thanks, Jan! A loop can now be preceded by a “`label:`” (or more than one) that names it, and can be a target for `break` and `continue` to say which of a set of nested loops is intended. Here is an example from the updated standard wording itself (lightly edited):
+
+```
+
+a: b: while (/* ... */) {
+  a: a: c: for (/* ... */) {
+    break;          // OK, terminates enclosing for loop
+    break a;        // OK, same
+    break b;        // OK, terminates enclosing while loop
+    y: { break y; } // error: y is not a breakable statement
+  }
+  break c;          // error: c is not an enclosing statement
+}
+```
+
+We also added several other language extensions and improvements.
+
+## Adopted for C++29: Standard library changes/features
+
+In addition to fixing a list of issues, we adopted seven papers for the C++29 standard library, including the following…
+
+**[P3411R7 “`any_view`”](http://wg21.link/p3411)** by **Hui Xie, Louis Dionne, S. Levent Yilmaz, and Patrick Roberts** adds the type-erased `std::ranges::any_view` to the standard library. Thank you, authors! The paper’s abstract summarizes it well: “That type-erased view allows customizing the traversal category of the view, its value type and a few other properties. For example:”
+
+```
+
+class MyClass {
+    std::unordered_map<Key, Widget> widgets_;
+public:
+    std::ranges::any_view<Widget> getWidgets();
+};
+
+std::ranges::any_view<Widget> MyClass::getWidgets() {
+    return widgets_ | std::views::values
+                    | std::views::filter(myFilter);
+}
+```
+
+**[P3216R6 “`views::slice`”](http://wg21.link/p3216)** by **Hewill Kang** adds the `views::slice` adaptor to the draft C++29 ranges library. Thanks, Hewill! This provides a standard way to extract a contiguous subrange from a sequence by specifying a start index and an end index. It is also the first adaptor that takes two parameters (start and end).
+
+**[P4189R0 “get()ing the pointer from optional”](http://wg21.link/p4189)** by **Nevin Liber** provides a portable way to get a pointer to the contained object of a `std::optional` by adding the `.get_ptr()` member function. Thank you, Nevin!
+
+We also added several other library extensions and improvements.
+
+## Wrapping up
+
+Thank you again to the about 220 experts who attended in person and online at this week’s meeting, and the many more who participate in standardization through their national bodies!
+
+But we’re not slowing down… we’ll continue to have subgroup Zoom meetings, and then our next full meeting will be in [Istanbul, Türkiye, in March](https://isocpp.org/files/papers/N5057.pdf), where we’ll continue adding features to C++29. I look forward to seeing many of you there.
+
+Thank you to everyone reading this for your interest and support for C++ and its standardization.

@@ -1,180 +1,283 @@
-In a [previous post](https://joshua.hu/wtf-google-feedburner-cache-problem-atom-rss), I talked about how Google’s [Chrome Releases blog](https://chromereleases.googleblog.com/) was serving stale results on its Atom feed, and had set up a redirect from its RSS feed (which was serving up-to-date results) to … the stale Atom feed. This meant results were up to a few days old. This was particularly annoying because my [CCBot](https://joshua.hu/ccbot-chrome-checker-bot-googlechromereleases-chromium-updates) parsed the blog’s feed to notify me (Opera!) about Chromium vulnerabilities which were fixed. When I wrote that post, the Atom feed was days behind:
+Terraform plan passes and shows all green and all the necessary resource changes. You trigger apply and... the job fails with some obscure error that a resource can't be changed. You open another pull request and try again. And perhaps you encounter an error again. Sounds familiar? I bet it does. I encountered issues like this so many times I'm afraid to count. But recently [AWS released](https://aws.amazon.com/about-aws/whats-new/2026/11/aws-emulator-now-available/) a new tool called Emulator that emulates actual AWS API endpoints. And it should be great for tasks just like that!
 
-```
-$ date
-Sun Feb 23 22:33:37 AEDT 2025
-$ curl --silent "https://feeds.feedburner.com/GoogleChromeReleases" | grep -o '2025-02-..' | sort -n | head -n5
-2025-02-16
-2025-02-13
-2025-02-13
-2025-02-13
-2025-02-13
-```
+![Title image](https://notes.hatedabamboo.me/assets/terraform-tests-with-aws-emulator.webp)
 
-And the RSS feed (which historically was serving fresh results) was redirecting to the Atom feed:
+## Defining the problem [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#defining-the-problem)
 
-```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default'
-HTTP/2 302
-location: http://feeds.feedburner.com/GoogleChromeReleases
-```
+The problem with the difference between plan and apply jobs is that plan can't possibly emulate every actual API call against a live infrastructure. It's a safe assumption based on the static declarations we put into it – the order of application, the necessary parameters, the proper configuration values. These mock calls can't know for a fact that you already have a resource in AWS called "my-bucket-asdasdasd" or that you're trying to upgrade a PostgreSQL RDS instance from version 14 to version 18 without an explicit "apply immediately" flag. One may argue that one can always try to apply changes locally, but this kinda undermines the whole automation workflow. So what is the answer?
 
-Well, lo and behold, a few days ago I came to discover that the RSS feed could still be accessed, if you added a secret parameter, `?redirect=false`:
+There are multiple tools that can emulate AWS services either [partially](https://github.com/guenter/aws-oss-alternatives) or in [full](https://ministack.org/), but what they lack is the actual knowledge of the service architecture. It may be similar, but it won't be authentic, and sometimes this small difference may cause a lot of problems. After all, what can be the closest to an AWS API, if not the same AWS API, but ephemeral?
 
-```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-HTTP/2 200
-cross-origin-resource-policy: cross-origin
-server: blogger-renderd
-x-content-type-options: nosniff
-x-xss-protection: 0
-x-frame-options: SAMEORIGIN
-date: Sat, 21 Nov 2026 22:20:58 GMT
-expires: Sat, 21 Nov 2026 22:20:59 GMT
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 14:45:03 GMT
-content-type: application/atom+xml; charset=UTF-8
-age: 0
-alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-accept-ranges: none
-vary: Accept-Encoding
+## AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#aws-emulator)
+
+The benefit of the AWS Emulator is that it's a self-contained binary (or Docker container) that can be utilized locally or in a CI workflow. This means the usual "Plan > Apply" terraform workflow changes to "Plan > Apply against mock AWS infrastructure to test the plan > Apply on actual AWS Infrastructure". This means slightly longer jobs, but if you're like me and apply jobs run on commits to the `main` branch after a PR, this saves you the hassle of creating a new branch just to fix the issue.
+
+### Running Terraform against local AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-local-aws-emulator)
+
+Let's start with a local setup and see how we can utilize AWS Emulator with the actual Terraform code. All code is available in my example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
+
+First up, installation. You can either install aws-emulator via [package manager](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html), or build it [with Docker](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html). I'll use Docker to keep my system clear of *yet another* package:
+
+```bash
+$ docker build -t aws-emulator .
+$ docker images
+IMAGE                 ID             DISK USAGE   CONTENT SIZE   EXTRA
+aws-emulator:latest   3c8fdb957b45       1.24GB             0B          # wow it's chonky
+$ docker run --rm -d -p 9297:9297 aws-emulator -a off
+dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
+$ docker logs dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
+{"timestamp":"2026-11-12T14:51:16.261883Z","level":"INFO","fields":{"message":"aws-emulator emulator starting"},"target":"aws_emulator"}
+This emulator collects usage and error telemetry: enabled (on by default; opt out any time); disable with EMULATOR_TELEMETRY=off or [telemetry] enabled = false in /home/emulator/.aws/emulator/config.toml
+{"timestamp":"2026-11-12T14:51:16.270635Z","level":"INFO","fields":{"message":"emulator server information","endpoint_url":"https://127.0.0.1:9297","health_check_url":"https://127.0.0.1:9297/__admin/health","config_file":"/home/emulator/.aws/emulator/9297/config","ca_file":"/home/emulator/.aws/emulator/9297/ca.pem","java_truststore_file":"/home/emulator/.aws/emulator/9297/truststore.p12"},"target":"aws_emulator_server"}
+{"timestamp":"2026-11-12T14:51:16.270655Z","level":"WARN","fields":{"message":"the emulator listens on 0.0.0.0, not loopback: other machines that can reach port 9297 can call it; bind 127.0.0.1 (-b 127.0.0.1) unless that is intended","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
+{"timestamp":"2026-11-12T14:51:16.270659Z","level":"WARN","fields":{"message":"request authentication is off: the emulator accepts any request, signed or not; start it with -a on to require signatures","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
 ```
 
-Since we can now pull in fresh results from the Chrome Releases blog, it means that CCBot can start working properly again. Its source is still [on GitHub](https://github.com/MegaManSec/CCBot), and I’m sure Opera still uses it (lol).
+And it's up and running! In the example above I set the container to live without limits (official AWS documentation proposes to set memory and swap limits: `--memory=2g --memory-swap=2g`, but for local that's fine). I also disabled authorization (flag `-a off`) to simplify things a bit.
 
-## Caching with If-Modified-Since
+To be sure aws-emulator is up and running, let's query the admin endpoint:
 
-In terms of the [feed caching problem](https://joshua.hu/google-feedburner-broken-caching-if-modified-since) I also previously wrote about, where the Feedburner Atom feed refused any caching techniques which RSS feeds typically allow to be utilized, it turns out the `redirect=false` feed supports them. Sort of.
-
-Feedburner itself hasn’t changed at all. It still doesn’t send an `ETag`, it still ignores `If-Modified-Since`, and it still tells everybody not to cache anything:
-
-```
-$ hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' 'https://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/2 200
-content-type: text/xml; charset=utf-8
-feedburnerv2:
-last-modified: Sat, 21 Nov 2026 15:27:08 GMT
-cache-control: no-cache, no-store, max-age=0, must-revalidate
-pragma: no-cache
-expires: Mon, 01 Jan 1990 00:00:00 GMT
-date: Sat, 21 Nov 2026 22:35:16 GMT
+```bash
+$ curl -sk https://127.0.0.1:9297/__admin/health
+ok
 ```
 
-It’s also still serving outdated results. For example, on the 30th of October, a post published at 07:58 PT was still missing from the Feedburner feed nearly two hours later.
+Okay, fake AWS is live, let's deploy some infrastructure!
 
-The `redirect=false` feed, on the other hand, does respond with `304 Not Modified`. Sometimes. Because of course it’s inconsistent. The same request, with an `If-Modified-Since` in the future, made twelve times in a row:
+I created an example AWS stack for Terraform and will use it in this article. First, let's configure Terraform to act against aws-emulator and not real AWS APIs. `providers.tf` will look like this:
 
-```
-$ URL='https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-$ for i in $(seq 12); do hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL" | tr -d '\r' | grep -iE '^(http|date|age)' | paste -sd ' ' -; done
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:17 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:18 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:19 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:20 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:21 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
-```
+```hcl
+provider "aws" {
+  access_key = var.access_key
+  secret_key = var.secret_key
+  region     = var.region
 
-Looking at the `date` and `age` headers, we see the first request in each second gets a full `200`, and every request after it in that same second gets a `304` with an `age: 0` header.
+  insecure = true # The emulator serves HTTPS with a self-signed certificate. Skip verification.
 
-`age` is the header a cache adds when it answers with its own stored copy instead of asking the server behind it. The feed is served with `cache-control: public, must-revalidate, proxy-revalidate, max-age=1`, so whatever sits in front of Blogger’s `blogger-renderd` server (presumably some Google frontend) is allowed to keep a copy for one second. While that copy is fresh, the cache handles the `If-Modified-Since` itself, correctly, and replies with a `304`. Once it has expired, the request goes through to `blogger-renderd`, which ignores `If-Modified-Since` completely and sends back the whole feed.
+  s3_use_path_style = true   # The emulator uses one IP endpoint. Put the bucket name in the path.
 
-Adding a cache-busting parameter to the URL makes every request miss the cache, and then it’s a `200` every single time:
+  # Do not call the real AWS or the instance metadata service.
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+  skip_region_validation      = true
 
-```
-$ for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL&nocache=$RANDOM"; done; echo
-200 200 200 200 200 200 200 200 200 200
-```
+  # Send every service to the emulator instead of AWS.
+  endpoints {
+    ec2        = var.emulator_endpoint
+    lambda     = var.emulator_endpoint
+    iam        = var.emulator_endpoint
+    sts        = var.emulator_endpoint
+    cloudwatch = var.emulator_endpoint
+    logs       = var.emulator_endpoint
+    events     = var.emulator_endpoint
+    sns        = var.emulator_endpoint
+  }
 
-So for anything that polls the feed every few minutes, the one-second copy will always have expired by the time the next request comes in, and `If-Modified-Since` never gets a `304`.
-
-## Caching with If-None-Match
-
-What’s also interesting is that `If-None-Match` *does* work on the `redirect=false` feed. The catch is that you get an `ETag` if and only if you ask for a compressed response (wtf). Without `Accept-Encoding: gzip`, there’s no `ETag` at all:
-
-```
-$ hcurl "$URL"
-HTTP/2 200
-server: blogger-renderd
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
+  default_tags {
+    tags = var.tags
+  }
+}
 ```
 
-And with it:
+The difference between actual live infrastructure and a fake one is that we set up a bunch of flags to allow insecure connections (perhaps turning authentication off wasn't actually simpler?) and we set up an endpoint for each service we use in the setup to an emulator endpoint, which lives in the local Docker container:
 
-```
-$ hcurl --compressed "$URL"
-HTTP/2 200
-content-encoding: gzip
-server: blogger-renderd
-content-length: 57817
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-etag: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
+```hcl
+# variables.tf
+variable "emulator_endpoint" {
+  description = "Base URL of the AWS Emulator"
+  type        = string
+  default     = "https://127.0.0.1:9297"
+}
+...
 ```
 
-Asking for only `br` or `zstd` doesn’t help, because the server doesn’t support them, so it sends the feed uncompressed, without an `ETag`.
+The rest of the configuration is as usual: resources, variables, modules (if any). Just what your project has.
 
-Once you have the `ETag`, sending it back in `If-None-Match` gets a `304` every time, even with the cache-busting parameter (so these all come from `blogger-renderd` itself), and with or without `--compressed`:
+Let's proceed and test our setup. (I'll omit full terraform output otherwise this article would be 3 kilometers long)
 
-```
-$ for i in $(seq 10); do curl -s --compressed -o /dev/null -w '%{http_code} ' -H 'if-none-match: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"' "$URL&nocache=$RANDOM"; done; echo
-304 304 304 304 304 304 304 304 304 304
-```
+```bash
+$ cd terraform/
+$ terraform init
+Initializing the backend...
+...
+Terraform has been successfully initialized!
+...
+$ terraform plan
+...
+Plan: 15 to add, 0 to change, 0 to destroy.
 
-This saves quite a bit, which I had originally intended and wanted to do. The full feed is 1,725,860 bytes uncompressed and 57,817 bytes gzipped, and a `304` is practically nothing. Feedburner still sends 55,792 gzipped bytes (1,615,960 uncompressed) every time.
-
-## Where the redirect came from
-
-All of this is different to what I found in my original post. Back then, the blogger.com URL was still served by the old GData API (that’s what the `sunset` and `link` headers in that post were about), and it answered `If-Modified-Since` with a `304`. Those headers are gone now, and the responses come from `server: blogger-renderd` (see the `redirect=false` response at the start of this post), which is the same server that handles the blog’s own feeds on chromereleases.googleblog.com.
-
-That’s probably also the real reason for the redirect in my last post. The documentation I quoted in my original post said that the old GData feed URLs would keep working, but that “the response is the same as blogspot.com feeds”. The Chrome Releases blog’s own feeds were already redirecting to Feedburner at the time (that’s Blogger’s “Post feed redirect URL” setting), so once the GData API was finally switched off, the blogger.com URL started redirecting too. So it probably wasn’t me emailing Feedburner’s support after all, too bad.
-
-`redirect=false` is how you get around that setting, and it’s not quite as undocumented as I originally thought: a [Feedburner help page about Google Webmaster Tools](https://support.google.com/feedburner/answer/97090) mentions `http://mybloggerblog.blogspot.com/feeds/posts/default?redirect=false` as a feed URL format that “should always work” for Blogger users.
-
-Oh, and the “RSS feed” I’ve been talking about in these posts is actually an Atom feed (`content-type: application/atom+xml`), and the real RSS version is accessed with `?alt=rss&redirect=false`, which behaves exactly the same way on both blogger.com and chromereleases.googleblog.com.
-
-## Redirecting to plain HTTP
-
-Another interesting thing is that every one of the blog’s feed URLs redirects to `http://feeds.feedburner.com/GoogleChromeReleases`, with `http`, not `https`, even when the feed itself was requested over https:
-
-```
-$ hcurl 'https://chromereleases.googleblog.com/feeds/posts/default'
-HTTP/2 302
-server: blogger-renderd
-location: http://feeds.feedburner.com/GoogleChromeReleases
+Changes to Outputs:
+  + alarm_name          = "ttwae-lambda-errors"
+  + event_rule_arn      = (known after apply)
+  + lambda_function_arn = (known after apply)
+  + security_group_id   = (known after apply)
+  + sns_topic_arn       = (known after apply)
+  + subnet_id           = (known after apply)
+  + vpc_id              = (known after apply)
 ```
 
-That means a feed reader that starts off on `https://chromereleases.googleblog.com/feeds/posts/default` gets downgraded to plain HTTP when it follows the redirect, and instead of sending it back to https, Feedburner just serves the whole feed over plain HTTP:
+Plan works! That's good to see, but not what we're here for. Still, a good sign. Now for the real test.
 
+```bash
+$ terraform apply --auto-approve
+...
+Apply complete! Resources: 15 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+alarm_name = "ttwae-lambda-errors"
+event_rule_arn = "arn:aws:events:us-east-1:000000000000:rule/ttwae-schedule"
+lambda_function_arn = "arn:aws:lambda:us-east-1:000000000000:function:ttwae-worker"
+security_group_id = "sg-00000000000000085"
+sns_topic_arn = "arn:aws:sns:us-east-1:000000000000:ttwae-alarms"
+subnet_id = "subnet-00000000000000089"
+vpc_id = "vpc-00000000000000080"
 ```
-$ hcurl 'http://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/1.1 200 OK
-Content-Type: text/xml; charset=utf-8
+
+And apply also works! Amazing!
+
+Sadly, the running aws-emulator container doesn't show in its logs which API requests it receives and what's happening under the hood, but I guess the tool is good enough as it is.
+
+When you're done, stop the container:
+
+```bash
+$ docker stop dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
 ```
 
-In other words, anything subscribed to one of the Chrome Releases blog’s own feed links gets Chrome’s security release announcements unencrypted, and anybody on the network path can change them, like adding a fake release post, or removing a real security update so something like CCBot never sees it.
+A container started with `--rm` removes itself after stopping, so no additional cleanup is needed. And as for the emulator -- it stores its state in memory, so each container restart drops all record of previous actions and any stale state.
 
-## Which feed URL to use
+### Running Terraform against AWS Emulator in CI pipeline [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-aws-emulator-in-ci-pipeline)
 
-So, to sum it all up:
+Now for the real test: can we wrap the desired logic inside a CI pipeline? Let's think.
 
-| URL | `If-Modified-Since` | `If-None-Match` | Up to date? |
-| --- | --- | --- | --- |
-| `feeds.feedburner.com/GoogleChromeReleases` | Ignored | No `ETag` | Not always (hours, or days, behind) |
-| `/feeds/posts/default` and `?alt=rss`, on chromereleases.googleblog.com or blogger.com | n/a (302 to Feedburner, over HTTP) | n/a | n/a |
-| The same URLs with `redirect=false` | Only from the one-second cache | Works, if you ask for gzip to get the `ETag` | Yes |
+For successful invocation in the pipeline we will need almost everything the same, but we will be limited by time (the faster -- the better, and overall reasonable timeouts) and resources.
 
-So, if you’re polling a Blogger feed that’s redirected to Feedburner, use `?redirect=false`, ask for gzip, keep the `ETag`, and send it back as `If-None-Match`. Python’s `requests` (as used by CCBot) already asks for gzip by default, so it’s only the last two you need to do yourself.
+The workflow with `terraform apply` against aws-emulator is shown down below. For it I decided to try out package manager installation (builders are ephemeral anyway) and proper authentication. Full workflow with actual successful runs can be found in the example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
 
-In other news, CCBot 1.1.2 has been published!
+```yaml
+---
+name: terraform-against-emulator
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      EMULATOR_PORT: "9297"
+      # Empty keys make the provider fall back to the shared credentials
+      # file that the emulator writes. insecure=false verifies the
+      # emulator cert through AWS_CA_BUNDLE
+      TF_VAR_access_key: ""
+      TF_VAR_secret_key: ""
+      TF_VAR_insecure: "false"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the AWS Emulator
+        run: |
+          curl -fsSLo aws-emulator.deb \
+            https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
+          sudo apt-get install -y ./aws-emulator.deb
+          aws-emulator -v
+      - name: Start the emulator with signature checks on
+        run: |
+          nohup aws-emulator > /tmp/aws-emulator.log 2>&1 &
+          echo "Waiting for the emulator to answer..."
+          CA="$HOME/.aws/emulator/${EMULATOR_PORT}/ca.pem"
+          for i in $(seq 30); do
+            if [ -f "$CA" ] && curl -sf --cacert "$CA" \
+                "https://127.0.0.1:${EMULATOR_PORT}/__admin/health" >/dev/null; then
+              echo "Emulator is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Emulator did not become ready." >&2
+          cat /tmp/aws-emulator.log >&2
+          exit 1
+      - name: Point Terraform at the emulator credentials and certificate
+        run: |
+          DIR="$HOME/.aws/emulator/${EMULATOR_PORT}"
+          {
+            echo "AWS_SHARED_CREDENTIALS_FILE=$DIR/emulator_credentials"
+            echo "AWS_CONFIG_FILE=$DIR/config"
+            echo "AWS_CA_BUNDLE=$DIR/ca.pem"
+            echo "AWS_REGION=us-east-1"
+            echo "AWS_DEFAULT_REGION=us-east-1"
+            echo "AWS_EC2_METADATA_DISABLED=true"
+            echo "AWS_DISABLE_HOST_PREFIX_INJECTION=true"
+          } >> "$GITHUB_ENV"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - run: terraform -chdir=terraform init -input=false
+      - run: terraform -chdir=terraform validate
+      - run: terraform -chdir=terraform plan -input=false
+      - run: terraform -chdir=terraform apply -auto-approve -input=false
+```
+
+This is a crude excerpt of the actual glorious workflow file that outlines the most important steps: emulator installation, terraform setup, plan and apply. On the example terraform architecture the whole pipeline took 1m25s, which is okay in my opinion, but there is room for improvement: sprinkle some caching on top, leave validation, format check for local hooks, etc.
+
+## Running a deliberately failing apply job [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-a-deliberately-failing-apply-job)
+
+It's always nice when code someone wrote on the internet works from the start after you copy-paste it onto your machine. That's why I always run the described processes myself -- building, testing, fixing, retrying -- before publishing an article. But showing only the positive scenarios creates a false sense of trust in the tool.
+
+Let's break something on purpose.
+
+In the example codebase I added a variable that, when enabled, makes the stack try to deploy a resource with an erroneous declaration. It will pass the plan job, but fail on apply.
+
+```hcl
+variable "enable_failure_demo" {
+  description = "Create a DynamoDB table with an invalid name."
+  type        = bool
+  default     = false
+}
+```
+
+Setting this variable to true at runtime will break our stack. Let's see:
+
+```bash
+$ cd terraform/
+$ terraform init
+Initializing the backend...
+...
+$ terraform plan -var 'enable_failure_demo=true'
+...
+Plan: 16 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+...
+  + failure_demo_table_arn = (known after apply)
+...
+$ terraform apply -auto-approve -var 'enable_failure_demo=true'
+...
+╷
+│ Error: creating AWS DynamoDB Table (ab): operation error DynamoDB: CreateTable, https response error StatusCode: 400, RequestID: 4TLD3XUB94783KNA4C76L8BEZ26UU8LS4IBN2IEKZJLAK4NMVTQ4, api error ValidationException: 1 validation error detected: Value 'ab' at 'tableName' failed to satisfy constraint: Member must have length greater than or equal to 3
+│
+│   with aws_dynamodb_table.bad_name[0],
+│   on dynamodb.tf line 10, in resource "aws_dynamodb_table" "bad_name":
+│   10: resource "aws_dynamodb_table" "bad_name" {
+│
+```
+
+And there we have it. The exact issue that arises only against actual API calls and not during a plan job.
+
+For scenarios exactly like this, the emulator is priceless.
+
+## Limitations and considerations [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#limitations-and-considerations)
+
+AWS Emulator is AWESOME. I'm rarely that excited about new tools lately (mostly because almost all of them are near/about AI), but this one is just so good and scratches that exact itch I felt for so long.
+
+Still, it's far from perfect.
+
+For starters, it can't effectively emulate IAM policies and permission checks. This is a bummer, because permission validation is such a crucial step for production-ready security. Here's hoping that the tool will evolve further and it will be included in future updates.
+
+Second, as a tool still a work-in-progress<sup>[[1]](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fn1)</sup>, its capabilities are quite limited. Even while writing the article I encountered several cases of `501 NotImplemented`. It complicates things a bit if your infrastructure setup is huge and has a lot of quirks and weird configurations and super new services. Still, AWS releases new versions quite often, and they're [quite open](https://docs.aws.amazon.com/emulator/latest/userguide/fidelity.html) about Emulator limitations, which is nice.
+
+And last, but not least, is telemetry. AWS [is explicit](https://docs.aws.amazon.com/emulator/latest/userguide/telemetry.html) that it gathers telemetry and what this telemetry includes. This is honest behaviour and I like that approach. They even allow you to disable the telemetry, which further increases my trust in this tool. I understand the rationale behind this functionality (the tool is actively developed, they need the data to understand usage patterns and what goes wrong), but in the age of constant surveillance from Big Tech at every corner it still raises a slight concern. But then again, for the ultra-paranoid folks the code is [open source](https://github.com/aws/aws-emulator) and can be rebuilt with telemetry torn out of it.
+
+1. As of the moment of writing this article, AWS Emulator has been live for 1 day. [↩︎](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fnref1)

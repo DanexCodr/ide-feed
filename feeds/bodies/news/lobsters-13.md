@@ -1,115 +1,180 @@
-SQLite is one of my favorite database technologies. It's a full SQL database, designed as an embeddable library, that stores all its data in a single file. The `sqlite3` command line tool is great too. You point it at a file and run queries. There's no server to run.
-
-At the other end of the spectrum is Postgres. It's the most capable general purpose SQL database, trusted in production at scale, and is something of an industry standard. With that comes complexity, starting with the fact that it's client-server.
-
-SQLite is a natural fit for software that needs a database but isn't meant to be deployed in the cloud at scale: desktop apps, self-hosted tools, things you run locally. These applications can use SQLite and manage it themselves, so you barely know there's a database involved.
-
-So when you find self-hostable open source software you'd like to run on your own computer, it can be daunting when it says it requires Postgres. Now you're responsible for setting up a database and getting it ready for the software to use.
-
-Sure, you can run Postgres in Docker, and plenty of projects recommend it. But now you have two dependencies. If you don't already have Docker, you have to install it, which can mean a VM and a daemon on your machine. Then you have to run Postgres in it and make sure it's running whenever you use the software. That's a lot just to try something you don't know you want yet.
-
-Wouldn't it be great to have the SQLite experience, but with Postgres?
-
-That's 
-              [miniPG](https://progrium.github.io/minipg/)
-              . It isn't Postgres as a library. There's already a WASM project for that, reasonably called [PGlite](https://pglite.dev/). miniPG is closer to the SQLite CLI: a single program that embeds a full Postgres server and client, wrapped up so you can use it the way you'd use `sqlite3`. Point it at a path, that path becomes the database, and you can run queries against it right away. There's no server to set up or keep running.
-
-Jumping into a new Postgres database to try something out or debug it is now easier than using Postgres in a Docker container, and you don't need Docker at all. And miniPG still provides a fully functional Postgres server for software that needs one. In many cases, you can just launch an open source program that looks for its Postgres config in the environment with miniPG.
-
-## miniPG in 30 seconds
-
-miniPG comes as a single, self-contained executable. You can just point it at a directory and run a query. There's no server to start, nothing to configure, and the result comes back immediately.
+In a [previous post](https://joshua.hu/wtf-google-feedburner-cache-problem-atom-rss), I talked about how Google’s [Chrome Releases blog](https://chromereleases.googleblog.com/) was serving stale results on its Atom feed, and had set up a redirect from its RSS feed (which was serving up-to-date results) to … the stale Atom feed. This meant results were up to a few days old. This was particularly annoying because my [CCBot](https://joshua.hu/ccbot-chrome-checker-bot-googlechromereleases-chromium-updates) parsed the blog’s feed to notify me (Opera!) about Chromium vulnerabilities which were fixed. When I wrote that post, the Atom feed was days behind:
 
 ```
-minipg ./mydb "create table notes (id serial, body text)"
-minipg ./mydb "insert into notes (body) values ('hello')"
-minipg ./mydb "select * from notes"
+$ date
+Sun Feb 23 22:33:37 AEDT 2025
+$ curl --silent "https://feeds.feedburner.com/GoogleChromeReleases" | grep -o '2025-02-..' | sort -n | head -n5
+2025-02-16
+2025-02-13
+2025-02-13
+2025-02-13
+2025-02-13
 ```
 
-That directory is the database. When nothing is using it, it's just files on disk. You can copy it, back it up, or delete it.
-
-This is actually real Postgres, not a compatibility layer, and this binary compiles to Mac, Windows, and Linux.
-
-When some software expects a Postgres server, miniPG can be one:
+And the RSS feed (which historically was serving fresh results) was redirecting to the Atom feed:
 
 ```
-minipg serve ./mydb -p 5432
+$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default'
+HTTP/2 302
+location: http://feeds.feedburner.com/GoogleChromeReleases
 ```
 
-Like I mentioned before, it can even launch programs with environment variables that configure it for this Postgres database:
+Well, lo and behold, a few days ago I came to discover that the RSS feed could still be accessed, if you added a secret parameter, `?redirect=false`:
 
 ```
-minipg run ./mydb -- some-tool
+$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
+HTTP/2 200
+cross-origin-resource-policy: cross-origin
+server: blogger-renderd
+x-content-type-options: nosniff
+x-xss-protection: 0
+x-frame-options: SAMEORIGIN
+date: Sat, 21 Nov 2026 22:20:58 GMT
+expires: Sat, 21 Nov 2026 22:20:59 GMT
+cache-control: public, must-revalidate, proxy-revalidate, max-age=1
+last-modified: Sat, 21 Nov 2026 14:45:03 GMT
+content-type: application/atom+xml; charset=UTF-8
+age: 0
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+accept-ranges: none
+vary: Accept-Encoding
 ```
 
-When the program is terminated, there's no database daemon to leave around or remember to stop. Only the data itself is kept right there on disk, ready to be used next time.
+Since we can now pull in fresh results from the Chrome Releases blog, it means that CCBot can start working properly again. Its source is still [on GitHub](https://github.com/MegaManSec/CCBot), and I’m sure Opera still uses it (lol).
 
-Instructions for getting it and even an interactive demo are available on the 
-              [miniPG website](https://progrium.github.io/minipg/)
-              .
+## Caching with If-Modified-Since
 
-## Who is it for?
+In terms of the [feed caching problem](https://joshua.hu/google-feedburner-broken-caching-if-modified-since) I also previously wrote about, where the Feedburner Atom feed refused any caching techniques which RSS feeds typically allow to be utilized, it turns out the `redirect=false` feed supports them. Sort of.
 
-Software people, from developers to open source power users, and agents too, can use miniPG whenever they'd reach for SQLite but need Postgres.
+Feedburner itself hasn’t changed at all. It still doesn’t send an `ETag`, it still ignores `If-Modified-Since`, and it still tells everybody not to cache anything:
 
-- Running software that only supports Postgres. This is what got me started. Self-hosting a tool shouldn't always mean operating a database server first.
-- Embedding Postgres in your own programs. If your tool needs Postgres, and PGlite doesn't cut it, you can ship and use miniPG. Users who don't care won't have to think about it, and users who want control can use it like sqlite3 to work with their data.
-- SQLite-style apps that need Postgres features. JSONB, full text search, window functions, extensions like pgvector or PostGIS. Postgres does so much more than SQLite, but it often wasn't worth the dependency.
-- Learning and experimenting with Postgres. No server, no config. Point it at a directory and start typing SQL.
-- Tests, local dev, and agents. A throwaway database per test, or a local copy of the same database you run in production, without Docker. Agents can spin up a real Postgres for a task and throw it away when they're done.
+```
+$ hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' 'https://feeds.feedburner.com/GoogleChromeReleases'
+HTTP/2 200
+content-type: text/xml; charset=utf-8
+feedburnerv2:
+last-modified: Sat, 21 Nov 2026 15:27:08 GMT
+cache-control: no-cache, no-store, max-age=0, must-revalidate
+pragma: no-cache
+expires: Mon, 01 Jan 1990 00:00:00 GMT
+date: Sat, 21 Nov 2026 22:35:16 GMT
+```
 
-This really makes Postgres more viable for scenarios it wasn't before. I'd love to hear the use cases I haven't thought of.
+It’s also still serving outdated results. For example, on the 30th of October, a post published at 07:58 PT was still missing from the Feedburner feed nearly two hours later.
 
-## Embedding Real Postgres
+The `redirect=false` feed, on the other hand, does respond with `304 Not Modified`. Sometimes. Because of course it’s inconsistent. The same request, with an `If-Modified-Since` in the future, made twelve times in a row:
 
-miniPG is the result of several attempts at embedding real Postgres into a standalone, cross platform binary.
+```
+$ URL='https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
+$ for i in $(seq 12); do hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL" | tr -d '\r' | grep -iE '^(http|date|age)' | paste -sd ' ' -; done
+HTTP/2 200  date: Sat, 21 Nov 2026 22:35:17 GMT
+HTTP/2 200  date: Sat, 21 Nov 2026 22:35:18 GMT
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
+HTTP/2 200  date: Sat, 21 Nov 2026 22:35:19 GMT
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
+HTTP/2 200  date: Sat, 21 Nov 2026 22:35:20 GMT
+HTTP/2 200  date: Sat, 21 Nov 2026 22:35:21 GMT
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
+HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
+```
 
-### Attempt 1: PGlite
+Looking at the `date` and `age` headers, we see the first request in each second gets a full `200`, and every request after it in that same second gets a `304` with an `age: 0` header.
 
-The obvious place to start was [PGlite](https://pglite.dev/). The name says it all, and in a sense it delivers: it's Postgres compiled to WebAssembly. In Go, you can load the module with the wazero runtime, run Postgres inside your program, and have your app connect to it. That's very close to the SQLite library experience.
+`age` is the header a cache adds when it answers with its own stored copy instead of asking the server behind it. The feed is served with `cache-control: public, must-revalidate, proxy-revalidate, max-age=1`, so whatever sits in front of Blogger’s `blogger-renderd` server (presumably some Google frontend) is allowed to keep a copy for one second. While that copy is fresh, the cache handles the `If-Modified-Since` itself, correctly, and replies with a `304`. Once it has expired, the request goes through to `blogger-renderd`, which ignores `If-Modified-Since` completely and sends back the whole feed.
 
-Brad Fitzpatrick even made a 
-              [proof of concept](https://github.com/bradfitz/gopglite)
-              that does this in a way that makes PGlite work as a driver for the standard Go SQL package.
+Adding a cache-busting parameter to the URL makes every request miss the cache, and then it’s a `200` every single time:
 
-The catch is that PGlite only supports a single connection and a single session. Software written for a real Postgres server often assumes it can have more. A common pattern is to start a transaction, then make another query on a separate connection before committing. With only one connection, that second query waits for a transaction that's waiting on it. The app I was trying to run deadlocked.
+```
+$ for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL&nocache=$RANDOM"; done; echo
+200 200 200 200 200 200 200 200 200 200
+```
 
-### Attempt 2: a VM in a webview
+So for anything that polls the feed every few minutes, the one-second copy will always have expired by the time the next request comes in, and `If-Modified-Since` never gets a `304`.
 
-If I needed real Postgres, I could run real Postgres in a virtual machine I could embed. I have a soft spot for using webviews as portable containers, so I ran [v86](https://github.com/copy/v86), an x86 emulator for the browser, inside one, and booted a full Postgres server in it.
+## Caching with If-None-Match
 
-The rest was plumbing. The headless webview opens a WebSocket back to the host program. Postgres connections are tunneled through it, and Postgres writes its data to a mount served over the same socket. The benefit of this approach is whatever platform the host program runs on, Postgres is always the same build running in the same VM.
+What’s also interesting is that `If-None-Match` *does* work on the `redirect=false` feed. The catch is that you get an `ETag` if and only if you ask for a compressed response (wtf). Without `Accept-Encoding: gzip`, there’s no `ETag` at all:
 
-I even built 
-              [webframe](https://github.com/tractordev/webframe)
-              for this, a library and CLI for running a native system webview headlessly.
+```
+$ hcurl "$URL"
+HTTP/2 200
+server: blogger-renderd
+cache-control: public, must-revalidate, proxy-revalidate, max-age=1
+last-modified: Sat, 21 Nov 2026 22:21:34 GMT
+content-type: application/atom+xml; charset=UTF-8
+vary: Accept-Encoding
+```
 
-The result was a proof of concept I called postgres-standalone: one binary, any platform, give it a port and a data directory, and you get a full Postgres server. It worked!
+And with it:
 
-However, it was also an order of magnitude slower than native. Postgres in a VM in WebAssembly in a browser. Initializing and checking a database took a while. In the best case, on my M3 MacBook, it took 7 seconds before it would accept a connection.
+```
+$ hcurl --compressed "$URL"
+HTTP/2 200
+content-encoding: gzip
+server: blogger-renderd
+content-length: 57817
+cache-control: public, must-revalidate, proxy-revalidate, max-age=1
+last-modified: Sat, 21 Nov 2026 22:21:34 GMT
+etag: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"
+content-type: application/atom+xml; charset=UTF-8
+vary: Accept-Encoding
+```
 
-I'd already written a design doc for the SQLite-style CLI: give it a directory, run a query, no server to run. On this stack, though, every `SELECT *` would sit there for 7 seconds first. That ruins the experience, so I had to shelve it. I had proven that embeddable Postgres was possible, just not pleasant.
+Asking for only `br` or `zstd` doesn’t help, because the server doesn’t support them, so it sends the feed uncompressed, without an `ETag`.
 
-### Attempt 3: Hyper9
+Once you have the `ETag`, sending it back in `If-None-Match` gets a `304` every time, even with the cache-busting parameter (so these all come from `blogger-renderd` itself), and with or without `--compressed`:
 
-Later, for unrelated reasons, I built 
-              [Hyper9](https://github.com/progrium/hyper9)
-              . Inspired by system API translation, an approach that Wine and Valve's Proton are built on, combined with a unique way to use hypervisors, Hyper9 lets you run Plan 9 executables at near native speed on all platforms.
+```
+$ for i in $(seq 10); do curl -s --compressed -o /dev/null -w '%{http_code} ' -H 'if-none-match: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"' "$URL&nocache=$RANDOM"; done; echo
+304 304 304 304 304 304 304 304 304 304
+```
 
-I'll be posting more about Plan 9 soon, but with a little extra magic, I was able to run the same Postgres at near native speed, in isolation, on all platforms. It's effectively the same approach as the previous attempt, but now without the slowdown.
+This saves quite a bit, which I had originally intended and wanted to do. The full feed is 1,725,860 bytes uncompressed and 57,817 bytes gzipped, and a `304` is practically nothing. Feedburner still sends 55,792 gzipped bytes (1,615,960 uncompressed) every time.
 
-Startup went from 7 seconds to 800ms. So I dusted off the design doc and built it. PGlite was taken, so postgres-standalone became miniPG.
+## Where the redirect came from
 
-## What it isn't
+All of this is different to what I found in my original post. Back then, the blogger.com URL was still served by the old GData API (that’s what the `sunset` and `link` headers in that post were about), and it answered `If-Modified-Since` with a `304`. Those headers are gone now, and the responses come from `server: blogger-renderd` (see the `redirect=false` response at the start of this post), which is the same server that handles the blog’s own feeds on chromereleases.googleblog.com.
 
-miniPG isn't a replacement for real Postgres deployments. If you're running in the cloud, using replicas, or serving many users over many connections, use Postgres the normal way.
+That’s probably also the real reason for the redirect in my last post. The documentation I quoted in my original post said that the old GData feed URLs would keep working, but that “the response is the same as blogspot.com feeds”. The Chrome Releases blog’s own feeds were already redirecting to Feedburner at the time (that’s Blogger’s “Post feed redirect URL” setting), so once the GData API was finally switched off, the blogger.com URL started redirecting too. So it probably wasn’t me emailing Feedburner’s support after all, too bad.
 
-miniPG is for local, single-user programs: the places SQLite would fit, but you need Postgres.
+`redirect=false` is how you get around that setting, and it’s not quite as undocumented as I originally thought: a [Feedburner help page about Google Webmaster Tools](https://support.google.com/feedburner/answer/97090) mentions `http://mybloggerblog.blogspot.com/feeds/posts/default?redirect=false` as a feed URL format that “should always work” for Blogger users.
 
-That said, go ahead and see how far you can push it!
+Oh, and the “RSS feed” I’ve been talking about in these posts is actually an Atom feed (`content-type: application/atom+xml`), and the real RSS version is accessed with `?alt=rss&redirect=false`, which behaves exactly the same way on both blogger.com and chromereleases.googleblog.com.
 
-## Try it
+## Redirecting to plain HTTP
 
-I'd really like to see how miniPG holds up in the wild, especially across different platforms and architectures. Please try it and tell me what breaks.
+Another interesting thing is that every one of the blog’s feed URLs redirects to `http://feeds.feedburner.com/GoogleChromeReleases`, with `http`, not `https`, even when the feed itself was requested over https:
 
-If this works, it proves a model that goes well beyond Postgres: taking complicated systems and packaging them as a single binary for more specific use cases. That's the part I find most exciting, and it's one of many new possibilities Hyper9 enables.
+```
+$ hcurl 'https://chromereleases.googleblog.com/feeds/posts/default'
+HTTP/2 302
+server: blogger-renderd
+location: http://feeds.feedburner.com/GoogleChromeReleases
+```
+
+That means a feed reader that starts off on `https://chromereleases.googleblog.com/feeds/posts/default` gets downgraded to plain HTTP when it follows the redirect, and instead of sending it back to https, Feedburner just serves the whole feed over plain HTTP:
+
+```
+$ hcurl 'http://feeds.feedburner.com/GoogleChromeReleases'
+HTTP/1.1 200 OK
+Content-Type: text/xml; charset=utf-8
+```
+
+In other words, anything subscribed to one of the Chrome Releases blog’s own feed links gets Chrome’s security release announcements unencrypted, and anybody on the network path can change them, like adding a fake release post, or removing a real security update so something like CCBot never sees it.
+
+## Which feed URL to use
+
+So, to sum it all up:
+
+| URL | `If-Modified-Since` | `If-None-Match` | Up to date? |
+| --- | --- | --- | --- |
+| `feeds.feedburner.com/GoogleChromeReleases` | Ignored | No `ETag` | Not always (hours, or days, behind) |
+| `/feeds/posts/default` and `?alt=rss`, on chromereleases.googleblog.com or blogger.com | n/a (302 to Feedburner, over HTTP) | n/a | n/a |
+| The same URLs with `redirect=false` | Only from the one-second cache | Works, if you ask for gzip to get the `ETag` | Yes |
+
+So, if you’re polling a Blogger feed that’s redirected to Feedburner, use `?redirect=false`, ask for gzip, keep the `ETag`, and send it back as `If-None-Match`. Python’s `requests` (as used by CCBot) already asks for gzip by default, so it’s only the last two you need to do yourself.
+
+In other news, CCBot 1.1.2 has been published!

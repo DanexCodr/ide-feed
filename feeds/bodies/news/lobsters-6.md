@@ -1,203 +1,243 @@
-When you visit a secure website today, your browser connects to port 443 and immediately starts speaking TLS. Only once the encryption is up and running does it get around to speaking HTTP. That’s two protocols stacked on top of each other, and the one at the bottom doesn’t know or care about anything the one on top has learned over the decades.
+It’s a cool board: there’s a ridiculous amount of IO exposed by the baseboard, not to mention 8 cores clocked at 1.9 GHz is nothing to sniff at for a RISC-V CPU.
+I’m not sure I could recommend buying any RISC-V SoC currently<sup>[2](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fn:2)</sup>, but all these distros that are starting to support RISC-V need to run tests *somewhere* that isn’t Spike/QEMU.
 
-This is why so many good ideas from HTTP had to be reinvented, years later, inside TLS. The most notorious is SNI, which is a `Host` header with extra steps.
+![A210 block diagram](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/a210.webp)
 
-It didn’t have to be this way. Let’s take a trip into a parallel universe where Netscape didn’t take the easy way out.
+I decided to make this board into a NixOS build server so I could learn more about the state of RISC-V support in NixOS and to get some practice in Linux bringup.
 
-## 🕰️ The Fork in the Road
+My complete A210 NixOS configuration can be found [here](https://feyor.sh/nixos-bringup-on-an-alibaba-riscv-board/a210-nixos.tar.gz); I confirmed sound, HDMI, Bluetooth/Wi-Fi, ethernet, and the GPU were all working, but YMMV.
 
-When Netscape released SSL in 1995, it came with a new URL scheme (`https://`) and a new port number (443). Plenty of people grumbled. The web already had a protocol and a port, so why invent new ones? Why not secure the conversation you’re already having?
+## I use NixOS btw
 
-To be fair to Netscape, in 1995 there wasn’t really a “proper” way to do that. HTTP/1.0 had no mechanism for handing a connection over to another protocol. The `Upgrade` header didn’t arrive until HTTP/1.1 in 1997, and the `Host` header, which made it possible to run many websites on one IP address, came with it. Netscape couldn’t have used either of them because neither existed yet.
+![NixOS my beloved](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/beloved.gif)
 
-But this is my parallel universe, so let’s say HTTP grew those headers a couple of years early and Netscape decided to wait for them.
+Nix makes cross compiling to RISC-V a breeze:
 
-## 🌐 Hello, Parallel Universe
-
-In our universe, a TLS connection begins with a `ClientHello` and the server replies with its certificate. In the parallel universe, that first exchange is just plain HTTP in the clear.
-
-The browser wants to buy something from `shop.example.com`. It connects to port 80, the same as always, and asks for the server’s certificate.
-
-```
-GET /.well-known/tls-cert HTTP/1.1
-Host: shop.example.com
-Accept: application/pkix-cert
+```nix
+pkgs = import {
+  system = "x86_64-linux";
+  crossSystem.system = "riscv64-linux";
+};
 ```
 
-(Yes, `/.well-known/` is from 2010. It’s a parallel universe. Let me have this one.)
+It really is that easy—building <kbd>pkgs.hello</kbd> will produce a bona fide RISC-V executable (you don’t even need a Nix file for one-off builds, just run <kbd>nix build nixpkgs#pkgsCross.riscv64.hello</kbd>).
+Some black magic in <kbd>callPackage</kbd> ensures that compile-time tools are built for <kbd>buildPlatform</kbd> and build artifacts are built for <kbd>hostPlatform</kbd>.
 
-The server responds with its certificate, and the certificates of any intermediate CAs, as an ordinary HTTP response. The browser checks the chain against its list of root CAs, exactly as it would in our universe. Is it signed by someone we trust? Is it for `shop.example.com`? Has it expired?
+In the process of compiling over a thousand packages I only ran into two issues: a problem with [rust-bindgen using the wrong version of clang](https://github.com/NixOS/nixpkgs/pull/586150) and [ministream not being properly configured for cross compilation](https://github.com/NixOS/nixpkgs/pull/587362), neither of which was specific to RISC-V.
 
-If you’re worried about sending the certificate in the clear, don’t be. Every version of SSL and TLS up to 1.2 sent the certificate unencrypted too. A certificate is public by design. An attacker can swap it for a different one, but they can’t make one that’s valid for `shop.example.com` without a CA’s help, and if they can get one of those, you have bigger problems.
+That having been said, I did run into some pretty bizarre OOM issues for some of the heavy hitters like Clang and GFortran.
+I was seeing >9GB memory usage per linking process(!) when compiling from `x86_64-linux`, which will quickly exhaust all of your memory if you have `max-jobs`/`cores` set to sane values.
+I sidestepped this issue by temporarily nerfing build parallelism into oblivion and running the offending builds overnight:
 
-Once the browser is happy, it knows the server’s public key. It invents a random secret, encrypts it with that key and asks to upgrade.
-
-```
-GET /checkout HTTP/1.1
-Host: shop.example.com
-Connection: Upgrade
-Upgrade: TLS/1.0
-TLS-Key: (the random secret, encrypted with the server's public key, in base-64)
+```bash
+nix-store --realise /nix/store/...-clang-riscv64-unknown-linux-gnu-21.1.8.drv -j1 --cores 3 --builders ""
 ```
 
-Only the real server, holding the private key, can decrypt that secret. It replies with a random value of its own and switches protocols.
+I don’t (yet) have access to a RISC-V remote Nix builder, but even if I did, it’s substantially faster to cross compile everything from my desktop.
+Cross compilation can get a little wonky with Nix flakes because you have to encode the <kbd>buildPlatform</kbd> in the output schema somehow, but <kbd>nixosConfigurations</kbd> does not allow nesting (<kbd>nixosConfigurations.x86_64-linux-a210</kbd> is valid, but <kbd>nixosConfigurations.x86_64-linux.a210</kbd> isn’t).
 
-```
-HTTP/1.1 101 Switching Protocols
-Connection: Upgrade
-Upgrade: TLS/1.0
-TLS-Nonce: (the server's random value, in base-64)
-```
+My solution to this is to expose the relevant build artifacts of the NixOS configuration (ISO + flashing script) under <kbd>packages.${system}</kbd> by creating a “wrapper” NixOS configuration for each <kbd>buildPlatform</kbd> that extends <kbd>nixosConfigurations.a210</kbd>:
 
-Both sides now derive their encryption keys from the browser’s secret, the server’s random value and a hash of everything that was said in the clear up to this point. Mixing in that hash means that if anyone tampered with the plaintext part, the two sides end up with different keys and the connection fails. From this point on everything on the connection is encrypted, starting with the response to `GET /checkout`.
-
-I’m describing the 1995 approach, where the browser encrypted a secret with the server’s RSA key. When Diffie-Hellman key exchange came along, it would have been just a different pair of headers: the browser sends its half of the exchange, and the server replies with its half, signed by the key in its certificate. Changing how keys are exchanged becomes header negotiation, which HTTP is already very good at.
-
-Or, to put it another way:
-
-> **Browser:** Hello, `shop.example.com`. Who are you?  
-> **Server:** Here’s my certificate.  
-> **Browser:** That checks out. Here’s a secret only you can read. Shall we go somewhere private?  
-> **Server:** 101.  
-> **Eavesdropper:** Aw.
-
-## 🏠 Virtual Hosting From Day One
-
-The first thing we get for free is the one that took our universe the longest to sort out.
-
-That very first request for the certificate has a `Host` header. A server hosting a thousand websites on one IP address knows exactly which certificate to send back, because the browser told it, using a header the server already understands. There’s nothing to retrofit.
-
-In our universe, the server had to pick a certificate before it knew which website you wanted. For years, every secure website needed its own IP address, which was one of the reasons HTTPS stayed expensive and rare for so long. The fix was SNI, standardized in 2003: an extension that lets the browser mention the website’s name at the very start of the TLS handshake. In other words, a `Host` header, reinvented inside TLS. The parallel universe never needs it.
-
-And it’s all on one port. Firewalls, proxies and load balancers deal with port 80 and nothing else. A URL is a URL.
-
-## 📦 A Smaller Black Box
-
-So if SNI was standardized in 2003, why couldn’t a website rely on it until the mid-2010s? This is the part I find most interesting.
-
-In our universe, TLS is a black box. Your application hands a socket to a TLS library, and the library takes care of everything: negotiating versions, swapping certificates, exchanging keys and the encryption itself. The box comes with a large “do not touch” sign, which is good advice. People who write their own cryptography tend to get it wrong.
-
-The trouble is that a black box that does *everything* can only be improved by whoever owns it. Browsers couldn’t use SNI until their TLS library supported it, and on many platforms that library was part of the operating system. Internet Explorer on Windows XP never got SNI at all. A website couldn’t rely on SNI until XP was finally gone.
-
-In the parallel universe, the black box is much smaller. Finding the certificate, checking it and exchanging keys all happen in HTTP, in code that browsers and web servers already update all the time. What’s left inside the box is the genuinely hard part: given these keys, encrypt and authenticate everything that follows. That still deserves a “do not touch” sign, but it’s a box that rarely needs touching. The bits people keep wanting to change live outside it.
-
-## 🏛️ Room for New CAs
-
-The parallel universe’s first request can do another job, too: it makes life much easier for new certificate authorities.
-
-In our universe, a server sends one certificate chain to everyone, before it knows anything about who’s asking. In practice, that means a server operator can only use a CA that every browser on Earth already trusts. Nobody will pick a CA with less than 100% support, however good it is, so a new CA can’t get started. Even Let’s Encrypt, which had about the most compelling offer imaginable (free certificates, issued automatically), had to launch with a cross-signature from IdenTrust, an established CA, so that older browsers would accept its certificates. When that old IdenTrust root expired in 2021, devices that had never learned to trust Let’s Encrypt directly started failing.
-
-In the parallel universe, the browser simply says which CAs it trusts, in the request:
-
-```
-GET /.well-known/tls-cert HTTP/1.1
-Host: shop.example.com
-Accept: application/pkix-cert
-Accept-CA: (a list of the root CAs this browser trusts)
+```nix
+packages = forAllSystems (pkgs: let
+  nixosCross = self.nixosConfigurations.a210.extendModules {
+    modules = [
+      ({ ... }: {
+        nixpkgs = {
+          inherit pkgs;
+          overlays = [
+            # ...
+          ];
+          buildPlatform = { inherit (pkgs.stdenv.buildPlatform) system; };
+          hostPlatform = "riscv64-linux";
+        };
+      })
+    ];
+  };
+in {
+  inherit (nixosCross.config.system.build) toplevel image initialRamdisk;
+};
 ```
 
-The server can hold certificates from several CAs and pick one the browser will accept. That’s content negotiation, which HTTP has done since the beginning. A new CA can start out with only the newest browsers, and sites can use it alongside their old CA until everyone catches up.
+This way <kbd>nixosConfigurations</kbd> is agnostic to <kbd>buildPlatform</kbd>, and cross compilation is straightforward—running <kbd>nix build .#image</kbd> on an `x86_64-linux` machine will use `x86_64-linux` as the <kbd>buildPlatform</kbd>, as one would expect.
 
-It’s worth noting that a list of trusted CAs, sent in the clear, is one more thing a website could use to fingerprint its visitors. I’d be surprised if it told them much, though. For most people, the list would be whatever came with their browser and operating system, which the `User-Agent` header already gives away. The exception would be anyone whose employer has added its own root CA to their machine, whose list would announce exactly where they work.
+## Boot flow
 
-Early implementations in the parallel universe might simply have sent the entire list. As trust stores grew, browsers would probably have evolved more efficient ways to express the same information: compact identifiers, Bloom-filter-style summaries, or a two-stage negotiation where the browser sends a reduced list and the server replies, “I don’t have certificates for any of those authorities, but I do have these.” HTTP has had a status code for exactly that answer since the 1990s: `300 Multiple Choices`. At that point the browser can make a second request with a CA it knows is acceptable to both sides.
+Ok, so the goal is to boot `U-Boot FSBL -> OpenSBI -> U-Boot SSBL -> Linux -> NixOS userspace`, using the vendor’s Buildroot scripts as reference.
 
-Our universe is, once again, getting there slowly. TLS 1.3 has an extension that lets a browser list the CAs it trusts, but no browser sends it, partly because a full list is so large. There’s now a proposal called Trust Anchor Identifiers that would let browsers say the same thing in a compact form, so that servers can pick the right certificate. It’s still a draft. And just like SNI, it will only be usable once the TLS library in every browser, operating system and server has caught up.
+Using vendor forks of U-Boot/Linux/OpenSBI is a simple matter of overriding <kbd>src</kbd> and sprinkling in a few patches (almost always to fix compiler warnings that have been promoted to errors in the latest version of GCC/Clang in nixpkgs).
+All we really have to do is slot in the vendor kernel by setting <kbd>boot.kernelPackages = pkgs.linuxPackagesFor pkgs.linuxA210;</kbd>
 
-## 🤝 SSH Joins the Party
+Armed with a bootloader and NixOS image, I plugged in the A210 to my MacBook and turned on Fastboot flashing mode, but to my dismay macOS refused to enumerate the device.
+Initially I figured the board was a lemon (due to it being a freebie and all), but I wasn’t ready to give up hope that easily.
 
-There’s another secure protocol that was born in 1995: SSH. Look at how it works and it’s already halfway into the parallel universe. An SSH connection opens with both sides exchanging version strings and lists of supported algorithms *in the clear*, then exchanging keys, and only then switching over to encrypted packets.
+I pored over the datasheet looking for alternative boot methods, and I investigated using PD resistors to [force QSPI boot](https://developer.zhcomputing.com/en/docs/A210/Hardware/Hardware-Design-Guide/Schematic_Diagram_Design_Suggestions#boot-mode-configuration) (using [NORbert](https://github.com/ArthurHeymans/NORbert) in lieu of a real QSPI device) to bootstrap into Linux userspace, at which point I could flash the eMMC directly without relying on Fastboot.
+But before pulling out my soldering iron I decided to try plugging the board into a different computer, which instantly detected the board. D’oh!
 
-So in the parallel universe, someone at the standards meeting would notice that the TLS people and the SSH people are building the same thing. Both have a handshake that ends with “here are our keys”. Both then need the same thing after that: chop the data into records, number them, encrypt them, authenticate them, and notice if anything is replayed, reordered or dropped. Why have two committees writing two versions of the hardest part?
+Ok, so Fastboot works<sup>[3](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fn:3)</sup> and I’m able to load the flasher firmware and program eMMC (I based my Fastboot payload on [openEuler’s A210 guide](https://github.com/openeuler-riscv/bootloader-build/tree/master/zhihe-a210) instead of the vendor’s script which flashes 7(!) different partitions), but after that I still got dead silence on UART.
+At this point I was pretty suspicious of my serial connection, so I decided to test it on a Pi Pico: lo and behold, it turns out leaving my [BMP](https://black-magic.org/)’s `vRef` pin floating was the culprit.
 
-I think the two groups would merge and settle on a common core. TLS would keep its handshake, with certificates and CAs and an HTTP `Upgrade`. SSH would keep its own, with host keys you’re asked to trust the first time you connect. Each would finish by handing a set of keys to the same small, heavily-reviewed piece of code. Every improvement to that core, whether a faster cipher or a fix for a subtle attack, would land in both protocols at once.
+After losing several hours and my dignity to the aforementioned skill issue, I was greeted with the following panic:
 
-Remember the small black box from earlier? This is where it ends up. HTTP owns the TLS handshake. SSH owns its own. That doesn’t make the handshake easy. Checking a certificate chain is still code where one wrong line can undo everything, as Apple found in 2014 when a single duplicated line skipped the signature check in its TLS handshake. But the handshake lives alongside the rest of the protocol, where it can be reviewed and updated by the same people, on the same schedule. Something like SNI ships with the next browser update, not the next operating system.
+```text
+sbi_trap_error: hart0: trap1: illegal instruction handler failed (error -2)
 
-The real “do not touch” sign hangs on the shared core that both protocols hand their keys to. It would still be free software, in the GNU sense: anyone can read it, study it, fork it and change it. But the official version would be maintained by cryptographers, and getting a change accepted into it would mean convincing them. Instead of every secure protocol carrying its own big black box, there’s one small one, with the strictest gatekeepers, and everyone uses it.
-
-This isn’t as far-fetched as it sounds. QUIC, the protocol underneath HTTP/3, already works this way. It borrows the TLS 1.3 handshake and nothing else: once the handshake produces keys, they are handed to QUIC’s own packet encryption, and TLS’s record layer is never used. The handshake and the core have already come apart. Our universe just took until 2021 to do it.
-
-There’s a warning in our universe too. In 2023, an attack called Terrapin showed that an attacker could quietly delete messages from the start of the encrypted part of an SSH connection. It worked by slipping extra messages into the plaintext handshake, which threw off the message numbering the encryption relied on, without either side noticing. The handover from “talking in the clear” to “talking securely” is exactly where the parallel universe would need to be most careful. It’s also exactly the sort of thing you’d want one shared core and one set of eyes on, rather than two.
-
-## 🐚 Shells Over the Web
-
-Once the two protocols share a core, the wall between them starts to look a bit thin. In a universe where every secure connection already starts with an HTTP `Upgrade`, it’s a short step to one more. Sooner or later, someone would modify OpenSSH to accept a shell over HTTP.
-
+sbi_trap_error: hart0: trap1: mcause=0x0000000000000002 mtval=0x00000000cc087057
+sbi_trap_error: hart0: trap1: mepc=0x000000008000bb24 mstatus=0x0000000a00001800
+sbi_trap_error: hart0: trap1: ra=0x0000000080007336 sp=0x0000000080062e68
+sbi_trap_error: hart0: trap1: gp=0x0000000082c50aa0 tp=0x0000000082c54c80
+sbi_trap_error: hart0: trap1: s0=0x0000000080062eb8 s1=0x0000000080062eb8
+sbi_trap_error: hart0: trap1: a0=0x0000000080062eb8 a1=0x0000000000000000
+sbi_trap_error: hart0: trap1: a2=0x0000000000000000 a3=0x0000000000000000
+sbi_trap_error: hart0: trap1: a4=0x0000000080027c94 a5=0x0000000080007330
+sbi_trap_error: hart0: trap1: a6=0x0000000000000004 a7=0x0000000000000010
+sbi_trap_error: hart0: trap1: s2=0x0000000080063000 s3=0x00000000fa685000
+sbi_trap_error: hart0: trap1: s4=0x0000000080200000 s5=0x0000000000000000
+sbi_trap_error: hart0: trap1: s6=0x00000000fff3661e s7=0x0000000000000000
+sbi_trap_error: hart0: trap1: s8=0x00000000fbf37c50 s9=0x0000000000000001
+sbi_trap_error: hart0: trap1: s10=0x00000000fbf44b90 s11=0x00000000fbf2d228
+sbi_trap_error: hart0: trap1: t0=0x0000040000000000 t1=0x000000008156c15d
+sbi_trap_error: hart0: trap1: t2=0x0000000002000000 t3=0x000000008156c158
+sbi_trap_error: hart0: trap1: t4=0x0000000000000007 t5=0x00000000fa688fff
+sbi_trap_error: hart0: trap1: t6=0x00000000fbf2c428
 ```
-GET /shell HTTP/1.1
-Host: build-server-7.example.com
-Connection: Upgrade
-Upgrade: ssh
+
+## Are we RISC-V yet?
+
+Judging from the above register dump, something seems to be amiss with OpenSBI itself:
+
+```bash
+echo '577008cc' | llvm-mc --triple=riscv64 --mattr=+v --hex --disassemble
 ```
 
-That request is sent after the connection has already been upgraded to TLS, so it’s encrypted, and the server knows exactly who’s asking, because the browser (or the SSH client) presented a certificate during the handshake. The server replies `101 Switching Protocols`, and what follows is SSH, with its channels, port forwarding and all. TLS has already done the encryption and checked both sides’ identities, so SSH can skip its own key exchange and get straight to the shell. In our universe, WebSocket had to be invented to tunnel things through HTTP. The parallel universe just asks.
+```text
+vsetivli	zero, 16, e8, m1, ta, ma
+```
 
-I think most people would move over to it. You’d get the whole CA-backed infrastructure for free: no more “the authenticity of this host can’t be established” and typing “yes” without reading it. Users would log in with client certificates issued by their organization, which can be revoked centrally when someone leaves, instead of hunting down their public key in every `authorized_keys` file on every server. It would get through firewalls and proxies that block port 22, and the same `Host` header that lets one web server host a thousand websites would let one gateway front a thousand servers.
+This confirmed my suspicion that the illegal instruction was from an ISA extension (in this case, a vector instruction).
+Initially I didn’t understand why this occurred: why would a CPU trap on an instruction it supports?
+I consulted the [ISA spec](https://riscv.github.io/riscv-isa-manual/snapshot/spec/#_vector_context_status_in_mstatus) and discovered that executing a vector instruction without the vector context bits of the <kbd>mstatus</kbd> register configured properly will result in the exact illegal instruction exception that I was seeing.
 
-Port 22 would still have its fans. Plain SSH doesn’t depend on a CA, so nobody else’s mistake can let an attacker pretend to be your server, and nothing breaks because a certificate expired over the weekend. I expect it would live on in the corner of the server room, run by people who know exactly why they want it.
+So roughly what was happening was the processor was context switching to OpenSBI where the vector context was not enabled, but certain operations like <kbd>memset</kbd> were optimized to use vector extensions because OpenSBI was compiled with <kbd>-march=rv64gv</kbd>.
+I conjecture that the vendor didn’t run into this issue because they compiled OpenSBI with a GCC toolchain that didn’t support vector instructions, but who’s to say?
+Backporting a patch that sets <kbd>-march=generic</kbd> did the trick, and now we’re making it into U-Boot stage 2.
 
-Our universe has been edging in this direction for a while. Browser-based terminals that tunnel a shell over a WebSocket are now a standard feature of cloud consoles. Large companies such as Meta and Netflix run their own SSH certificate authorities, so that engineers get short-lived certificates instead of permanent keys. And in 2023 a research project called SSH3 rebuilt SSH on top of HTTP/3, so servers can identify themselves with the same kind of certificate a website uses, and you can log in with your organization’s single sign-on. Our universe is getting there. It’s just doing it the long way round.
+At this point I could boot Linux from eMMC manually, but I wanted to take the time to do things “right”.
+I prefer the more generic [distro boot](https://docs.u-boot-project.org/en/v2026.10/develop/distro.html) to the hard coded boot command the vendor came up with, so I decided to roll my own board header.
 
-## 🔓 What Could Possibly Go Wrong?
+```c
+#ifndef __CONFIG_A210_EVB_H
+#define __CONFIG_A210_EVB_H
 
-I’d be a poor advocate if I didn’t look at the downsides, and there’s one big one: stripping.
+#ifndef CONFIG_SPL_BUILD
+#define BOOT_TARGET_DEVICES(func) \
+  func(MMC, mmc, 0)
+#include <config_distro_bootcmd.h>
+#else
+#define BOOTENV
+#endif
 
-Credit where it’s due: having `https://` as a separate URL scheme does give our real universe something genuinely useful. It’s an explicit sign that security is expected, and that the browser shouldn’t proceed without it. When you click on an `https://` link, the author of that page is telling your browser “this must be encrypted, and if it isn’t, stop”.
+#define CFG_EXTRA_ENV_SETTINGS \
+  BOOTENV \
+  "boot_loglevel=1\0" \
+  "kernel_addr_r=0x82000000\0" \
+  "kernel_comp_addr_r=0x8a000000\0" \
+  "kernel_comp_size=0x6000000\0" \
+  "fdt_addr=0x8c000000\0" \
+  "fdt_addr_r=0x9ff00000\0" \
+  "ramdisk_addr_r=0x90000000\0" \
+  "scriptaddr=0x88000000\0" \
+  "pxefile_addr_r=0x88100000\0" \
+  "\0"
 
-The parallel universe gives that up. Its security is *opportunistic*: the browser asks whether the server can do encryption and uses it if so. That’s great, right up until someone hides the opportunity before the handshake completes. The negotiation happens in the clear, so an attacker sitting in the middle doesn’t need to break the encryption. They just stop it from ever starting. Anyone who has set up STARTTLS for email will recognize this one.
+#endif
+```
 
-So what’s a browser to do? You connect to your bank’s website, ask for `/.well-known/tls-cert`, and get back “404 Not Found”. Maybe the bank really has forgotten to set up its certificate. Maybe someone in the coffee shop is lying to you. The browser can’t tell the difference. Does it keep going without security?
+Ok—now we’re able to get most of the way through the initrd before UART abruptly goes silent.
+Fortunately, the last message makes the problem pretty clear:
 
-In fairness, our universe has the same problem. When you type `bank.example` into your browser, it has traditionally tried plain HTTP on port 80 first. The bank’s server replies with a redirect to `https://`, and an attacker can simply hide that redirect and keep you on the insecure version. A tool called sslstrip demonstrated exactly that in 2009. Our universe’s answer, for many years, was to train users to look for the padlock.
+```text
+[    7.010500] clk: Disabling unused clocks
+```
 
-The parallel universe would end up in much the same place. The padlock would survive as the sign that security was correctly established, and users would be trained to look for it just as ours were. (Our universe has since turned the padlock inside out. Chrome retired it in 2023, but plain HTTP pages have carried a big “Not Secure” warning since 2018. These days the sign that a connection is secure is that the warning *isn’t* there.)
+It’s a bit of a hack, but I decided to set <kbd>clk_ignore_unused</kbd> on the kernel command line just to see if we could get more logs.
+Imagine my surprise when after reflashing, the board makes it all the way into NixOS userspace with no issues!
+Although I steeled my resolve to go spelunking in the device tree to find which clock was not marked as critical, I decided not to waste my time when I realized the vendor also sets <kbd>clk_ignore_unused</kbd> in their kernel cmdline. ¯\_(ツ)_/¯
 
-Sooner or later, something like HSTS would be introduced, a header the server sends to say “from now on, never talk to me without encryption”. In our universe, HSTS arrived in 2012. In the parallel universe, with no `s` in the URL to fall back on, I suspect it would have been needed much sooner.
+I would be remiss if I didn’t mention that running an old kernel in the current era of AI-assisted kernel vulnerability disclosures hitting LKML every other week does not exactly help me sleep better at night.
+I looked into backporting patches for [Dirty Frag](https://github.com/V4bel/dirtyfrag) and co., but if the attacker has access to my tailnet I’m already cooked.
 
-## 🛡️ Secure or Stop
+## GPU’nt working
 
-Here’s a twist. The parallel universe might end up inventing `https://` anyway, but with a different meaning. It wouldn’t mean “use a different protocol on a different port”. It would mean “do HTTP on port 80 as normal, but this time, stop if security can’t be negotiated”. A link author could once again promise that a page must be encrypted, and the bank’s 404 becomes an error page instead of a shrug.
+So now that I can SSH in, we’re done, right?
+Well, the vendor explicitly advertises support for Vulkan/OpenGL ES, so I decided I couldn’t call this finished until I brought up the GPU.
 
-Our universe has even written the mirror image of this down. RFC 8164 (2017) describes “opportunistic security” for plain `http://` URLs, where a browser can quietly use TLS if the server offers it, while `https://` keeps its meaning of “secure or nothing”. Both universes end up with `https://` making the same promise. They just got there from opposite ends.
+This requires support in both the kernel (a driver to talk to the actual GPU hardware) and in userspace (implementing a uniform interface like Vulkan over the device-specific API).
+For the former, The vendor opts to ship a kernel module with no source; a firmware blob (with a device tree to make sense of it) I can generally understand, but I don’t get shipping kernel modules, and here’s why:
 
-There’s an old argument that the parallel universe would replay, from the other side.
+Kernel modules rely on the pertinent ABIs of the kernel being built against and the kernel the module will run on being nearly identical.
+If `CONFIG_MODVERSIONS` is set in your Kconfig (which it should be), the kernel will refuse to load a module if its <kbd>vermagic</kbd> (basically an ABI checksum) doesn’t match that of the running kernel.
+I’m using the vendor’s fork of Linux, so the <kbd>vermagic</kbd> matches exactly—so far so good.
 
-Before Let’s Encrypt arrived in 2015 and made certificates free, a few people ran their servers with self-signed certificates, vouched for by nobody but themselves. Browsers greeted those servers with big scary here-be-dragons warnings. The people running them hated this, and they had a point: a website with no security at all got no warning at all. The browser was treating “encrypted, but I can’t tell who by” as worse than “not encrypted”.
+But comparing <kbd>vermagic</kbd>s only checks for identical function prototypes; there are several Kconfig options that can change the size, alignment and layout of kernel data structures like [<kbd>struct module</kbd>](https://elixir.bootlin.com/linux/v6.6/source/include/linux/module.h#L402-L589).
+Many of these are security or debugging related, and I’ve done enough kernel exploitation in my day to understand that there are good reasons to introduce this seemingly unnecessary binary incompatibility.
 
-In the parallel universe, the same struggle would happen in a different way. Connect to a site for the first time, with no `https://` in the link and no HSTS history, and the opportunistic security kicks in. If the certificate checks out, you get the padlock. If it doesn’t, there’s no padlock, but there’s no need for a warning either. An unknown certificate is much the same as no security at all, and the browser treats it that way.
+The upshot is I can’t use the vendor kernel module unless I massage NixOS’s Kconfig into producing a kernel that passes Linux’s [ABI compatibility smell checks](https://elixir.bootlin.com/linux/v6.6/source/kernel/module/main.c#L1669).
 
-Going to the effort of TLS without verifying the certificate sounds a bit pointless, but it isn’t entirely. It won’t stop an attacker who can sit in the middle and hand you a certificate of their own. It does stop anyone who can only listen, which is the cheaper and far more common kind of snooping. The IETF came round to this view in 2014, declaring that pervasive monitoring is an attack (RFC 7258) and describing opportunistic encryption as “some protection most of the time” (RFC 7435).
+While searching for an alternative solution, I was pleasantly surprised to learn that my GPU is already supported in upstream [Linux](https://docs.kernel.org/gpu/imagination/index.html%20) and [Mesa](https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/15243)!
+In my naïvety I thought “great, we’ll clone Linux 6.18, run <kbd>make -M=$PWD/drivers/gpu/drm/imagination -C vendor-linux/lib/modules/6.6.0/build modules</kbd> and we’ll have a perfectly compatible driver!”
 
-And if you know the magic spell to get into the experts-only configuration, you’ve got the basis for SSH-style security. Tell your browser to remember that certificate, and complain loudly if it ever changes. The first connection is a leap of faith, and every connection after that is checked against it. Our universe’s browsers half-did this already: Firefox had a “Permanently store this exception” checkbox, buried behind enough scary warnings that only the determined ever found it.
+However, several changes in the DRM subsystem thwarted my attempt for a clean port, and in a fit of desperation (SLOP WARNING) I vibe ported the driver from the 6.18 kernel tree to an external module I could compile against the vendor fork of Linux 6.6.
+Adding a ton of code I did not write or understand is especially not good for software running with supervisor-level permissions; using this code feels like taping a “pwn me” sign to my back.
 
-Is that a good thing? Depends how you feel about SSH.
+If you’re following along, I want to emphasize that my slop driver is only for using the A210’s GPU, and if you chose to use it you should first sic your own clanker on the source to make sure I’m not punking you.<sup>[4](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fn:4)</sup>
+Alas, this is (in my opinion) still better than trying to use the prebuilt kernel module.
 
-## 🔁 Meanwhile, Back in Our Universe
+I was getting a bit fed up with the “compile-<kbd>nix copy</kbd>-kernel hang” loop, so I took a few minutes to setup a MCP server for Ghidra.
+I then tasked Codex (without Daybreak) with comparing the vendor-supplied kernel module with the slop that was ported from newer Linux.
 
-Here’s the funny thing. Our universe keeps quietly doing it the HTTP way anyway.
+The issue was identified and fixed within 3 minutes, whereas <kbd>printk</kbd> debugging and debugfs abuse got nowhere in several hours.   
 
-- The RFC exists. RFC 2817, “Upgrading to TLS Within HTTP/1.1”, was published in 2000. It describes Upgrade: TLS/1.0 on an ordinary port-80 connection, much like this post. Browsers never implemented it.
-- So did a rival. S-HTTP, designed in 1994, secured individual HTTP messages inside HTTP itself. It lost out to SSL.
-- Even the inventor of the web made the case. In 2015, Tim Berners-Lee wrote a personal note arguing against moving the web’s links from http: to https:. Every https: address is a different address from the http: one it replaces, so switching them over breaks the links that hold the web together. His alternative was to encrypt everything at the protocol level and keep the http: prefix, which is the parallel universe in a sentence. Not everyone agreed. The sharpest reply was that the s is the part that matters, which is a point I’ll come back to.
-- ALPN is TLS’s `Upgrade` header. When HTTP/2 came along, it defined an upgrade from plain HTTP/1.1 using the Upgrade header. Browsers declined to support it and only do HTTP/2 inside TLS, which meant TLS needed its own mechanism for choosing which protocol to speak.
-- ECH is fixing SNI. Because SNI sends the website’s name in the clear, anyone watching can see which site you’re visiting. Encrypted Client Hello is the current effort to hide it. To be fair to our universe, the parallel universe would have this problem too, as that first Host header goes in the clear.
-- Proxies use `CONNECT`. When your browser goes through a proxy, it sends an HTTP request asking the proxy to open a tunnel, then starts TLS inside it. That’s an HTTP-style handover.
-- HTTP/3 is discovered over HTTP. A server tells your browser it speaks HTTP/3 with an Alt-Svc header, and the browser switches over next time. Ask over HTTP, then move.
+Static analysis for the win!
 
-Not every lesson points my way, though. Email went the parallel-universe route with STARTTLS, upgrading a plain connection on the normal port. In 2018, RFC 8314 recommended that email clients use a dedicated port with TLS from the very first byte instead, because of the stripping problem.
+After ironing out the kinks in the kernel side, we need to coax Mesa into letting us use it by setting [`PVR_I_WANT_A_BROKEN_VULKAN_DRIVER`](https://github.com/reactjs/react.dev/issues/3896), after which we can successfully draw triangles!
 
-## 🏁 Lazy or Right?
+```text
+=======================================================
+    vkmark 2025.01
+=======================================================
+    Vendor ID:      0x1010
+    Device ID:      0x36104182
+    Device Name:    PowerVR B-Series BXM-4-64 MC1
+    Driver Version: 109060102
+    Device UUID:    4f8b656c3f16826f4c0fb79ad2d8c9a9
+=======================================================
+[clear] duration=20: FPS: 627 FrameTime: 1.595 ms
+[cube] duration=20: FPS: 333 FrameTime: 3.003 ms
+[shading] duration=20: FPS: 179 FrameTime: 5.587 ms
+[desktop] duration=20: FPS: 68 FrameTime: 14.706 ms
+[effect2d] duration=20: FPS: 30 FrameTime: 33.333 ms
+[texture] duration=20: FPS: 222 FrameTime: 4.505 ms
+[vertex] duration=20: FPS: 253 FrameTime: 3.953 ms
+=======================================================
+                                   vkmark Score: 2445
+=======================================================
+```
 
-So was Netscape lazy, or right?
+## Lessons learned
 
-I think the honest answer is “right for the wrong reasons”, and the parallel universe shows which part was right. The thing that protects you from an attacker quietly downgrading your connection isn’t the separate port. It’s the `s` in the URL: a promise, made in advance, that this connection must be secure. Netscape almost certainly didn’t choose a new scheme for that reason. A new scheme and a new port were simply the easiest way to bolt encryption onto software that already existed. But the scheme is the part that earned its keep.
+1. macOS USB support kinda sucks (I’ve encountered similar issues with the Altera USB-Blaster III); if a device isn’t detected, try a different computer. (In an attempt to update my USB drivers I made the generational fumble of updating to macOS 27, which makes Asahi Linux look stable in comparison.)
+2. Never assume something works just because you think it should (trust, but verify).
+3. The multitude of kernel configuration options makes kernel module API/ABI compatibility a pain; having source makes the problem tenable but still nontrivial.
 
-The port, I’m less sure about. I can’t help noticing how much of the past thirty years of TLS work has been spent rebuilding, inside a black box, things HTTP already had. I’d have liked to visit the universe where the `s` in `https://` means “this must be secure” and everything else is just HTTP.
+Overall, this was a fun (if not unexpected) project.
+I have fond memories of designing a [OoO](https://en.wikipedia.org/wiki/Out-of-order_execution) RISC-V CPU with all the bells and whistles during my time at uni, so this nerd snipe was particularly gratifying for me.
 
-**Credits**  
-📸 “[Duck browsing the lake](https://www.flickr.com/photos/104082864@N04/53741152051/)” by Andres Alvarado. (CC BY-SA 2.0)  
-📸 “[anim2038](https://www.flickr.com/photos/noaaphotolib/14318675298/)” by NOAA Photo Library. (CC BY 2.0)  
-📸 “[Padlock by the sea](https://www.flickr.com/photos/gromgull/2642629481/)” by “gromgull”. (CC BY 2.0)  
-📸 “[too tired to care](https://www.flickr.com/photos/rosiejuliet/52247781631/)” by “marneejill”. (CC BY-SA 2.0)  
-🤖 Claude, for fact checking and editing.
+It’s a bit of a shame that this machine won’t see a lot of use, but I anticipate that will change as RISC-V adoption continues to grow.
+Also, I am still flabbergasted that NixOS is completely slept on by SoC suppliers; I eagerly await the day NixOS will eat Yocto/PetaLinux/Buildroot’s lunch.
+
+1. I paid a frankly too-good-to-be-true price of $1.2k for an [Alinx VD100](https://www.en.alinx.com/Product/SoC-Development-Boards/Versal-AI-Edge/VD100.html), and so I was disappointed but not surprised when I instead received some random $300 RISC-V curio. Thankfully I was able to get a full refund and keep the board; I think the “scam” here is to write off the cost of excess inventory as misshipments instead of surplus. [↩︎](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fnref:1)
+2. I’m loathe to recommend a Microchip product, but the [PolarFire SoC Discovery](https://www.microchip.com/en-us/development-tool/mpfs-disco-kit) costs $130 and doubles as both a RV64GC SoC and an FPGA. [↩︎](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fnref:2)
+3. I couldn’t get the board to enter Fastboot mode after I flashed a bootloader, but this was fine because I could run <kbd>fastboot usb 0</kbd> in U-Boot instead. [↩︎](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fnref:3)
+4. This is not to say you shouldn’t audit the other stuff too, but if you *were* pwned by something other than the PowerVR driver, at least you could take solace in the fact that a human (me) had the last laugh. [↩︎](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fnref:4)
+5. To call this GPU “dinky” would be an understatement; for comparison, my RX 6700 XT scores 26230 on the same benchmark. [↩︎](https://feyor.sh/blog/nixos-bringup-on-an-alibaba-riscv-board/#fnref:5)
