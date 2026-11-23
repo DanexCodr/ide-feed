@@ -1,283 +1,205 @@
-Terraform plan passes and shows all green and all the necessary resource changes. You trigger apply and... the job fails with some obscure error that a resource can't be changed. You open another pull request and try again. And perhaps you encounter an error again. Sounds familiar? I bet it does. I encountered issues like this so many times I'm afraid to count. But recently [AWS released](https://aws.amazon.com/about-aws/whats-new/2026/11/aws-emulator-now-available/) a new tool called Emulator that emulates actual AWS API endpoints. And it should be great for tasks just like that!
+There's a bit of irony in the title. At the time of writing,
+[Gliver](https://codeberg.org/ebeem/gliver/issues),
+a Guile based window manager for Wayland in the style of
+[StumpWM](https://www.youtube.com/watch?v=tKt_rVO960Q) and
+[Emacs](https://www.gnu.org/software/emacs/), isn't yet in
+[Guix](https://guix.gnu.org/). There is, however,
+[an open PR to *add* Gliver to Guix](https://codeberg.org/guix/guix/pulls/11817).
+However, what that patch is really waiting on is
+[an upcoming release of Gliver](https://codeberg.org/guix/guix/pulls/11817#issuecomment-28112931)
+which will solve many bugs.
 
-![Title image](https://notes.hatedabamboo.me/assets/terraform-tests-with-aws-emulator.webp)
+Notably, that release will be `0.0.5`. If that sounds early, Gliver
+still *is* early. There are bugs, and you will probably have to file
+issues for some that you discover. There are also some noticeable
+missing features. But it doesn't matter. Gliver is everything I want
+from a desktop experience, and I suspect for many of the kinds of
+people who read my blog, it will be for them as well.
 
-## Defining the problem [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#defining-the-problem)
+Gliver might not be for everyone. But if the following appeals to you:
+a live-hackable, written in Guile Scheme, tiling window manager which
+looks good, feels good, and whose codebase is
+[understandable](https://gracefulliberty.com/articles/towards-understandable-software/)
+and, indeed, encourages you to understand and explore it, Gliver is
+for you.
 
-The problem with the difference between plan and apply jobs is that plan can't possibly emulate every actual API call against a live infrastructure. It's a safe assumption based on the static declarations we put into it – the order of application, the necessary parameters, the proper configuration values. These mock calls can't know for a fact that you already have a resource in AWS called "my-bucket-asdasdasd" or that you're trying to upgrade a PostgreSQL RDS instance from version 14 to version 18 without an explicit "apply immediately" flag. One may argue that one can always try to apply changes locally, but this kinda undermines the whole automation workflow. So what is the answer?
+## Why I think Gliver matters
 
-There are multiple tools that can emulate AWS services either [partially](https://github.com/guenter/aws-oss-alternatives) or in [full](https://ministack.org/), but what they lack is the actual knowledge of the service architecture. It may be similar, but it won't be authentic, and sometimes this small difference may cause a lot of problems. After all, what can be the closest to an AWS API, if not the same AWS API, but ephemeral?
+I think Anna Liberty's
+[Towards Understandable Software](https://gracefulliberty.com/articles/towards-understandable-software/)
+is a must-read. Call it a counter-vision to the
+[vibe bobsled](https://dustycloud.org/blog/faulty-towers-vibe-sickness-and-the-vibe-bobsled/).
+Anna lays out that software should be more understandable, not less,
+and easy to participate in even for people with no programming
+background. While Gliver doesn't itself try all the approaches Anna
+lays out, it is an understandable codebase.
 
-## AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#aws-emulator)
+Furthermore, Gliver is *participatory*. Gliver invites you to learn
+its internals and explore it. By default, Gliver's describe-key
+functionality opens a window where you can type the command you are
+thinking of, and it will show you what key it is bound to... but you
+can also type in a key sequence, and it'll show you what command that
+runs.
 
-The benefit of the AWS Emulator is that it's a self-contained binary (or Docker container) that can be utilized locally or in a CI workflow. This means the usual "Plan > Apply" terraform workflow changes to "Plan > Apply against mock AWS infrastructure to test the plan > Apply on actual AWS Infrastructure". This means slightly longer jobs, but if you're like me and apply jobs run on commits to the `main` branch after a PR, this saves you the hassle of creating a new branch just to fix the issue.
+![ebeem's screenshot of Gliver's describe-key interface](https://dustycloud.org/misc/ebeems-gliver-screenshot.jpeg)
 
-### Running Terraform against local AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-local-aws-emulator)
+More than that, by default Gliver opens a unix domain socket in
+`~/.local/state/gliver/repl.sock`. You can connect to this, say with
+[Geiser](https://geiser.nongnu.org/). You are live! You know that
+command you just looked up with the above describe-key interface? Why
+not try running it at the REPL! Hey, how does it work? Well Geiser
+already has a feature for that; by default typing `M-.`
+(`geiser-edit-symbol-at-point`) will jump you right to the definition,
+and you can explore how that code works! You can run commands manually
+at the REPL, you can inspect the state of the system, you can hack
+away, you can take the useful things you have learned and add them to
+your `init.scm` file so that the next time Gliver starts things are
+more the way you want them than last time. But of course there's no
+need to wait, this is a lisp style system! You can eval those changes
+and apply them immediately and carry on your way.
 
-Let's start with a local setup and see how we can utilize AWS Emulator with the actual Terraform code. All code is available in my example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
+Maybe this all sounds pretty technical, and even technically
+elite. And I think Gliver is probably not very accessible to
+non-scheme-hackers. But on the other hand, it could help you *become*
+a Scheme hacker.
 
-First up, installation. You can either install aws-emulator via [package manager](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html), or build it [with Docker](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html). I'll use Docker to keep my system clear of *yet another* package:
+When I started using Emacs, I was not a programmer. By extending
+Emacs, I *became* a programmer. (My background is not in CS; I was an
+interdisciplinary humanities student.) Emacs invites you to explore
+how it works by customizing it. My entire career would not have likely
+happened if Emacs did not welcome me into this process.
 
-```bash
-$ docker build -t aws-emulator .
-$ docker images
-IMAGE                 ID             DISK USAGE   CONTENT SIZE   EXTRA
-aws-emulator:latest   3c8fdb957b45       1.24GB             0B          # wow it's chonky
-$ docker run --rm -d -p 9297:9297 aws-emulator -a off
-dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-$ docker logs dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-{"timestamp":"2026-11-12T14:51:16.261883Z","level":"INFO","fields":{"message":"aws-emulator emulator starting"},"target":"aws_emulator"}
-This emulator collects usage and error telemetry: enabled (on by default; opt out any time); disable with EMULATOR_TELEMETRY=off or [telemetry] enabled = false in /home/emulator/.aws/emulator/config.toml
-{"timestamp":"2026-11-12T14:51:16.270635Z","level":"INFO","fields":{"message":"emulator server information","endpoint_url":"https://127.0.0.1:9297","health_check_url":"https://127.0.0.1:9297/__admin/health","config_file":"/home/emulator/.aws/emulator/9297/config","ca_file":"/home/emulator/.aws/emulator/9297/ca.pem","java_truststore_file":"/home/emulator/.aws/emulator/9297/truststore.p12"},"target":"aws_emulator_server"}
-{"timestamp":"2026-11-12T14:51:16.270655Z","level":"WARN","fields":{"message":"the emulator listens on 0.0.0.0, not loopback: other machines that can reach port 9297 can call it; bind 127.0.0.1 (-b 127.0.0.1) unless that is intended","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
-{"timestamp":"2026-11-12T14:51:16.270659Z","level":"WARN","fields":{"message":"request authentication is off: the emulator accepts any request, signed or not; start it with -a on to require signatures","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
+Gliver takes the same approach. But instead of Emacs Lisp, which is a
+hackable but honestly not really great lisp, it uses Guile Scheme,
+which is lovely. And notably, this is the same language as Guix.
+
+There is more I want to say on this, and I will in a future article.
+In many ways I think Blender is also an interesting example of
+reflective software in action, and actually does expose some of the
+ideas such as visual programming for non-programmers in a way that
+Emacs and Gliver don't, with great success too. But that's to discuss
+later.
+
+But as for the choice to switch. I have gotten tired of using systems
+that feel like they know better than I do. I have spent
+most of my days using [GNOME](https://www.gnome.org/), but without
+getting too much into it, I have been burnt way too many times by a
+paternalistic attitude which seems at the center of its design
+philosophy. When I did the latest upgrade and found out that custom
+application launcher shortcuts did not work anymore, and I could not
+figure out for the life of me why, I decided I didn't actually care to
+*try* to solve the problem this time. I was going to try something
+else.
+
+Which is when I re-discovered Gliver. Thanks to
+[ebeem](https://mastodon.social/@ebeem) for working on Gliver and
+[jfred](https://www.terracrypt.net/) for having been an earlier
+adopter than I was and who helped me with some messy
+this-isnt-yet-packaged trickiness.
+
+## A bit more on Gliver before we wrap up
+
+I suppose I've already said most of it, but a few more details.
+One interesting aspect of Gliver is that it uses
+[River](https://codeberg.org/river/river), which is a Wayland
+compositor which is designed as a framework for building window
+managers on top of. Building small window managers had become a lot
+harder to do with the move from X11 to Wayland; River provides a
+common foundation that makes it much more possible.
+
+Gliver allegedly supports different tiling modes, but I don't use
+them, I just use manual tiling. I like splitting up my screens the way
+I like them. I know I want this thing here and that thing
+there. Gliver shines at this kind of manual flow. It also has multiple
+"tabbed" windows stacked in each pane of the frames (in Gliver, each
+of those panes is called a "container"). You can move around what
+workspace and container a window "belongs to" with
+keybindings. Personally I bound `<super>-x` to be a keymapping with
+sub-bindings for splitting things up with the same equivalent keys as
+they are in emacs, since those mappings are burned into my brain.
+
+The default theme is very nice. You can customize its colors but black
+and purple is exactly my jam already.
+
+There are some rough edges. I have filed a number of issues for the
+things I've encountered. But one of the most noticeable is that there
+are several commands you might find for launching shell commands or
+creating new workspaces where you would expect to be prompted.  For
+example, here's one of Gliver's commands for running a shell command:
+
+```
+(define-command (shell-process-spawn-detached cmd)
+  #:interactive (string)
+  "Spawn CMD via /bin/sh in a detached subprocess (double-fork)."
+  (system (string-append cmd " &")))
 ```
 
-And it's up and running! In the example above I set the container to live without limits (official AWS documentation proposes to set memory and swap limits: `--memory=2g --memory-swap=2g`, but for local that's fine). I also disabled authorization (flag `-a off`) to simplify things a bit.
+Or for creating a workspace:
 
-To be sure aws-emulator is up and running, let's query the admin endpoint:
-
-```bash
-$ curl -sk https://127.0.0.1:9297/__admin/health
-ok
+```
+(define-command (workspace-create name)
+  #:interactive (string)
+  "Create a new workspace."
+  (let ((output (output-current)))
+    (when output
+      (let ((workspace (make-workspace #:name (or name "New")
+                                       #:output output)))
+        (workspace-add! workspace)
+        (log-debug "Workspace ~a created." (workspace-name workspace))))))
 ```
 
-Okay, fake AWS is live, let's deploy some infrastructure!
+Nice, these look like good commands, let's bind them to keys in our
+config! But oh wait, nothing happens! That's strange, they work at the
+REPL, why don't they work when bound to a key?
 
-I created an example AWS stack for Terraform and will use it in this article. First, let's configure Terraform to act against aws-emulator and not real AWS APIs. `providers.tf` will look like this:
+The simple answer is that `#:interactive (string)` part you see above,
+which indicates that Gliver's UI should be asking you for a prompt and
+letting you type in something, simply isn't implemented yet! So when I
+say there are some missing features, there really are some missing
+features.
 
-```hcl
-provider "aws" {
-  access_key = var.access_key
-  secret_key = var.secret_key
-  region     = var.region
+But this all may be changing very quickly. ebeem is working on a
+refactor of the GUI system to be more of a functional reactive
+programming type system, inspired by [Flutter](https://flutter.dev/).
+When that lands, I expect a number of bugs to be fixed, and a number
+of missing features like the above to land.
 
-  insecure = true # The emulator serves HTTPS with a self-signed certificate. Skip verification.
+This does lead to the funny situation that to create a new workspace,
+I have to do it at the REPL! That's okay. It'll be fixed, and for now,
+it's a nice reminder that running things at the REPL is something I
+can absolutely do at any time with Gliver, which I appreciate.
 
-  s3_use_path_style = true   # The emulator uses one IP endpoint. Put the bucket name in the path.
+Speaking of the GUI, what GUI toolkit is it using, you may wonder?
+The answer is: it kind of has its own thing! Gliver has FFI bindings
+to [Cairo](https://www.cairographics.org/) for its vector graphics and
+[Pango](https://docs.gtk.org/Pango/) for fonts. That's it! It seems to
+be a good enough foundation for the rest it is using and doing.
 
-  # Do not call the real AWS or the instance metadata service.
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
-  skip_region_validation      = true
+Now, how am I running Gliver at all when it isn't in Guix? The funny
+thing is that for now, I am running out of a git checkout of Gliver.
+I start up and sacrifice the not-so-proverbial
+[Cow](https://codeberg.org/cow-wm/cow) window manager and replace it
+live with Gliver in a terminal like so:
 
-  # Send every service to the emulator instead of AWS.
-  endpoints {
-    ec2        = var.emulator_endpoint
-    lambda     = var.emulator_endpoint
-    iam        = var.emulator_endpoint
-    sts        = var.emulator_endpoint
-    cloudwatch = var.emulator_endpoint
-    logs       = var.emulator_endpoint
-    events     = var.emulator_endpoint
-    sns        = var.emulator_endpoint
-  }
-
-  default_tags {
-    tags = var.tags
-  }
-}
+```
+killall -q cow; while true; do (killall -q gliver || true) && make run || sleep 3; done
 ```
 
-The difference between actual live infrastructure and a fake one is that we set up a bunch of flags to allow insecure connections (perhaps turning authentication off wasn't actually simpler?) and we set up an endpoint for each service we use in the setup to an emulator endpoint, which lives in the local Docker container:
+Which is basically the trick in the Gliver README, just starting with
+a cow sacrifice first. Pretty ugly though, it'll be nicer when Gliver
+is just packaged in Guix.
 
-```hcl
-# variables.tf
-variable "emulator_endpoint" {
-  description = "Base URL of the AWS Emulator"
-  type        = string
-  default     = "https://127.0.0.1:9297"
-}
-...
-```
+## Departing thoughts
 
-The rest of the configuration is as usual: resources, variables, modules (if any). Just what your project has.
+Gliver is nice. It feels good, it works well. And it's participatory,
+understandable software. It's also very early. It might not be for
+everyone, but it has elements of a vision for a future I'd like to see
+for everyone.
 
-Let's proceed and test our setup. (I'll omit full terraform output otherwise this article would be 3 kilometers long)
+If you like the idea of a scheme'y lisp machine using Guix as your
+operating system distribution but have found that the desktop
+experience was missing, well, Gliver is now here! And soon, packaged
+in a Guix near you.
 
-```bash
-$ cd terraform/
-$ terraform init
-Initializing the backend...
-...
-Terraform has been successfully initialized!
-...
-$ terraform plan
-...
-Plan: 15 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-  + alarm_name          = "ttwae-lambda-errors"
-  + event_rule_arn      = (known after apply)
-  + lambda_function_arn = (known after apply)
-  + security_group_id   = (known after apply)
-  + sns_topic_arn       = (known after apply)
-  + subnet_id           = (known after apply)
-  + vpc_id              = (known after apply)
-```
-
-Plan works! That's good to see, but not what we're here for. Still, a good sign. Now for the real test.
-
-```bash
-$ terraform apply --auto-approve
-...
-Apply complete! Resources: 15 added, 0 changed, 0 destroyed.
-
-Outputs:
-
-alarm_name = "ttwae-lambda-errors"
-event_rule_arn = "arn:aws:events:us-east-1:000000000000:rule/ttwae-schedule"
-lambda_function_arn = "arn:aws:lambda:us-east-1:000000000000:function:ttwae-worker"
-security_group_id = "sg-00000000000000085"
-sns_topic_arn = "arn:aws:sns:us-east-1:000000000000:ttwae-alarms"
-subnet_id = "subnet-00000000000000089"
-vpc_id = "vpc-00000000000000080"
-```
-
-And apply also works! Amazing!
-
-Sadly, the running aws-emulator container doesn't show in its logs which API requests it receives and what's happening under the hood, but I guess the tool is good enough as it is.
-
-When you're done, stop the container:
-
-```bash
-$ docker stop dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-```
-
-A container started with `--rm` removes itself after stopping, so no additional cleanup is needed. And as for the emulator -- it stores its state in memory, so each container restart drops all record of previous actions and any stale state.
-
-### Running Terraform against AWS Emulator in CI pipeline [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-aws-emulator-in-ci-pipeline)
-
-Now for the real test: can we wrap the desired logic inside a CI pipeline? Let's think.
-
-For successful invocation in the pipeline we will need almost everything the same, but we will be limited by time (the faster -- the better, and overall reasonable timeouts) and resources.
-
-The workflow with `terraform apply` against aws-emulator is shown down below. For it I decided to try out package manager installation (builders are ephemeral anyway) and proper authentication. Full workflow with actual successful runs can be found in the example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
-
-```yaml
----
-name: terraform-against-emulator
-on:
-  push:
-    branches: [main]
-permissions:
-  contents: read
-jobs:
-  terraform:
-    runs-on: ubuntu-latest
-    env:
-      EMULATOR_PORT: "9297"
-      # Empty keys make the provider fall back to the shared credentials
-      # file that the emulator writes. insecure=false verifies the
-      # emulator cert through AWS_CA_BUNDLE
-      TF_VAR_access_key: ""
-      TF_VAR_secret_key: ""
-      TF_VAR_insecure: "false"
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install the AWS Emulator
-        run: |
-          curl -fsSLo aws-emulator.deb \
-            https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
-          sudo apt-get install -y ./aws-emulator.deb
-          aws-emulator -v
-      - name: Start the emulator with signature checks on
-        run: |
-          nohup aws-emulator > /tmp/aws-emulator.log 2>&1 &
-          echo "Waiting for the emulator to answer..."
-          CA="$HOME/.aws/emulator/${EMULATOR_PORT}/ca.pem"
-          for i in $(seq 30); do
-            if [ -f "$CA" ] && curl -sf --cacert "$CA" \
-                "https://127.0.0.1:${EMULATOR_PORT}/__admin/health" >/dev/null; then
-              echo "Emulator is ready."
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Emulator did not become ready." >&2
-          cat /tmp/aws-emulator.log >&2
-          exit 1
-      - name: Point Terraform at the emulator credentials and certificate
-        run: |
-          DIR="$HOME/.aws/emulator/${EMULATOR_PORT}"
-          {
-            echo "AWS_SHARED_CREDENTIALS_FILE=$DIR/emulator_credentials"
-            echo "AWS_CONFIG_FILE=$DIR/config"
-            echo "AWS_CA_BUNDLE=$DIR/ca.pem"
-            echo "AWS_REGION=us-east-1"
-            echo "AWS_DEFAULT_REGION=us-east-1"
-            echo "AWS_EC2_METADATA_DISABLED=true"
-            echo "AWS_DISABLE_HOST_PREFIX_INJECTION=true"
-          } >> "$GITHUB_ENV"
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_wrapper: false
-      - run: terraform -chdir=terraform init -input=false
-      - run: terraform -chdir=terraform validate
-      - run: terraform -chdir=terraform plan -input=false
-      - run: terraform -chdir=terraform apply -auto-approve -input=false
-```
-
-This is a crude excerpt of the actual glorious workflow file that outlines the most important steps: emulator installation, terraform setup, plan and apply. On the example terraform architecture the whole pipeline took 1m25s, which is okay in my opinion, but there is room for improvement: sprinkle some caching on top, leave validation, format check for local hooks, etc.
-
-## Running a deliberately failing apply job [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-a-deliberately-failing-apply-job)
-
-It's always nice when code someone wrote on the internet works from the start after you copy-paste it onto your machine. That's why I always run the described processes myself -- building, testing, fixing, retrying -- before publishing an article. But showing only the positive scenarios creates a false sense of trust in the tool.
-
-Let's break something on purpose.
-
-In the example codebase I added a variable that, when enabled, makes the stack try to deploy a resource with an erroneous declaration. It will pass the plan job, but fail on apply.
-
-```hcl
-variable "enable_failure_demo" {
-  description = "Create a DynamoDB table with an invalid name."
-  type        = bool
-  default     = false
-}
-```
-
-Setting this variable to true at runtime will break our stack. Let's see:
-
-```bash
-$ cd terraform/
-$ terraform init
-Initializing the backend...
-...
-$ terraform plan -var 'enable_failure_demo=true'
-...
-Plan: 16 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-...
-  + failure_demo_table_arn = (known after apply)
-...
-$ terraform apply -auto-approve -var 'enable_failure_demo=true'
-...
-╷
-│ Error: creating AWS DynamoDB Table (ab): operation error DynamoDB: CreateTable, https response error StatusCode: 400, RequestID: 4TLD3XUB94783KNA4C76L8BEZ26UU8LS4IBN2IEKZJLAK4NMVTQ4, api error ValidationException: 1 validation error detected: Value 'ab' at 'tableName' failed to satisfy constraint: Member must have length greater than or equal to 3
-│
-│   with aws_dynamodb_table.bad_name[0],
-│   on dynamodb.tf line 10, in resource "aws_dynamodb_table" "bad_name":
-│   10: resource "aws_dynamodb_table" "bad_name" {
-│
-```
-
-And there we have it. The exact issue that arises only against actual API calls and not during a plan job.
-
-For scenarios exactly like this, the emulator is priceless.
-
-## Limitations and considerations [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#limitations-and-considerations)
-
-AWS Emulator is AWESOME. I'm rarely that excited about new tools lately (mostly because almost all of them are near/about AI), but this one is just so good and scratches that exact itch I felt for so long.
-
-Still, it's far from perfect.
-
-For starters, it can't effectively emulate IAM policies and permission checks. This is a bummer, because permission validation is such a crucial step for production-ready security. Here's hoping that the tool will evolve further and it will be included in future updates.
-
-Second, as a tool still a work-in-progress<sup>[[1]](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fn1)</sup>, its capabilities are quite limited. Even while writing the article I encountered several cases of `501 NotImplemented`. It complicates things a bit if your infrastructure setup is huge and has a lot of quirks and weird configurations and super new services. Still, AWS releases new versions quite often, and they're [quite open](https://docs.aws.amazon.com/emulator/latest/userguide/fidelity.html) about Emulator limitations, which is nice.
-
-And last, but not least, is telemetry. AWS [is explicit](https://docs.aws.amazon.com/emulator/latest/userguide/telemetry.html) that it gathers telemetry and what this telemetry includes. This is honest behaviour and I like that approach. They even allow you to disable the telemetry, which further increases my trust in this tool. I understand the rationale behind this functionality (the tool is actively developed, they need the data to understand usage patterns and what goes wrong), but in the age of constant surveillance from Big Tech at every corner it still raises a slight concern. But then again, for the ultra-paranoid folks the code is [open source](https://github.com/aws/aws-emulator) and can be rebuilt with telemetry torn out of it.
-
-1. As of the moment of writing this article, AWS Emulator has been live for 1 day. [↩︎](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fnref1)
+And, I suspect, once it is... well, we'll be seeing most of the Guix
+community moving over. It's too exciting and too nice not to!

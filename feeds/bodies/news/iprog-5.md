@@ -1,9 +1,105 @@
-Apache SeaTunnel 3 has been released, along with SeaTunnel Shade 3, a collection of shaded (relocated) third-party libraries that SeaTunnel bundles to avoid classpath conflicts with downstream applications. SeaTunnel is a next-generation cloud-native, high-performance, distributed, massive data integration tool. It was originally created by open source community members, data experts, and developers in China. It can be used to ingest and synchronize massive data (tens of billions of items of data a day) faster, greatly lowering the cost of maintaining the data transfer. SeaTunnel has been designed to solve common problems in the field of data integration such as the need to use multiple incompatible data sources with complex synchronization scenarios such as offline-full synchronization, offline- incremental synchronization, CDC, real-time synchronization, and full database synchronization. It also takes care of problems in the data integration and synchronization processes such as data loss or duplication. SeaTunnel 3's improvements start with a greatly expanded set of connectors, increasing the range away from databases, message queues, and data lakes to add support for SaaS and Cloud connectors. This release adds first-class support for marketing and ads platforms including Google Ads, Facebook Ads and TikTok Ads; and customer/collaboration tools including Salesforce, Zendesk, Airtable, Linear, and PostHog. There's also new support for payments and commerce systems including Stripe and Shopify. The list of cloud storage and vector sinks now supported include GCS, Baidu BOS, Azure Queue, Azure Cosmos DB, Amazon DocumentDB, Couchbase, NebulaGraph, Google Bigtable, and Deep Lake. Support has also been added for Python Source and Python Transform, meaning that if you need to create a system that doesn't really fit any pre-configured connector, you can now write it in Python directly.  The support for CDC (Change Data Capture) and IoT (Internet of Things) has also been improved, with support for DB2 CDC and Vitess CDC, alongside MQTT, NATS JetStream, Google Pub/Sub, and SNMPv2c SET sinks. SeaTunnel adds support for running jobs on more engines, so in addition to using the default SeaTunnel Engine (Zeta), you can now use Apache Flink or Apache Spark using a unified connector and job configuration model.  Elsewhere, performance has been improved through the addition of unified batch and streaming capabilities, distributed snapshot algorithms for exact-once data guarantees, schema evolution, and high-throughput parallel execution. SeaTunnel Shade has also been updated to use the latest versions of Jackson, Calcite, and Scala. There's also a new seatunnel-shade-jackson-yaml module.  SeaTunnel 3 and Shade 3 are available now.
+Every day I Programmer has new material written by programmers, for programmers. This digest gives a summary of the latest content, which this week includes an extract from **Programmers Guide To Containers.** If you've not yet adopted containerization its a good way to discover the practicalities. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **November 12 - 18, 2026** | 
 
-#### More Information
+### Featured Articles  
 
-[SeaTunnel Website](<https://seatunnel.apache.org>)
+---  
 
-#### Related Articles
+* * *
 
-[Apache SeaTunnel Reaches Top Level Status](<https://www.i-programmer.info/news/197-data-mining/16369-apache-seatunnel-reaches-top-level-status.html>) [Apache HugeGraph Becomes Top-Level Project](<https://www.i-programmer.info/news/197-data-mining/18736-apache-hugegraph-becomes-top-level-project.html>) [Apache Iceberg Improves Spark Support](<https://www.i-programmer.info/news/197-data-mining/15669-apache-iceberg-improves-spark-support.html>) [Spark BI Gets Fine Grain Security](<https://www.i-programmer.info/news/197-data-mining/10407-spark-bi-gets-fine-grain-security.html>) [Spark Announcements](<https://www.i-programmer.info/news/84/9471.html>) [Apache Flink ML 2.0 Released](<https://www.i-programmer.info/news/197-data-mining/15160-apache-flink-ml-20-released.html>) [Apache Flink 1.9 Adds New Query Engine](<https://www.i-programmer.info/news/197-data-mining/13043-apache-flink-19-adds-new-query-engine.html>) [Apache Flink 1.5.0 Adds Support For Broadcast State](<https://www.i-programmer.info/news/197-data-mining/11872-apache-flink-adds-support-for-broadcast-state.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+[ Programmers Guide To Containers - How Containers Work ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>)   
+18 Nov  |  Mike James    
+[ ](<https://www.i-programmer.info/programming/241-devops/19291-programmers-guide-to-containers-how-containers-work.html>) Containers seem mysterious technology, but in fact they are very simple indeed - on Linux at least! <ASIN:B0HKY1GQ5K>  
+
+* * *
+
+[ Gene Amdahl ](<https://www.i-programmer.info/history/8-people/300-gene-amdahl.html>)   
+16 Nov  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/history/8-people/300-gene-amdahl.html>) Gene Amdahl is a legend who made logic design cool and out did IBM in building advanced computers. He was born on November 16, 1933 and his first computer, the Wisconsin Integrally Synchronized Computer (WISC), was very advanced for its time (1951).  
+
+### Programming News and Views  
+
+* * *
+
+[ Chrome Ships HTML-in-Canvas: Closing The Loop! ](<https://www.i-programmer.info/news/191-htmlcss/19292-chrome-ships-html-in-canvas-closing-the-loop.html>)   
+18 Nov  |  Ian Elliot    
+[ ](<https://www.i-programmer.info/news/191-htmlcss/19292-chrome-ships-html-in-canvas-closing-the-loop.html>) If you want proof that the world of software is insane, you need look no further than the news that Google Chrome now comes with HTML-in-Canvas. How many rendering options does one app need? <ASIN:1871962625>  
+
+* * *
+
+[ Unsettling Results of Stack Overflow Developer Survey 2026 ](<https://www.i-programmer.info/news/99-professional/19276-stack-overflow-developer-survey-2026.html>)   
+18 Nov  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/99-professional/19276-stack-overflow-developer-survey-2026.html>) The Stack Overflow that as developers we used to rely on for the answers to our day-to-day queries was among the first casualties of generative AI. It is, however, continuing to function, even though its previous role as the prime resource for answers has been usurped by AI chatbots and its annual survey has things to tell us about the current developer landscape.  
+
+* * *
+
+[ Red Hat Developer 2.1 Adds New Plugin Architectures ](<https://www.i-programmer.info/news/90-tools/19289-red-hat-developer-21-adds-new-plugin-architectures.html>)   
+17 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/90-tools/19289-red-hat-developer-21-adds-new-plugin-architectures.html>) Red Hat has released Red Hat Developer Hub 2.1, the latest version of its developer portal. This version expands release support to a 10-month lifecycle window, has a modernized plugin architecture and increases the support for agent-assisted development.  
+
+* * *
+
+[ GitHub Copilot App for Beginners - The Course ](<https://www.i-programmer.info/news/90-tools/19290-github-copilot-app-for-beginners-the-course-.html>)   
+17 Nov  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/90-tools/19290-github-copilot-app-for-beginners-the-course-.html>) **GitHub Copilot App for Beginners** is a free, hands-on course, designed to teach developers how to direct, supervise, and review AI coding agents using the desktop GitHub Copilot App.  
+
+* * *
+
+[ Amazon Releases AWS Emulator ](<https://www.i-programmer.info/news/80-java/19288-amazon-releases-aws-emulator.html>)   
+16 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/80-java/19288-amazon-releases-aws-emulator.html>) Amazon has released an AWS Emulator that can be used to build and test AWS applications locally on a developer's machine or in a continuous integration (CI) environment.  
+
+* * *
+
+[ BlimpMate: AI-Assistant In a Helium Balloon ](<https://www.i-programmer.info/news/105-artificial-intelligence/19286-blimpmate-ai-assistant-in-a-helium-balloon.html>)   
+15 Nov  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19286-blimpmate-ai-assistant-in-a-helium-balloon.html>) Meet BlimpMate, described as a flying display robot designed for calm and persistent interaction in indoor environments.  
+
+* * *
+
+[ Fun Gifts For Geeks ](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>)   
+13 Nov  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/85-humour-/19285-fun-gifts-for-geeks.html>) I hope that, like us, you're avoiding the increasing amount of stuff on the Web and social media about how to ensure the perfect Thanksgiving/Holiday Season. You are? Great. Here's another article to shout "It's too early" at. Sadly, it's not that long before you'll be looking for the wrapping paper and cursing because that must-have toy is out of stock.  
+
+* * *
+
+[ What Happened At Percona Live 2026 ](<https://www.i-programmer.info/news/80-java/19284-what-happened-at-percona-live-2026.html>)   
+13 Nov  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/80-java/19284-what-happened-at-percona-live-2026.html>) This year the Percona Live conference took place from September 9-11 in Amsterdam. We provide an overview of this year's event.  
+
+* * *
+
+[ .NET 11 Released ](<https://www.i-programmer.info/news/89-net/19281-net-11-released-.html>)   
+12 Nov  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/89-net/19281-net-11-released-.html>) Microsoft has released .NET 11, with improvements across C# 15, ASP.NET Core, .NET MAUI, and Windows development. The version has hundreds of runtime optimizations, more responsive SDK tooling, and less overhead in everyday commands.  
+
+* * *
+
+[ Torvalds Says AI-Driven Linux Patching Slowing ](<https://www.i-programmer.info/news/149-security/19282-torvalds-says-ai-driven-linux-patching-slowing-.html>)   
+12 Nov  |  Alex Denham    
+[ ](<https://www.i-programmer.info/news/149-security/19282-torvalds-says-ai-driven-linux-patching-slowing-.html>) While the current news is dominated by yet another round of patching driven by problems discovered by AI, Linus Torvalds says things might be getting better.  
+
+### Book Watch  
+
+* * *
+
+[ Site Reliability Engineering, 2nd Ed ](<https://www.i-programmer.info/book-watch-archive/19293-site-reliability-engineering-2nd-ed.html>)   
+
+In this revised second edition of a book subtitled "How Google Runs Production Systems", key members of Google's Site Reliability Engineering (SRE) team explore the company's current SRE practices and explain how they've evolved in the decade since the book's initial publication. Betsy Beyer at al discuss the techniques used for applying reliability to the entire user journey for consumer, enterprise, and infrastructure systems, with fresh insights on engineering techniques, organizational processes, and case studies to help promote and implement greater reliability throughout the engineering lifecycle. <ASIN:B0GTYSKFKY >  
+
+* * *
+
+[ Algorithms for Validation (MIT Press) ](<https://www.i-programmer.info/book-watch-archive/19287-algorithms-for-validation-mit-press.html>)   
+
+This book presents a variety of computational methods for validating autonomous systems, introducing the underlying mathematical problem formulations and the algorithms for solving them. With unifying techniques from multiple fields under a common validation framework, Mykel J. Kochenderfer, Sydney M. Katz, Anthony L. Corso and Robert J. Moss provide advanced objective strategies for validation. <ASIN:0262056011 >  
+
+* * *
+
+[ Big Math: The Hidden Codes That Run Our World (Little, Brown and Company) ](<https://www.i-programmer.info/book-watch-archive/19283-big-math-the-hidden-codes-that-run-our-world-little-brown-and-company.html>)   
+
+This book tells the story of how a handful of surprisingly simple mathematical ideas have sparked today's technological breakthroughs, from Netflix's recommendation algorithm to medical imaging to artificial intelligence and beyond. However, Steven Strogatz and Alex Townsend argue that the same ideas are also slipping further and further from our understanding, with potentially earth-shaking consequences. They examine how math is in every photo you post to Instagram, every Google search you make, and every answer you get back from ChatGPT; how it routes our packages and planes, maps social networks, and predicts the weather. Big Math is quietly running our world. <ASIN:0316581585 >  
+
+I Programmer has reported news for over 15 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

@@ -1,205 +1,42 @@
-There's a bit of irony in the title. At the time of writing,
-[Gliver](https://codeberg.org/ebeem/gliver/issues),
-a Guile based window manager for Wayland in the style of
-[StumpWM](https://www.youtube.com/watch?v=tKt_rVO960Q) and
-[Emacs](https://www.gnu.org/software/emacs/), isn't yet in
-[Guix](https://guix.gnu.org/). There is, however,
-[an open PR to *add* Gliver to Guix](https://codeberg.org/guix/guix/pulls/11817).
-However, what that patch is really waiting on is
-[an upcoming release of Gliver](https://codeberg.org/guix/guix/pulls/11817#issuecomment-28112931)
-which will solve many bugs.
+![Black silhouette in the shape of a smartphone overlaid with graffiti-style text that says "SIGNAL WAS HERE".](https://signal.org/blog/images/protecting-your-privacy-header.png)
 
-Notably, that release will be `0.0.5`. If that sounds early, Gliver
-still *is* early. There are bugs, and you will probably have to file
-issues for some that you discover. There are also some noticeable
-missing features. But it doesn't matter. Gliver is everything I want
-from a desktop experience, and I suspect for many of the kinds of
-people who read my blog, it will be for them as well.
+Privacy is our mission; it’s why we exist, and we do everything we can to protect it.
 
-Gliver might not be for everyone. But if the following appeals to you:
-a live-hackable, written in Guile Scheme, tiling window manager which
-looks good, feels good, and whose codebase is
-[understandable](https://gracefulliberty.com/articles/towards-understandable-software/)
-and, indeed, encourages you to understand and explore it, Gliver is
-for you.
+This means that we are restricting the latest AI agents built into mobile operating systems from potentially capturing and storing your Signal data.
 
-## Why I think Gliver matters
+We’ve already had to do this once with Windows. Last year, we used screenshot blocking to [prevent](https://signal.org/blog/signal-doesnt-recall/) Microsoft’s Recall AI from taking and storing screenshots of your Signal messages on Windows 11 operating systems by default.<sup>[1](https://signal.org/blog/protecting-your-privacy/#fn:1)</sup> We will now be taking similar measures to restrict agentic systems built into iOS 27 and on Android versions where we can detect an AI assistant attempting to read your Signal screen.<sup>[2](https://signal.org/blog/protecting-your-privacy/#fn:2)</sup>
 
-I think Anna Liberty's
-[Towards Understandable Software](https://gracefulliberty.com/articles/towards-understandable-software/)
-is a must-read. Call it a counter-vision to the
-[vibe bobsled](https://dustycloud.org/blog/faulty-towers-vibe-sickness-and-the-vibe-bobsled/).
-Anna lays out that software should be more understandable, not less,
-and easy to participate in even for people with no programming
-background. While Gliver doesn't itself try all the approaches Anna
-lays out, it is an understandable codebase.
+The problem is similar to Microsoft Recall on Windows: Google and Apple are integrating agentic capabilities like [Gemini Intelligence](https://support.google.com/gemini/answer/15850607?hl=en) with Google Gemini and [Onscreen Awareness](https://www.apple.com/newsroom/2026/09/siri-ai-a-profoundly-more-capable-and-personal-assistant-is-here/) with Siri AI deep into their operating systems. This is a significant move. Google (Android), Apple (iOS/macOS), and Microsoft (Windows) produce the three major consumer operating systems (OS), which comprise the environment that third-party developers – like Signal – build their apps to function and operate within. To put it differently, these three operating systems are the oceans in which Signal, and other applications, must swim; they dictate the conditions of life for the application ecosystem. Right now, these agentic AI integrations are changing this environment in a way that’s making it increasingly hostile to privacy. This is an existential threat to Signal, and our ability to responsibly uphold our mission.
 
-Furthermore, Gliver is *participatory*. Gliver invites you to learn
-its internals and explore it. By default, Gliver's describe-key
-functionality opens a window where you can type the command you are
-thinking of, and it will show you what key it is bound to... but you
-can also type in a key sequence, and it'll show you what command that
-runs.
+In order to gain access to information about you, these OS AI agents “scan” the information that’s on your screen. In doing so, your Signal data is captured, then made available to these agentic systems in order to allow them to answer your questions and do your bidding.
 
-![ebeem's screenshot of Gliver's describe-key interface](https://dustycloud.org/misc/ebeems-gliver-screenshot.jpeg)
+The net result is that these AI capabilities in the operating system are undermining Signal’s ability to independently guarantee privacy. For over a decade, this guarantee has been backed by our tried and trusted open source code base and our formally verified encryption protocol. These have been scrutinized by some of the best security experts and hackers across the world, and shown to be robust. Now, in service of AI agentic capabilities, your sensitive data is being captured, stored, and made accessible to whatever local database or remote server an OS-level AI agent is using at that moment. All of this is outside of Signal’s control once the data has been captured, and imperils the privacy of all the participants in a conversation.
 
-More than that, by default Gliver opens a unix domain socket in
-`~/.local/state/gliver/repl.sock`. You can connect to this, say with
-[Geiser](https://geiser.nongnu.org/). You are live! You know that
-command you just looked up with the above describe-key interface? Why
-not try running it at the REPL! Hey, how does it work? Well Geiser
-already has a feature for that; by default typing `M-.`
-(`geiser-edit-symbol-at-point`) will jump you right to the definition,
-and you can explore how that code works! You can run commands manually
-at the REPL, you can inspect the state of the system, you can hack
-away, you can take the useful things you have learned and add them to
-your `init.scm` file so that the next time Gliver starts things are
-more the way you want them than last time. But of course there's no
-need to wait, this is a lisp style system! You can eval those changes
-and apply them immediately and carry on your way.
+![A screenshot from Signal Settings on iOS showing the new "Block Siri AI" setting enabled.](https://signal.org/blog/images/protecting-your-privacy-1.png)
 
-Maybe this all sounds pretty technical, and even technically
-elite. And I think Gliver is probably not very accessible to
-non-scheme-hackers. But on the other hand, it could help you *become*
-a Scheme hacker.
+![A screenshot from Signal Settings on Android showing the "Screen security" setting enabled.](https://signal.org/blog/images/protecting-your-privacy-2.png)
 
-When I started using Emacs, I was not a programmer. By extending
-Emacs, I *became* a programmer. (My background is not in CS; I was an
-interdisciplinary humanities student.) Emacs invites you to explore
-how it works by customizing it. My entire career would not have likely
-happened if Emacs did not welcome me into this process.
+So, we are blocking such capture by preventing screenshots in the app on iOS 27 and when AI assistants attempt to capture screen data on Android.<sup>[2](https://signal.org/blog/protecting-your-privacy/#fn:2)</sup>
 
-Gliver takes the same approach. But instead of Emacs Lisp, which is a
-hackable but honestly not really great lisp, it uses Guile Scheme,
-which is lovely. And notably, this is the same language as Guix.
+People who want the ability to take screenshots can disable this protection within the Signal app’s settings. However, doing so will potentially expose your (and your contacts’) Signal content to these AI agents, and break our privacy guarantees. Our remedy is also incomplete – while we are doing everything we can, restricting screenshots does not address other more sneaky ways AI agents could potentially access application data, such as retrieving content already present on a user’s device via the filesystem.
 
-There is more I want to say on this, and I will in a future article.
-In many ways I think Blender is also an interesting example of
-reflective software in action, and actually does expose some of the
-ideas such as visual programming for non-programmers in a way that
-Emacs and Gliver don't, with great success too. But that's to discuss
-later.
+We want to be very clear: it is a serious problem that Signal – and application developers beyond – lack robust tools to prevent AI agents from undermining application-level privacy. Even where we are able to detect and block AI data access, Google, Apple, Microsoft, and others do not provide ways for developers to easily restrict such AI data access without making drastic compromises to the core user experience. This is also the reason we are currently unable to implement these protections on macOS.<sup>[3](https://signal.org/blog/protecting-your-privacy/#fn:3)</sup>
 
-But as for the choice to switch. I have gotten tired of using systems
-that feel like they know better than I do. I have spent
-most of my days using [GNOME](https://www.gnome.org/), but without
-getting too much into it, I have been burnt way too many times by a
-paternalistic attitude which seems at the center of its design
-philosophy. When I did the latest upgrade and found out that custom
-application launcher shortcuts did not work anymore, and I could not
-figure out for the life of me why, I decided I didn't actually care to
-*try* to solve the problem this time. I was going to try something
-else.
+We are also struggling with a significant lack of documentation about how these AI agents actually work. Over the past few months, we’ve spent considerable developer time and energy doing forensic investigations across Android and iOS in an attempt to learn what is actually happening when these AI systems access application data. Without better documentation and clear technical specifications, it will be increasingly difficult for Signal to provide robust privacy and security to the many millions of people who rely on us.
 
-Which is when I re-discovered Gliver. Thanks to
-[ebeem](https://mastodon.social/@ebeem) for working on Gliver and
-[jfred](https://www.terracrypt.net/) for having been an earlier
-adopter than I was and who helped me with some messy
-this-isnt-yet-packaged trickiness.
+We continue to call on the major consumer operating system companies – Apple, Google, and Microsoft – to provide simple technical tools and accurate documentation that give developers like Signal ways to prevent AI agents from accessing sensitive application data. In particular, we are calling on these companies to provide two common-sense remedies that can protect the privacy so many millions of people rely on:
 
-## A bit more on Gliver before we wrap up
+1. Developers should have an easy and well-documented way to opt their app out of AI data access and processing, including (but not limited to) screen reading, filesystem access, notifications, APIs, and other OS frameworks, all without undermining the core utility of an application.
+2. Operating system companies should create better documentation and technical specifications around how these AI agents function, particularly regarding data access and processing. Confidential computing approaches are not a complete solution, and do not address these core concerns. In particular, these approaches still leave the power to determine the extent of privacy guarantees (if any) in the hands of these providers.
 
-I suppose I've already said most of it, but a few more details.
-One interesting aspect of Gliver is that it uses
-[River](https://codeberg.org/river/river), which is a Wayland
-compositor which is designed as a framework for building window
-managers on top of. Building small window managers had become a lot
-harder to do with the move from X11 to Wayland; River provides a
-common foundation that makes it much more possible.
+We also see a growing need for tools that can prevent third-party agents, like Meta’s Muse, from accessing application data using the deep permissions that users are encouraged to grant them during setup. In many cases these agents are leveraging accessibility settings that were meant to empower actual people to get the most out of their apps and services, not to act as a skeleton key that provides access to AI agents.
 
-Gliver allegedly supports different tiling modes, but I don't use
-them, I just use manual tiling. I like splitting up my screens the way
-I like them. I know I want this thing here and that thing
-there. Gliver shines at this kind of manual flow. It also has multiple
-"tabbed" windows stacked in each pane of the frames (in Gliver, each
-of those panes is called a "container"). You can move around what
-workspace and container a window "belongs to" with
-keybindings. Personally I bound `<super>-x` to be a keymapping with
-sub-bindings for splitting things up with the same equivalent keys as
-they are in emacs, since those mappings are burned into my brain.
+In addition to taking these technical measures to block capture, we are engaging in conversations across the ecosystem to make the stakes clear. There is a lot of work to be done in the industry to improve the ways that AI agents operate in the operating system, and how and whether they capture and process private data. We are cautiously optimistic that some major OS providers, like Google and Apple, are engaging with us on how these systems should better interface with privacy-sensitive apps like Signal. We hope to have more to share on this topic soon, and that these companies recognize the danger to the ecosystem and work with us and others to create standardized approaches that meaningfully protect privacy across the industry.
 
-The default theme is very nice. You can customize its colors but black
-and purple is exactly my jam already.
+Finally, we want to acknowledge that we are not the only ones recognizing these perils, and we are grateful to our allies for pushing for similar [changes](https://www.eff.org/deeplinks/2026/10/victory-you-can-now-exclude-apps-siri-ai). We all need to recognize that the current integration of AI agents into the operating system, without these common-sense remedies, represents an existential threat to privacy at the application layer, and the ability of independent developers like Signal to protect your sensitive data. Signal is the canary in the coal mine, but this affects the entire ecosystem and should galvanize anyone who cares about these fundamental rights.
 
-There are some rough edges. I have filed a number of issues for the
-things I've encountered. But one of the most noticeable is that there
-are several commands you might find for launching shell commands or
-creating new workspaces where you would expect to be prompted.  For
-example, here's one of Gliver's commands for running a shell command:
+*Signal Technology Foundation is the nonprofit home of the Signal app, which is trusted by millions around the world. We protect free expression and enable secure global communication through open source privacy technology. Signal Technology Foundation is a US 501(c)(3) tax-exempt organization.*
 
-```
-(define-command (shell-process-spawn-detached cmd)
-  #:interactive (string)
-  "Spawn CMD via /bin/sh in a detached subprocess (double-fork)."
-  (system (string-append cmd " &")))
-```
-
-Or for creating a workspace:
-
-```
-(define-command (workspace-create name)
-  #:interactive (string)
-  "Create a new workspace."
-  (let ((output (output-current)))
-    (when output
-      (let ((workspace (make-workspace #:name (or name "New")
-                                       #:output output)))
-        (workspace-add! workspace)
-        (log-debug "Workspace ~a created." (workspace-name workspace))))))
-```
-
-Nice, these look like good commands, let's bind them to keys in our
-config! But oh wait, nothing happens! That's strange, they work at the
-REPL, why don't they work when bound to a key?
-
-The simple answer is that `#:interactive (string)` part you see above,
-which indicates that Gliver's UI should be asking you for a prompt and
-letting you type in something, simply isn't implemented yet! So when I
-say there are some missing features, there really are some missing
-features.
-
-But this all may be changing very quickly. ebeem is working on a
-refactor of the GUI system to be more of a functional reactive
-programming type system, inspired by [Flutter](https://flutter.dev/).
-When that lands, I expect a number of bugs to be fixed, and a number
-of missing features like the above to land.
-
-This does lead to the funny situation that to create a new workspace,
-I have to do it at the REPL! That's okay. It'll be fixed, and for now,
-it's a nice reminder that running things at the REPL is something I
-can absolutely do at any time with Gliver, which I appreciate.
-
-Speaking of the GUI, what GUI toolkit is it using, you may wonder?
-The answer is: it kind of has its own thing! Gliver has FFI bindings
-to [Cairo](https://www.cairographics.org/) for its vector graphics and
-[Pango](https://docs.gtk.org/Pango/) for fonts. That's it! It seems to
-be a good enough foundation for the rest it is using and doing.
-
-Now, how am I running Gliver at all when it isn't in Guix? The funny
-thing is that for now, I am running out of a git checkout of Gliver.
-I start up and sacrifice the not-so-proverbial
-[Cow](https://codeberg.org/cow-wm/cow) window manager and replace it
-live with Gliver in a terminal like so:
-
-```
-killall -q cow; while true; do (killall -q gliver || true) && make run || sleep 3; done
-```
-
-Which is basically the trick in the Gliver README, just starting with
-a cow sacrifice first. Pretty ugly though, it'll be nicer when Gliver
-is just packaged in Guix.
-
-## Departing thoughts
-
-Gliver is nice. It feels good, it works well. And it's participatory,
-understandable software. It's also very early. It might not be for
-everyone, but it has elements of a vision for a future I'd like to see
-for everyone.
-
-If you like the idea of a scheme'y lisp machine using Guix as your
-operating system distribution but have found that the desktop
-experience was missing, well, Gliver is now here! And soon, packaged
-in a Guix near you.
-
-And, I suspect, once it is... well, we'll be seeing most of the Guix
-community moving over. It's too exciting and too nice not to!
+1. Microsoft Recall captures your screen every few seconds, extracts text from screenshots via optical character recognition, then populates a searchable on-device database with this personal data in order to allow the AI system to query it – potentially exposing and retaining your Signal data indefinitely, including disappearing messages. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:1)
+2. There are multiple versions of Android beyond the Google-provided distributions on Pixel devices. For many vendors, we don’t have a reliable way to detect when a screenshot was attempted ***if*** screenshots are already disabled. Rather than choose a poor user experience (where screenshots simply stop working, confusing users), we decided to instead focus on detecting when an AI assistant attempts to access the screen. We automatically enable the “Screen security” setting in Signal Android when this type of access is detected. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:2) [↩<sup>2</sup>](https://signal.org/blog/protecting-your-privacy/#fnref:2:1)
+3. Careful readers will note that in addition to not being able to cover all Android devices, we are also not blocking Siri AI on macOS. This is because we cannot reliably block screenshots on macOS. Faced with a lack of clearly documented APIs that allow us to implement screenshot protection, we do not have the tools available that let us do the job. While protections against continuous screen capture exist on macOS, we cannot apply them to screenshots (which is how most agentic systems access data from applications like Signal). Trying to implement screenshot blocking on macOS has revealed to us a minefield of bewildering decisions that place user privacy at risk, including APIs that have been deprecated in favor of screen-protection solutions that [only work for streaming media](https://developer.apple.com/streaming/fps/) and other DRM-protected content. This is something we hope Apple remedies urgently. For now, the only recommendation we have for macOS 27 users is to add Signal to the Excluded Apps section in System Settings > Siri to protect message content from proactive access by Siri AI. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:3)

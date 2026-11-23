@@ -1,180 +1,227 @@
-In a [previous post](https://joshua.hu/wtf-google-feedburner-cache-problem-atom-rss), I talked about how Google’s [Chrome Releases blog](https://chromereleases.googleblog.com/) was serving stale results on its Atom feed, and had set up a redirect from its RSS feed (which was serving up-to-date results) to … the stale Atom feed. This meant results were up to a few days old. This was particularly annoying because my [CCBot](https://joshua.hu/ccbot-chrome-checker-bot-googlechromereleases-chromium-updates) parsed the blog’s feed to notify me (Opera!) about Chromium vulnerabilities which were fixed. When I wrote that post, the Atom feed was days behind:
+I recently received a game called “Hitster” as a gift. It’s a board game where you try to identify songs and guess things like when they came out, who the artist or band is, etc. Each card has a QR code that you scan using the Hitster app, which then plays the music through Spotify or Apple Music.
+
+Sadly, the app requires an Apple Music or Spotify subscription. In this blog post, I’ll go down the rabbit hole of reverse engineering the Android app and bypassing their very, very sloppy attempt at hiding the data.
+
+# Part 0: How it works
+
+First, we need to understand how the game works.
+
+On the front of each card, you’ll find the artist or band name, the year the song came out, and the song title. On the back, there’s a QR code. Scanning it takes you to a URL with two things in its path: the game’s region (`DE` in my case) and the card ID. The music then starts playing in the app or through Spotify.
+
+This means there’s a mapping from Card ID ⇒ Spotify Track. There are also multiple card versions per region, so the card ID alone isn’t enough to identify a song. Card ID 1 might be “Wet Dream” in the UK, but “Tage wie diese” in Germany.
+
+![card.png](https://wuemeli.com/_astro/card.DxcNptP5_Zkv1oD.webp)
+
+![qr_code.png](https://wuemeli.com/_astro/qr_code.BqCb_R1b_ZuQ3l.webp)
+
+# Part 1: The Android app
+
+After getting the app’s APK from some sketchy Android APK download website, I used [jadx](https://github.com/skylot/jadx) to get the decompiled Java code.
+
+![source_code](https://wuemeli.com/_astro/source_code.DrTbtfqy_1nfCVU.webp)
+
+After digging around for a bit, I found a few JSON files under `res/raw`. One of them was named `gameset_database_4.json`, and it seemed to be encrypted.
+
+I ran a tool to identify the format, and it came back as Base64. That’s an encoding, so I decoded it first. The result still wasn’t readable, and I guessed it was encrypted with AES or something similar.
+
+I’d never reverse engineered an Android app before, so I just searched globally for `AES`. And guess what? There was a file called `k43.java` with the entire decryption process laid out in front of me:
 
 ```
-$ date
-Sun Feb 23 22:33:37 AEDT 2025
-$ curl --silent "https://feeds.feedburner.com/GoogleChromeReleases" | grep -o '2025-02-..' | sort -n | head -n5
-2025-02-16
-2025-02-13
-2025-02-13
-2025-02-13
-2025-02-13
+public static String f(String str, String str2) throws o21 {
+    str.getClass();
+    str2.getClass();
+    try {
+        byte[] bArrDecode = Base64.decode(str, 0);
+        bArrDecode.getClass();
+        p(bArrDecode);
+        return o(
+            or.m(bArrDecode, 0, 12),
+            bArrDecode,
+            m(bArrDecode.length - 28, str2)
+        );
+    } catch (o21 e) {
+        throw e;
+    } catch (Exception e2) {
+        Napier.e$default(
+            Napier.INSTANCE,
+            e2,
+            (String) null,
+            new s11(24),
+            2,
+            (Object) null
+        );
+        throw new o21(pv0.o("Decryption failed: ", e2.getMessage()), e2);
+    }
+}
+
+public static SecretKeySpec m(int i, String str)
+    throws NoSuchAlgorithmException {
+    String str2 = i + str;
+    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+    byte[] bytes = str2.getBytes(yj0.a);
+    bytes.getClass();
+    return new SecretKeySpec(messageDigest.digest(bytes), "AES");
+}
+
+public static String o(
+    byte[] bArr,
+    byte[] bArr2,
+    SecretKeySpec secretKeySpec
+)
+    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(
+        2,
+        secretKeySpec,
+        new GCMParameterSpec(SemanticState.Focused, bArr)
+    );
+    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
+    bArrDoFinal.getClass();
+    return new String(bArrDoFinal, yj0.a);
+}
 ```
 
-And the RSS feed (which historically was serving fresh results) was redirecting to the Atom feed:
+So let’s walk through this step by step.
+
+The function `f` takes two strings as inputs. The first, `str`, contains the Base64-encoded data, which it decodes:
 
 ```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default'
-HTTP/2 302
-location: http://feeds.feedburner.com/GoogleChromeReleases
+byte[] bArrDecode = Base64.decode(str, 0);
+bArrDecode.getClass();
+p(bArrDecode);
 ```
 
-Well, lo and behold, a few days ago I came to discover that the RSS feed could still be accessed, if you added a secret parameter, `?redirect=false`:
+It then checks whether the decoded data is at least 28 bytes long:
 
 ```
-$ hcurl 'https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-HTTP/2 200
-cross-origin-resource-policy: cross-origin
-server: blogger-renderd
-x-content-type-options: nosniff
-x-xss-protection: 0
-x-frame-options: SAMEORIGIN
-date: Sat, 21 Nov 2026 22:20:58 GMT
-expires: Sat, 21 Nov 2026 22:20:59 GMT
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 14:45:03 GMT
-content-type: application/atom+xml; charset=UTF-8
-age: 0
-alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-accept-ranges: none
-vary: Accept-Encoding
+public static void p(byte[] bArr) throws o21 {
+    if (bArr.length < 28) {
+        throw new o21(
+            gg3.g(
+                bArr.length,
+                "Encrypted data too small: ",
+                " bytes (minimum: 28 bytes)"
+            ),
+            null
+        );
+    }
+}
 ```
 
-Since we can now pull in fresh results from the Chrome Releases blog, it means that CCBot can start working properly again. Its source is still [on GitHub](https://github.com/MegaManSec/CCBot), and I’m sure Opera still uses it (lol).
-
-## Caching with If-Modified-Since
-
-In terms of the [feed caching problem](https://joshua.hu/google-feedburner-broken-caching-if-modified-since) I also previously wrote about, where the Feedburner Atom feed refused any caching techniques which RSS feeds typically allow to be utilized, it turns out the `redirect=false` feed supports them. Sort of.
-
-Feedburner itself hasn’t changed at all. It still doesn’t send an `ETag`, it still ignores `If-Modified-Since`, and it still tells everybody not to cache anything:
+Next, it passes a bunch of data to the function `o`, which handles the final stage of decryption:
 
 ```
-$ hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' 'https://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/2 200
-content-type: text/xml; charset=utf-8
-feedburnerv2:
-last-modified: Sat, 21 Nov 2026 15:27:08 GMT
-cache-control: no-cache, no-store, max-age=0, must-revalidate
-pragma: no-cache
-expires: Mon, 01 Jan 1990 00:00:00 GMT
-date: Sat, 21 Nov 2026 22:35:16 GMT
+return o(
+    or.m(bArrDecode, 0, 12),
+    bArrDecode,
+    m(bArrDecode.length - 28, str2)
+);
 ```
 
-It’s also still serving outdated results. For example, on the 30th of October, a post published at 07:58 PT was still missing from the Feedburner feed nearly two hours later.
+The first argument is the first 12 bytes of the decoded data. That’s our IV, or nonce. The second argument is the entire decoded byte array.
 
-The `redirect=false` feed, on the other hand, does respond with `304 Not Modified`. Sometimes. Because of course it’s inconsistent. The same request, with an `If-Modified-Since` in the future, made twelve times in a row:
+The third argument is where things get interesting. It takes the total length minus 28 and passes that, along with `str2`, to the function `m`. Those 28 bytes account for the 12-byte nonce and the 16-byte authentication tag.
 
-```
-$ URL='https://www.blogger.com/feeds/8982037438137564684/posts/default?redirect=false'
-$ for i in $(seq 12); do hcurl -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL" | tr -d '\r' | grep -iE '^(http|date|age)' | paste -sd ' ' -; done
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:17 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:18 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:18 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:19 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:19 GMT age: 0
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:20 GMT
-HTTP/2 200  date: Sat, 21 Nov 2026 22:35:21 GMT
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
-HTTP/2 304  date: Sat, 21 Nov 2026 22:35:21 GMT age: 0
-```
+Inside `m`, the remaining length is converted to a string and joined with `str2`. That combined string is then hashed using SHA-256 to produce the AES key.
 
-Looking at the `date` and `age` headers, we see the first request in each second gets a full `200`, and every request after it in that same second gets a `304` with an `age: 0` header.
+So `str2` isn’t the AES key itself. It’s the secret string used to derive it, and we haven’t found it yet.
 
-`age` is the header a cache adds when it answers with its own stored copy instead of asking the server behind it. The feed is served with `cache-control: public, must-revalidate, proxy-revalidate, max-age=1`, so whatever sits in front of Blogger’s `blogger-renderd` server (presumably some Google frontend) is allowed to keep a copy for one second. While that copy is fresh, the cache handles the `If-Modified-Since` itself, correctly, and replies with a `304`. Once it has expired, the request goes through to `blogger-renderd`, which ignores `If-Modified-Since` completely and sends back the whole feed.
-
-Adding a cache-busting parameter to the URL makes every request miss the cache, and then it’s a `200` every single time:
+Finally, `o` does the actual decryption:
 
 ```
-$ for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' -H 'if-modified-since: Mon, 20 Jan 2035 10:39:12 GMT' "$URL&nocache=$RANDOM"; done; echo
-200 200 200 200 200 200 200 200 200 200
+public static String o(
+    byte[] bArr,
+    byte[] bArr2,
+    SecretKeySpec secretKeySpec
+)
+    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(
+        2,
+        secretKeySpec,
+        new GCMParameterSpec(SemanticState.Focused, bArr)
+    );
+    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
+    bArrDoFinal.getClass();
+    return new String(bArrDoFinal, yj0.a);
+}
 ```
 
-So for anything that polls the feed every few minutes, the one-second copy will always have expired by the time the next request comes in, and `If-Modified-Since` never gets a `304`.
+It sets up AES-GCM with the derived key and nonce, then decrypts the data after the first 12 bytes.
 
-## Caching with If-None-Match
+That’s the decryption process figured out. Now we just need the secret string.
 
-What’s also interesting is that `If-None-Match` *does* work on the `redirect=false` feed. The catch is that you get an `ETag` if and only if you ask for a compressed response (wtf). Without `Accept-Encoding: gzip`, there’s no `ETag` at all:
+# Part 2: Finding the decryption key
 
-```
-$ hcurl "$URL"
-HTTP/2 200
-server: blogger-renderd
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
-```
+I was doing this in a Discord call in the Rust Language Community server, and someone pointed out that I should look for a byte array with a length of 32 bytes.
 
-And with it:
+I first searched for `byte[32]`, but didn’t find anything useful. I then tried this pattern:
 
 ```
-$ hcurl --compressed "$URL"
-HTTP/2 200
-content-encoding: gzip
-server: blogger-renderd
-content-length: 57817
-cache-control: public, must-revalidate, proxy-revalidate, max-age=1
-last-modified: Sat, 21 Nov 2026 22:21:34 GMT
-etag: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"
-content-type: application/atom+xml; charset=UTF-8
-vary: Accept-Encoding
+grep -P 'byte\[\]\s*\w+\s*=\s*\{' | awk -F',' 'NF==32'
 ```
 
-Asking for only `br` or `zstd` doesn’t help, because the server doesn’t support them, so it sends the feed uncompressed, without an `ETag`.
-
-Once you have the `ETag`, sending it back in `If-None-Match` gets a `304` every time, even with the cache-busting parameter (so these all come from `blogger-renderd` itself), and with or without `--compressed`:
+That led me to `m17.java`, which contained these two super cool arrays:
 
 ```
-$ for i in $(seq 10); do curl -s --compressed -o /dev/null -w '%{http_code} ' -H 'if-none-match: W/"19973aaeb10ce867051869871443ee4e1f782e6a97a91bff8e8b5422e5f7f357"' "$URL&nocache=$RANDOM"; done; echo
-304 304 304 304 304 304 304 304 304 304
+public static final byte[] a = {117, -67, 13, -80, 43, 2, 93, 61, 9, 71, 61, -85, 12, -119, -123, 58, -13, 30, -119, -59, -30, 60, 3, 56, -34, -80, -28, -124, 88, -124, 1, 68};
+public static final byte[] b = {45, -28, 93, -4, 29, 49, 31, 87, 102, 16, 119, -31, 71, -54, -10, 66, -72, 40, -80, -73, -86, 14, 77, 86, -85, -55, -121, -55, 46, -73, 98, 29};
 ```
 
-This saves quite a bit, which I had originally intended and wanted to do. The full feed is 1,725,860 bytes uncompressed and 57,817 bytes gzipped, and a `304` is practically nothing. Feedburner still sends 55,792 gzipped bytes (1,615,960 uncompressed) every time.
-
-## Where the redirect came from
-
-All of this is different to what I found in my original post. Back then, the blogger.com URL was still served by the old GData API (that’s what the `sunset` and `link` headers in that post were about), and it answered `If-Modified-Since` with a `304`. Those headers are gone now, and the responses come from `server: blogger-renderd` (see the `redirect=false` response at the start of this post), which is the same server that handles the blog’s own feeds on chromereleases.googleblog.com.
-
-That’s probably also the real reason for the redirect in my last post. The documentation I quoted in my original post said that the old GData feed URLs would keep working, but that “the response is the same as blogspot.com feeds”. The Chrome Releases blog’s own feeds were already redirecting to Feedburner at the time (that’s Blogger’s “Post feed redirect URL” setting), so once the GData API was finally switched off, the blogger.com URL started redirecting too. So it probably wasn’t me emailing Feedburner’s support after all, too bad.
-
-`redirect=false` is how you get around that setting, and it’s not quite as undocumented as I originally thought: a [Feedburner help page about Google Webmaster Tools](https://support.google.com/feedburner/answer/97090) mentions `http://mybloggerblog.blogspot.com/feeds/posts/default?redirect=false` as a feed URL format that “should always work” for Blogger users.
-
-Oh, and the “RSS feed” I’ve been talking about in these posts is actually an Atom feed (`content-type: application/atom+xml`), and the real RSS version is accessed with `?alt=rss&redirect=false`, which behaves exactly the same way on both blogger.com and chromereleases.googleblog.com.
-
-## Redirecting to plain HTTP
-
-Another interesting thing is that every one of the blog’s feed URLs redirects to `http://feeds.feedburner.com/GoogleChromeReleases`, with `http`, not `https`, even when the feed itself was requested over https:
+We then tried to figure out how to turn these into something useful. After a bit of experimenting, someone suggested XORing the two arrays together. We interpreted the resulting bytes as text and got this:
 
 ```
-$ hcurl 'https://chromereleases.googleblog.com/feeds/posts/default'
-HTTP/2 302
-server: blogger-renderd
-location: http://feeds.feedburner.com/GoogleChromeReleases
+XYPL63BjoWJJKCsxK69rH2NnuycMv3cY
 ```
 
-That means a feed reader that starts off on `https://chromereleases.googleblog.com/feeds/posts/default` gets downgraded to plain HTTP when it follows the redirect, and instead of sending it back to https, Feedburner just serves the whole feed over plain HTTP:
+Using this string, I wrote a little decryptor in Rust:
 
 ```
-$ hcurl 'http://feeds.feedburner.com/GoogleChromeReleases'
-HTTP/1.1 200 OK
-Content-Type: text/xml; charset=utf-8
+use aes_gcm::{
+    Aes256Gcm, Nonce,
+    aead::{Aead, AeadCore, Generate, Key, KeyInit},
+};
+use base64::Engine;
+use sha2::{Digest, Sha256};
+
+const STRING_2: &str = "XYPL63BjoWJJKCsxK69rH2NnuycMv3cY";
+
+fn main() {
+    let input = std::fs::read_to_string(
+        "/home/<redacted>/Downloads/HITSTER_4.0.3_APKPure.xapk.out/HITSTER_4.0.3_apkcombo.com/resources/nl.jumbo.hitster.apk/res/raw/locales_v4.json",
+    );
+
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(input.unwrap())
+        .unwrap();
+
+    let iv = &data[..12];
+    let ct = &data[12..];
+
+    let mut hash = Sha256::new();
+    hash.update((data.len() - 28).to_string().as_bytes());
+    hash.update(STRING_2);
+    let key = hash.finalize();
+
+    let cipher = Aes256Gcm::new(&key);
+    let plaintext = cipher.decrypt(Nonce::from_slice(iv), ct).unwrap();
+
+    std::fs::write("test.txt", plaintext).unwrap();
+}
 ```
 
-In other words, anything subscribed to one of the Chrome Releases blog’s own feed links gets Chrome’s security release announcements unencrypted, and anybody on the network path can change them, like adding a fake release post, or removing a real security update so something like CCBot never sees it.
+That gave us this awesome `test.txt` file with around 31,000 lines of mappings from card IDs to Apple Music and Spotify tracks, plus ISRCs, across multiple regions.
 
-## Which feed URL to use
+We then looked around the code a little more and found out that all of this wasn’t really needed.
 
-So, to sum it all up:
+If we’d searched for an HTTPS URL first, we would’ve landed on this:
 
-| URL | `If-Modified-Since` | `If-None-Match` | Up to date? |
-| --- | --- | --- | --- |
-| `feeds.feedburner.com/GoogleChromeReleases` | Ignored | No `ETag` | Not always (hours, or days, behind) |
-| `/feeds/posts/default` and `?alt=rss`, on chromereleases.googleblog.com or blogger.com | n/a (302 to Feedburner, over HTTP) | n/a | n/a |
-| The same URLs with `redirect=false` | Only from the one-second cache | Works, if you ask for gzip to get the `ETag` | Yes |
+And with a little imagination, we tried:
 
-So, if you’re polling a Blogger feed that’s redirected to Feedburner, use `?redirect=false`, ask for gzip, keep the `ETag`, and send it back as `If-None-Match`. Python’s `requests` (as used by CCBot) already asks for gzip by default, so it’s only the last two you need to do yourself.
+There was the entire thing. No encryption.
 
-In other news, CCBot 1.1.2 has been published!
+We spent around 18 hours chasing a file that, in the end, wasn’t even a real secret.
+
+Credits:
+
+- Mr.Corrupt from the Rust Language Discord community for helping me.

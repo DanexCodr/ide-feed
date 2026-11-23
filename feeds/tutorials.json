@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-23T06:21:12Z",
+  "updated": "2026-11-23T23:33:12Z",
   "items": [
     {
       "id": "devto-5060452",
@@ -62,27 +62,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978580",
-      "title": "AI Code Is Unmaintainable? So Is Ours.",
-      "desc": "By Daniel Nwaneri | 2 min read",
-      "tag": "tutorial",
-      "published": "2026-11-11T15:59:00Z",
-      "order": 6,
-      "url": "https://dev.to/dannwaneri/ai-code-is-unmaintainable-so-is-ours-3mek",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fnjh8nx84adsifberdyfi.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBBAX/xAAUAQEAAAAAAAAAAAAAAAAAAAAD/9oADAMBAAIQAxAAAAGu6DnrEAJ//8QAGBAAAwEBAAAAAAAAAAAAAAAAAAECESH/2gAIAQEAAQUC0RkmSLrfCuKdZ//EABYRAAMAAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPwE1f//EABgRAAIDAAAAAAAAAAAAAAAAAAECEBEh/9oACAECAQE/AQu1H//EABcQAAMBAAAAAAAAAAAAAAAAAAARMRD/2gAIAQEABj8CmQmtjZ//xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQXExYbHw/9oACAEBAAE/IW2bdjRiD4osnyLzF1Md3mh02aP/2gAMAwEAAgADAAAAEIXP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8QSBGf/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQIBAT8QAbn/xAAcEAEBAQEAAgMAAAAAAAAAAAABESEAMaFBUYH/2gAIAQEAAT8Qzn114+tHznW1T++CAhJG/jq1slzqIRJl6MQUImeuIqQpg313/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5091872",
       "title": "The Third Cup: Five Elements, One IT Company",
       "desc": "By xulingfeng | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-22T06:17:19Z",
-      "order": 7,
+      "order": 6,
       "url": "https://dev.to/thethirdcup/the-third-cup-five-elements-one-it-company-1bca",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Feu9y2dd1w8r7y7ctg0r2.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAIDBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABzDUDS1Fy/8QAGhABAAIDAQAAAAAAAAAAAAAAAQARAhIhMf/aAAgBAQABBQKqnIeudJ2AbZBQDP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAAQMSD/2gAIAQEABj8CzFD/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhQWFx0f/aAAgBAQABPyGiR9h1PvFEUCO+QhCIb5MCmDUrhuXuf//aAAwDAQACAAMAAAAQWd//xAAYEQADAQEAAAAAAAAAAAAAAAAAAREhMf/aAAgBAwEBPxBK8Jh//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhMf/aAAgBAgEBPxDBun//xAAbEAEBAAMBAQEAAAAAAAAAAAABEQAhMUFRkf/aAAgBAQABPxBB4MBWpp9w+1Z7ov5jAA0bXZiVJJWQ7mwYgFmGY9N8ZUCtxq42cMBs9+5//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4978580",
+      "title": "AI Code Is Unmaintainable? So Is Ours.",
+      "desc": "By Daniel Nwaneri | 2 min read",
+      "tag": "tutorial",
+      "published": "2026-11-11T15:59:00Z",
+      "order": 7,
+      "url": "https://dev.to/dannwaneri/ai-code-is-unmaintainable-so-is-ours-3mek",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fnjh8nx84adsifberdyfi.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBBAX/xAAUAQEAAAAAAAAAAAAAAAAAAAAD/9oADAMBAAIQAxAAAAGu6DnrEAJ//8QAGBAAAwEBAAAAAAAAAAAAAAAAAAECESH/2gAIAQEAAQUC0RkmSLrfCuKdZ//EABYRAAMAAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPwE1f//EABgRAAIDAAAAAAAAAAAAAAAAAAECEBEh/9oACAECAQE/AQu1H//EABcQAAMBAAAAAAAAAAAAAAAAAAARMRD/2gAIAQEABj8CmQmtjZ//xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQXExYbHw/9oACAEBAAE/IW2bdjRiD4osnyLzF1Md3mh02aP/2gAMAwEAAgADAAAAEIXP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8QSBGf/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQIBAT8QAbn/xAAcEAEBAQEAAgMAAAAAAAAAAAABESEAMaFBUYH/2gAIAQEAAT8Qzn114+tHznW1T++CAhJG/jq1slzqIRJl6MQUImeuIqQpg313/9k=",
       "color": "#3B49DF"
     },
     {
@@ -110,27 +110,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-5004759",
-      "title": "Everyone Is Building AI to Replace Developers. Nobody Is Building the Plan for What Comes After.",
-      "desc": "By TheBitForge | 8 min read",
-      "tag": "tutorial",
-      "published": "2026-11-09T13:57:43Z",
-      "order": 10,
-      "url": "https://dev.to/thebitforge/everyone-is-building-ai-to-replace-developers-nobody-is-building-the-plan-for-what-comes-after-4a5o",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgznnx050gbzm02crp9o9.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAd4MUTI//8QAFxABAQEBAAAAAAAAAAAAAAAAABEBIv/aAAgBAQABBQLWaqp1Gq//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREQIUFx/9oACAEBAAE/IWKMcY9KbPweMrmj/9oADAMBAAIAAwAAABAYH//EABcRAQADAAAAAAAAAAAAAAAAAAARIUH/2gAIAQMBAT8Q1UP/xAAXEQEAAwAAAAAAAAAAAAAAAAAAESFB/9oACAECAQE/EMXL/8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUExYYH/2gAIAQEAAT8QUciA219mhpyUy+xvevKDhEgvqsjEHZuC/E//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5004421",
       "title": "I Used gp-grid to Build a React Food Festival App with Advanced Data Grid Features",
       "desc": "By Hadil Ben Abdallah | 16 min read",
       "tag": "tutorial",
       "published": "2026-11-10T09:04:10Z",
-      "order": 11,
+      "order": 10,
       "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5079085",
+      "title": "Everybody Has an AI Apocalypse Story. Almost Nobody Reads the Fine Print.",
+      "desc": "By Self-Correcting Systems | 21 min read",
+      "tag": "tutorial",
+      "published": "2026-11-20T05:31:00Z",
+      "order": 11,
+      "url": "https://dev.to/kenielzep97/everybody-has-an-ai-apocalypse-story-almost-nobody-reads-the-fine-print-43hm",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsaykgc6y8kkun5ps5gam.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAACAf/aAAwDAQACEAMQAAABjeJSrpiOn//EABkQAAMBAQEAAAAAAAAAAAAAAAABETECEv/aAAgBAQABBQJ4vJUKQ53raf/EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/Aaf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAABBQAAAAAAAAAAAAAAAAAAAQIgMUH/2gAIAQEABj8CMKaLH//EABsQAAMAAgMAAAAAAAAAAAAAAAABESFxMVGR/9oACAEBAAE/IUUbGVtrDqGXPibJtwpwDSyj/9oADAMBAAIAAwAAABBof//EABgRAAIDAAAAAAAAAAAAAAAAAAABETFB/9oACAEDAQE/EIPCj//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAECAQE/EIf/xAAaEAEAAwEBAQAAAAAAAAAAAAABABEhMUFx/9oACAEBAAE/ECO1dLIU48aI/ZfjZ6HIHwwhkHGtmg8fZeAdML5Hhc//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -158,39 +158,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-5079085",
-      "title": "Everybody Has an AI Apocalypse Story. Almost Nobody Reads the Fine Print.",
-      "desc": "By Self-Correcting Systems | 21 min read",
-      "tag": "tutorial",
-      "published": "2026-11-20T05:31:00Z",
-      "order": 14,
-      "url": "https://dev.to/kenielzep97/everybody-has-an-ai-apocalypse-story-almost-nobody-reads-the-fine-print-43hm",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsaykgc6y8kkun5ps5gam.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAACAf/aAAwDAQACEAMQAAABjeJSrpiOn//EABkQAAMBAQEAAAAAAAAAAAAAAAABETECEv/aAAgBAQABBQJ4vJUKQ53raf/EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/Aaf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAABBQAAAAAAAAAAAAAAAAAAAQIgMUH/2gAIAQEABj8CMKaLH//EABsQAAMAAgMAAAAAAAAAAAAAAAABESFxMVGR/9oACAEBAAE/IUUbGVtrDqGXPibJtwpwDSyj/9oADAMBAAIAAwAAABBof//EABgRAAIDAAAAAAAAAAAAAAAAAAABETFB/9oACAEDAQE/EIPCj//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAECAQE/EIf/xAAaEAEAAwEBAQAAAAAAAAAAAAABABEhMUFx/9oACAEBAAE/ECO1dLIU48aI/ZfjZ6HIHwwhkHGtmg8fZeAdML5Hhc//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5047181",
       "title": "The Agentic Loop Explained: Step Through the Plan, Build, Judge and Repeat Loop Behind AI Coding Agents",
       "desc": "By DevOps Daily | 6 min read",
       "tag": "tutorial",
       "published": "2026-11-16T10:52:54Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/devopsdaily/the-agentic-loop-explained-step-through-the-plan-build-judge-and-repeat-loop-behind-ai-coding-36g2",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdevops-daily.com%2Fimages%2Fsimulator-posts%2F8e36552e-c946-5827-ae26-513c678d96d2-cover.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABz4SEP//EABcQAAMBAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCzSr/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAZEAEBAAMBAAAAAAAAAAAAAAAAARFhcTH/2gAIAQEAAT8hnjERUunDhbp//9oADAMBAAIAAwAAABBhT//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQACAgMBAAAAAAAAAAAAAAEAESFxMVGRgf/aAAgBAQABPxACIIOIBckAXKSqO7lOvrNPrBTgfWf/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-5005200",
-      "title": "A VS Code extension to turn ANY free chatbot website into an AI agent (kind of)",
-      "desc": "By EffessDev | 2 min read",
-      "tag": "tutorial",
-      "published": "2026-11-12T14:00:15Z",
-      "order": 16,
-      "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1jfb",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fkmhyr0912qeoxsoo11q2.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAIBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhy4QF/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQABBQKFh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABcQAAMBAAAAAAAAAAAAAAAAAAERIDH/2gAIAQEAAT8hg7OP/9oADAMBAAIAAwAAABBUD//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxAdn//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAECAQE/EIf/xAAaEAEBAAIDAAAAAAAAAAAAAAABEQAQQVGB/9oACAEBAAE/ELMW68ww8zJiQHvf/9k=",
       "color": "#3B49DF"
     },
     {
@@ -199,10 +175,34 @@
       "desc": "By Giorgi Kobaidze | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-19T21:20:16Z",
-      "order": 17,
+      "order": 15,
       "url": "https://dev.to/georgekobaidze/c-15-unpacked-unions-have-arrived-heres-why-they-matter-48je",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fezi58spyxkisi28opxne.jpeg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEAA//EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHpcqLiP//EABkQAAIDAQAAAAAAAAAAAAAAAAABAhEhEP/aAAgBAQABBQK9TLFOu4JRZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABkQAAIDAQAAAAAAAAAAAAAAAAAQERIxof/aAAgBAQAGPwJ1UmGdP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFRQXH/2gAIAQEAAT8hcRH9KUWoVY0SS4ThUtVqegQ//9oADAMBAAIAAwAAABC77//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxCLj//EABoQAQEBAQEBAQAAAAAAAAAAAAERIQBRMXH/2gAIAQEAAT8QtCEtfOpGEk37wuaM4dVBbGcJYvKWcBLQZpk/OyoJ4pxOWeLv/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5094625",
+      "title": "8 Best MCP Gateways",
+      "desc": "By Varshith V Hegde | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-23T13:19:07Z",
+      "order": 16,
+      "url": "https://dev.to/varshithvhegde/8-best-mcp-gateways-4ddf",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F0uuq7fbkp06wlff82efc.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB41HdShKP/8QAGBAAAwEBAAAAAAAAAAAAAAAAAAERICH/2gAIAQEAAQUCvKPKR//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAAx/9oACAECAQE/AVf/xAAXEAADAQAAAAAAAAAAAAAAAAAAIEGR/9oACAEBAAY/AiYRv//EAB4QAAIBAwUAAAAAAAAAAAAAAAABERAhYTFBUXGh/9oACAEBAAE/IVwJ9oUyfbyhq2lJwTgmuz//2gAMAwEAAgADAAAAECS//8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQMBAT8Qp//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAgEBPxAcgXl//8QAHRABAQABBAMAAAAAAAAAAAAAAREAECExUUFhkf/aAAgBAQABPxBOWy5FfuPVDPXLjEdmOEXs0jp3k2xzcAqMPGf/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5005200",
+      "title": "A VS Code extension to turn ANY free chatbot website into an AI agent (kind of)",
+      "desc": "By EffessDev | 2 min read",
+      "tag": "tutorial",
+      "published": "2026-11-12T14:00:15Z",
+      "order": 17,
+      "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1jfb",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fkmhyr0912qeoxsoo11q2.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAIBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhy4QF/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQABBQKFh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABcQAAMBAAAAAAAAAAAAAAAAAAERIDH/2gAIAQEAAT8hg7OP/9oADAMBAAIAAwAAABBUD//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxAdn//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAECAQE/EIf/xAAaEAEBAAIDAAAAAAAAAAAAAAABEQAQQVGB/9oACAEBAAE/ELMW68ww8zJiQHvf/9k=",
       "color": "#3B49DF"
     },
     {
@@ -218,27 +218,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-5042533",
-      "title": "How I Made a Markov Chain Model from Scratch in C++ During a Global Online Teen Hackathon",
-      "desc": "By Tyler N | 15 min read",
-      "tag": "tutorial",
-      "published": "2026-11-15T19:51:04Z",
-      "order": 19,
-      "url": "https://dev.to/necoz/how-i-made-a-markov-chain-model-from-scratch-in-c-during-a-global-online-teen-hackathon-3gd7",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5elgjxui0dq9ukar94dn.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAgADBP/EABUBAQEAAAAAAAAAAAAAAAAAAAQC/9oADAMBAAIQAxAAAAHG60qnCio//8QAFxAAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAQABBQJIhMrLv//EABYRAQEBAAAAAAAAAAAAAAAAAAACEf/aAAgBAwEBPwGUa//EABYRAQEBAAAAAAAAAAAAAAAAAAACEf/aAAgBAgEBPwG9U//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABoQAAMBAAMAAAAAAAAAAAAAAAABEVEhMWH/2gAIAQEAAT8ht3wSQTKejK1leles/9oADAMBAAIAAwAAABDj3//EABcRAQEBAQAAAAAAAAAAAAAAAAEAMUH/2gAIAQMBAT8QDyBdv//EABgRAAIDAAAAAAAAAAAAAAAAAAABETFh/9oACAECAQE/EEnZs//EACAQAAIBAwQDAAAAAAAAAAAAAAABETFR4SFBYYGRobH/2gAIAQEAAT8QlNTs2+iiq56IqN+irRDlCyQssK+8izh//9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5082880",
       "title": "A VS Code extension to turn any free chatbot in your browser into an AI agent",
       "desc": "By EffessDev | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-21T11:49:40Z",
-      "order": 20,
+      "order": 19,
       "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1n21",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fd1di2l8z24jfwbgdwm6b.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABwkBT/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAgMBAAAAAAAAAAAAAAAAEBEAAWEh/9oACAEBAAE/IQ9HDVN5P//aAAwDAQACAAMAAAAQIw//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAgEFAQAAAAAAAAAAAAABABEhEDFBUXGB/9oACAEBAAE/EMcxTuCHCJ9uJQoR91qK9lz/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-5042533",
+      "title": "How I Made a Markov Chain Model from Scratch in C++ During a Global Online Teen Hackathon",
+      "desc": "By Tyler N | 15 min read",
+      "tag": "tutorial",
+      "published": "2026-11-15T19:51:04Z",
+      "order": 20,
+      "url": "https://dev.to/necoz/how-i-made-a-markov-chain-model-from-scratch-in-c-during-a-global-online-teen-hackathon-3gd7",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5elgjxui0dq9ukar94dn.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAgADBP/EABUBAQEAAAAAAAAAAAAAAAAAAAQC/9oADAMBAAIQAxAAAAHG60qnCio//8QAFxAAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAQABBQJIhMrLv//EABYRAQEBAAAAAAAAAAAAAAAAAAACEf/aAAgBAwEBPwGUa//EABYRAQEBAAAAAAAAAAAAAAAAAAACEf/aAAgBAgEBPwG9U//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABoQAAMBAAMAAAAAAAAAAAAAAAABEVEhMWH/2gAIAQEAAT8ht3wSQTKejK1leles/9oADAMBAAIAAwAAABDj3//EABcRAQEBAQAAAAAAAAAAAAAAAAEAMUH/2gAIAQMBAT8QDyBdv//EABgRAAIDAAAAAAAAAAAAAAAAAAABETFh/9oACAECAQE/EEnZs//EACAQAAIBAwQDAAAAAAAAAAAAAAABETFR4SFBYYGRobH/2gAIAQEAAT8QlNTs2+iiq56IqN+irRDlCyQssK+8izh//9k=",
       "color": "#3B49DF"
     },
     {
@@ -278,18 +278,6 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-5041118",
-      "title": "Antigravity Research Kit: 8 Scientific Skills, Stdio MCP Server & Pure-SVG Comic Studio",
-      "desc": "By Robina Mirbahar | 5 min read",
-      "tag": "tutorial",
-      "published": "2026-11-15T11:20:10Z",
-      "order": 24,
-      "url": "https://dev.to/gde/how-i-built-an-8-skill-research-engineering-plugin-stdio-mcp-server-vector-comic-studio-for-lfb",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F615f8eax8gsnd5fqn9aj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAMC/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAXxuU3YyY//EABgQAAMBAQAAAAAAAAAAAAAAAAABAkEx/9oACAEBAAEFAq5mSMsgR//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAABEAEP/aAAgBAQAGPwKWXSM//8QAGxAAAQUBAQAAAAAAAAAAAAAAAQAQESExQVH/2gAIAQEAAT8hhpRbghJEKlmUUnxq1Stb/9oADAMBAAIAAwAAABBGf//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QDZ5f/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EHCL/8QAGxABAQADAQEBAAAAAAAAAAAAAREAIUExYfD/2gAIAQEAAT8Q9lfI5Q4Aa/rkCI6hZgAZdhbkRb7zOz2FeuI8Ql005Ow4Gf/Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5054233",
       "title": "Git 2.56's git add --resolved only checks conflict markers while git still calls a file unmerged",
       "desc": "By Alex Georgiev | 6 min read",
@@ -323,18 +311,6 @@
       "url": "https://dev.to/xulingfeng/stratagem-35-lena-made-the-promises-interlock-the-ai-still-cant-see-acls-full-reach-41i5",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvlq6fvuprii0dchoigc3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkZySHhqxP10l//8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPwEJv//EABkQAAIDAQAAAAAAAAAAAAAAAAAhASAxQf/aAAgBAQAGPwLohmTX/8QAGhAAAgMBAQAAAAAAAAAAAAAAAAERITFBsf/aAAgBAQABPyFvgS2rHnqVCpjUkDpjwstdDW4ZFh//2gAMAwEAAgADAAAAEKlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGAbf/xAAfEAEBAAIBBAMAAAAAAAAAAAABEQAhQTFRYXGB0eH/2gAIAQEAAT8QV2OtyS3C53W4fuInWaDFm5WIEMAVyS6TzhiAFcn1lYBUs94oXnROH4z/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-5048056",
-      "title": "Stratagem #34: Derek Gave Up Acceptance Sign-Off. The AI Still Can't Tell Who Won.",
-      "desc": "By xulingfeng | 16 min read",
-      "tag": "tutorial",
-      "published": "2026-11-16T13:08:10Z",
-      "order": 18,
-      "url": "https://dev.to/xulingfeng/stratagem-34-derek-gave-up-acceptance-sign-off-the-ai-still-cant-tell-who-won-25f8",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fh622imtaoop06jditqgq.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkZyMh4asT9dJf/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGhAAAAcAAAAAAAAAAAAAAAAAAAEQICExQf/aAAgBAQAGPwLUkUbf/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcbH/2gAIAQEAAT8hb4Esom/BpqVC0akgdMfCy10NbhkWH//aAAwDAQACAAMAAAAQqU//xAAWEQEBAQAAAAAAAAAAAAAAAAABADH/2gAIAQMBAT8QQkcv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAECAQE/EAZA2//EAB4QAQEAAgICAwAAAAAAAAAAAAERACFBcTFRYYHR/9oACAEBAAE/EFdjrcktwS90qMYOl0DFm5WIEO8AVyS6T5wggBXJ+ZWAVLO8ULzwnD9Z/9k=",
       "color": "#3B49DF"
     }
   ]
