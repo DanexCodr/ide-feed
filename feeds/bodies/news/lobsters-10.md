@@ -1,261 +1,157 @@
-I like making little tools that do one thing well and thing finding clever ways to combine them. It's the ethos behind a lot of the little software projects I have over at [Less Software](https://less.software).
+TIL (or this week-ish I learned) why big-sigma and big-pi turn up in
+the notation of dependent type theory.
 
-One of the first ones I made was a tool called [whereami](https://less.software/whereami/). Tongue-in-cheekly, I wanted to pitch it as the natural compliment to `whoami`. For that tool, the thinking was nearly every modern OS provides some kind of native API for geolocation. It felt silly to me that I could run a quick command from the terminal for so many things, but I couldn't run one that taps into this capability.
+I’ve long been aware of the zoo of more obscure Greek letters that
+turn up in papers about type system features of functional programming
+languages, `μ`, `Λ`, `Π`, `Σ`. Their meaning is usually clear from context
+but the reason for the choice of notation is usually not explained.
 
-In the pursuit to make that tool cross-platform, one of the things I found myself navigating were the differences between them. Consistently, macOS tended to have a lot of extra niceties baked in, particuarly when it came to imagine recognition, natural language processing and accessibility tooling.
+I recently stumbled on an explanation for `Π` (dependent functions)
+and `Σ` (dependent pairs) which turn out to be nicer than I expected,
+and closely related to every-day algebraic data types.
 
-With geolocation, one of the nice things macOS provides that other OS-native approaches don't is a built-in geocoder (and reverse geocoder). So you can type in something like this:
+## [sizes of types](https://dotat.at/@/2025-05-28-types.html#sizes-of-types)
 
-```makefile
-$ whereami
+The easiest way to understand algebraic data types is by counting the
+inhabitants of a type. For example:
 
-Location: 40.6753, -73.9431
-Accuracy: 35m
-Address: 865 St Marks Ave, New York, NY, 11213, US
+- the unit type `()` has one inhabitant, `()`, and the number 1 is why it’s called the unit type;
+- the `bool` type hass two inhabitants, `false` and `true`.
 
-$ whereami --json
+I have even seen these types called **`1`** and **`2`** (cruelly,
+without explanation) in occasional papers.
 
-{
-  "latitude": 40.675265033592396,
-  "longitude": -73.94310370569808,
-  "accuracy": 35,
-  "address": {
-    "street": "865 St Marks Ave",
-    "city": "New York",
-    "state": "NY",
-    "postal_code": "11213",
-    "country": "US"
-  }
-}
+## [product types](https://dotat.at/@/2025-05-28-types.html#product-types)
+
+Or pairs or (more generally) tuples or records. Usually written,
+
+```
+    (A, B)
 ```
 
-And you get that handy little `address` block! It also makes it easy to do something like this:
+The pair contains an *A* and a *B*, so the number of possible values is
+the number of possible *A* values multiplied by the number of possible
+*B* values.
 
-```ruby
-$ whereami "397 Bridge Street, Brooklyn NY"
+So it is spelled in type theory (and in Standard ML) like,
 
-Location: 40.6913, -73.9850
-Address: 397 Bridge St, New York, NY, 11201, US
-
-$ whereami "397 Bridge Street, Brooklyn NY" --json
-
-{
-  "latitude": 40.6913424,
-  "longitude": -73.9850328,
-  "accuracy": 0,
-  "address": {
-    "street": "397 Bridge St",
-    "city": "New York",
-    "state": "NY",
-    "postal_code": "11201",
-    "country": "US"
-  }
-}
+```
+    A * B
 ```
 
-Now you can grab the `latitude` and `longitude` coordinates for an address. And you get all of this "for free" no your macOS system. No t bad!
+## [sum types](https://dotat.at/@/2025-05-28-types.html#sum-types)
 
-There's another handy framework macOS makes available to your system: MapKit. It's analgous to Google Maps and their API offerings, but native to the operating system.
+Or disjoint union, or variant record. Declared in Haskell like,
 
-It turns out it's pretty straightforward to build a CLI wrapper around that framework as well, so I made [nearme](https://less.software/nearme/) (macOS only).
-
-They're designed to play well together:
-
-```java
-$ whereami --json | nearme "coffeeshop" --count=5
-
-1. Cafe Imael (cafe)
-   1090 St Johns Pl, New York, NY 11213
-   +1 (718) 758-5857 · https://www.imael.co · 485 m
-
-2. Zaim Coffee Shop (cafe)
-   1102 St Johns Pl, New York, NY 11213
-   +1 (347) 529-3444 · https://www.yelp.com/biz/zaim-coffee-shop-crown-heights · 500 m
-
-3. Cheeni (restaurant)
-   485 Tompkins Ave, New York, NY 11216
-   +1 (347) 365-4015 · https://www.yelp.com/biz/cheeni-brooklyn · 589 m
-
-4. Cotton Bean (cafe)
-   1077 Bergen St, Brooklyn, NY 11216
-   +1 (347) 276-8749 · https://www.cafecottonbean.com · 623 m
-
-5. MoCo 575 (restaurant)
-   531 Nostrand Ave, New York, NY 11216
-   +1 (347) 365-3680 · https://moco575.com · 673 m
-
-$ whereami --json | nearme "coffeeshop" --count=5 --json 
-
-[
-  {
-    "name": "Cafe Imael",
-    "address": "1090 St Johns Pl, New York, NY 11213",
-    "latitude": 40.67105,
-    "longitude": -73.942339,
-    "phone": "+1 (718) 758-5857",
-    "url": "https://www.imael.co",
-    "category": "cafe"
-  },
-  {
-    "name": "Zaim Coffee Shop",
-    "address": "1102 St Johns Pl, New York, NY 11213",
-    "latitude": 40.6710142,
-    "longitude": -73.9416723,
-    "phone": "+1 (347) 529-3444",
-    "url": "https://www.yelp.com/biz/zaim-coffee-shop-crown-heights",
-    "category": "cafe"
-  },
-  {
-    "name": "Cheeni",
-    "address": "485 Tompkins Ave, New York, NY 11216",
-    "latitude": 40.6806663,
-    "longitude": -73.9431295,
-    "phone": "+1 (347) 365-4015",
-    "url": "https://www.yelp.com/biz/cheeni-brooklyn",
-    "category": "restaurant"
-  },
-  {
-    "name": "Cotton Bean",
-    "address": "1077 Bergen St, Brooklyn, NY 11216",
-    "latitude": 40.6762179,
-    "longitude": -73.950436,
-    "phone": "+1 (347) 276-8749",
-    "url": "https://www.cafecottonbean.com",
-    "category": "cafe"
-  },
-  {
-    "name": "MoCo 575",
-    "address": "531 Nostrand Ave, New York, NY 11216",
-    "latitude": 40.6791358,
-    "longitude": -73.9493723,
-    "phone": "+1 (347) 365-3680",
-    "url": "https://moco575.com",
-    "category": "restaurant"
-  }
-]
+```hs
+        data Either a b
+            = Left a
+            | Right b
 ```
 
-I can vouch for at least three of these coffeeshops!
+Or in Rust like,
 
-When I was doing my pseudo-sabbatical at the Recurse Center this past spring, I spent a lot of time hammering away at these little tools and finding ways to combine them. Someone told me that the work I was doing and sharing reminded them of this idea you only need to control three points of focus to do a magic trick.
-
-That comment inspired me to make this list of "recipes" where I try to showcase different ways to combine these tools in surprising, useful and/or fun ways:
-
-But the one I want to write about specifically today is this "meet in the middle" idea.
-
-I just showed you how you can use `whereami` and `nearme` to find coffeeshops (or anything you can find via Apple Maps) on your Mac. With a little piping and a convenient alias, you can help figure out a place to "meet in the middle" between you and and another point:
-
-```bash
-{ whereami "350 5th Ave, New York" --json; \
-  whereami "200 Eastern Pkwy, Brooklyn" --json; } | \
-  jq -s '{latitude: (map(.latitude) | add / 2),
-          longitude: (map(.longitude) | add / 2)}' | \
-  nearme "bar" --count=3
+```rust
+        enum Either<A, B> {
+            Left(A),
+            Right(B),
+        }
 ```
 
-```java
-1. Deux Chats (nightlife)
-   27 Broadway, New York, NY 11249
-   +1 (917) 909-0145 · https://www.deuxchatsbk.com · 575 m
+A value of the type is either an *A* or a *B*, so the number of
+possible values is the number of *A* values plus the number of *B*
+values.
 
-2. Bar Milagro (nightlife)
-   29 Dunham Pl, New York, NY 11249
-   +1 (929) 298-0032 · https://www.xolobk.com/barmilagro · 617 m
+So it is spelled in type theory like,
 
-3. Cafe Susanne (nightlife)
-   8 River St, Brooklyn, NY 10044
-   https://www.barsusanne.com · 651 m
+```
+    A + B
 ```
 
-There you go! No API keys or browser or accounts: just input a couple addresses and a few plausible bars come out on the other side.
+## [dependent pairs](https://dotat.at/@/2025-05-28-types.html#dependent-pairs)
 
-## How it works
+In a dependent pair, the *type* of the second element depends on the
+*value* of the first. The classic example is a slice, roughly,
 
-It's three small tools, each doing one thing.
-
-**[whereami](https://less.software/whereami/)** started life as a CLI that asks your operating system where you are. As of 0.4 it can also act like a reverse geocoder (on macOS):
-
-```bash
-$ whereami "350 5th Ave, New York" --json
-{"latitude":40.7482378,"longitude":-73.9850579,"accuracy":0,"address":{"street":"350 5th Ave","city":"New York","state":"NY","postal_code":"10118","country":"US"}}
+```rust
+        struct IntSlice {
+            len: usize,
+            elem: &[i64; len],
+        }
 ```
 
-Looking up an address doesn't need location permission, because nothing is asking where you are. **jq** does the arithmetic. The `-s` flag slurps both JSON objects into an array, and the filter averages the coordinates:
+(This might look a bit circular, but the idea is that an array `[i64; N]` must be told how big it is – its size is an explicit part of its
+type – but an `IntSlice` knows its own size. The traditional
+dependent “vector” type is a sized linked list, more like my array
+type than my slice type.)
 
-```json
-{"latitude":40.7097896,"longitude":-73.9743696}
+The classic way to write a dependent pair in type theory is like,
+
+Σ len: usize . Array(Int, len)
+
+The big sigma binds a variable that has a type annotation, with a
+scope covering the expression after the dot – similar syntax to a
+typed lambda expression.
+
+We can expand a simple example like this into a many-armed sum type:
+either an array of length zero, or an array of length 1, or an array
+of length 2, … but in a sigma type the discriminant is user-defined
+instead of hidden.
+
+The number of possible values of the type comes from adding up all the
+alternatives, a summation just like the big sigma summation we were
+taught in school.
+
+When the second element doesn’t depend on the first element, we can
+count the inhabitants like,
+
+And the sigma type simplifies to a product type.
+
+### [telescopes](https://dotat.at/@/2025-05-28-types.html#telescopes)
+
+An aside from the main topic of these notes, I also recently
+encountered the name “telescope” for a multi-part dependent tuple or
+record.
+
+The name “telescope” comes from de Bruijn’s AUTOMATH, one of the first
+computerized proof assistants. (I first encountered de Bruijn as the
+inventor of numbered lambda bindings.)
+
+## [dependent functions](https://dotat.at/@/2025-05-28-types.html#dependent-functions)
+
+The return type of a dependent function can vary according to the
+argument it is passed.
+
+For example, to construct an array we might write something like,
+
+```rust
+        fn repeat_zero(len: usize) -> [i64; len] {
+            [0; len]
+        }
 ```
 
-**[nearme](https://less.software/nearme/)** searches for places around a set of coordinates using MapKit, the search engine behind Apple Maps. It reads coordinates from JSON on stdin, and it only cares about `latitude` and `longitude`. It has no idea those numbers came out of `jq` and not out of a GPS.
+The classic way to write the type of `repeat_zero()` is very similar
+to the `IntSlice` dependent pair, but with a big pi instead of a big
+sigma:
 
-Averaging two coordinates is not the "real" way to find the middle, but over a few miles trying to find a place to meet for coffee it's close enough. What does matter is that the midpoint has no idea what's actually there.
+Π len: usize . Array(Int, len)
 
-## Make it a command
+Mmm, pie.
 
-Typing that pipeline more than once get annoying quickly. It's more convenient to set it up as a function:
+To count the number of possible (pure, total) functions *A* ➞ *B*, we
+can think of each function as a big lookup table with *A* entries each
+containing a *B*. That is, a big tuple (*B*, *B*, … *B*), that is,
+*B* * *B* * … * *B*, that is, *B*<sup>*A*</sup>. Functions are
+exponential types.
 
-```bash
-middle() {
-  local second=()
-  # Two addresses only if a third argument is there to be the search term
-  if [[ $# -ge 3 && $3 != -* ]]; then
-    second=("$2")
-    set -- "$1" "${@:3}"
-  fi
-  { whereami "$1" --json; whereami "${second[@]}" --json; } |
-    jq -s '{latitude: (map(.latitude) | add / 2), longitude: (map(.longitude) | add / 2)}' |
-    nearme "${2:-coffeeshop}" "${@:3}"
-}
-```
+We can count a dependent function, where the number of possible
+*B*s depends on which *A* we are passed,
 
-Or if you're using fish, like me:
+## [danger](https://dotat.at/@/2025-05-28-types.html#danger)
 
-```fish
-function middle --description 'Search for places halfway between two addresses, or between you and one'
-    set -l second
-    # Two addresses only if a third argument is there to be the search term
-    if set -q argv[3]; and not string match -q -- '-*' $argv[3]
-        set second $argv[2]
-        set -e argv[2]
-    end
-    begin
-        whereami $argv[1] --json
-        whereami $second --json
-    end | jq -s '{latitude: (map(.latitude) | add / 2), longitude: (map(.longitude) | add / 2)}' | nearme (set -q argv[2]; and echo $argv[2]; or echo coffeeshop) $argv[3..]
-end
-```
+I have avoided the terms “dependent sum” and “dependent product”,
+because they seem perfectly designed to cause confusion over whether I
+am talking about variants, records, or functions.
 
-Give it two addresses and something to look for. Anything after that goes straight through to nearme. Leave off the second address and it uses wherever you are right now, so `middle "123 Main Street" coffee` finds coffee between you and 123 Main Street. With only an address, it looks for a coffeeshop.
-
-```bash
-$ middle "350 5th Ave, New York" "200 Eastern Pkwy, Brooklyn" coffee --count=2
-1. Cafe Susanne (nightlife)
-   8 River St, Brooklyn, NY 10044
-   https://www.barsusanne.com · 651 m
-
-2. Social House Cafe (cafe)
-   60 Broadway, Brooklyn, NY 11249
-   +1 (929) 295-0397 · https://www.socialhousecafellc.com · 697 m
-```
-
-## Caveats
-
-- It's macOS only. nearme is built on MapKit, and whereami's address lookup only exists on macOS.
-- It wants street addresses or city names, though landmarks will work soetimes. "Golden Gate Bridge" doesn't geocode but "350 5th Ave, New York" and "Central Park" and "Brooklyn Briddge" do (caveat emptor).
-- The math is a very literal and naive geographic middle, not taking travel-time middle or anything else into consideration.
-
-## Try it
-
-```bash
-brew install georgemandis/tap/whereami georgemandis/tap/nearme jq
-```
-
-Both tools live under [Less Software](https://less.software):
-
-Let me know if you find it useful or stumble across other good ideas for "[recipes](https://less.software/recipes)" to share!
-
-*If you enjoyed reading this consider [sponsoring my work](https://github.com/sponsors/georgemandis) on GitHub or [subscribing](https://buttondown.com/georgemandis) to my newsletter.*
-
-*Share this post: [Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F&t=Let's%20Meet%20in%20the%20Middle) • [Reddit](https://www.reddit.com/submit?url=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F&title=Let's%20Meet%20in%20the%20Middle) • [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F) • [Mastodon](https://share.joinmastodon.org/?text=Let's%20Meet%20in%20the%20Middle%0A%0Ahttps%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F).*
-
-*Published on Tuesday, November 17th 2026. Read this post as [plain-text](https://george.mand.is/2026/11/lets-meet-in-the-middle.txt).*
+It kind of makes me want to avoid algebraic data type jargon, except
+that there isn’t a good alternative for “sum type”. Hmf.

@@ -1,462 +1,143 @@
-Welcome back to another round of [Simple Sudoku Solvers](https://blog.veitheller.de/sss/)! If you
-are unfamiliar with the series, I suggest you start with [the
-first post](https://blog.veitheller.de/Six_Simple_Sudoku_Solvers_I:_Python_(Reference).html) or by perusing [the backlog](https://blog.veitheller.de/sss/). Last time, in [assembly](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII,_EII:_Assembly.html),
-we told the CPU exactly what to do, one instruction at a time. Today we
-go one level lower and build the machine directly in Verilog.
+The other day, I saw a viral tweet saying that people talking about how LLMs are causing slow, bloated, code are going to eat crow once they re-write everything in super-optimized assembly. [We're not quite at the point where we want to write everything in assembly](https://danluu.com/pl-tokens/), but some variant of what Nolan Lawson said about testing, [you can choose how many bugs you want now](https://nolanlawson.com/2026/08/16/you-can-just-choose-how-many-bugs-you-want-now/), which I [less eloquently noted here](https://danluu.com/ai-coding/), is becoming more true for performance.
 
-Verilog is a hardware description language. You don’t write a program
-that will at some point run on hardware. Instead, you describe a
-circuit, and the compiler turns that description into gates and
-flip-flops. We’ll run it in a simulator, because I don’t have a Sudoku
-chip lying around (future work), but the solver is real hardware in the
-sense that a synthesis tool accepts it and tells us how many gates it
-would take. Still counts, even with sim2real TBD.
+In response to a comment in my last post that [the cost of formerly specialized performance work has dropped by many orders of magnitude](https://danluu.com/benchpocalypse/) and performance work that used to require a person or team that had a rare set of skills can be done by anyone who can type a few sentences<sup>[1](https://danluu.com/no-slow/#fn:B)</sup>, which means that you can do all sorts of optimizations that used to be too expensive to be worthwhile for all but the largest scale or most lucrative projects, [Marc Brooker responded with](https://x.com/MarcJBrooker/status/2089545628607255026)
 
-The solver is about 145 lines, plus 40 lines of ceremony to feed it a
-puzzle and print the result. You can run it with
-`iverilog -o sudoku sudoku.v && vvp sudoku`, using [Icarus Verilog](https://github.com/steveicarus/iverilog). I
-didn’t test it anywhere else. As always, [the code is on GitHub](https://github.com/hellerve/sudoku).
+> Completely agree with your closing point. Dynamic custom software, fitted to a particular workload rather than a class of workloads, seems like a very likely outcome. (Which comes with all kinds of fun risks and opportunities of its own). Kind of reminds me of [FFTW](https://www.fftw.org/faq/section4.html#whyfast). And a ton of weird old demoscene techniques which were all about being super fast and small on a very particular problem (and often very particular hardware). For example, I remember a demo that re-used its code as textures to get great cache locality.
 
-## Why Verilog?
+And Michael Malis has noted
 
-Season three is about solvers, specifications, and constraints, and
-somehow also about hardware and the lowest of low levels. That’s because
-hardware is possibly the purest version of a specification (and, to be
-quite honest, because I felt like it).
+> There’s been a meme circulating about how AI doesn’t help because “code was never the hard part.” I think that’s true in some domains, but in others, writing the code absolutely was the hard part. JIT compilers are a great example of that. For many pieces of software, a JIT compiler would help a lot with speeding up the code. The rarity of JIT compilers makes me believe that implementing a JIT compiler historically was too difficult for it to be worthwhile. LLMs have lowered the barrier to entry and made it much easier to write a JIT compiler. This is the thesis behind pgrust. Databases historically were the hardest piece of software to build and were limited because of that. Now, with AI, we can be more ambitious about the type of software we build.
 
-So, what’s cool about Verilog?
+### Optimizing for a class of workload
 
-- Everything happens at once. In most solvers so far, we looped over the 81 cells one after the other or wrote the constraints that will then execute a loop-like structure for us. In hardware, we do away with the loop. Instead, we use 81 copies of the same circuit that all compute their result in the same clock cycle. Sounds weird? We’ll get there!
-- Time is a first-class citizen. Nothing happens “next” unless a clock edge fires, and we’ll have to decide what our solver does each cycle, which turns our recursive search into a state machine (surprisingly new to us!).
-- There is no recursion and no heap. Every bit of memory is an explicitly conjured flip-flop. Backtracking needs a stack, and we’ll have to build it ourselves, much like in Forth.
+Let's try this out with [FRE](https://github.com/danluu/fre), the regex engine we built in the last post. Recall that it was created by having an agent loop for a month on improving regex engine performance with access to [the rebar regex benchmark suite](https://github.com/BurntSushi/rebar). This resulted in FRE being heavily overfit to rebar until we warned our agent that we had a holdout benchmark, which caused the agent to generalize the optimizations enough that performance was ok-ish on our holdout. There's no particular reason to use a "software factory" regex engine that doesn't beat a well-tested regex engine on holdout benchmarks, but one notable thing about FRE was that the native AOT compiled version did quite well at longer searches. We noted that, it stands to reason that one could run the native code compiler in another thread while ripgrep was running its normal matcher and then cut over to the native code when it finished compiling and generally get better performance. Of course this will generally result in worse performance for short queries as we lose a thread to compilation, but I care a lot more about how long ripgrep takes when it runs for many seconds or minutes than when it runs for a few seconds, so I'm ok with that tradeoff.
 
-I think this was the strangest episode so far, for me. I don’t mean
-that in a bad way.
+In the same way we could build a regex engine in a few minutes of human time, we can also just try this experiment in a few minutes of human time. I typed a few sentences and an agent went and did the work to allow this to happen (which would be a decent chunk of code surgery for a human) and it ran the benchmark on actual ripgrep queries that come from my codex history. For longer queries, we see a 2x-4x performance improvement here for a few very simple queries. But most queries are more complex, and when we run on representative holdout queries, for queries where AOT should be enabled<sup>[2](https://danluu.com/no-slow/#fn:E)</sup>, we get about a 7% speedup. Not an earth shattering result, but also not a bad outcome for spending a few minutes typing to codex (and it's still doing more optimization and will presumably speed things up further).
 
-## A quick primer on reading
-Verilog
+### Build an index?
 
-If you’ve never read Verilog before, here is what you need for this
-post.
+This is arguably a silly thing to do, since if we're repeatedly searching for text on a computer, the obvious thing to do to speed that up isn't to write a native code compiler for regex matching, it's to create an index. But the point here is just that this kind of technical work, which used to take a fair amount of time and expertise, can just be done trivially now. And if we wanted to build a text index, it just so happens that I worked on [BitFunnel, the Bing search index that was specialized for constant/fast text ingestion](https://danluu.com/bitfunnel-sigir.pdf) that won Best Paper Award at SIGIR, so I can think of a few experiments to try if we're going to build a fast local index of our entire machine (the projects I've seen seem to be intended to index your code directories, but what really kills my machine performance is when codex decides to run ripgrep against huge temporary directories with a ton of generated files and then expands to looking at my whole machine when it misses, so I'd want an index of my entire disk and not just of the code for some projects).
 
-A `module` is a circuit with inputs and outputs.
-`wire [8:0] x` is a bundle of nine wires, numbered 8 down to
-0. `reg` is a bit of a misnomer: it’s a value we assign in a
-procedural block, and whether it becomes an actual register is actually
-dependent on our usage of it.
+If I were working at an AI lab and had access to things like SOTA models running on Cerebras chips or other accelerators that greatly increase tok/s and therefore load/demand for search, I might actually survey the existing indexers to see if they're fast enough or if I'd want to build something custom myself. While the open source version of BitFunnel "only" contains a bytecode interpreter and one JIT, the Bing version contains multiple JIT compilers. A project that did that level of optimization used to be a major undertaking, but "[I could do that in a weekend](https://danluu.com/sounds-easy/)" is now actually true for some of these kinds of projects. With my lowly $200/mo account, I think a somewhat faster ripgrep plus any off-the-shelf index is fine, so maybe this fast-ingesting whole-machine index project can be left as an "exercise for the reader (who works at an AI lab)".
 
-There are two kinds of blocks we care about. `always @*`
-describes combinational logic. Its outputs are a pure function of its
-inputs, and they change whenever the inputs do. Think of it as a very
-big expression.
+### Optimizations are cheap
 
-`always @(posedge clk)`, on the other hand, describes
-sequential logic. It runs once at every rising clock edge, and the
-`<=` assignments inside it all happen together at the end
-of that edge. That’s where all our state lives.
+The drastic reduction in the cost of optimizations has been true going back to November 2025 and maybe even somewhat before then with public models (and I'm sure before that still with what folks at AI labs had access to). For an example from the GPT-5.1 or 5.2 days, with no knowledge of game AIs, I tried building an Azul AI. This ended up being the strongest AI in the world for the game by a pretty large margin. From reading the thesis that describes [the 2nd strongest AI](https://www.youtube.com/watch?v=qkzpeXGwE-4), I think my AI is probably a bit better on the "AI" side of things, but the main place it wins is on optimization despite spending what looks like maybe two orders of magnitude less time (estimated by reading the thesis and seeing the process and comparison to my process) and also mostly working on my laptop vs. having a cluster of machines to use (which means much less bandwidth to run experiments with, do parameter tuning, etc.). For example, that other AI is single-threaded and my AI is multi-threaded. Since I have a native code version as well as [a heinous shared wasm memory + javascript version](https://danluu.com/game/tile/), and two different search architectures for two different versions, which "require" completely different multi-threading algorithms (minimax for a very small and fast net and MCTS for a larger net), this would've been a fairly large undertaking if done by hand. And, because I let an LLM pick the multi-threading algorithm based on its own (incorrect) reasoning a couple times before spending 30 minutes reading about multi-threading algorithms for game AIs myself, I ended up re-writing (having codex re-write) the multi-threading algorithm multiple times.
 
-`for` loops exist, but in synthesizable code they are
-unrolled completely. A loop over 81 cells is 81 copies of its body. Keep
-that in mind, it will matter. It’s also very cool, so it’s worth keeping
-in mind anyway.
+There's a bunch of standard stuff it makes sense to do to debug and verify a multithreading algorithm for something like this, like implementing replay from debug logs that can reproduce bugs despite the algorithm being nondetermistic. Doing that alone would've probably been days to a week of work had I done it by hand, but it's exactly the kind of thing an agent can trivially do in a loop (just have it try to replay logs and insert logging for non-determinism every time you don't get a perfect replay). A lot of the tedium it used to take to get a tricky optimization like this working is gone.
 
-## The board
+This also applies to a lot of other tricky optimizations. From having written CPU microcode, done CPU verification, worked on optimizing a search engine index, etc., I have a lot of experience looking at optimizations and thinking "hmm, this would increase performance by 2%, but it's going to take N person-days to verify that this tricky optimization works" and making a call to go ahead or not based on whether or not it's worth the time to get the optimization working. Now that this N has dropped by a tremendous factor (variable but, in terms of human time, frequently 1000x / 10000x / 1000000x, probably more like 1000x on dollar cost if you compare token costs at metered rates vs. the Bing engineer who wrote the compilers at JITs that the search index used), the number of these kinds of optimizations it makes sense to do goes way up. The same goes for optimizations that you aren't sure will work out. I used to sometimes look at an optimization that I wasn't sure would speed things up and think "this will take M hours to implement to the point where we have a good enough measurement to guess at the performance impact". Many more of those optimizations make sense to try out now.
 
-The board is the same 81 cells as always, but since hardware doesn’t
-really do arrays of bytes, it is one 324-bit vector, with four bits per
-cell and `0` for an empty cell:
+Going back to the game AI case, at least for the AI I tried, it seems like you gain about 100 Elo for every doubling in speed (more than in chess, I suspect because draws are very rare). Just adding multithreading alone is enough to wipe the floor with an otherwise comparable AI on a large machine. If you stack in 10-20 more optimizations that seem too annoying for most people to do by hand, the difference in strength is tremendous and it's not really reasonable to try to keep up with a hand-written AI<sup>[3](https://danluu.com/no-slow/#fn:A)</sup>.
 
-```
-module sudoku (
-  input  wire         clk,
-  input  wire         start,
-  input  wire [323:0] puzzle,
-  output reg          done,
-  output reg          solved,
-  output reg  [323:0] board
-);
-```
+The game AI case is a little more annoying than for most software because a lot of the optimizations you want to do actually change the result and there isn't a cheap, trivial, way to tell if the speed increase + the change in result gives a better or worse actual result in practice. And, [as we noted before](https://danluu.com/ai-coding/), current publicly available SOTA models are pretty bad at experimental design, so I had to set up the framework they used to determine if an optimization is good, but once that was in place, it's like any other optimization problem. I guess people working on LLM optimizations also have to deal with this class of problem but most optimization problems are a lot more straightforward.
 
-We have three input wires and output `reg`s (remember, not
-necessarily registers). That’s the whole interface of our chip.
+To pick another example, as part of preparing for performance interviews, Jamie Brandon tried Anthropic's [now public performance takehome](https://github.com/anthropics/original_performance_takehome/). After trying it, he had Claude pick up where he left off and it got a much better result. When he looked at what Claude did that he didn't, he said a lot of the optimizations were things that occurred to him but he hadn't gotten to yet, and "[o]thers were just crazy shit that I would never try unless I was working on this for weeks"<sup>[4](https://danluu.com/no-slow/#fn:C)</sup>. He's a reasonable performance engineer and he got an offer for the performance job he wanted, but on a well-defined optimization problem, he doesn't stand a chance against a decent model (I haven't tried the problem myself, but I suspect I also wouldn't stand a chance given remotely comparable time controls).
 
-We put a puzzle on the `puzzle` wires, hold
-`start` for one cycle, and wait until `done` goes
-high (think in currents). Then, if `solved` is set,
-`board` has the answer. Otherwise, the board is
-unsolvable.
+### Workload-specific optimization
 
-Reading a cell is a slice, which we wrap in a small function.
+Coming back to this part of Marc Brooker's comment:
+
+> Dynamic custom software, fitted to a particular workload rather than a class of workloads, seems like a very likely outcome.
+
+This seems pretty inevitable. In another response to my post, Michael Malis of pgrust said something similar:
+
+> [discussion of pgrust optimizations] ... I think it's easy enough to create these optimizations that we could look at a customers workload and add them as needed
+
+Without having any kind of framework or setup, right before I started writing this post, I had an agent do workload-specific optimization for my ripgrep queries (not the native code compiler switch, just the optimizations to the general FRE engine based on a set of benchmarks), which took about 2 minutes for me to launch. The optimizations run on a set of queries, and then there's a later holdout set of queries to run against. That's still running, but the initial results seem promising. After one pass of optimization, the workload optimized version is 2% faster than standard ripgrep on the holdout and it's still getting faster. 2% isn't a big deal for my local ripgrep usage, but considering that this took minutes of time and the optimizations done here got started when I started typing this point and are still improving, I'd take a 2% win here (note that this isn't combined with the native code compiler, which would give a larger overall win if combined properly). And recall that this is leveraging the [FRE](https://github.com/danluu/fre) regex engine<sup>[5](https://danluu.com/no-slow/#fn:F)</sup>, which was substantially slower than the Rust regex engine on holdout benchmarks and was stuck with slow improvement on holdouts because with me knowing nothing about regex workloads and SOTA LLMs not being good enough at experimental design to do unguided open-ended self-improving loops, we didn't have a good way to improve performance on our holdouts. But if what I care about is performance on my own workloads, I have plenty of data and am generating more all the time. As Marc Brooker noted above, we do have to be careful about overfitting if there's a regime change that's not in the old data, etc., but we're still in a better situation than we were before.
+
+In the more general case, if you're someone like Marc Brooker at Amazon or Michael Malis working on pgrust, it makes sense to not just do this as a one-off, but to work with customers to pilot a program that uses their data to optimize things for them and then figure out how to scale it out for customers in general. I'm not working at a company where that's the best use of my time<sup>[6](https://danluu.com/no-slow/#fn:T)</sup>, but it's pretty wild that you can see that this is coming for larger companies with more scale, and given that it only takes minutes of my time to run these experiments for my personal workflows, it's pretty reasonable to mess with this kind of thing on personal projects.
+
+*Thanks to Jamie Brandon, Michael Malis, andrea (@s__video), Artyom Bologov, and Max Bittker for comments/corrections/discussion.*
+
+P.S. As I've noted in [the last](https://danluu.com/benchpocalypse/) [couple posts](https://danluu.com/pl-tokens/), with coding agents, the time it takes to run an experiment and see enough of a result to satisfy my curiosity has gone way down while the time it takes to make a result really rigorous hasn't changed or has gone up, so writing things up the way I used to would mean running very few experiments relative to the bandwidth I have for them. As a result, I've just been running these experiments and sharing the result with a couple of friends. As an experiment, I'm trying to write these up in a very quick and non-rigorous way instead of years of these experiments only being known to a few friends. Like the last post, I set a goal of writing this post and doing all the clean-up in half an hour and didn't time it but am pretty sure I missed that by a bit.
+
+Even doing this, the time it takes to write these up is long enough that I'm falling behind on sharing recent results, but I'm not inclined to switch to LLM-written posts (yet?), and I don't think I can realistically get the time to clean up the data and write a post like this down enough to turn a post around in less than half an hour. Just on the length of this post, typing this up should be something like 20-30 minutes including time to pause and think about what I'm writing, and then when I look at the data sometimes something will look wrong enough that I need to look into it more closely to see if there's an issue that needs to be fixed (this happened multiple times here, and I would expect that, because I didn't spend much more time, there are other data issues that I don't know about).
+
+Anyway, if you have opinions on these quick (and surely more wrong) writeup, let me know what you think ([X](https://x.com/danluu/) [Bsky](https://bsky.app/profile/danluu.com) [Mastodon](https://mastodon.social/@danluu/))!
+
+### Appendix: There's no reason for software to be slow anymore
+
+I've been on the record for a long time as [strongly disagreeing with the general sentiment that the developers of X are bad and should feel bad](https://mastodon.social/@danluu/111064964615090306) for [writing slow code because there are a lot of different kinds of programming expertise](https://mastodon.social/@danluu/110550198966171979) and not only is it not the case that most programmers don't have performance expertise, it probably doesn't even make sense for them to develop (from the standpoint of what the business cares about, what the employment market looks like, etc.), so of course most projects will have very poor performance compared to what a performance expert can do. I can see why a performance expert would look at [the growing gap](https://danluu.com/slow-device/) between [how fast a program can be and how fast programs actually are](https://danluu.com/input-lag/) and think that it's ridiculous. I don't disagree that there's an absurdity to it, but if I think about the gap between how good a UI can be and how a good a UI I can make (by hand) is, I don't think that looks any less absurd, but I also don't think it really makes sense for me to spend time learning how to build a great UI, or even a decent UI, for the same reasons it doesn't make sesne for most people to spend time learning how to decent performance work.
+
+For the example above, Jamie Brandon got an offer from Anthropic and you probably can't afford him unless you're OpenAI, but you can afford to use a coding agent that can beat him on a bounded optimization problem. The agent doesn't have the judgement he has and will do worse on an open-ended problem (recall that [when we tried building an optimized regex engine and just told it to not overfit, it was more than an order of magnitude worse than the best regex engines on our holdout benchmarks](https://danluu.com/benchpocalypse/), but also recall that after telling the agent there was a holdout it was doing poorly on, it sped up regex engine performance enough to generally match 2nd tier regex engines in terms of performance, which is still extremely good compared to the general level of performance optimization in most code today), but that's plenty good to achieve reasonable performance on all sorts of problems. This post has generally discussed backend performance issues, but agents don't seem worse at front-end performance if you want to drive down a set of metrics like LCP and CLS. In fact, after inserting the interactive plots I've been using recently into posts, I found that my client-side perf numbers got worse, so I had an LLM spent 1% of my weekly quota optimizing those and the numbers are once again back to being good. This is a very simple site, but people do these kinds of optimizations on fairly complex apps that ship to many millions of users and it also works there, although it does cost a few more tookens.
+
+I still don't think someone is bad and should feel bad if their software has poor performance, but I do think that someone who doesn't know anything about performance and is a reasonable user of LLMs (just in general, not on performance problems in particular) should generally be able to create software that has decent performance. If you just tell an LLM to optimize, it will often do all sorts of incorrect things that are really bad that you have to catch, but that's generally true of using the LLM effectively in the first place, so getting decent performance is no longer a specialized skill.
+
+### Appendix: How is codex running ripgrep?
+
+Here's some information about the distribution of riprep queries on my machine. I make no claims that this is at all representative of what's happening anywhere else. The pattern distribution of the length of the pattern that's searched has a lot more long patterns that I would've expected. The p50 is 55 unicode code points (I'll just call these characters for simplicity), which is already longer than things I grep for by hand, and the p90 is 119!
+
+We can also look at the number of alternation arms in regexes, which are once again much more complex than what I do by hand.
+
+Another view is to look at how these are correlated. Do we get more alternation arms in the regexes as the regexes get longer? Yes.
+
+What are these really long regexes, anyway? If we look at them, most of the longest are long alternations over function or tests names, such as the following regex, which appears to be related to [FRE](https://danluu.com/no-slow/github.com/danluu/fre/) development.
 
 ```
-function [3:0] at(input [323:0] b, input integer i);
-  at = b[4 * i +: 4];
-endfunction
+  fn (hot_byte_compiler_is_generic_only_and_anonymous_count_uses_auto_count|
+  one_pattern_count_spans_uses_the_retained_complete_span_session|
+  formal_compact_state_byte_visitors_coexist_with_native_count|
+  fixed_boundary_record_visit_matches_line_relative_reference_and_is_atomic|
+  unbounded_languages_refuse_finite_extraction_before_allocation|
+  formal_single_raw_span_sweep_preflight|
+  assert_exact_fixture_uses_formal_large_continuation_sweep|
+  url_only_compile_identity_binds_language_and_owner_mode|
+  url_only_compile_exact_limits_and_runtime_refusals_close|
+  url_only_compile_post_plan_allocation_faults_close|
+  url_only_owner_discriminator_is_stable_and_precharged|
+  url_only_compile_owner_is_strategy_and_operation_scoped|
+  formal_rebar_url_owner_is_compile_only_and_matches_oracle|
+  formal_rebar_url_exact_fixture_uses_certified_execution|
+  formal_fixed_schema_materialization_matches_both_record_oracles_and_controls|
+  formal_single_count_selects_compact_state_byte_complete_bound_visitors|
+  authenticated_bound_line_total_lf_free_domain_opportunity_exceeds_five_percent|
+  prepared_absolute_onepass_fuses_slots_and_preserves_pre_source_fallback|
+  authenticated_word_boundary_russian_compact_lowering_public_canary|
+  ordered_nfa_x86_epsilon_edges_bypass_the_assertion_call|
+  ordered_nfa_aarch64_epsilon_edges_bypass_the_assertion_call|
+  ordered_edge_dispatch_v2_is_target_neutral_deterministic_and_relocation_free|
+  ordered_edge_dispatch_v2_copies_canonical_tables_and_cap_falls_back_to_v1|
+  ordered_nfa_v3_composes_terminal_range_and_dispatch_without_data_relocations|
+  ordered_nfa_x86_terminal_range_emits_authenticated_reverse_scan|
+  ordered_nfa_aarch64_terminal_range_emits_authenticated_reverse_scan|
+  ordered_nfa_x86_boundary_assertion_cache_is_lazy_and_boundary_scoped|
+  ordered_nfa_aarch64_caches_repeated_assertions_once_per_boundary|
+  boundary_assertion_cache_requires_dense_exact_kind_reuse|
+  boundary_assertion_cache_selection_is_compiler_only_and_deterministic)
 ```
 
-Slices work like in many other languages, except that the operators
-`+:` and `-:` encode a direction from the start
-index. Here, we say “start at `4 * i` and take the next
-`4` bits”.
-
-Units are the 27 rows, columns, and boxes we always care about. We
-describe them with a function that tells us which cell is the
-`k`-th member of unit `u`:
+But some are funny numerical constructions, such as
 
 ```
-function [6:0] member(input integer u, input integer k);
-  if (u < 9)       member = u * 9 + k;
-  else if (u < 18) member = k * 9 + (u - 9);
-  else             member = ((u - 18) / 3) * 27 + ((u - 18) % 3) * 3
-                          + (k / 3) * 9 + k % 3;
-endfunction
+:(13[0-9]|14[0-9]|15[0-9]|16[0-9]|17[0-9]|18[0-9]|19[0-9]|20[0-9]|21[0-9]|22[0-9]|23[0-9]|24[0-9]|25[0-9]|26[0-9]|27[0-9]|28[0-9]|29[0-9]|30[0-9]|31[0-9]|32[0-9]|33[0-9]|34[0-9]|35[0-9]|36[0-9]|37[0-9]|38[0-9]|39[0-9]|40[0-9]|41[0-9]|42[0-9]|43[0-9]|44[0-9]|45[0-9]|46[0-9]|47[0-9]|48[0-9]|49[0-9]|50[0-9]|51[0-9]|52[0-9]|53[0-9]|54[0-9]|55[0-9]|56[0-9]|57[0-9]|58[0-9]|59[0-9]|60[0-9]|61[0-9]|62[0-9]|63[0-9]|64[0-9]|65[0-9]|66[0-9]|67[0-9]|68[0-9]|69[0-9]|70[0-9]|71[0-9]|72[0-9]|73[0-9]|74[0-9]|75[0-9]|76[0-9]|77[0-9]|78[0-9]|79[0-9]|80[0-9]|81[0-9]|82[0-9]|83[0-9]|84[0-9]|85[0-9]|86[0-9]|87[0-9]|88[0-9]|89[0-9]|90[0-9]|91[0-9]|92[0-9]|93[0-9]|94[0-9]|95[0-9]|96[0-9]|97[0-9]|98[0-9]|99[0-9])[0-9]:
 ```
 
-The first 9 are the rows, then come the columns, and the icky
-expression at the end there is the box arithmetic with our usual set of
-magic numbers.
-
-Fun fact: this looks like it does division at runtime, but it
-doesn’t. We only ever call it with constants from unrolled loops, so the
-synthesis tool computes all of it ahead of time (much like an optimizing
-compiler would). What is left is just the wiring, and the box arithmetic
-decides which wires connect.
-
-## Bitty digits
-
-Like in many previous installments, we track digits as bitmasks. And
-like in our assembly episode, when it’s convenient we use the trick
-where digit `d` lives in bit `d`, and an empty
-cell lands in bit 0, which we throw away:
+This is equivalent to `:(?:1[3-9]|[2-9][0-9])[0-9]{2}:` (which, if run through ripgrep on the original input, has approximately the same performance; the shorter regex is technically a bit faster on the real query data, but only by a very small amount). The entire pipeline for that was
 
 ```
-function [8:0] bit_of(input [3:0] d);
-  reg [9:0] wide;
-  begin
-    wide = 10'b1 << d;
-    bit_of = wide[9:1];
-  end
-endfunction
+cargo clippy … | rg 'crates/fre-aot-regex/src/module.rs:' | rg NUMBER_REGEX | head -250
 ```
 
-In hardware this is a decoder, four wires in, ten wires out, one of
-them lights up. Dropping bit 0 is just not connecting it. We don’t need
-a branch, and in this case not even an instruction. These sorts of
-tricks are annoying the higher up the stack we go, but they come
-naturally to us when we’re thinking in circuits and currents.
+which might be an odd thing for a human to do, but agents seem to do this kind of thing all the time.
 
-We also need the opposite direction, from a single bit back to a
-digit, and a popcount:
+On another topic, if we look at how long ripgrep queries took, there are quite a few slow queries, e.g., p99 is almost 1 minute! And p999 is almost 10 minutes! And the maximum query over this time period (around a month on one laptop; queries and distributions seem likely to be different on the AWS hosts I run agents on, etc., but I haven't checked) is approaching 2 hours!
 
-```
-function [3:0] digit(input [8:0] onehot);
-  integer d;
-  begin
-    digit = 0;
-    for (d = 1; d <= 9; d = d + 1)
-      if (onehot[d - 1]) digit = d;
-  end
-endfunction
+In terms of command line options, we see the following. Perhaps unsurprisingly, codex often wants line numbers and, for whatever reason, it very occasionally uses PCRE2 regexes.
 
-function [3:0] popcount(input [8:0] m);
-  integer b;
-  begin
-    popcount = 0;
-    for (b = 0; b < 9; b = b + 1)
-      popcount = popcount + m[b];
-  end
-endfunction
-```
+I won't add plots or tables for these, but another thing to note is that there's fairly low locality for what patterns are searched for (about 94% of patterns only occurred once), which makes some sense given how long a lot of the queries were. However, there's fairly high locality in what files get searched and a file that got searched is relatively likely to get searched again soon, indicating that (for small enough files), they're likely to be searched in memory.
 
-We are back to having to write our own popcount, regretfully, but it
-doesn’t have to be smart. It’s a chain of adders in the end, unrolled by
-our magical synthesis tool again.
+Also, 99% of queries were regex queries (1% were non-regex string searches) and 99.9% of search queries were ASCII only, but in terms of files searched, approximately 45% were ASCII only and 55% contained Unicode, a higher percentage than I would've guessed for Unicode.
 
-## Everywhere all at once
+On a draft of the last post, Peter Geoghegan noted
 
-This is where Verilog differs from everything else we’ve done!
+> It's also possible for a regex implementation to be faster by supporting fewer features. Some implementations don't support back references, etc.
 
-The following block is combinational. Every clock cycle, it looks at
-the whole board and computes, for all 81 cells at the same time,
-everything the solver could want to know.
+which is also true here. The workload-specific optimizations done here were fairly superficial because I just gave codex some short instructions and let it do whatever it wanted (which is, in general, not the most effective use of codex), but with a more detailed plan, more focused optimizations supporting the common use cases for my queries could be expected to yield larger gains.
 
-First, the units:
-
-```
-always @* begin
-  for (u = 0; u < 27; u = u + 1) begin
-    seen[9 * u +: 9] = 0;
-    clash[u] = 0;
-    for (k = 0; k < 9; k = k + 1) begin
-      clash[u] = clash[u] | |(seen[9 * u +: 9] & bit_of(at(board, member(u, k))));
-      seen[9 * u +: 9] = seen[9 * u +: 9] | bit_of(at(board, member(u, k)));
-    end
-  end
-```
-
-That’s quite a few symbols, but it almost looks familiar I think.
-
-For each of the 27 units we `or` together the digits it
-contains into `seen`. While we do that, we check if a digit
-was already there, and if so, the unit has a `clash`. No
-other solver in the series has needed this check so far, and you’ll see
-in a minute why we need it now. Hint: it has to do with the parallel
-nature of the system.
-
-Then the cells:
-
-```
-  dead = |clash;
-  full = 1;
-  any_forced = 0;
-  forced = board;
-  best = 0;
-  best_n = 10;
-  for (i = 0; i < 81; i = i + 1) begin
-    cands[9 * i +: 9] = 0;
-    if (at(board, i) == 0) begin
-      full = 0;
-      cands[9 * i +: 9] = ~(seen[9 * (i / 9) +: 9]
-                          | seen[9 * (9 + i % 9) +: 9]
-                          | seen[9 * (18 + (i / 27) * 3 + (i % 9) / 3) +: 9]);
-      if (popcount(cands[9 * i +: 9]) == 0) dead = 1;
-      if (popcount(cands[9 * i +: 9]) == 1) begin
-        any_forced = 1;
-        forced[4 * i +: 4] = digit(cands[9 * i +: 9]);
-      end
-      if (popcount(cands[9 * i +: 9]) < best_n) begin
-        best = i;
-        best_n = popcount(cands[9 * i +: 9]);
-      end
-    end
-  end
-end
-```
-
-The candidates are the usual not-yet-taken numbers, and we compute
-them for all cells. We end up with four answers:
-
-- dead: some unit has a clash, or some empty cell has no candidates left. The board is unsolvable from here.
-- full: there are no empty cells. We are done.
-- forced: a copy of the board where every cell with exactly one candidate is filled in.
-- best: the index of the empty cell with the fewest candidates, our MRV cell. We also keep best_n to check whenever we find a cell if it’s a better candidate.
-
-This reads much like the solver loop we’ve written many times, but it
-works completely differently, because there is no loop. The circuit that
-is synthesized has 81 candidate calculators and a long chain of
-comparators for the minimum that are all settling at once.
-
-Why the clash check? Here, because of parallelism,
-`forced` fills in every forced cell in the same cycle. If two
-cells in the same unit are both set to the same number, we write both of
-those in the same cycle and nothing checks at the end. Instead, we check
-the unit for duplicates at the next cycle, and treat a clash like any
-other unsolvable branch.
-
-So we’ve successfully parallelized our work, including our mistakes!
-Fun!
-
-## A state machine
-
-Since there is no recursion, the search becomes a state machine with
-three states:
-
-```
-localparam RUN = 2'd0, BACK = 2'd1, HALT = 2'd2;
-```
-
-`RUN` propagates and branches, `BACK`
-backtracks, and `HALT` is the stop condition.
-
-For backtracking we need a stack. The entry has the board before a
-guess, the cell we guessed in, and the candidates we haven’t tried
-yet:
-
-```
-reg [323:0] saved [0:80];
-reg [6:0]   where [0:80];
-reg [8:0]   rest  [0:80];
-reg [6:0]   sp;
-reg [1:0]   state;
-```
-
-Every guess fills at least one cell, so the search can’t go deeper
-than 81, and 81 entries are enough to hold our search tree. Math!
-Logic!
-
-Unfortunately, we have to pay for every entry in hardware, no matter
-if we end up using it or not.
-
-I originally called the second array `cell`, but it turns
-out `cell` is a reserved word in Verilog. It’s used for
-configurations, which I had never heard of before. Shows what I know.
-I’m just documenting this because `where` is a bit of an odd
-name, I think, but I didn’t think to pull out the thesaurus<sup>[1](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII%2C_EIII%3A_Verilog.html#1)</sup>.
-
-Anyway, time to look at the actual states.
-
-### Running
-
-Here is a `RUN` clock cycle:
-
-```
-always @(posedge clk) begin
-  if (start) begin
-    board  <= puzzle;
-    sp     <= 0;
-    done   <= 0;
-    solved <= 0;
-    state  <= RUN;
-  end else case (state)
-    RUN:
-      if (dead) state <= BACK;
-      else if (any_forced) board <= forced;
-      else if (full) begin
-        done   <= 1;
-        solved <= 1;
-        state  <= HALT;
-      end else begin
-        saved[sp] <= board;
-        where[sp] <= best;
-        rest[sp]  <= pick & (pick - 1);
-        sp        <= sp + 1;
-        board[4 * best +: 4] <= digit(pick & -pick);
-      end
-```
-
-Side note: the first cycle is spent initializing, then we fall
-through to our `case` structure.
-
-`RUN` is our whole solver as an `if` chain. If
-the board is dead, we backtrack. If there are forced cells, we fill all
-of them and come back next cycle to continue our work. If the board is
-full, we’re done and set `HALT` and all our stopping
-variables.
-
-Otherwise we dance. `pick` is the candidate mask of the
-MRV cell:
-
-```
-wire [8:0] pick = cands[9 * best +: 9];
-```
-
-We push the current board, the cell, and the remaining candidates,
-and then write the lowest candidate into the board.
-`pick & -pick` isolates the lowest set bit, and
-`pick & (pick - 1)` clears it, so together they split the
-mask into what to try now vs. what to try later. That’s my official
-favorite trick from the last episode making a second appearance as a
-subtractor and a row of `and` gates.
-
-This is also the place that tripped me up most when I was learning
-Verilog for this: all of these `<=` assignments happen
-together at the clock edge. We write `board` into the stack
-and change one cell of `board` in the same cycle, and the
-stack still gets the old board, because everything on the right-hand
-side was read before the edge. The timing is very explicit, and my
-intuitions are still very much developing.
-
-### Backtracking
-
-The `BACK` state looks at the top of the stack:
-
-```
-wire [8:0] left = rest[sp - 1];
-wire [8:0] low = left & -left;
-```
-
-and then does one of three things:
-
-```
-    BACK:
-      if (sp == 0) begin
-        done  <= 1;
-        state <= HALT;
-      end else if (left == 0) sp <= sp - 1;
-      else begin
-        board <= saved[sp - 1];
-        board[4 * where[sp - 1] +: 4] <= digit(low);
-        rest[sp - 1] <= left & (left - 1);
-        state <= RUN;
-      end
-  endcase
-end
-```
-
-If the stack is empty, we’ve tried everything, and there is no
-solution.
-
-If the top entry has no candidates left, we pop it and stay in
-`BACK`, so the next cycle looks at the entry below. So we do
-one backtracking step per cycle, at worst 81 times. This seems wasteful
-at first, but it’s actually beautiful in its simplicity I find.
-
-Otherwise we restore the saved board, try the next candidate, and go
-back to `RUN`. The entry stays on the stack with one fewer
-candidate, ready to come back if this one’s a dud, too.
-
-This, too, is the same copy-and-restore dance number from assembly,
-but it’s copying a board in one cycle. A register that is 324 bits wide
-is just 324 flip-flops that all load at the same time. If you design the
-board you can do whatever, it turns out.
-
-And that’s it! We’ve solved the board!
-
-## How fast is it?
-
-Our usual hard puzzle takes 7,639 cycles. The puzzles from the
-repository take between 5 cycles (easy) and 411 cycles (evil), and a
-puzzle with two 8s in the first row is rejected in 2 cycles, because the
-clash check catches it right away.
-
-That number is hard to compare with the other episodes. If the
-circuit ran at 1 MHz, 7,639 cycles would be about 7.5 milliseconds. But
-I haven’t placed and routed it, so I don’t know how fast it could really
-be made<sup>[2](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII%2C_EIII%3A_Verilog.html#2)</sup>. The 81 comparator chain we built
-above would probably be the limit, but again, I have no intuitions on
-how to measure this.
-
-The simulation, on the other hand, is slow. Icarus simulates every
-wire of that circuit on every cycle, and running the hard puzzle takes
-about 11 seconds on my machine. That makes it the slowest solver in the
-series by a wide margin, beating even Agda. That’s not a fair
-comparison, but I think it’s funny anyway, because we came to the land
-of speed and wires and ended up with the slowest simulations of the
-series.
-
-As for size, I let the genie guide me and ran the solver through [Yosys](https://github.com/YosysHQ/yosys) targeting Lattice
-iCE40, a family of small FPGAs that hobbyists like. It comes out at
-about 35,000 lookup tables and 28,000 flip-flops, almost all in the
-stack. That is a lot more than any iCE40 chip I’ve found has, so we’d
-need a bigger FPGA, or a stack in block RAM, which would cost us a cycle
-per access.
-
-If you want to build this circuit, be my guest! Do send pictures
-and/or measurements, though, please.
-
-## Fin
-
-We built a Sudoku solver out of (simulated) wires and flip-flops, and
-made the thing nicely parallel. Through our little state machine, we
-also added a new tool to our bag of tricks. Time will tell if we need it
-again.
-
-I still think this one fits the season better than it might have
-seemed on paper. We really did specify Sudoku in hardware, in a way, in
-a very lop-sided chip.
-
-In the next episode, we stop writing search code entirely once again:
-we hand the constraints to z3 and let it find the answer for us, much
-like in Prolog and miniKanren, but differently. See you there!
-
-#### Footnotes
-
-1. We can’t all be Kent Beck.
-
-2. Synthesis turns the description into gates.
-Placing and routing then decide where on the chip each gate goes and how
-the wires run between them, and only then do you know how long a signal
-takes to get through the slowest path, which sets the maximum clock
-speed through the annoyances of physics. I didn’t do that step by hand,
-and I don’t know whether there is a tool for doing it automatically for
-me.
+1. though, as we discussed in that post as well as before, the benchmarking and experimental design skills of SOTA models aren't good enough to do this in the general case without a human (or a skill) setting up the benchmarking environment for the agent. <sup>[return]</sup>
+2. we can see from our old benchmarks that, even with time to run the compiler, there are a lot of cases where the native code compiled version is slower than the Rust regex crate. If we look at why this is, these tend to be more complex queries where the Rust regex crate has some algorithmic optimization and the FRE native code compiler is falling back to something naive (the agent that created FRE spent much less time on the native code compiler than it did on the "normal" regex engine). <sup>[return]</sup>
+3. I have no doubt that a hand-written AI by someone who has real AI expertise, e.g., by someone who's written one of the top Go and chess engines in the world, could beat my AI on the strength of the "AI" side of things being better than what you get when someone who knows nothing about AI (me) creates an AI, but if the levels of expertise are remotely similar, the LLM-written version is going to dominate for any given amount of time spent. <sup>[return]</sup>
+4. it's arguably unfair to compare the result of an agent picking up where he left off, since his work is a starting point which might let an agent do much better than it would do on its own, so I tried giving the fresh task to an agent and it got a very similar score to what he got when an agent re-used his work (and a quick check by another agent didn't find evidence of cheating). <sup>[return]</sup>
+5. The performance probably would've been better if I had an agent just modify a ripgrep fork directly, but I was curious if this could also solve the FRE overfitting problem with respect to my queries. <sup>[return]</sup>
+6. a while back, I reduced the size of page in our signup flow from 50 MB to 5 MB and a revenue A/B test seemed to indicate that this increased revenue by about 0.5%. In general, I'm a huge fan of doing the simple and easy wins first, such as this, and there are probably a lot of higher ROI wins than we'd get out of building custom compilers or doing other highly specialized technical work here. <sup>[return]</sup>

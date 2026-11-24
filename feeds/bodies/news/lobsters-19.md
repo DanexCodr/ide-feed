@@ -1,176 +1,227 @@
-I’ve created a new little tool to help run and manage scripts in a folder tree, called
-            [scriptura](https://git.alin.ovh/scriptura). It is based on the idea behind
-            [sd](https://github.com/ianthehenry/sd)
-            and is made for fish users.
+I recently received a game called “Hitster” as a gift. It’s a board game where you try to identify songs and guess things like when they came out, who the artist or band is, etc. Each card has a QR code that you scan using the Hitster app, which then plays the music through Spotify or Apple Music.
 
-Given a script folder like so:
+Sadly, the app requires an Apple Music or Spotify subscription. In this blog post, I’ll go down the rabbit hole of reverse engineering the Android app and bypassing their very, very sloppy attempt at hiding the data.
 
-```console
-$ set -x SCRIPTURA_ROOT ~/scripts
-$ tree ~/scripts
-~/scripts
-├── os
-│   └── update
-│       ├── linde
-│       └── r5 -> linde
-└── scriptura
-    └── tree
+# Part 0: How it works
+
+First, we need to understand how the game works.
+
+On the front of each card, you’ll find the artist or band name, the year the song came out, and the song title. On the back, there’s a QR code. Scanning it takes you to a URL with two things in its path: the game’s region (`DE` in my case) and the card ID. The music then starts playing in the app or through Spotify.
+
+This means there’s a mapping from Card ID ⇒ Spotify Track. There are also multiple card versions per region, so the card ID alone isn’t enough to identify a song. Card ID 1 might be “Wet Dream” in the UK, but “Tage wie diese” in Germany.
+
+![card.png](https://wuemeli.com/_astro/card.DxcNptP5_Zkv1oD.webp)
+
+![qr_code.png](https://wuemeli.com/_astro/qr_code.BqCb_R1b_ZuQ3l.webp)
+
+# Part 1: The Android app
+
+After getting the app’s APK from some sketchy Android APK download website, I used [jadx](https://github.com/skylot/jadx) to get the decompiled Java code.
+
+![source_code](https://wuemeli.com/_astro/source_code.DrTbtfqy_1nfCVU.webp)
+
+After digging around for a bit, I found a few JSON files under `res/raw`. One of them was named `gameset_database_4.json`, and it seemed to be encrypted.
+
+I ran a tool to identify the format, and it came back as Base64. That’s an encoding, so I decoded it first. The result still wasn’t readable, and I guessed it was encrypted with AES or something similar.
+
+I’d never reverse engineered an Android app before, so I just searched globally for `AES`. And guess what? There was a file called `k43.java` with the entire decryption process laid out in front of me:
+
+```
+public static String f(String str, String str2) throws o21 {
+    str.getClass();
+    str2.getClass();
+    try {
+        byte[] bArrDecode = Base64.decode(str, 0);
+        bArrDecode.getClass();
+        p(bArrDecode);
+        return o(
+            or.m(bArrDecode, 0, 12),
+            bArrDecode,
+            m(bArrDecode.length - 28, str2)
+        );
+    } catch (o21 e) {
+        throw e;
+    } catch (Exception e2) {
+        Napier.e$default(
+            Napier.INSTANCE,
+            e2,
+            (String) null,
+            new s11(24),
+            2,
+            (Object) null
+        );
+        throw new o21(pv0.o("Decryption failed: ", e2.getMessage()), e2);
+    }
+}
+
+public static SecretKeySpec m(int i, String str)
+    throws NoSuchAlgorithmException {
+    String str2 = i + str;
+    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+    byte[] bytes = str2.getBytes(yj0.a);
+    bytes.getClass();
+    return new SecretKeySpec(messageDigest.digest(bytes), "AES");
+}
+
+public static String o(
+    byte[] bArr,
+    byte[] bArr2,
+    SecretKeySpec secretKeySpec
+)
+    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(
+        2,
+        secretKeySpec,
+        new GCMParameterSpec(SemanticState.Focused, bArr)
+    );
+    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
+    bArrDoFinal.getClass();
+    return new String(bArrDoFinal, yj0.a);
+}
 ```
 
-If I type in
-            `scriptura run os update linde`, it will run the script at
-            `~/scripts/os/update/linde`, whilst providing tab completion for each element. Pressing tab after a script has been resolved will first add
-            `--`
-            to clearly show the end of the script part of the command line, then use the default shell filename completion.
+So let’s walk through this step by step.
 
-```console
-$ scriptura run os update linde -- <tab>
-bin/        flake.nix  LICENSES/  private/    scripts/  system/
-flake.lock  lib/       packages/  REUSE.toml  secrets/  user/
+The function `f` takes two strings as inputs. The first, `str`, contains the Base64-encoded data, which it decodes:
+
+```
+byte[] bArrDecode = Base64.decode(str, 0);
+bArrDecode.getClass();
+p(bArrDecode);
 ```
 
-The usage information gives more detail on what can be done.
+It then checks whether the decoded data is at least 28 bytes long:
 
-```console
-$ scriptura
-Usage: scriptura <subcommand> <script_name>
-SCRIPTURA_ROOT: ~/scripts
-
-Subcommands:
-
-  run          Run a script
-  help         Display help information
-  new          Create new script
-  edit         Edit existing script
-  which        Display script path
-  cat          Display script content
-  cmd          Execute shell command from target directory
-
-User Subcommands:
-
-  tree         print a tree of files under $SCRIPTURA_ROOT
-
-Scripts:
-
-os ...       -- os commands
+```
+public static void p(byte[] bArr) throws o21 {
+    if (bArr.length < 28) {
+        throw new o21(
+            gg3.g(
+                bArr.length,
+                "Encrypted data too small: ",
+                " bytes (minimum: 28 bytes)"
+            ),
+            null
+        );
+    }
+}
 ```
 
-## Typing shortcuts
+Next, it passes a bunch of data to the function `o`, which handles the final stage of decryption:
 
-To reduce the amount of typing required, I have set the following aliases.
-
-```fish
-alias sfm="scriptura"
-alias sf="scriptura run"
+```
+return o(
+    or.m(bArrDecode, 0, 12),
+    bArrDecode,
+    m(bArrDecode.length - 28, str2)
+);
 ```
 
-The fish completion system handles these well:
-            `sf <tab>`
-            will show me scripts to be run, whereas
-            `sfm`
-            will show me the subcommands of the tool.
+The first argument is the first 12 bytes of the decoded data. That’s our IV, or nonce. The second argument is the entire decoded byte array.
 
-## Documenting scripts
+The third argument is where things get interesting. It takes the total length minus 28 and passes that, along with `str2`, to the function `m`. Those 28 bytes account for the 12-byte nonce and the 16-byte authentication tag.
 
-To aid documentation,
-            `scriptura`
-            will look in a couple of places:
+Inside `m`, the remaining length is converted to a string and joined with `str2`. That combined string is then hashed using SHA-256 to produce the AES key.
 
-1. an adjacent file with the .help extension
-2. comments inside the script (currently only supports one comment syntax #) Additionally, folders can be documented by adding a file called help. This information is then provided during tab completion, via the help subcommand or when listing scripts (the default action if a the command line does not resolve to a script).
+So `str2` isn’t the AES key itself. It’s the secret string used to derive it, and we haven’t found it yet.
 
-## Language support
+Finally, `o` does the actual decryption:
 
-Whilst scriptura is written in fish, scripts don’t have to be; it’s just the default.
-            `scriptura new`
-            will create scripts with a fish shebang, which can be freely edited. I also plan to add a command-line option to set a different interpreter.
-
-## Changes from sd
-
-The
-            [blog post version of
-              `sd`](https://ianthehenry.com/posts/sd-my-script-directory/)
-            and the version
-            [published to Github](https://github.com/ianthehenry/sd)
-            already differ in that the blog post version uses subcommands like
-            `sd new`, whereas the Github version uses flags for actions that don’t involve running a script (e.g.
-            `sd --new`). I prefer the subcommand style, at least when there is a short alias to the
-            `run`
-            subcommand.
-
-Additionally, I’ve added some new features.
-
-## New features
-
-### Tab completion after
-            `new`
-
-The
-            `new`
-            subcommand invokes the underlying command’s tab-completion after a script name is given:
-
-```console
-$ scriptura new mac svc restart -- launchctl k<tab>
-kickstart  (Forces an existing service to start)
-kill    (Sends a signal to the service instance)
+```
+public static String o(
+    byte[] bArr,
+    byte[] bArr2,
+    SecretKeySpec secretKeySpec
+)
+    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(
+        2,
+        secretKeySpec,
+        new GCMParameterSpec(SemanticState.Focused, bArr)
+    );
+    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
+    bArrDoFinal.getClass();
+    return new String(bArrDoFinal, yj0.a);
+}
 ```
 
-### Run ad-hoc commands in the script root
+It sets up AES-GCM with the derived key and nonce, then decrypts the data after the first 12 bytes.
 
-```console
-$ scriptura cmd tree
+That’s the decryption process figured out. Now we just need the secret string.
+
+# Part 2: Finding the decryption key
+
+I was doing this in a Discord call in the Rust Language Community server, and someone pointed out that I should look for a byte array with a length of 32 bytes.
+
+I first searched for `byte[32]`, but didn’t find anything useful. I then tried this pattern:
+
+```
+grep -P 'byte\[\]\s*\w+\s*=\s*\{' | awk -F',' 'NF==32'
 ```
 
-will run the
-            `tree`
-            command with the working directory set to
-            `$SCRIPTURA_ROOT`.
+That led me to `m17.java`, which contained these two super cool arrays:
 
-### Custom subcommands
-
-One thing that I thought would be useful is a
-            `tree`
-            subcommand. However, I don’t want to force that on any other potential users. Whilst I could have settled with the
-            `cmd`
-            subcommand mentioned in the previous section, I decided I wanted it to be even easier.
-Scripts under the special
-            *scriptura*
-            subdirectory are exposed as subcommands, which pass flags to the underlying command and interpret positional arguments as script path components:
-
-```console
-# create a new script at ~/scripts/scriptura/tree which just calls tree
-$ scriptura new scriptura tree -- tree
-$ scriptura tree
-.
-├── os
-│   └── update
-│       ├── linde
-│       └── r5 -> linde
-└── scriptura
-    └── tree
-
-4 directories, 3 files
-$ scriptura tree -L1 os
-os
-└── update
-
-2 directories, 0 files
+```
+public static final byte[] a = {117, -67, 13, -80, 43, 2, 93, 61, 9, 71, 61, -85, 12, -119, -123, 58, -13, 30, -119, -59, -30, 60, 3, 56, -34, -80, -28, -124, 88, -124, 1, 68};
+public static final byte[] b = {45, -28, 93, -4, 29, 49, 31, 87, 102, 16, 119, -31, 71, -54, -10, 66, -72, 40, -80, -73, -86, 14, 77, 86, -85, -55, -121, -55, 46, -73, 98, 29};
 ```
 
-## Motivation
+We then tried to figure out how to turn these into something useful. After a bit of experimenting, someone suggested XORing the two arrays together. We interpreted the resulting bytes as text and got this:
 
-Recently, I found
-            [sd](https://github.com/ianthehenry/sd), which is designed to help run and manage scripts under a specific directory tree.
+```
+XYPL63BjoWJJKCsxK69rH2NnuycMv3cY
+```
 
-There are two reasons I’m not using this tool directly:
+Using this string, I wrote a little decryptor in Rust:
 
-- It’s called sd, which is a name that’s already taken on my system by another tool: sd (sed alternative).
-- It doesn’t ship with completions for the fish shell. There was a gist with these, but it seems to have disappeared. The completions are, in my opinion, the biggest feature.
+```
+use aes_gcm::{
+    Aes256Gcm, Nonce,
+    aead::{Aead, AeadCore, Generate, Key, KeyInit},
+};
+use base64::Engine;
+use sha2::{Digest, Sha256};
 
-Also, I expected a fish implementation to be easier to read and write, as well as not requiring so many external command calls.
+const STRING_2: &str = "XYPL63BjoWJJKCsxK69rH2NnuycMv3cY";
 
-In the introductory
-            [blog post](https://ianthehenry.com/posts/sd-my-script-directory/), Ian writes
-            It’s not really a thing. It’s more of an idea. You can implement it yourself in one sitting, if you want..
+fn main() {
+    let input = std::fs::read_to_string(
+        "/home/<redacted>/Downloads/HITSTER_4.0.3_APKPure.xapk.out/HITSTER_4.0.3_apkcombo.com/resources/nl.jumbo.hitster.apk/res/raw/locales_v4.json",
+    );
 
-It took me more than one sitting, but I enjoyed it.
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(input.unwrap())
+        .unwrap();
+
+    let iv = &data[..12];
+    let ct = &data[12..];
+
+    let mut hash = Sha256::new();
+    hash.update((data.len() - 28).to_string().as_bytes());
+    hash.update(STRING_2);
+    let key = hash.finalize();
+
+    let cipher = Aes256Gcm::new(&key);
+    let plaintext = cipher.decrypt(Nonce::from_slice(iv), ct).unwrap();
+
+    std::fs::write("test.txt", plaintext).unwrap();
+}
+```
+
+That gave us this awesome `test.txt` file with around 31,000 lines of mappings from card IDs to Apple Music and Spotify tracks, plus ISRCs, across multiple regions.
+
+We then looked around the code a little more and found out that all of this wasn’t really needed.
+
+If we’d searched for an HTTPS URL first, we would’ve landed on this:
+
+And with a little imagination, we tried:
+
+There was the entire thing. No encryption.
+
+We spent around 18 hours chasing a file that, in the end, wasn’t even a real secret.
+
+Credits:
+
+- Mr.Corrupt from the Rust Language Discord community for helping me.

@@ -1,66 +1,15 @@
-TL;DR: GitHub Actions accepts several invalid YAML productions, making it
-difficult (read: impossible) to parse some real-world action and workflow
-definitions with a properly conforming YAML parser.
+I assume you know about the P vs. NP problem. But what is this wacky thing [Anthropic just posted](https://github.com/anthropics/formal-math/blob/main/vp-vnp/paper.pdf)?
 
-This is related to [zizmor#1116](https://github.com/zizmorcore/zizmor/issues/1116), which has been bugging me for a year and a half.
+You learned how to take a determinant in your linear algebra class:
 
-Last April, a user reported that [zizmor](https://docs.zizmor.sh) was rejecting a workflow containing
-a step that looks like this:
+The naive way is fine for 3×3 matrices, but notice that you need to perform Θ(n!) arithmetic operations here. Exercise for the reader is to find the exact number of operations (hint: start with a recurrence relation).
 
-```yaml
-- name: Create NPM Remote Repository JSON
-  uses: jsdaniell/create-json@v1.2.3
-  with:
-    name: "npm-remote-template.json"
-    json: '{
-      "key": "npm-remote",
-      "rclass": "remote",
-      "packageType": "npm",
-      "url": "https://registry.npmjs.org"
-    }'
-```
+Luckily, if you paid attention, you will remember there are faster ways to do this for big n×n matrices, like Gaussian elimination. If we stick only to adding and multiplying, we can still find a determinant in polynomial time ([there are better ways, but this is an old, readable method](https://www.sciencedirect.com/science/article/pii/0020019084900188)).
 
-Apart from the use of a multi-line flow-style string for the `json:` key, nothing particularly
-stands out about this step.
+A related problem to the determinant is finding the permanent. It’s like a determinant without any subtraction:
 
-Except: it isn't valid YAML! YAML says this about flow-style nodes that are nested inside
-of a block-style parent collection (read: map or array):
+Unlike determinants, there is no known way to compute permanents in polynomial time. Since finding the permanent of a matrix of 0s and 1s is NP-hard (and in fact [#P-complete](https://en.wikipedia.org/wiki/Counting_problem_(complexity))), it would be pretty important if there were a way.
 
-> Flow nodes must be indented by at least one more space than the parent block collection.
-> Note that flow nodes may begin on a following line.
->
-> *Source*: [YAML 1.2.2 § 8.2.3](https://yaml.org/spec/1.2.2/#823-block-nodes)
+What the Anthropic proof that VP≠VNP means is that there is no way to do this if we are limited to arithmetic circuits of size polynomial in the input-size, which look like this:
 
-That means the *correct* syntax is instead:
-
-```yaml
-- name: Create NPM Remote Repository JSON
-  uses: jsdaniell/create-json@v1.2.3
-  with:
-    name: "npm-remote-template.json"
-    json: '{
-      "key": "npm-remote",
-      "rclass": "remote",
-      "packageType": "npm",
-      "url": "https://registry.npmjs.org"
-     }'
-```
-
-The difference is barely visible:
-
-YAML is a big and complicated spec, so it didn't even occur to me that this *was*
-invalid. Instead, I opened [tree-sitter-yaml#36](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/36) to "fix" it. I've now
-opened [tree-sitter-yaml#51](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/51) to revert that misbegotten fix.
-
-On GitHub's side, I'm not sure if they have a clean path towards spec
-conformance here. Much of the code behind Actions is proprietary,
-but it seems likely that the underlying parser on their end is [YamlDotNet](https://www.nuget.org/packages/yamldotnet/).
-
-Actions [appears to use YamlDotNet 5.3.0](https://github.com/actions/runner/blob/7e211dc69c347b78fc398e630e74facb11a13235/src/Sdk/Sdk.csproj#L29), which was [released in 2018](https://github.com/aaubry/YamlDotNet/releases/tag/v5.3.0).
-However, even upgrading to the newest version (18.1.0 as of writing)
-wouldn't fix this particular bug, since it's [still present](https://github.com/aaubry/YamlDotNet/blob/748334a8fa7c227740018b284b71ad95cc6b7fc7/YamlDotNet/Core/Scanner.cs#L1841-L1844) on that
-version (note the `!isSingleQuoted` guard).
-
-My best guess is that a 2020 patch ([YamlDotNet#467](https://github.com/aaubry/YamlDotNet/pull/467)) only fixed the double-quoted
-form because YAML's official test suite only tests rule 8.2.3 with a double-quoted
-string, despite it applying to both forms.
+This means that for P to equal NP, there must be some trick to computing permanents using AND/OR/NOT on the bits of the input that is better than addition and multiplication. There are many problems where access to Boolean operators is helpful, but it isn’t clear how they would help with the permanent. If you think of a way, go claim your $1 million.

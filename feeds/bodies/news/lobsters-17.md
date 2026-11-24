@@ -1,16 +1,261 @@
-On the bus back to Pescara on the evening of the second day of Django on the Med 2026, people were still talking about Django. We had spent the morning working in the sprints, then tasted wine at a local winery, walked through a medieval town and had dinner with traditional local dishes. I was tired, and some people were dozing while others still felt like talking. The conversations moved easily from one thing to another and came back to the ideas and problems we had worked on that morning.As we came down towards the Adriatic coast, we could see lightning striking out at sea, quite a sight from the bus. We reached central Pescara around midnight, and luckily everyone was staying only a few minutes away on foot. Moreno, Alessia and I drove home with one last day of sprints still ahead of us.Looking back, that bus ride is one of the moments I remember most clearly from the second edition. Maybe it was the slow descent from the mountains to the sea, or maybe I was just very tired. I wanted people to have time to be together, work on Django and get to know a little of my hometown.![The sun rises over the Adriatic, between the palms on the seafront and rows of closed beach umbrellas.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_051542583.webp)© 2026 Paolo Melchiorre CC BY-SA “Sunrise on the Pescara seafront, before the first morning of sprints.”From Palafrugell to PescaraWhen I proposed dedicated Django sprints in 2022, I had just returned from DjangoCon US in San Diego. Being there had been a wonderful and demanding experience, with a long trip, a different time zone and the pressure of preparing and giving a talk in a language that was not my own. On the first morning of the sprints, I went for a swim in the ocean with Mariusz, Wil and Simon. All three were part of the Django community, and I had met them in person for the first time on that trip, so far from home. Afterwards, over coffee at a café on the Pacific coast, we finally had time to talk without rushing. We looked out at the palms and the sea, a view that reminded me of home.[![© 2022 Paolo Melchiorre CC BY-SA “Paolo with Mariusz, Wil, Simon, Carlton, Will, Ryan and Drew at Ocean Beach in San Diego during the DjangoCon US 2022”](https://www.paulox.net/images/derivatives/wide/468w/PXL_20221020_140519841.webp)  
-My Django active developers Sprints proposal](https://www.paulox.net/2022/10/26/my-django-active-developers-sprints-proposal/)<small>*The story of how the proposal to organize sprints on the Django active developers was born and how I proposed it during the past DjangoCon US 2022 in San Diego to various components of the Django community.*</small>I wanted to spend time like that together more often, without a long trip, several full days at a conference and the work of giving a talk or helping to run the event every time. Early in my time in the Python community, I had come across small, dedicated sprints in the Zope and Plone communities. In the wider Python community we have long used the word *sprint* for sessions where people meet in person and form their own groups. They might write code, improve documentation or discuss how to take a project forward. I thought we could do something similar in the Django community, so I talked to people about it while I was still in San Diego and wrote a post when I got home.The proposal had been around for a few years when, at DjangoCon Europe in Dublin in April 2025, Carlton gave me the push to try it. That was where we started Django on the Med together. We found a direct flight from Pescara to Girona, near Palafrugell, where he lives. I immediately bought a return ticket for early October. Even if it ended up being just the two of us, we would have three days to sprint together.Carlton and I had given ourselves two editions to experiment: one in Palafrugell, where he lives, and one in Pescara, my hometown. For the first one, we decided to let people make their own plans and see what happened. Carlton took on the work of getting everything started in Palafrugell, with no previous edition to learn from.In October, fourteen of us met in Palafrugell. Carlton had found a room, arranged breakfast and given everyone a base from which to make their own plans. I could simply turn up with my laptop and a few ideas, join the discussions, go to the beach, swim in the sea, and take plenty of photos. I had allowed myself to rely on other people, something that does not always come easily to me.[![© 2025 Paolo Melchiorre CC BY-SA “One of the sprint mornings in the Palafrugell venue, with contributors working side by side.”](https://www.paulox.net/images/derivatives/wide/468w/PXL_20251008_065138078.webp)  
-Django On The Med: A Contributor Sprint Retrospective](https://www.paulox.net/2025/12/30/django-on-the-med-a-contributor-sprint-retrospective/)<small>*A personal retrospective on Django On The Med, three months later. From the first idea to the actual contributor sprint, and how a simple format based on focused mornings and open afternoons created unexpected value for people and the Django open source community.*</small>Our roles would be different in Pescara. This time I was the local person who knew the places, the people and how to get around. I wanted to build on what we had learned in Palafrugell and try something different in our second experiment. I would suggest places to stay near the sprint room and arrange some activities to share the area with the group. After years of leaving Pescara to meet the Django community elsewhere, I would finally get to welcome that same community here. I had left this city for San Diego and written the sprint proposal here when I returned. Now the second edition would take place right here. It felt like a good way to bring that story back home.A base in the city centreOne thing I remembered from Palafrugell was getting around. Daniele, Mark and I were staying in an apartment on the coast, in Calella de Palafrugell, with a lovely sea view. The town council had given us a room for the sprints in the centre of Palafrugell, free of charge. Everyone had booked their own place to stay, so some of us ended up in town and others by the sea. The hour-long walk at sunrise on the first morning is one of my best memories of Palafrugell. With people staying in different places, we were less likely to run into one another after the sprints. I thought about that when I looked for a venue in Pescara.In Pescara I wanted a base from which people could do almost everything on foot. I spent a long time looking for a free room like the one in Palafrugell. Camillo, from our local Python Pescara community, helped me find Hotel Plaza in Piazza Sacro Cuore. It was close to both the railway station and the bus station, with a suitable room and places to stay in the hotel or nearby.![The green Django banner stands at the top of the steps at Hotel Plaza, below the sign above the entrance.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_054815166.webp)© 2026 Paolo Melchiorre CC BY-SA “On the first morning, I had just put the Django banner outside Hotel Plaza, before the participants arrived.”I had considered more scenic places near Pescara, in the Torre del Cerrano marine reserve or along the Costa dei Trabocchi coast. I liked the idea of being right next to a pine forest by the sea or in a spot overlooking the water. For people coming from far away, either option would have meant another leg of the journey. In the city centre, people could step off the train and walk to the hotel in a few minutes. That made a real difference for anyone travelling.The Django Software Foundation approved our funding request through its usual process. For a small event outside the main tourist season, the grant was enough to cover the room for all three sprint mornings. The foundation paid the hotel directly, and Catherine helped us with the administration. That support made a real difference for a small volunteer-run event without its own legal entity or bank account. Once the room was booked, we had what we needed for the sprints. Everything else was close by, including places to stay, restaurants and shops. The beach was about five minutes away on foot.![Paolo and Carlton are smiling in the foreground. Behind them, participants sit around the tables in the sprint room.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_064242924.webp)© 2026 Paolo Melchiorre CC BY-SA “The first selfie in the sprint room at Hotel Plaza, just after we opened the sprints on 23 September.” (from left to right: Caleb, Daniele, Valentino, Tim, Alex, Mark, Žan, Becky, Moreno, Annabelle, Simon, Jacob R., Justin, Shai, Jacob W., Matthias, Lilian, Carlton, Johannes, Paolo, Lily)After years of figuring out how to get to conferences myself, I tried to use what I had learned to make the journey easier for others. I suggested ways to reach Pescara, options for anyone flying into another city, places to stay and how far each was from the venue. In the event chat, people also started making plans to travel together for part of the journey or share accommodation they had already booked.We had planned for 20 places and asked people to arrange travel and accommodation before claiming a free ticket. To our surprise, the places ran out while some people who had followed that advice were still looking for flights, trains or somewhere to stay. We opened a waiting list and released more places, bringing the total to 25 confirmed registrations.By the evening of 22 September, the day before the sprints began, people were letting us know in the chat that they had arrived in Pescara. We had arranged dinner at Lido Aurora, a pizzeria on the seafront, to bring Python Pescara together with the people who had come for Django on the Med. Luca, Marco and Vincent had helped with the preparations, and Mario and Tyrone joined us at the table. We chose a *giro pizza*, where the pizzas arrive already cut into slices and everyone takes the ones they like. It worked well for people who joined us later too.![Paolo takes a selfie under the lights at the beach restaurant. People at two long tables behind him smile and some wave.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260922_195327593.webp)© 2026 Paolo Melchiorre CC BY-SA “A selfie at the end of the welcome dinner at Lido Aurora on the Pescara seafront.” (from left to right: Valentino, Paolo, Jacob R., Manuela, Jacob W., Carlton, Vincent, Annabelle, Lilian, Marco, Mario, Juliana, Luca, Tyrone, Justin, Caleb, Charlie, Konstanze, Matthias, Žan, Tim, Lily, Sam)As a co-founder of Python Pescara, I knew the people from the local community, and as a Django on the Med organizer I knew many of those who had come for the sprints. It was good to see them sitting together and talking. People arriving from elsewhere already had a group there to welcome them. For people who live here, it was a chance to meet people from the Django community they would usually only see online or at a conference abroad.Over the next few days, some of them also joined us for coffee breaks, lunches, dinners and afternoon activities. I was glad to see the conversations between Python Pescara and the Django community continue. We started talking about getting together again at DjangoCon Europe 2027 in Innsbruck. Jacob Rief, one of the local organizers, was with us in Pescara, and Moreno, Caleb and Mario bought their tickets during one of the coffee breaks.*«It was a pleasure to finally meet some of the people I have been either working with or just following for a long time. A special surprise was meeting Simon again. We met at Django Under the Hood in Amsterdam in 2016 and he helped get my first pull request to Django off the ground back then.»* ![Matthias Kestenholz](https://www.paulox.net/images/matthias-kestenholz-avatar-32.webp) [Matthias Kestenholz](https://406.ch/writing/looking-back-at-django-on-the-med-2026/#tuesday) Finding time to sprintOn the morning of 23 September, the first day of the sprints, my wife dropped me off in Pescara on her way to work. Along the seafront there were palms, a few clouds and the sun rising over the Adriatic. I took a short walk on the beach and took a few photos, which felt like a good way to start the day.At the hotel I put the Django banner by the entrance and checked the room. Then I went to a nearby pastry shop, where we had agreed to meet anyone whose accommodation did not include breakfast. I ordered a cappuccino and a *bomba alla crema*, a doughnut filled with custard, and waited for Jacob and Alex to join me for breakfast.At half past eight we were ready to start. I welcomed everyone, thanked the participants and sponsors, went over the practical details and handed over to Carlton. As in the first edition, he led a half-hour brainstorming session and took notes on large sheets of paper. We talked about what we liked about Django, what problems we saw and what we wanted to work on. Small groups then formed naturally around shared interests.*«When Paolo wasn’t otherwise showing us around Abruzzo last week at Django on the Med 🏖️, I had the pleasure of supporting a number of groups there […]  
-Special thanks to Annabelle and Simon for taking up my suggestion to pair on some delicate issues around NULL handling in the ORM. […] the three of us now have more context for tackling whatever comes next in this area.»* ![Jacob Walls](https://www.paulox.net/images/jacob-walls-avatar-32.webp) [Jacob Walls](https://forum.djangoproject.com/t/django-fellow-report-jacob-2026/43851/41) I kept moving from one table to another while also looking after the day’s arrangements. I had to contact the bike shop about rentals for the afternoon, arrange lunch for the whole group and check that everything was ready for the coffee break. I knew I would have less time for sprint work than in Palafrugell. I still tried to make time each morning to talk with a few people about ideas I had been thinking about.![Participants look towards the camera from both sides of a long table under beach umbrellas. Plates and bottles are visible in the foreground.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_124022570.webp)© 2026 Paolo Melchiorre CC BY-SA “At the end of our first lunch at Lido Aurora, on the beach in Pescara, on 23 September.” (from left to right: Jacob R., Juliana, Marco, Caleb, Justin, Alex, Paolo, Lily, Tim, Annabelle, Jekaterina, Žan, Matthias, Becky, Mark, Shai, Sigal, Carlton, Moreno, Valentino, Simon, Daniele, Lilian, Sam)On the first morning, I spoke with Daniele Procida about documentation and AI. I was curious about how good documentation like Django’s fits with the way we use AI tools today, and whether it could already do some of the work of a *skill*. It was a short conversation, but I enjoyed hearing Daniele’s ideas and seeing an approach to generating a text version of the documentation that I would like to explore further.The next morning, I found time to talk with Simon Charette and return to the idea of an ORM compatibility matrix. I had started a prototype with Jacob Walls in Palafrugell, and a year later I was talking with someone again to work out what to do next. Simon stressed the value of generating a matrix from the database feature flags automatically and suggested using Python’s descriptor protocol. I already knew how valuable his feedback could be, and it helped to ask him a question, explain what I was unsure about and think it through together.[![© 2025 Paolo Melchiorre CC BY-SA “Wells Street Bridge over the Chicago River, framed by the city’s skyline in the heart of downtown Chicago, USA”](https://www.paulox.net/images/derivatives/wide/468w/PXL_20250910_232244553.webp)  
-Django: one ORM to rule all databases 💍](https://www.paulox.net/2025/10/06/django-orm-comparison/)<small>*Comparing the Django ORM support across official database backends, so you don’t have to learn it the hard way.*</small>Around us, other people were working on the ORM, the frontend, documentation, Django’s async support and plenty of other topics. People with different levels of experience sat at the same tables, where they could ask for help or a review. I enjoyed seeing people who had been listening at first grow more confident and join the discussions.The mid-morning coffee break, funded by Cuttlesoft, was in the next room. We could get up, have as many freshly made espressos or cappuccinos as we wanted, get something good to eat and talk without having to find a café for the whole group. We had first thought about having breakfast together, but the coffee break fit the rhythm of the three mornings well.![Some participants stand and talk, while others sit at small tables with coffee, cappuccinos and pastries.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260925_091505883.webp)© 2026 Paolo Melchiorre CC BY-SA “The coffee break at Hotel Plaza on 25 September, the last morning of sprints.”One thing I never managed to do in Pescara in 2026 was share photos, moments and impressions on my personal Mastodon account as the days went by, as I normally do. This time I took as many photos as I could and wrote a few posts on the official Django on the Med account. Unfortunately, I never got around to posting about the event on my own account, during the sprints or afterwards.[![© 2025 Paolo Melchiorre CC BY-SA “Selfie taken in Palafrugell, at the end of the Django on the Med 2025 with (from left to right) Paolo Melchiorre, Andreu Vallbona, James Bligh, Mark Smith, Ramiro Nocelli, Carlton Gibson, Alex Gómez, Mariusz Felisiak, Jacob Walls, Carles Barrobés, Lily, Daniele Procida, Simon Charette)”](https://www.paulox.net/images/derivatives/wide/468w/PXL_20251009_110025612.webp)  
-My Django on the Med 2025 🏖️](https://www.paulox.net/2025/10/12/my-django-on-the-med-2025/)<small>*A summary of my experience at Django On The Med 2025 told through the posts I published on Mastodon during the sprint.*</small>Alessia joined us on the second day to take photos and record video. I had asked her to help because I had been free to document everything in Palafrugell, and in Pescara I knew I would have other things to look after. That morning we recorded a few short video interviews with people who wanted to share where they came from and why they were there. I was glad we could keep a record of people’s voices and faces as well as having the photos.The Costa dei TrabocchiFor the afternoon of the first day, I had suggested a bike ride along the Costa dei Trabocchi coast. After lunch on the beach, we walked to the station together to take the regional train to the coastal village of San Vito Chietino. I thought we had plenty of time, but settling the last bills at the restaurant and waiting at the ticket machines meant we still had to hurry a little.*«[…] Django on the Med was my first face-to-face encounter with other Djangonauts. I knew the Django community is a friendly place, but my expectations were exceeded.  
-[…] During the lovely afternoon excursions, we were able to connect […] I feel truly inspired and empowered […] I hope that other contributors can have a similar experience […]»* ![Annabelle Wiegart](https://www.paulox.net/images/annabelle-wiegart-avatar-32.webp) [Annabelle Wiegart](https://dev.to/annalauraw/my-django-on-the-med-2026-experience-4elb) As soon as we arrived, everyone bought a return ticket. We had just seen how much a simple thing like that could slow us down, and the small station had only one ticket machine.We picked up the bikes from the shop I had contacted well in advance and headed towards the Adriatic cycle path. Caleb had brought his Brompton folding bike and Johannes his Penny skateboard. The shop owner had warned me that two old rails still crossed the entrance to the path. We needed to get off our bikes to cross them because the wheels could slip. I stopped there to remind the group and wait for the last few people to cross them.![The group cycles towards the camera along the cycle path. On the right are the Adriatic Sea and a trabocco with its walkway.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_150314395.webp)© 2026 Paolo Melchiorre CC BY-SA “Heading south along the Adriatic cycle path on the Costa dei Trabocchi on the afternoon of 23 September.” (from left to right: Annabelle, Juliana, Jacob W., Jekaterina, Alex, Charlie, Sam)When I looked up, nearly everyone was already cycling the wrong way. Daniele and Valentino had set off north at full speed, and the others had followed, assuming they knew where to go. Caleb went after them and brought them back. I had tried to think of all the little things that might go wrong. The whole group riding away in the opposite direction had never crossed my mind.Once we were all together again, we headed south along the old railway route. The path goes through tunnels and stretches that open out onto the sea. We could ride next to each other, talk and move between groups as we went. I stopped to explain what the *trabocchi* are and how these wooden fishing structures gave the whole coast its name.On the Punta Isolata headland, part of the group stopped at the kiosk opposite the *trabocco* of the same name. A few of us went a little further. We took off our shoes on the beach and put our feet in the water. The sea was a little rough, but the summer sun had kept it pleasantly warm. Some people took photos, others watched the waves, and some preferred a drink at the kiosk. I got to show people places I knew well and enjoy them with the people I usually talk to about Django.![Four people stand barefoot at the water's edge as a wave breaks behind them. The person on the right raises their arms.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260923_153400878.webp)© 2026 Paolo Melchiorre CC BY-SA “With Annabelle, Sam and Juliana at the water’s edge at Punta Isolata on the afternoon of 23 September.” (from left to right: Paolo, Annabelle, Juliana, Sam)On the way back I reminded everyone that they could make their own plans for dinner. While we waited on the platform at San Vito station, we started forming groups based on what we felt like eating: vegetarian or vegan food, meat or fish. I joined the group that wanted fish. We found a small room for nine at La Barcaccia, a very good seafood restaurant in central Pescara, where we ate local fish and seafood dishes. After spending the afternoon together, it worked well to carry on the evening in smaller groups.*«Django on the Med in Pescara was truly amazing. Being able to interact with Django first line contributors in person was truly an unreal experience.  
-I’ve been working remotely for more than 13 years and it still amazes me how refreshing can be to meet fellow developers in person. In the context of advancing a web framework like Django, these events acquire more value than any other means of interaction.»* ![Valentino Gagliardi](https://www.paulox.net/images/valentino-gagliardi-avatar-32.webp) [Valentino Gagliardi](https://valentinog.com/blog/django-on-the-med-pescara-2026/#my-django-on-the-med-pescara) From the hills to the mountainsFor the afternoon of the second day, I also wanted to show people the countryside inland from Pescara. I had thought of several possibilities before I knew which ones we could actually arrange. Mark Smith helped me start the conversation with JetBrains, where he works, and their support made it possible for us to travel together. We would leave Pescara at sea level, cross the countryside, then head up into the hills and finally into the mountains.![Participants with backpacks talk outside the bus station. A bus is parked behind them.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260924_131916173.webp)© 2026 Paolo Melchiorre CC BY-SA “At the Pescara bus station on the second day, waiting for the bus for the tour supported by JetBrains.” (from left to right: Alessia, Juliana, Alex, Matthias, Jacob W., Johannes)With the private bus, we could travel together and return straight to the city centre at the end of the evening.Our first stop was La Tenuta del Priore, a winery in Collecorvino, in the countryside near Pescara. The vineyards were near the Tavo River valley, about 150 metres above sea level. It was harvest time, so we saw the vineyards and the winery while everyone was busy with the harvest, then sat down on the patio for the tasting. In front of us were the hills, the vineyards and the mountains we would head towards later.![Paolo takes a selfie from one end of a long table under a covered terrace. Participants sit on both sides, with glasses of wine and small plates of food.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260924_144844978.webp)© 2026 Paolo Melchiorre CC BY-SA “Tasting wine and local food on the patio at La Tenuta del Priore in Collecorvino on 24 September.” (in the foreground, from left to right: Mark, Jacob W., Justin, Simon, Alex, Matthias, Lily, Lilian, Annabelle, Carlton, Paolo)I already knew the people at the winery, which helped me arrange the afternoon. I could explain what kind of event it was, who was coming from abroad and what different needs we had to consider. Being able to talk to people in advance and adjust the plans together made a difference throughout the preparations.*«You’d be working on a problem in the morning with someone else, and perhaps by the end of the sprint that morning you’d be thinking:  
-“Maybe we need to freshen our brains, think about something else, and then maybe you’ll be able to solve the problem when you get back to tackling it.”  
-And then when you do have that moment a few hours later, you’ll still be with the person you are working on the problem with.»* ![Alex Hatfield](https://www.paulox.net/images/alex-hatfield-avatar-32.webp) [Alex Hatfield](https://youtu.be/3I4QVWisPTY?t=949) I wanted everyone to be able to enjoy the experience. We had arranged an alternative for people who did not drink wine. For dinner, we wanted to serve only traditional dishes from the area. Most local dishes are based on meat, so we worked with the restaurant to find vegetarian and vegan options that were also part of the local tradition. This was one of the things that needed the most attention. It took some planning before anyone sat down to order.After the tasting we stopped in Penne, a medieval town on a high hill in the province of Pescara. Vanda, the local guide I had hired at the last minute, took us through Penne’s narrow streets, churches and viewpoints and told us about them in English. I already knew the town, and I still learned something new about its history.![Seen from behind, the group walks up a stone-paved lane in Penne, between brick walls and buildings in the old town.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260924_183216516.webp)© 2026 Paolo Melchiorre CC BY-SA “During the guided walk through the medieval streets of Penne on 24 September.”We stopped for a photo at the highest point in town, about 450 metres above sea level. We could see across the valley and the countryside below, all the way to the sea. Behind the town, the sun was setting over the Gran Sasso massif.Then we headed up towards Villa Celiera, a small mountain village on the slopes of Gran Sasso. We had dinner at La Locanda del Voltigno in a tiny hamlet just over 900 metres above sea level. We were in the Voltigno plateau area, inside the Gran Sasso and Monti della Laga National Park. Cristiano, the owner and chef, had set up a long table in a room for our group. We had worked together on alternatives for the menu, including *ciabotto*, a traditional vegetable dish. After the first courses, we went outside to see how *arrosticini*, the local meat skewers, are cooked. Cristiano explained how to cook them on the *furnacella*, a long, narrow charcoal grill shaped like a gutter, and I translated.Standing around the *furnacella*, talking and eating the arrosticini while they were still hot from the charcoal was one of the most authentic experiences I could share. I was glad to do it with friends who had come from so many different places. Eventually we went back inside, finished dinner and stayed to talk longer than planned, thanks to a patient bus driver.![Smoke rises from a long charcoal grill. Cristiano and Paolo are on the right, while some participants watch with a glass in hand.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260924_212024516.webp)© 2026 Paolo Melchiorre CC BY-SA “On the evening of 24 September at La Locanda del Voltigno in Villa Celiera, Cristiano showed us how to cook arrosticini over charcoal, and I translated for the group.” (from left to right: Lilian, Justin, Mark, Jacob R., Paolo, Cristiano)It was already late when we got back on the bus. The lightning over the sea and the conversations that were still going on brought a very full day to a close. With JetBrains’ support, I had been able to arrange much more than the three mornings of sprints.*«It’s three serious days. We got 25 people together, and we work solidly in the mornings. The afternoons are more social, and you do carry on the discussions: on the bus coming back from the restaurants, there are people talking about nested transactions and all sorts of things going on.»* ![Carlton Gibson](https://www.paulox.net/images/carlton-gibson-avatar-32.webp) [Carlton Gibson](https://www.djangochat.com/episodes/django-on-the-med/transcript) I was pleased, and I also knew how much work it had taken. I had set aside a week off for the event and kept dealing with bookings, attendance, menus and calls until the last moment. With a room in central Pescara, people could have made their own plans for most afternoons and dinners. I chose to arrange those extra activities because I wanted to share as much of the area as I could with people who had come from far away. When I look back on this edition, I want to remember both what we got from it and how much time it took to make it happen.The last photoOn the last morning, 25 September, the seafront was still wet from the storm we had seen coming in from the sea on the bus ride back. I went for another walk before heading to the hotel. After the long day and a night of rain, some people took the chance to sleep a little longer, so the morning started more slowly. Andrew Northall joined us for the last morning, the only one he could attend.By then people knew their way around the city. They knew the room, had tasks in progress and had sat next to different people over the three days. I had a chance to talk with Carlton about how things had gone and what to do next with Django on the Med.*«[…] I’m here because, besides the fun that I’m having here, being in the sprints for a few days charges me and inspires my work on Django for months to come.»* ![Shai Berger](https://www.paulox.net/images/shai-berger-avatar-32.webp) [Shai Berger](https://fosstodon.org/@djangomed/117478644487730505) We started thinking about the next edition on Gozo, a Maltese island in the middle of the Mediterranean, with help from Joseph Zammit on the island. Joseph had planned everything for Pescara, but had to pull out shortly before the sprints began. Sitting together with Carlton again made that conversation quick too. The year before, we had taken a photo in Dublin to remember our decision to try organizing the first event. This time we took another while Carlton wrote down ideas for the next edition in his notebook.![Paolo and Carlton smile at the camera. Carlton holds up an open notebook with handwritten notes.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260925_070900843.webp)© 2026 Paolo Melchiorre CC BY-SA “On the morning of 25 September, Carlton and I had just decided to meet again on Gozo, Malta, in October 2027 for the third edition of Django on the Med.” (from left to right: Paolo, Carlton)That morning, with the activities from the previous days behind me, I finally got to sit down at my computer. I opened a proposal for an ORM compatibility matrix based on feature flags to write down and share the work from 2025 and the ideas Simon and I had discussed the day before.[![© 2005 Django Software Foundation “Official Django Logo”](https://www.paulox.net/images/django-logo-468px.webp)  
-ORM compatibility matrix proposal](https://github.com/django/new-features/issues/216)<small>*Use database feature flags to generate an ORM compatibility matrix automatically.*</small>We stopped at one in the afternoon, half an hour earlier than on the previous days, to give people time to catch their trains or flights without rushing. We took the Django banner outside for our usual group photo in front of the hotel. Then came the goodbyes and hugs. Those who had time stayed for one last quick lunch at Pesciolillo, a small restaurant in the city centre. We tried to make sure the people leaving soon could order first. The station and everyone’s accommodation were close by, so we could spend a bit more time together and everyone could still get on their way easily.After the night of rain, the sun came back quickly and it was even warmer. We ate outside, then those of us still around went for a gelato. By then I was exhausted and very pleased with how it had gone.![Paolo holds a gelato cone in the foreground. The others smile behind him, some holding gelato.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260925_130037692.webp)© 2026 Paolo Melchiorre CC BY-SA “Our usual gelato selfie after lunch on Friday 25 September, the last moment together before we said goodbye.” (from left to right: Paolo, Mark, Becky, Jekaterina, Jacob W., Charlie, Sam, Jacob R., Andrew)On each of the three mornings I had managed to do at least one of the things I had planned for the sprints. I talked with Daniele about documentation and AI, discussed the ORM feature flags matrix with Simon and planned the next edition with Carlton. As an organizer, I often felt there was one more thing to do before I could stop. Looking back, I got a lot out of those short conversations too.*«Django on the Med 2026 in Pescara is a wrap! 🇮🇹  
-We filed issues, opened pull requests, reviewed code, cycled many kilometres, explored Abruzzo, ate a lot of good food and shared quite a few glasses of wine. We worked, talked, laughed and had a great time together. 🍷  
-Here we all are in our final group photo. Thank you to everyone who made these three days special. 🤗  
-See you in Malta in the 2nd week of October 2027, with Joseph Zammit as our local point person! 🇲🇹»* ![Django on the Med 🏖️](https://www.paulox.net/images/djangomed-avatar-32.webp) [Django on the Med](https://fosstodon.org/@djangomed/117331497564193634) When I got home late that afternoon, I collapsed on the sofa. From the messages and photos in the chat, I could see that some people still in Pescara had gone to the beach and others were making plans for dinner together. I was glad they were still enjoying their time together while I could stop thinking about what came next.*«Home, sweet home, but I am missing Pescara already and all the exceptional people that made Django on the Med special.  
-Unmeasurable thanks to Paolo Melchiorre and his fellow locals for keeping us always active, heavenly fed, well caffeinated, incredibly happy and slightly tipsy.  
-What a blast ❤️‍🔥»* ![Johannes Maron](https://www.paulox.net/images/johannes-maron-avatar-32.webp) [Johannes Maron](https://fosstodon.org/@codingjoe/117333664624675516) The last photo I have from those days is of me and Carlton near Pescara’s historic railway station, a few metres from the sprint venue. We are laughing while we wait for my wife to pick us up and drive us to the airport. We still had time to talk a little about how it had gone and say goodbye with a hug. After so many trips to see each other elsewhere, I was glad I had been able to show him a little of home.![Paolo Melchiorre and Carlton Gibson laugh in a selfie in front of Pescara's historic railway station.](https://www.paulox.net/images/derivatives/wide/1050w/PXL_20260925_134104030.webp)© 2026 Paolo Melchiorre CC BY-SA “My last photo of the event, a short walk from Hotel Plaza, while Carlton and I waited for my wife to pick us up and drive us to the airport.” (from left to right: Carlton, Paolo)Meta  [2026-11-23](https://www.paulox.net/2026/11/23) [Paolo Melchiorre](https://www.paulox.net/author/paolo-melchiorre/) [Article](https://www.paulox.net/category/article/) [#community](https://www.paulox.net/tag/community/) · [#django](https://www.paulox.net/tag/django/) · [#open-source](https://www.paulox.net/tag/open-source/) · [#python](https://www.paulox.net/tag/python/) · [#sprints](https://www.paulox.net/tag/sprints/)
+I like making little tools that do one thing well and thing finding clever ways to combine them. It's the ethos behind a lot of the little software projects I have over at [Less Software](https://less.software).
+
+One of the first ones I made was a tool called [whereami](https://less.software/whereami/). Tongue-in-cheekly, I wanted to pitch it as the natural compliment to `whoami`. For that tool, the thinking was nearly every modern OS provides some kind of native API for geolocation. It felt silly to me that I could run a quick command from the terminal for so many things, but I couldn't run one that taps into this capability.
+
+In the pursuit to make that tool cross-platform, one of the things I found myself navigating were the differences between them. Consistently, macOS tended to have a lot of extra niceties baked in, particuarly when it came to imagine recognition, natural language processing and accessibility tooling.
+
+With geolocation, one of the nice things macOS provides that other OS-native approaches don't is a built-in geocoder (and reverse geocoder). So you can type in something like this:
+
+```makefile
+$ whereami
+
+Location: 40.6753, -73.9431
+Accuracy: 35m
+Address: 865 St Marks Ave, New York, NY, 11213, US
+
+$ whereami --json
+
+{
+  "latitude": 40.675265033592396,
+  "longitude": -73.94310370569808,
+  "accuracy": 35,
+  "address": {
+    "street": "865 St Marks Ave",
+    "city": "New York",
+    "state": "NY",
+    "postal_code": "11213",
+    "country": "US"
+  }
+}
+```
+
+And you get that handy little `address` block! It also makes it easy to do something like this:
+
+```ruby
+$ whereami "397 Bridge Street, Brooklyn NY"
+
+Location: 40.6913, -73.9850
+Address: 397 Bridge St, New York, NY, 11201, US
+
+$ whereami "397 Bridge Street, Brooklyn NY" --json
+
+{
+  "latitude": 40.6913424,
+  "longitude": -73.9850328,
+  "accuracy": 0,
+  "address": {
+    "street": "397 Bridge St",
+    "city": "New York",
+    "state": "NY",
+    "postal_code": "11201",
+    "country": "US"
+  }
+}
+```
+
+Now you can grab the `latitude` and `longitude` coordinates for an address. And you get all of this "for free" no your macOS system. No t bad!
+
+There's another handy framework macOS makes available to your system: MapKit. It's analgous to Google Maps and their API offerings, but native to the operating system.
+
+It turns out it's pretty straightforward to build a CLI wrapper around that framework as well, so I made [nearme](https://less.software/nearme/) (macOS only).
+
+They're designed to play well together:
+
+```java
+$ whereami --json | nearme "coffeeshop" --count=5
+
+1. Cafe Imael (cafe)
+   1090 St Johns Pl, New York, NY 11213
+   +1 (718) 758-5857 · https://www.imael.co · 485 m
+
+2. Zaim Coffee Shop (cafe)
+   1102 St Johns Pl, New York, NY 11213
+   +1 (347) 529-3444 · https://www.yelp.com/biz/zaim-coffee-shop-crown-heights · 500 m
+
+3. Cheeni (restaurant)
+   485 Tompkins Ave, New York, NY 11216
+   +1 (347) 365-4015 · https://www.yelp.com/biz/cheeni-brooklyn · 589 m
+
+4. Cotton Bean (cafe)
+   1077 Bergen St, Brooklyn, NY 11216
+   +1 (347) 276-8749 · https://www.cafecottonbean.com · 623 m
+
+5. MoCo 575 (restaurant)
+   531 Nostrand Ave, New York, NY 11216
+   +1 (347) 365-3680 · https://moco575.com · 673 m
+
+$ whereami --json | nearme "coffeeshop" --count=5 --json 
+
+[
+  {
+    "name": "Cafe Imael",
+    "address": "1090 St Johns Pl, New York, NY 11213",
+    "latitude": 40.67105,
+    "longitude": -73.942339,
+    "phone": "+1 (718) 758-5857",
+    "url": "https://www.imael.co",
+    "category": "cafe"
+  },
+  {
+    "name": "Zaim Coffee Shop",
+    "address": "1102 St Johns Pl, New York, NY 11213",
+    "latitude": 40.6710142,
+    "longitude": -73.9416723,
+    "phone": "+1 (347) 529-3444",
+    "url": "https://www.yelp.com/biz/zaim-coffee-shop-crown-heights",
+    "category": "cafe"
+  },
+  {
+    "name": "Cheeni",
+    "address": "485 Tompkins Ave, New York, NY 11216",
+    "latitude": 40.6806663,
+    "longitude": -73.9431295,
+    "phone": "+1 (347) 365-4015",
+    "url": "https://www.yelp.com/biz/cheeni-brooklyn",
+    "category": "restaurant"
+  },
+  {
+    "name": "Cotton Bean",
+    "address": "1077 Bergen St, Brooklyn, NY 11216",
+    "latitude": 40.6762179,
+    "longitude": -73.950436,
+    "phone": "+1 (347) 276-8749",
+    "url": "https://www.cafecottonbean.com",
+    "category": "cafe"
+  },
+  {
+    "name": "MoCo 575",
+    "address": "531 Nostrand Ave, New York, NY 11216",
+    "latitude": 40.6791358,
+    "longitude": -73.9493723,
+    "phone": "+1 (347) 365-3680",
+    "url": "https://moco575.com",
+    "category": "restaurant"
+  }
+]
+```
+
+I can vouch for at least three of these coffeeshops!
+
+When I was doing my pseudo-sabbatical at the Recurse Center this past spring, I spent a lot of time hammering away at these little tools and finding ways to combine them. Someone told me that the work I was doing and sharing reminded them of this idea you only need to control three points of focus to do a magic trick.
+
+That comment inspired me to make this list of "recipes" where I try to showcase different ways to combine these tools in surprising, useful and/or fun ways:
+
+But the one I want to write about specifically today is this "meet in the middle" idea.
+
+I just showed you how you can use `whereami` and `nearme` to find coffeeshops (or anything you can find via Apple Maps) on your Mac. With a little piping and a convenient alias, you can help figure out a place to "meet in the middle" between you and and another point:
+
+```bash
+{ whereami "350 5th Ave, New York" --json; \
+  whereami "200 Eastern Pkwy, Brooklyn" --json; } | \
+  jq -s '{latitude: (map(.latitude) | add / 2),
+          longitude: (map(.longitude) | add / 2)}' | \
+  nearme "bar" --count=3
+```
+
+```java
+1. Deux Chats (nightlife)
+   27 Broadway, New York, NY 11249
+   +1 (917) 909-0145 · https://www.deuxchatsbk.com · 575 m
+
+2. Bar Milagro (nightlife)
+   29 Dunham Pl, New York, NY 11249
+   +1 (929) 298-0032 · https://www.xolobk.com/barmilagro · 617 m
+
+3. Cafe Susanne (nightlife)
+   8 River St, Brooklyn, NY 10044
+   https://www.barsusanne.com · 651 m
+```
+
+There you go! No API keys or browser or accounts: just input a couple addresses and a few plausible bars come out on the other side.
+
+## How it works
+
+It's three small tools, each doing one thing.
+
+**[whereami](https://less.software/whereami/)** started life as a CLI that asks your operating system where you are. As of 0.4 it can also act like a reverse geocoder (on macOS):
+
+```bash
+$ whereami "350 5th Ave, New York" --json
+{"latitude":40.7482378,"longitude":-73.9850579,"accuracy":0,"address":{"street":"350 5th Ave","city":"New York","state":"NY","postal_code":"10118","country":"US"}}
+```
+
+Looking up an address doesn't need location permission, because nothing is asking where you are. **jq** does the arithmetic. The `-s` flag slurps both JSON objects into an array, and the filter averages the coordinates:
+
+```json
+{"latitude":40.7097896,"longitude":-73.9743696}
+```
+
+**[nearme](https://less.software/nearme/)** searches for places around a set of coordinates using MapKit, the search engine behind Apple Maps. It reads coordinates from JSON on stdin, and it only cares about `latitude` and `longitude`. It has no idea those numbers came out of `jq` and not out of a GPS.
+
+Averaging two coordinates is not the "real" way to find the middle, but over a few miles trying to find a place to meet for coffee it's close enough. What does matter is that the midpoint has no idea what's actually there.
+
+## Make it a command
+
+Typing that pipeline more than once get annoying quickly. It's more convenient to set it up as a function:
+
+```bash
+middle() {
+  local second=()
+  # Two addresses only if a third argument is there to be the search term
+  if [[ $# -ge 3 && $3 != -* ]]; then
+    second=("$2")
+    set -- "$1" "${@:3}"
+  fi
+  { whereami "$1" --json; whereami "${second[@]}" --json; } |
+    jq -s '{latitude: (map(.latitude) | add / 2), longitude: (map(.longitude) | add / 2)}' |
+    nearme "${2:-coffeeshop}" "${@:3}"
+}
+```
+
+Or if you're using fish, like me:
+
+```fish
+function middle --description 'Search for places halfway between two addresses, or between you and one'
+    set -l second
+    # Two addresses only if a third argument is there to be the search term
+    if set -q argv[3]; and not string match -q -- '-*' $argv[3]
+        set second $argv[2]
+        set -e argv[2]
+    end
+    begin
+        whereami $argv[1] --json
+        whereami $second --json
+    end | jq -s '{latitude: (map(.latitude) | add / 2), longitude: (map(.longitude) | add / 2)}' | nearme (set -q argv[2]; and echo $argv[2]; or echo coffeeshop) $argv[3..]
+end
+```
+
+Give it two addresses and something to look for. Anything after that goes straight through to nearme. Leave off the second address and it uses wherever you are right now, so `middle "123 Main Street" coffee` finds coffee between you and 123 Main Street. With only an address, it looks for a coffeeshop.
+
+```bash
+$ middle "350 5th Ave, New York" "200 Eastern Pkwy, Brooklyn" coffee --count=2
+1. Cafe Susanne (nightlife)
+   8 River St, Brooklyn, NY 10044
+   https://www.barsusanne.com · 651 m
+
+2. Social House Cafe (cafe)
+   60 Broadway, Brooklyn, NY 11249
+   +1 (929) 295-0397 · https://www.socialhousecafellc.com · 697 m
+```
+
+## Caveats
+
+- It's macOS only. nearme is built on MapKit, and whereami's address lookup only exists on macOS.
+- It wants street addresses or city names, though landmarks will work soetimes. "Golden Gate Bridge" doesn't geocode but "350 5th Ave, New York" and "Central Park" and "Brooklyn Briddge" do (caveat emptor).
+- The math is a very literal and naive geographic middle, not taking travel-time middle or anything else into consideration.
+
+## Try it
+
+```bash
+brew install georgemandis/tap/whereami georgemandis/tap/nearme jq
+```
+
+Both tools live under [Less Software](https://less.software):
+
+Let me know if you find it useful or stumble across other good ideas for "[recipes](https://less.software/recipes)" to share!
+
+*If you enjoyed reading this consider [sponsoring my work](https://github.com/sponsors/georgemandis) on GitHub or [subscribing](https://buttondown.com/georgemandis) to my newsletter.*
+
+*Share this post: [Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F&t=Let's%20Meet%20in%20the%20Middle) • [Reddit](https://www.reddit.com/submit?url=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F&title=Let's%20Meet%20in%20the%20Middle) • [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F) • [Mastodon](https://share.joinmastodon.org/?text=Let's%20Meet%20in%20the%20Middle%0A%0Ahttps%3A%2F%2Fgeorge.mand.is%2F2026%2F11%2Flets-meet-in-the-middle%2F).*
+
+*Published on Tuesday, November 17th 2026. Read this post as [plain-text](https://george.mand.is/2026/11/lets-meet-in-the-middle.txt).*

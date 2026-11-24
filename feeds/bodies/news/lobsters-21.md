@@ -1,283 +1,171 @@
-Terraform plan passes and shows all green and all the necessary resource changes. You trigger apply and... the job fails with some obscure error that a resource can't be changed. You open another pull request and try again. And perhaps you encounter an error again. Sounds familiar? I bet it does. I encountered issues like this so many times I'm afraid to count. But recently [AWS released](https://aws.amazon.com/about-aws/whats-new/2026/11/aws-emulator-now-available/) a new tool called Emulator that emulates actual AWS API endpoints. And it should be great for tasks just like that!
+The computer is a curious gadget. It is one of few human inventions which can exist purely — yet accurately — in the imagination. Prior to the existence of a real computing machine, mathematicians could hypothesize how it might behave. They even understood the unbounded, fractal potential of computers: If human beings have machines for computation we also have the *atom* of computation and we can recombine these atoms to great effect. Our largest and most complex computers were borne of tiny, simple computing components.
 
-![Title image](https://notes.hatedabamboo.me/assets/terraform-tests-with-aws-emulator.webp)
+Cixin Liu visualized this agglomeration beautifully in *The Three-Body Problem*. Liu imagines the characters of his book playing an open-world, emergent [MMORPG](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Massively_multiplayer_online_role-playing_game). The players, who know nothing about computer design, create a functional computer in-game ([a la Minecraft](https://web.archive.org/web/20210329070928/https://www.minecraft.net/en-us/article/deep-thought)) through the composition of thirty million other players, with each of those thirty million individuals acting as a computational gate. An expanse of desert acts as Liu’s silicon wafer under the gates of his meat computer. Quite naturally, the username of the player who creates the computer is `Von Neumann`.
 
-## Defining the problem [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#defining-the-problem)
+Whatever hardware brings a computer to life — whether soldiers in the desert or transistors on silicon — its various parts require names. Liu’s fantasy human computer has *registers*, *stack memory*, a *system bus*, and a *hard drive*. Most of his components consist of people raising and lowering flags to control the flow of data, with one exception. Scholars with notepads comprise the hard disk — a notion we’ll revisit in a moment.
 
-The problem with the difference between plan and apply jobs is that plan can't possibly emulate every actual API call against a live infrastructure. It's a safe assumption based on the static declarations we put into it – the order of application, the necessary parameters, the proper configuration values. These mock calls can't know for a fact that you already have a resource in AWS called "my-bucket-asdasdasd" or that you're trying to upgrade a PostgreSQL RDS instance from version 14 to version 18 without an explicit "apply immediately" flag. One may argue that one can always try to apply changes locally, but this kinda undermines the whole automation workflow. So what is the answer?
+Liu’s component names all seem obvious to us, due to their twenty-first century ubiquity. But why these names? If I had never heard of a computer before, would I consider *stack memory* emblematic of a stack of cards or would the name seem arbitrary? When we pick apart a label like "system bus", and thus the [etymology of "omnibus"](https://web.archive.org/web/20210329070928/https://www.merriam-webster.com/dictionary/omnibus), we begin to see the exercise of *naming things* in two parts. The first, and more obvious, is the coining of terms. The more important second part is the construction of metaphors.
 
-There are multiple tools that can emulate AWS services either [partially](https://github.com/guenter/aws-oss-alternatives) or in [full](https://ministack.org/), but what they lack is the actual knowledge of the service architecture. It may be similar, but it won't be authentic, and sometimes this small difference may cause a lot of problems. After all, what can be the closest to an AWS API, if not the same AWS API, but ephemeral?
+## Broken Metaphors
 
-## AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#aws-emulator)
+We only need to revisit some [Today Show clips from 1994](https://web.archive.org/web/20210329070928/https://www.youtube.com/watch?v=95-yZ-31j9A) to recall how alien computers and computer networks were just three decades ago. In 1991 a computer was a magical box of infinite possibility. A computer — a real computing machine — is by its very nature an abstract thing and thus has always been so much more than a better calculator or a fancier accounting ledger. And yet, paradoxically, that’s precisely how we use computers today. Computers coordinate the most mundane aspects of the global economy, send me a message when my library book is due, or record a family’s new home in the government’s Land Titles database. The sprawling mycelium of computing devices across the globe behave, in aggregate, much more like the robots of retrofuturism than any of us are likely to acknowledge. The robots take us shopping and help us with video calls to our aging parents. The robots are ubiquitous, invisible, and heart-breakingly banal.
 
-The benefit of the AWS Emulator is that it's a self-contained binary (or Docker container) that can be utilized locally or in a CI workflow. This means the usual "Plan > Apply" terraform workflow changes to "Plan > Apply against mock AWS infrastructure to test the plan > Apply on actual AWS Infrastructure". This means slightly longer jobs, but if you're like me and apply jobs run on commits to the `main` branch after a PR, this saves you the hassle of creating a new branch just to fix the issue.
+Of course, we need not restrict ourselves to the tangible world of buttons, files, and folders. We programmers kick ourselves with broken metaphors all the time while programming the robot’s innards. Remember when we used "object-relational mapping" libraries to write objects to disk? Those were heady days, weren’t they? <sup>[[1](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_1)]</sup> I still remember my first glimpse of the Rails ActiveRecord implementation. `has_many :simply_darling_little_macros` was an epiphany back in 2004 for those of us stuck wiring the fields in our [POJOs](https://web.archive.org/web/20210329070928/https://martinfowler.com/bliki/POJO.html) to database columns by hand like mid-century telephone operators hard-wiring networks of voices, one at a time. Yessir. ORM was a thing of beauty, compared to her contemporaries. Every day at 8:00 AM I would grab a steaming cup of loam-flavoured American drip coffee and sit back to enjoy the DHH Show — marveling at his juxtapositions: a quagmire of Spring XML against his elegant Ruby macros. But that’s not what I’m talking about.
 
-### Running Terraform against local AWS Emulator [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-local-aws-emulator)
+The real question is: Why were we mapping anything at all? Why was anything required to save an object / record / document to disk beyond this?
 
-Let's start with a local setup and see how we can utilize AWS Emulator with the actual Terraform code. All code is available in my example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
+| ActiveRecord | Crux |
+| --- | --- |
+| `class Facility < ApplicationRecord belongs_to :facility_group has_many :phone_number_authentications has_many :users, through: :phone_number_authentications has_and_belongs_to_many :teleconsultation_medical_officers, -> { distinct }, class_name: "User", association_foreign_key: :user_id, join_table: "officers" has_many :encounters has_many :blood_pressures, through: :encounters, source: :blood_pressures has_many :blood_sugars, through: :encounters, source: :blood_sugars has_many :patients, -> { distinct }, through: :encounters has_many :prescription_drugs has_many :appointments has_many :teleconsultations has_many :drug_stocks has_many :registered_patients has_many :registered_diabetes_patients has_many :registered_hypertension_patients has_many :assigned_patients has_many :assigned_hypertension_patients ... end facility.save` | `[:crux.tx/put facility]` |
 
-First up, installation. You can either install aws-emulator via [package manager](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html), or build it [with Docker](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html). I'll use Docker to keep my system clear of *yet another* package:
+<sup>[[2](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_2)]</sup>
 
-```bash
-$ docker build -t aws-emulator .
-$ docker images
-IMAGE                 ID             DISK USAGE   CONTENT SIZE   EXTRA
-aws-emulator:latest   3c8fdb957b45       1.24GB             0B          # wow it's chonky
-$ docker run --rm -d -p 9297:9297 aws-emulator -a off
-dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-$ docker logs dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-{"timestamp":"2026-11-12T14:51:16.261883Z","level":"INFO","fields":{"message":"aws-emulator emulator starting"},"target":"aws_emulator"}
-This emulator collects usage and error telemetry: enabled (on by default; opt out any time); disable with EMULATOR_TELEMETRY=off or [telemetry] enabled = false in /home/emulator/.aws/emulator/config.toml
-{"timestamp":"2026-11-12T14:51:16.270635Z","level":"INFO","fields":{"message":"emulator server information","endpoint_url":"https://127.0.0.1:9297","health_check_url":"https://127.0.0.1:9297/__admin/health","config_file":"/home/emulator/.aws/emulator/9297/config","ca_file":"/home/emulator/.aws/emulator/9297/ca.pem","java_truststore_file":"/home/emulator/.aws/emulator/9297/truststore.p12"},"target":"aws_emulator_server"}
-{"timestamp":"2026-11-12T14:51:16.270655Z","level":"WARN","fields":{"message":"the emulator listens on 0.0.0.0, not loopback: other machines that can reach port 9297 can call it; bind 127.0.0.1 (-b 127.0.0.1) unless that is intended","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
-{"timestamp":"2026-11-12T14:51:16.270659Z","level":"WARN","fields":{"message":"request authentication is off: the emulator accepts any request, signed or not; start it with -a on to require signatures","bind_address":"0.0.0.0"},"target":"aws_emulator_server"}
+Today, ActiveRecord is void. Mapping objects into databases is outmoded. The idea has a certain appeal, no doubt. I *record* (verb) my *records* (noun) to disk. When they are read back into memory via `has_one :superfluous_abstraction` the virtual machine makes them *active* — singing, dancing, and procreating through the object lifecycle — until they are *recorded* back into Postgres. But this act of recording doesn’t necessitate mapping. Object mapping is a broken metaphor.
+
+In fact, object mapping is a broken metaphor built on broken metaphors. We have a `User` object in memory we want to save to disk. That’s all. Instead of a command equivalent to "computer, save the user" we are met with forty years' worth of anachronisms. We must worry about join tables, floating point value coercion, and whether or not our TIMESTAMP columns are automatic.
+
+The mapping is a symptom; the anachronism is the disease. Our objects can and should maintain symmetry with the database unless we tell them otherwise. To do so, we must choose a new storage metaphor for the next forty years.
+
+End users understand the metaphors of buttons, folders, and desktops as user interfaces. So it is for us developers and our database metaphors. There is some surface area to a database that allows us to store, query, and listen. This is our user interface. It is also our storage metaphor.
+
+Each structure has a preferred location within the cube. Rows in a relational database table will subscribe to a hard schema, a flat depth, and a common shape. Document stores will subscribe to a softer schema, a nested depth, and (potentially) unique shapes. Triples do not dictate schema by their nature but they have negligible depth and negligible variety. The uncomplicated nature of triples is reminiscent of LISP’s absence of syntax. That makes them attractive…​ but esoteric.
+
+| ** | There are visual examples provided for each storage metaphor’s preferred structure. They are intended to be fun and illustrative rather than realistic and boring. |
+| --- | --- |
+
+I was fifteen years old in 1996. My highschool had an "Information Processing" class for Grade 10 students, from which I distinctly remember an argument between a close friend and the teacher while they stooped over a PowerMac running ClarisWorks. My friend insisted that learning a spreadsheet was unnecessary since the word processor already provided "tables". Although my teacher understood that the word processor’s tables were insufficient for accounting, I do remember his argument eventually came down to "just trust me on this one" rather than diving into the semantics of ClarisWorks' internal data representation. My friend’s confusion was only exacerbated the following week when a desktop database was added to the mix. In his mind, *a table is a table is a table.*
+
+It’s easy to see where this confusion comes from. Most people do not care what a computer thinks about rows in a table. A table is an intuitive concept, even to children. But we all know, just as my teacher understood, that text in an arbitrary table is effectively meaningless, text in a spreadsheet table is meaningful but unconstrained, and text in a database is constrained by datatype. When your tables have constraints you can build schema, views, atomic writes, and table-to-table relationships on top of them. That’s powerful stuff.
+
+Looking back at Cixin Liu’s "hard drive" comprised of scholars with notepads, our confidence in the meat computer is likely to go up if we can put some hard limitations on what kinds of data the scholars are allowed to write, and where. The scholar who writes whatever she wants wherever she wants is not a very useful component. She must adhere to the sensibilities of the computer.
+
+Tables are powerful precisely because of their handicaps. They are not mathematically perfect constructions sent to us from the Heavens or Harvard. <sup>[[3](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_3)]</sup> Instead, they are intuitive, flat, and readily map to business processes. Tables have served us well for three or four decades and most businesses can still survive on software built with tables alone. For a while. Businesses in the 1990s could survive on paper for a while, too.
+
+Skip ahead nearly a decade to 2004. I stumbled across [Prevayler](https://web.archive.org/web/20210329070928/https://prevayler.org/) during my years at University. "10,000 times faster than Oracle? This thing is going to be *huge*," I thought. We all know how that turned out. Years later when my younger colleagues were getting excited about Couch and MongoDB, I found myself put off by the lack of standard querying and the entire shoot-from-the-hip attitude document databases were pitching. "Schemaless! No SQL! Just shove things in the database and figure it out later!" No thanks.
+
+Over a decade later, I don’t know of a single object database or document database in those ex-colleagues' production systems. Everyone uses Postgres. Why?
+
+Object DBs simply never took off. An object isn’t a simple or intuitive concept; an object is type-matching dynamic dispatch implemented over a collection of closures which in turn share a second collection of lexically-bound variables which themselves are — you guessed it — more objects. <sup>[[4](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_4)]</sup> These trees of objects are nested indefinitely. Many of us have made a career out of object-oriented programming but the essence of an object is *message passing*, not structs for disk serialization.
+
+Document DBs, on the other hand, were not such a bad idea. They were just poorly implemented. Standard query languages? Nope. Schemaless? Nope. Relationships? Not really. Append-only, immutable data? That gets pretty expensive when you denormalize all your records into a deeply-nested rat’s nest.
+
+Developers want languages built on research and standards. Even a fragmented standard like SQL is better than a homebrew query language. MongoDB lacked basic joins [until version 3.2](https://web.archive.org/web/20210329070928/https://www.mongodb.com/blog/post/joins-and-other-aggregation-enhancements-coming-in-mongodb-3-2-part-1-of-3-introduction) but this was an honest mistake. MongoDB engineers believed their customers could survive on schemaless, denormalized data with no relationships. We now know this isn’t true. All databases [have schema](https://web.archive.org/web/20210329070928/https://sadalage.com/post/schema_less_databases/). <sup>[[5](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_5)]</sup> All databases [have relationships](https://web.archive.org/web/20210329070928/http://www.sarahmei.com/blog/2013/11/11/why-you-should-never-use-mongodb/). <sup>[[6](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_6)]</sup> Our schema and relationships may be implicit but they are truths we must face.
+
+Neo4j, on the other hand, is a document database that actually works. Neo4j is a property graph and property graphs do not pretend relational data doesn’t exist — or that it exists but somehow isn’t important. Unfortunately, Neo4j has its own homebrew query language, Cypher, with its own baggage. Although an open standard [since 2017](https://web.archive.org/web/20210329070928/http://www.opencypher.org/), Cypher queries are difficult to compose because [the language lacks a foundation in logic](https://web.archive.org/web/20210329070928/https://medium.com/terminusdb/graph-fundamentals-part-2-labelled-property-graphs-ba9a8edb5dfe):
+
+> From the perspective of a formal query language, it is a mess — with structures that break compositionality for no good reason, and it remains a good 70 years behind the frontier of formal graph logic.
+
+Rather than hide behind a deeply-nested document model or inglorious query languages, we can put our faith in decades of research. Computer Science tends to invent things long before they hit the market so it’s likely a high-caliber document store need not invent anything from scratch. An immutable document store supported by a well-understood query language for traversing relationships would feel natural to users and developers alike — the best parts of MongoDB and Neo4j without the dross.
+
+Skip ahead another decade to 2014. Clojure already won my heart prior to its 1.0 release in 2009. By 2014 I was building a company on it. I was excited about the possibility of Clojure-style simplicity in database form: The triple-store.
+
+Roughly, there are two categories of triples: [RDF triples](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Semantic_triple), which attempt to encode relationship semantics, and [EAV triples](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Entity%E2%80%93attribute%E2%80%93value_model), which only encode the relationship. A semantic triple might look something like `[Bob belongs_to CommunistParty]` where an EAV triple is more likely to take the shape `[Bob :party CommunistParty]`. Rather than debate the semantics of semantic triples, we’ll treat them as loosely equivalent for this story. Caveat lector.
+
+My team was immediately attracted to triples. The declarative logic of Datalog, with its Prolog origins, felt like the perfect way to ask questions of a database. Having never worked with triple-stores before, there was a purity to EAV triples none of us had ever imagined possible during our career with relational databases. An immutable store of pure facts? Count us in!
+
+Alas. Just as a child grows up and learns her parents and teachers are not infallible, so does the star-struck developer seduced by the siren song of purity. I know better now. These days, when I read my friend Abhinav’s [Haskell articles](https://web.archive.org/web/20210329070928/https://abhinavsarkar.net/tags/haskell/), full of beautiful and orderly code, I look back on my time with the triples and remind myself that purity can be a dangerous waste of time. Rather than squandering my finite time on this planet searching for the bottom of the purity rabbit hole, I instead watch Haskell from afar with profound respect and terror.
+
+```clojure
+[63 :db/ident :user/name]
+[63 :db/valueType :db.type/string]
+[63 :db/cardinality :db.cardinality/one]
+
+[64 :db/ident :user/url]
+[64 :db/valueType :db.type/string]
+[64 :db/cardinality :db.cardinality/one]
+
+[64 :db/ident :user/stream]
+[64 :db/valueType :db.type/ref]
+[64 :db/cardinality :db.cardinality/many]
+
+[64 :db/ident :post/user]
+[64 :db/valueType :db.type/ref]
+[64 :db/cardinality :db.cardinality/one]
+
+[64 :db/ident :post/title]
+[64 :db/valueType :db.type/string]
+[64 :db/cardinality :db.cardinality/one]
+
+[64 :db/ident :post/body]
+[64 :db/valueType :db.type/string]
+[64 :db/cardinality :db.cardinality/one]
+
+[64 :db/ident :post/likes]
+[64 :db/valueType :db.type/ref]
+[64 :db/cardinality :db.cardinality/many]
+
+[1234 :user/name   "Joe"]
+[1234 :user/url    "..."]
+[1234 :user/stream [9090]]
+
+[5678 :user/name   "Jane"]
+[5678 :user/url    "..."]
+[5678 :user/stream [...]]
+
+[8912 :user/name   "Lu"]
+[8912 :user/url    "..."]
+[8912 :user/stream [...]]
+
+[9090 :post/user  5678]
+[9090 :post/title "today"]
+[9090 :post/body  "go fly a kite"]
+[9090 :post/likes [8912 1234]]
 ```
 
-And it's up and running! In the example above I set the container to live without limits (official AWS documentation proposes to set memory and swap limits: `--memory=2g --memory-swap=2g`, but for local that's fine). I also disabled authorization (flag `-a off`) to simplify things a bit.
+Back in 2014 our triple-store of choice had a hard schema, not unlike the schema definitions in most relational databases. However, it went so much deeper than that. Creating schema for our facts felt like Carl Sagan’s famous quote, reified: "If you wish to make an apple pie from scratch, you must first invent the universe." We really wanted to build our system out of triples but it felt as though we were bootstrapping the universe just to get to square one. Square one, as it turns out, is simply:
 
-To be sure aws-emulator is up and running, let's query the admin endpoint:
-
-```bash
-$ curl -sk https://127.0.0.1:9297/__admin/health
-ok
+```clojure
+[:crux.tx/put record]
 ```
 
-Okay, fake AWS is live, let's deploy some infrastructure!
+We found that bootstrapping wasn’t our only challenge. Schema or no schema, triples are not really *natural.* Beautiful, yes. Pure, yes. Natural, no. Try as we might, the team never had the epiphany with triples we had each experienced with Clojure.
 
-I created an example AWS stack for Terraform and will use it in this article. First, let's configure Terraform to act against aws-emulator and not real AWS APIs. `providers.tf` will look like this:
+In retrospect, it feels as though there must be an underlying reason RDF has never enjoyed general database success. Despite more than two decades of research and implementation, RDF remains the storage metaphor of museum artefacts and government statistics. <sup>[[7](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_7)]</sup> <sup>[[8](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_8)]</sup> The elevation of purity above all else is a certainly one problem with triples. Their true deficiency, however, is hidden in plain sight: triples by their very nature only describe relationships. Despite their name, relational databases consign the very notion of a "relationship" to the realm of the derivative. Triples have the opposite problem. Triples treat nouns as second-class citizens.
 
-```hcl
-provider "aws" {
-  access_key = var.access_key
-  secret_key = var.secret_key
-  region     = var.region
+What exactly is a "record"? To understand the record completely, we must look back over the history of computers, back over businesses which predate computers, and back over all of recorded human history. Before we take that trip, though, let’s quickly read the first dictionary entry:
 
-  insecure = true # The emulator serves HTTPS with a self-signed certificate. Skip verification.
+> a thing constituting a piece of evidence about the past, especially an account kept in writing or some other permanent form
 
-  s3_use_path_style = true   # The emulator uses one IP endpoint. Put the bucket name in the path.
+Computer Scientists will understand: "evidence about the past" is equivalent to "facts on a timeline" and "permanent form" is a synonym for "immutable data".
 
-  # Do not call the real AWS or the instance metadata service.
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
-  skip_region_validation      = true
+Once upon a time in computing history, tapes were composed of files which were composed of records. It could be argued that the "record" is actually the most natural of the three, given that humans have been organizing information into records since long before the computer. Sometimes those records were flat rows in an accountant’s ledger but they were often written on card stock:
 
-  # Send every service to the emulator instead of AWS.
-  endpoints {
-    ec2        = var.emulator_endpoint
-    lambda     = var.emulator_endpoint
-    iam        = var.emulator_endpoint
-    sts        = var.emulator_endpoint
-    cloudwatch = var.emulator_endpoint
-    logs       = var.emulator_endpoint
-    events     = var.emulator_endpoint
-    sns        = var.emulator_endpoint
-  }
+These sorts of records can be seen for hundreds of years into humanity’s past, at least as far back as the double-entry bookkeeping of 14th Century Venice. It could even be argued that all three storage metaphors we’ve examined so far — the table, the document, and the triple — can claim the title of "record".
 
-  default_tags {
-    tags = var.tags
-  }
-}
+But relational databases fail the dictionary definition. Most lack a meaningful, first-class representation of time with which to view the past. The flip side of that coin is the absence of immutability. If you want immutable records for your `inventory` table you are often stuck managing an `inventory_audits` table in the application tier…​ wastefully duplicating the built-in Write-Ahead Log of your database in the process.
+
+Triples fail our mental model instead. The client record card is natural. Specifying each individual fact about your client is not. If we want to see that natural record, triples force synecdoche on us. We must ascribe meaning to identities so triples like `[Bob has_email "bob@newhart.com"]` and `[Bob has_phone +15551234567]` can be glued together into "Bob". The truth is, there is no "Bob" — only facts about Bob. If triples are to say anything about the form of the data they contain, we must slather them in complicated ontologies.
+
+It is possible to find a middle path between hard, flat rows in tables and infinitely malleable triples. Surprisingly, documents are that middle path.
+
+["Flat is better than nested"](https://web.archive.org/web/20210329070928/https://www.python.org/dev/peps/pep-0020/) is a guideline, not a rule. If we can employ nesting conservatively, the storage metaphor of "documents" can avoid the MongoDB rat’s nest. If we add a standard query language to that, we may really be on to something.
+
+The Client Record Card from a few paragraphs ago is a useful visual aid — it is both a record and a document. "Address" is embedded within the card but the physical constraints of the card prevent us from nesting nests of nests the same way we enjoy foldering folders of folders. Nothing crazy is happening.
+
+Any developer who has sent or received data over an HTTP API in the past ten years is already accustomed to this sort of document. We can all imagine encoding this card in JSON. Nothing crazy will happen.
+
+To ensure nothing crazy will ever happen, our storage metaphor of "documents" must play by the rules. The dictionary says our database must store *immutable facts on a timeline.* <sup>[[9](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_9)]</sup> Computer Science says our database must speak a standard query language. Our experience and intuition says our database should provide us lightweight references between our documents and discourage deep nesting.
+
+```clojure
+{:user/name   "Joe"
+ :user/url    "..."
+ :user/stream [9090]}
+
+{:user/name   "Jane"
+ :user/url    "..."
+ :user/stream [...]}
+
+{:user/name   "Lu"
+ :user/url    "..."
+ :user/stream [...]}
+
+{:crux.db/id  9090
+ :post/user   "Jane"
+ :post/title  "today"
+ :post/body   "go fly a kite"
+ :post/likes  ["Lu" "Joe"]}
 ```
 
-The difference between actual live infrastructure and a fake one is that we set up a bunch of flags to allow insecure connections (perhaps turning authentication off wasn't actually simpler?) and we set up an endpoint for each service we use in the setup to an emulator endpoint, which lives in the local Docker container:
+These are not abstruse or mystical ideas, but they do demand a reappraisal of the database. We can’t just tack immutability onto MongoDB or temporality onto Postgres. <sup>[[10](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_10)]</sup> We must rebuild the foundation. We must record a *graph* of *immutable facts* on a *timeline* tolerant of *growth* and query them by *time-aware logic*. That’s a mouthful, so let’s just call it a *Record*. This is the new metaphor.
 
-```hcl
-# variables.tf
-variable "emulator_endpoint" {
-  description = "Base URL of the AWS Emulator"
-  type        = string
-  default     = "https://127.0.0.1:9297"
-}
-...
-```
-
-The rest of the configuration is as usual: resources, variables, modules (if any). Just what your project has.
-
-Let's proceed and test our setup. (I'll omit full terraform output otherwise this article would be 3 kilometers long)
-
-```bash
-$ cd terraform/
-$ terraform init
-Initializing the backend...
-...
-Terraform has been successfully initialized!
-...
-$ terraform plan
-...
-Plan: 15 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-  + alarm_name          = "ttwae-lambda-errors"
-  + event_rule_arn      = (known after apply)
-  + lambda_function_arn = (known after apply)
-  + security_group_id   = (known after apply)
-  + sns_topic_arn       = (known after apply)
-  + subnet_id           = (known after apply)
-  + vpc_id              = (known after apply)
-```
-
-Plan works! That's good to see, but not what we're here for. Still, a good sign. Now for the real test.
-
-```bash
-$ terraform apply --auto-approve
-...
-Apply complete! Resources: 15 added, 0 changed, 0 destroyed.
-
-Outputs:
-
-alarm_name = "ttwae-lambda-errors"
-event_rule_arn = "arn:aws:events:us-east-1:000000000000:rule/ttwae-schedule"
-lambda_function_arn = "arn:aws:lambda:us-east-1:000000000000:function:ttwae-worker"
-security_group_id = "sg-00000000000000085"
-sns_topic_arn = "arn:aws:sns:us-east-1:000000000000:ttwae-alarms"
-subnet_id = "subnet-00000000000000089"
-vpc_id = "vpc-00000000000000080"
-```
-
-And apply also works! Amazing!
-
-Sadly, the running aws-emulator container doesn't show in its logs which API requests it receives and what's happening under the hood, but I guess the tool is good enough as it is.
-
-When you're done, stop the container:
-
-```bash
-$ docker stop dcc416f234aaa3ec2966c9e8dcde7870f8d03057ec8a465cb8960617af82e501
-```
-
-A container started with `--rm` removes itself after stopping, so no additional cleanup is needed. And as for the emulator -- it stores its state in memory, so each container restart drops all record of previous actions and any stale state.
-
-### Running Terraform against AWS Emulator in CI pipeline [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-terraform-against-aws-emulator-in-ci-pipeline)
-
-Now for the real test: can we wrap the desired logic inside a CI pipeline? Let's think.
-
-For successful invocation in the pipeline we will need almost everything the same, but we will be limited by time (the faster -- the better, and overall reasonable timeouts) and resources.
-
-The workflow with `terraform apply` against aws-emulator is shown down below. For it I decided to try out package manager installation (builders are ephemeral anyway) and proper authentication. Full workflow with actual successful runs can be found in the example [GitHub repository](https://github.com/hatedabamboo/terraform-tests-with-aws-emulator).
-
-```yaml
----
-name: terraform-against-emulator
-on:
-  push:
-    branches: [main]
-permissions:
-  contents: read
-jobs:
-  terraform:
-    runs-on: ubuntu-latest
-    env:
-      EMULATOR_PORT: "9297"
-      # Empty keys make the provider fall back to the shared credentials
-      # file that the emulator writes. insecure=false verifies the
-      # emulator cert through AWS_CA_BUNDLE
-      TF_VAR_access_key: ""
-      TF_VAR_secret_key: ""
-      TF_VAR_insecure: "false"
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install the AWS Emulator
-        run: |
-          curl -fsSLo aws-emulator.deb \
-            https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
-          sudo apt-get install -y ./aws-emulator.deb
-          aws-emulator -v
-      - name: Start the emulator with signature checks on
-        run: |
-          nohup aws-emulator > /tmp/aws-emulator.log 2>&1 &
-          echo "Waiting for the emulator to answer..."
-          CA="$HOME/.aws/emulator/${EMULATOR_PORT}/ca.pem"
-          for i in $(seq 30); do
-            if [ -f "$CA" ] && curl -sf --cacert "$CA" \
-                "https://127.0.0.1:${EMULATOR_PORT}/__admin/health" >/dev/null; then
-              echo "Emulator is ready."
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Emulator did not become ready." >&2
-          cat /tmp/aws-emulator.log >&2
-          exit 1
-      - name: Point Terraform at the emulator credentials and certificate
-        run: |
-          DIR="$HOME/.aws/emulator/${EMULATOR_PORT}"
-          {
-            echo "AWS_SHARED_CREDENTIALS_FILE=$DIR/emulator_credentials"
-            echo "AWS_CONFIG_FILE=$DIR/config"
-            echo "AWS_CA_BUNDLE=$DIR/ca.pem"
-            echo "AWS_REGION=us-east-1"
-            echo "AWS_DEFAULT_REGION=us-east-1"
-            echo "AWS_EC2_METADATA_DISABLED=true"
-            echo "AWS_DISABLE_HOST_PREFIX_INJECTION=true"
-          } >> "$GITHUB_ENV"
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_wrapper: false
-      - run: terraform -chdir=terraform init -input=false
-      - run: terraform -chdir=terraform validate
-      - run: terraform -chdir=terraform plan -input=false
-      - run: terraform -chdir=terraform apply -auto-approve -input=false
-```
-
-This is a crude excerpt of the actual glorious workflow file that outlines the most important steps: emulator installation, terraform setup, plan and apply. On the example terraform architecture the whole pipeline took 1m25s, which is okay in my opinion, but there is room for improvement: sprinkle some caching on top, leave validation, format check for local hooks, etc.
-
-## Running a deliberately failing apply job [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#running-a-deliberately-failing-apply-job)
-
-It's always nice when code someone wrote on the internet works from the start after you copy-paste it onto your machine. That's why I always run the described processes myself -- building, testing, fixing, retrying -- before publishing an article. But showing only the positive scenarios creates a false sense of trust in the tool.
-
-Let's break something on purpose.
-
-In the example codebase I added a variable that, when enabled, makes the stack try to deploy a resource with an erroneous declaration. It will pass the plan job, but fail on apply.
-
-```hcl
-variable "enable_failure_demo" {
-  description = "Create a DynamoDB table with an invalid name."
-  type        = bool
-  default     = false
-}
-```
-
-Setting this variable to true at runtime will break our stack. Let's see:
-
-```bash
-$ cd terraform/
-$ terraform init
-Initializing the backend...
-...
-$ terraform plan -var 'enable_failure_demo=true'
-...
-Plan: 16 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-...
-  + failure_demo_table_arn = (known after apply)
-...
-$ terraform apply -auto-approve -var 'enable_failure_demo=true'
-...
-╷
-│ Error: creating AWS DynamoDB Table (ab): operation error DynamoDB: CreateTable, https response error StatusCode: 400, RequestID: 4TLD3XUB94783KNA4C76L8BEZ26UU8LS4IBN2IEKZJLAK4NMVTQ4, api error ValidationException: 1 validation error detected: Value 'ab' at 'tableName' failed to satisfy constraint: Member must have length greater than or equal to 3
-│
-│   with aws_dynamodb_table.bad_name[0],
-│   on dynamodb.tf line 10, in resource "aws_dynamodb_table" "bad_name":
-│   10: resource "aws_dynamodb_table" "bad_name" {
-│
-```
-
-And there we have it. The exact issue that arises only against actual API calls and not during a plan job.
-
-For scenarios exactly like this, the emulator is priceless.
-
-## Limitations and considerations [#](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#limitations-and-considerations)
-
-AWS Emulator is AWESOME. I'm rarely that excited about new tools lately (mostly because almost all of them are near/about AI), but this one is just so good and scratches that exact itch I felt for so long.
-
-Still, it's far from perfect.
-
-For starters, it can't effectively emulate IAM policies and permission checks. This is a bummer, because permission validation is such a crucial step for production-ready security. Here's hoping that the tool will evolve further and it will be included in future updates.
-
-Second, as a tool still a work-in-progress<sup>[[1]](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fn1)</sup>, its capabilities are quite limited. Even while writing the article I encountered several cases of `501 NotImplemented`. It complicates things a bit if your infrastructure setup is huge and has a lot of quirks and weird configurations and super new services. Still, AWS releases new versions quite often, and they're [quite open](https://docs.aws.amazon.com/emulator/latest/userguide/fidelity.html) about Emulator limitations, which is nice.
-
-And last, but not least, is telemetry. AWS [is explicit](https://docs.aws.amazon.com/emulator/latest/userguide/telemetry.html) that it gathers telemetry and what this telemetry includes. This is honest behaviour and I like that approach. They even allow you to disable the telemetry, which further increases my trust in this tool. I understand the rationale behind this functionality (the tool is actively developed, they need the data to understand usage patterns and what goes wrong), but in the age of constant surveillance from Big Tech at every corner it still raises a slight concern. But then again, for the ultra-paranoid folks the code is [open source](https://github.com/aws/aws-emulator) and can be rebuilt with telemetry torn out of it.
-
-1. As of the moment of writing this article, AWS Emulator has been live for 1 day. [↩︎](https://notes.hatedabamboo.me/terraform-tests-with-aws-emulator/#fnref1)
+Liu’s scholars in the desert would do precisely this. Each scholar’s document may refer to another scholar’s document. The system (and the user) must be able to read the documents — consistently. Given enough paper, the scholars would never scribble out old documents and rewrite them. Instead, they would maintain a record of every document they’d ever written, ordered by date. The documents are the audit log. Whether we say *record* or *document*, the storage metaphor is the user interface for the scholars, just as it is for us.
