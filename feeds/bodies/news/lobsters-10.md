@@ -1,157 +1,42 @@
-TIL (or this week-ish I learned) why big-sigma and big-pi turn up in
-the notation of dependent type theory.
+![Black silhouette in the shape of a smartphone overlaid with graffiti-style text that says "SIGNAL WAS HERE".](https://signal.org/blog/images/protecting-your-privacy-header.png)
 
-I’ve long been aware of the zoo of more obscure Greek letters that
-turn up in papers about type system features of functional programming
-languages, `μ`, `Λ`, `Π`, `Σ`. Their meaning is usually clear from context
-but the reason for the choice of notation is usually not explained.
+Privacy is our mission; it’s why we exist, and we do everything we can to protect it.
 
-I recently stumbled on an explanation for `Π` (dependent functions)
-and `Σ` (dependent pairs) which turn out to be nicer than I expected,
-and closely related to every-day algebraic data types.
+This means that we are restricting the latest AI agents built into mobile operating systems from potentially capturing and storing your Signal data.
 
-## [sizes of types](https://dotat.at/@/2025-05-28-types.html#sizes-of-types)
+We’ve already had to do this once with Windows. Last year, we used screenshot blocking to [prevent](https://signal.org/blog/signal-doesnt-recall/) Microsoft’s Recall AI from taking and storing screenshots of your Signal messages on Windows 11 operating systems by default.<sup>[1](https://signal.org/blog/protecting-your-privacy/#fn:1)</sup> We will now be taking similar measures to restrict agentic systems built into iOS 27 and on Android versions where we can detect an AI assistant attempting to read your Signal screen.<sup>[2](https://signal.org/blog/protecting-your-privacy/#fn:2)</sup>
 
-The easiest way to understand algebraic data types is by counting the
-inhabitants of a type. For example:
+The problem is similar to Microsoft Recall on Windows: Google and Apple are integrating agentic capabilities like [Gemini Intelligence](https://support.google.com/gemini/answer/15850607?hl=en) with Google Gemini and [Onscreen Awareness](https://www.apple.com/newsroom/2026/09/siri-ai-a-profoundly-more-capable-and-personal-assistant-is-here/) with Siri AI deep into their operating systems. This is a significant move. Google (Android), Apple (iOS/macOS), and Microsoft (Windows) produce the three major consumer operating systems (OS), which comprise the environment that third-party developers – like Signal – build their apps to function and operate within. To put it differently, these three operating systems are the oceans in which Signal, and other applications, must swim; they dictate the conditions of life for the application ecosystem. Right now, these agentic AI integrations are changing this environment in a way that’s making it increasingly hostile to privacy. This is an existential threat to Signal, and our ability to responsibly uphold our mission.
 
-- the unit type `()` has one inhabitant, `()`, and the number 1 is why it’s called the unit type;
-- the `bool` type hass two inhabitants, `false` and `true`.
+In order to gain access to information about you, these OS AI agents “scan” the information that’s on your screen. In doing so, your Signal data is captured, then made available to these agentic systems in order to allow them to answer your questions and do your bidding.
 
-I have even seen these types called **`1`** and **`2`** (cruelly,
-without explanation) in occasional papers.
+The net result is that these AI capabilities in the operating system are undermining Signal’s ability to independently guarantee privacy. For over a decade, this guarantee has been backed by our tried and trusted open source code base and our formally verified encryption protocol. These have been scrutinized by some of the best security experts and hackers across the world, and shown to be robust. Now, in service of AI agentic capabilities, your sensitive data is being captured, stored, and made accessible to whatever local database or remote server an OS-level AI agent is using at that moment. All of this is outside of Signal’s control once the data has been captured, and imperils the privacy of all the participants in a conversation.
 
-## [product types](https://dotat.at/@/2025-05-28-types.html#product-types)
+![A screenshot from Signal Settings on iOS showing the new "Block Siri AI" setting enabled.](https://signal.org/blog/images/protecting-your-privacy-1.png)
 
-Or pairs or (more generally) tuples or records. Usually written,
+![A screenshot from Signal Settings on Android showing the "Screen security" setting enabled.](https://signal.org/blog/images/protecting-your-privacy-2.png)
 
-```
-    (A, B)
-```
+So, we are blocking such capture by preventing screenshots in the app on iOS 27 and when AI assistants attempt to capture screen data on Android.<sup>[2](https://signal.org/blog/protecting-your-privacy/#fn:2)</sup>
 
-The pair contains an *A* and a *B*, so the number of possible values is
-the number of possible *A* values multiplied by the number of possible
-*B* values.
+People who want the ability to take screenshots can disable this protection within the Signal app’s settings. However, doing so will potentially expose your (and your contacts’) Signal content to these AI agents, and break our privacy guarantees. Our remedy is also incomplete – while we are doing everything we can, restricting screenshots does not address other more sneaky ways AI agents could potentially access application data, such as retrieving content already present on a user’s device via the filesystem.
 
-So it is spelled in type theory (and in Standard ML) like,
+We want to be very clear: it is a serious problem that Signal – and application developers beyond – lack robust tools to prevent AI agents from undermining application-level privacy. Even where we are able to detect and block AI data access, Google, Apple, Microsoft, and others do not provide ways for developers to easily restrict such AI data access without making drastic compromises to the core user experience. This is also the reason we are currently unable to implement these protections on macOS.<sup>[3](https://signal.org/blog/protecting-your-privacy/#fn:3)</sup>
 
-```
-    A * B
-```
+We are also struggling with a significant lack of documentation about how these AI agents actually work. Over the past few months, we’ve spent considerable developer time and energy doing forensic investigations across Android and iOS in an attempt to learn what is actually happening when these AI systems access application data. Without better documentation and clear technical specifications, it will be increasingly difficult for Signal to provide robust privacy and security to the many millions of people who rely on us.
 
-## [sum types](https://dotat.at/@/2025-05-28-types.html#sum-types)
+We continue to call on the major consumer operating system companies – Apple, Google, and Microsoft – to provide simple technical tools and accurate documentation that give developers like Signal ways to prevent AI agents from accessing sensitive application data. In particular, we are calling on these companies to provide two common-sense remedies that can protect the privacy so many millions of people rely on:
 
-Or disjoint union, or variant record. Declared in Haskell like,
+1. Developers should have an easy and well-documented way to opt their app out of AI data access and processing, including (but not limited to) screen reading, filesystem access, notifications, APIs, and other OS frameworks, all without undermining the core utility of an application.
+2. Operating system companies should create better documentation and technical specifications around how these AI agents function, particularly regarding data access and processing. Confidential computing approaches are not a complete solution, and do not address these core concerns. In particular, these approaches still leave the power to determine the extent of privacy guarantees (if any) in the hands of these providers.
 
-```hs
-        data Either a b
-            = Left a
-            | Right b
-```
+We also see a growing need for tools that can prevent third-party agents, like Meta’s Muse, from accessing application data using the deep permissions that users are encouraged to grant them during setup. In many cases these agents are leveraging accessibility settings that were meant to empower actual people to get the most out of their apps and services, not to act as a skeleton key that provides access to AI agents.
 
-Or in Rust like,
+In addition to taking these technical measures to block capture, we are engaging in conversations across the ecosystem to make the stakes clear. There is a lot of work to be done in the industry to improve the ways that AI agents operate in the operating system, and how and whether they capture and process private data. We are cautiously optimistic that some major OS providers, like Google and Apple, are engaging with us on how these systems should better interface with privacy-sensitive apps like Signal. We hope to have more to share on this topic soon, and that these companies recognize the danger to the ecosystem and work with us and others to create standardized approaches that meaningfully protect privacy across the industry.
 
-```rust
-        enum Either<A, B> {
-            Left(A),
-            Right(B),
-        }
-```
+Finally, we want to acknowledge that we are not the only ones recognizing these perils, and we are grateful to our allies for pushing for similar [changes](https://www.eff.org/deeplinks/2026/10/victory-you-can-now-exclude-apps-siri-ai). We all need to recognize that the current integration of AI agents into the operating system, without these common-sense remedies, represents an existential threat to privacy at the application layer, and the ability of independent developers like Signal to protect your sensitive data. Signal is the canary in the coal mine, but this affects the entire ecosystem and should galvanize anyone who cares about these fundamental rights.
 
-A value of the type is either an *A* or a *B*, so the number of
-possible values is the number of *A* values plus the number of *B*
-values.
+*Signal Technology Foundation is the nonprofit home of the Signal app, which is trusted by millions around the world. We protect free expression and enable secure global communication through open source privacy technology. Signal Technology Foundation is a US 501(c)(3) tax-exempt organization.*
 
-So it is spelled in type theory like,
-
-```
-    A + B
-```
-
-## [dependent pairs](https://dotat.at/@/2025-05-28-types.html#dependent-pairs)
-
-In a dependent pair, the *type* of the second element depends on the
-*value* of the first. The classic example is a slice, roughly,
-
-```rust
-        struct IntSlice {
-            len: usize,
-            elem: &[i64; len],
-        }
-```
-
-(This might look a bit circular, but the idea is that an array `[i64; N]` must be told how big it is – its size is an explicit part of its
-type – but an `IntSlice` knows its own size. The traditional
-dependent “vector” type is a sized linked list, more like my array
-type than my slice type.)
-
-The classic way to write a dependent pair in type theory is like,
-
-Σ len: usize . Array(Int, len)
-
-The big sigma binds a variable that has a type annotation, with a
-scope covering the expression after the dot – similar syntax to a
-typed lambda expression.
-
-We can expand a simple example like this into a many-armed sum type:
-either an array of length zero, or an array of length 1, or an array
-of length 2, … but in a sigma type the discriminant is user-defined
-instead of hidden.
-
-The number of possible values of the type comes from adding up all the
-alternatives, a summation just like the big sigma summation we were
-taught in school.
-
-When the second element doesn’t depend on the first element, we can
-count the inhabitants like,
-
-And the sigma type simplifies to a product type.
-
-### [telescopes](https://dotat.at/@/2025-05-28-types.html#telescopes)
-
-An aside from the main topic of these notes, I also recently
-encountered the name “telescope” for a multi-part dependent tuple or
-record.
-
-The name “telescope” comes from de Bruijn’s AUTOMATH, one of the first
-computerized proof assistants. (I first encountered de Bruijn as the
-inventor of numbered lambda bindings.)
-
-## [dependent functions](https://dotat.at/@/2025-05-28-types.html#dependent-functions)
-
-The return type of a dependent function can vary according to the
-argument it is passed.
-
-For example, to construct an array we might write something like,
-
-```rust
-        fn repeat_zero(len: usize) -> [i64; len] {
-            [0; len]
-        }
-```
-
-The classic way to write the type of `repeat_zero()` is very similar
-to the `IntSlice` dependent pair, but with a big pi instead of a big
-sigma:
-
-Π len: usize . Array(Int, len)
-
-Mmm, pie.
-
-To count the number of possible (pure, total) functions *A* ➞ *B*, we
-can think of each function as a big lookup table with *A* entries each
-containing a *B*. That is, a big tuple (*B*, *B*, … *B*), that is,
-*B* * *B* * … * *B*, that is, *B*<sup>*A*</sup>. Functions are
-exponential types.
-
-We can count a dependent function, where the number of possible
-*B*s depends on which *A* we are passed,
-
-## [danger](https://dotat.at/@/2025-05-28-types.html#danger)
-
-I have avoided the terms “dependent sum” and “dependent product”,
-because they seem perfectly designed to cause confusion over whether I
-am talking about variants, records, or functions.
-
-It kind of makes me want to avoid algebraic data type jargon, except
-that there isn’t a good alternative for “sum type”. Hmf.
+1. Microsoft Recall captures your screen every few seconds, extracts text from screenshots via optical character recognition, then populates a searchable on-device database with this personal data in order to allow the AI system to query it – potentially exposing and retaining your Signal data indefinitely, including disappearing messages. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:1)
+2. There are multiple versions of Android beyond the Google-provided distributions on Pixel devices. For many vendors, we don’t have a reliable way to detect when a screenshot was attempted ***if*** screenshots are already disabled. Rather than choose a poor user experience (where screenshots simply stop working, confusing users), we decided to instead focus on detecting when an AI assistant attempts to access the screen. We automatically enable the “Screen security” setting in Signal Android when this type of access is detected. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:2) [↩<sup>2</sup>](https://signal.org/blog/protecting-your-privacy/#fnref:2:1)
+3. Careful readers will note that in addition to not being able to cover all Android devices, we are also not blocking Siri AI on macOS. This is because we cannot reliably block screenshots on macOS. Faced with a lack of clearly documented APIs that allow us to implement screenshot protection, we do not have the tools available that let us do the job. While protections against continuous screen capture exist on macOS, we cannot apply them to screenshots (which is how most agentic systems access data from applications like Signal). Trying to implement screenshot blocking on macOS has revealed to us a minefield of bewildering decisions that place user privacy at risk, including APIs that have been deprecated in favor of screen-protection solutions that [only work for streaming media](https://developer.apple.com/streaming/fps/) and other DRM-protected content. This is something we hope Apple remedies urgently. For now, the only recommendation we have for macOS 27 users is to add Signal to the Excluded Apps section in System Settings > Siri to protect message content from proactive access by Siri AI. [↩](https://signal.org/blog/protecting-your-privacy/#fnref:3)

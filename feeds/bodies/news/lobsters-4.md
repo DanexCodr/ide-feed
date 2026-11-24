@@ -1,16 +1,15 @@
-**NOTICE**: Sneakernet is a work in progress. The documentation makes some promises that are not reflected in the current state of affairs. Links to to-be-written parts of the documentation are indicated [in red](https://sneakernet.eu/#).
+Hello friends! Ladybird is now in alpha. You can [download it](https://ladybird.org/download/) for macOS and Linux.
 
-Sneakernet is a system for securely<sup>[1](https://sneakernet.eu/#fn-1)</sup> sending digital messages to other people without using the Internet. Instead, messages are automatically passed on to other Sneakernet users on your local network – at your hackerspace, an event or conference, your local cafe, etc — and then physically carried to their destination on your “sneakers”, where they will be automatically delivered to any recipients on the same network (or handed over to be carried further on by someone else).
+I’ve been looking forward to writing this post for a long time. :^)
 
-Sneakernet encourages slow, thoughtful participation in community and face-to-face meetings with the users who will carry your messages onwards to their destination, and entrust their own messages to you.
+Ladybird is a browser with a new engine. The engine is our own, built from the ground up, and not a fork. The browser around it is modest, but functional.
 
-⇒ Head to [Getting started](https://sneakernet.eu/getting-started/) to set up Sneakernet on your device.
+This is an alpha, so some websites won’t work, and it will crash sometimes. When that happens, tell us! You can report a broken site from inside the browser. After a crash, you can read the crash report and decide whether to send it. Our [privacy policy](https://ladybird.org/privacy/) has the details.
 
-Many applications can be built on top of sneakernet’s general-purpose messaging system, provided that they are tolerant of high latency and out-of-order messages. Some examples include:
+We want security nerds to hack it! A new browser gets hacked, over and over, and that’s part of the process, so we make no promises about security today. When you pwn us, please [tell us how](https://github.com/LadybirdBrowser/ladybird/blob/master/SECURITY.md) so we can harden Ladybird!
 
-- E-Mail (sneakermail)
-- Message boards/news groups (sneakernews)
-- File sharing (sneakershare)
-- And many more!
+The alpha is a rolling channel, and we’ll be pushing out automatic updates regularly. This is the part I’m most excited about. Ladybird improves quickly, and until now you had to build it from source to see that.
 
-Building your own sneakernet applications is easy, too, in any programming language – see [Building applications](https://sneakernet.eu/development/building-apps/) for more details.
+If you build websites, try yours in Ladybird and tell us what breaks. It supports WebDriver for automated testing, as well as the Firefox DevTools protocol.
+
+Thank you to [our sponsors](https://ladybird.org/#sponsors) and donors, and to everyone who has tested, reported bugs, and written code over the years. There’s still a mountain of work ahead of us, but I’m very happy that you can finally try Ladybird for yourself!

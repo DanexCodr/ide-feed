@@ -1,227 +1,157 @@
-I recently received a game called “Hitster” as a gift. It’s a board game where you try to identify songs and guess things like when they came out, who the artist or band is, etc. Each card has a QR code that you scan using the Hitster app, which then plays the music through Spotify or Apple Music.
+TIL (or this week-ish I learned) why big-sigma and big-pi turn up in
+the notation of dependent type theory.
 
-Sadly, the app requires an Apple Music or Spotify subscription. In this blog post, I’ll go down the rabbit hole of reverse engineering the Android app and bypassing their very, very sloppy attempt at hiding the data.
+I’ve long been aware of the zoo of more obscure Greek letters that
+turn up in papers about type system features of functional programming
+languages, `μ`, `Λ`, `Π`, `Σ`. Their meaning is usually clear from context
+but the reason for the choice of notation is usually not explained.
 
-# Part 0: How it works
+I recently stumbled on an explanation for `Π` (dependent functions)
+and `Σ` (dependent pairs) which turn out to be nicer than I expected,
+and closely related to every-day algebraic data types.
 
-First, we need to understand how the game works.
+## [sizes of types](https://dotat.at/@/2025-05-28-types.html#sizes-of-types)
 
-On the front of each card, you’ll find the artist or band name, the year the song came out, and the song title. On the back, there’s a QR code. Scanning it takes you to a URL with two things in its path: the game’s region (`DE` in my case) and the card ID. The music then starts playing in the app or through Spotify.
+The easiest way to understand algebraic data types is by counting the
+inhabitants of a type. For example:
 
-This means there’s a mapping from Card ID ⇒ Spotify Track. There are also multiple card versions per region, so the card ID alone isn’t enough to identify a song. Card ID 1 might be “Wet Dream” in the UK, but “Tage wie diese” in Germany.
+- the unit type `()` has one inhabitant, `()`, and the number 1 is why it’s called the unit type;
+- the `bool` type hass two inhabitants, `false` and `true`.
 
-![card.png](https://wuemeli.com/_astro/card.DxcNptP5_Zkv1oD.webp)
+I have even seen these types called **`1`** and **`2`** (cruelly,
+without explanation) in occasional papers.
 
-![qr_code.png](https://wuemeli.com/_astro/qr_code.BqCb_R1b_ZuQ3l.webp)
+## [product types](https://dotat.at/@/2025-05-28-types.html#product-types)
 
-# Part 1: The Android app
-
-After getting the app’s APK from some sketchy Android APK download website, I used [jadx](https://github.com/skylot/jadx) to get the decompiled Java code.
-
-![source_code](https://wuemeli.com/_astro/source_code.DrTbtfqy_1nfCVU.webp)
-
-After digging around for a bit, I found a few JSON files under `res/raw`. One of them was named `gameset_database_4.json`, and it seemed to be encrypted.
-
-I ran a tool to identify the format, and it came back as Base64. That’s an encoding, so I decoded it first. The result still wasn’t readable, and I guessed it was encrypted with AES or something similar.
-
-I’d never reverse engineered an Android app before, so I just searched globally for `AES`. And guess what? There was a file called `k43.java` with the entire decryption process laid out in front of me:
-
-```
-public static String f(String str, String str2) throws o21 {
-    str.getClass();
-    str2.getClass();
-    try {
-        byte[] bArrDecode = Base64.decode(str, 0);
-        bArrDecode.getClass();
-        p(bArrDecode);
-        return o(
-            or.m(bArrDecode, 0, 12),
-            bArrDecode,
-            m(bArrDecode.length - 28, str2)
-        );
-    } catch (o21 e) {
-        throw e;
-    } catch (Exception e2) {
-        Napier.e$default(
-            Napier.INSTANCE,
-            e2,
-            (String) null,
-            new s11(24),
-            2,
-            (Object) null
-        );
-        throw new o21(pv0.o("Decryption failed: ", e2.getMessage()), e2);
-    }
-}
-
-public static SecretKeySpec m(int i, String str)
-    throws NoSuchAlgorithmException {
-    String str2 = i + str;
-    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-    byte[] bytes = str2.getBytes(yj0.a);
-    bytes.getClass();
-    return new SecretKeySpec(messageDigest.digest(bytes), "AES");
-}
-
-public static String o(
-    byte[] bArr,
-    byte[] bArr2,
-    SecretKeySpec secretKeySpec
-)
-    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
-    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    cipher.init(
-        2,
-        secretKeySpec,
-        new GCMParameterSpec(SemanticState.Focused, bArr)
-    );
-    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
-    bArrDoFinal.getClass();
-    return new String(bArrDoFinal, yj0.a);
-}
-```
-
-So let’s walk through this step by step.
-
-The function `f` takes two strings as inputs. The first, `str`, contains the Base64-encoded data, which it decodes:
+Or pairs or (more generally) tuples or records. Usually written,
 
 ```
-byte[] bArrDecode = Base64.decode(str, 0);
-bArrDecode.getClass();
-p(bArrDecode);
+    (A, B)
 ```
 
-It then checks whether the decoded data is at least 28 bytes long:
+The pair contains an *A* and a *B*, so the number of possible values is
+the number of possible *A* values multiplied by the number of possible
+*B* values.
+
+So it is spelled in type theory (and in Standard ML) like,
 
 ```
-public static void p(byte[] bArr) throws o21 {
-    if (bArr.length < 28) {
-        throw new o21(
-            gg3.g(
-                bArr.length,
-                "Encrypted data too small: ",
-                " bytes (minimum: 28 bytes)"
-            ),
-            null
-        );
-    }
-}
+    A * B
 ```
 
-Next, it passes a bunch of data to the function `o`, which handles the final stage of decryption:
+## [sum types](https://dotat.at/@/2025-05-28-types.html#sum-types)
 
-```
-return o(
-    or.m(bArrDecode, 0, 12),
-    bArrDecode,
-    m(bArrDecode.length - 28, str2)
-);
-```
+Or disjoint union, or variant record. Declared in Haskell like,
 
-The first argument is the first 12 bytes of the decoded data. That’s our IV, or nonce. The second argument is the entire decoded byte array.
-
-The third argument is where things get interesting. It takes the total length minus 28 and passes that, along with `str2`, to the function `m`. Those 28 bytes account for the 12-byte nonce and the 16-byte authentication tag.
-
-Inside `m`, the remaining length is converted to a string and joined with `str2`. That combined string is then hashed using SHA-256 to produce the AES key.
-
-So `str2` isn’t the AES key itself. It’s the secret string used to derive it, and we haven’t found it yet.
-
-Finally, `o` does the actual decryption:
-
-```
-public static String o(
-    byte[] bArr,
-    byte[] bArr2,
-    SecretKeySpec secretKeySpec
-)
-    throws BadPaddingException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, InvalidKeyException, InvalidAlgorithmParameterException {
-    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    cipher.init(
-        2,
-        secretKeySpec,
-        new GCMParameterSpec(SemanticState.Focused, bArr)
-    );
-    byte[] bArrDoFinal = cipher.doFinal(bArr2, 12, bArr2.length - 12);
-    bArrDoFinal.getClass();
-    return new String(bArrDoFinal, yj0.a);
-}
+```hs
+        data Either a b
+            = Left a
+            | Right b
 ```
 
-It sets up AES-GCM with the derived key and nonce, then decrypts the data after the first 12 bytes.
+Or in Rust like,
 
-That’s the decryption process figured out. Now we just need the secret string.
-
-# Part 2: Finding the decryption key
-
-I was doing this in a Discord call in the Rust Language Community server, and someone pointed out that I should look for a byte array with a length of 32 bytes.
-
-I first searched for `byte[32]`, but didn’t find anything useful. I then tried this pattern:
-
-```
-grep -P 'byte\[\]\s*\w+\s*=\s*\{' | awk -F',' 'NF==32'
+```rust
+        enum Either<A, B> {
+            Left(A),
+            Right(B),
+        }
 ```
 
-That led me to `m17.java`, which contained these two super cool arrays:
+A value of the type is either an *A* or a *B*, so the number of
+possible values is the number of *A* values plus the number of *B*
+values.
+
+So it is spelled in type theory like,
 
 ```
-public static final byte[] a = {117, -67, 13, -80, 43, 2, 93, 61, 9, 71, 61, -85, 12, -119, -123, 58, -13, 30, -119, -59, -30, 60, 3, 56, -34, -80, -28, -124, 88, -124, 1, 68};
-public static final byte[] b = {45, -28, 93, -4, 29, 49, 31, 87, 102, 16, 119, -31, 71, -54, -10, 66, -72, 40, -80, -73, -86, 14, 77, 86, -85, -55, -121, -55, 46, -73, 98, 29};
+    A + B
 ```
 
-We then tried to figure out how to turn these into something useful. After a bit of experimenting, someone suggested XORing the two arrays together. We interpreted the resulting bytes as text and got this:
+## [dependent pairs](https://dotat.at/@/2025-05-28-types.html#dependent-pairs)
 
-```
-XYPL63BjoWJJKCsxK69rH2NnuycMv3cY
-```
+In a dependent pair, the *type* of the second element depends on the
+*value* of the first. The classic example is a slice, roughly,
 
-Using this string, I wrote a little decryptor in Rust:
-
-```
-use aes_gcm::{
-    Aes256Gcm, Nonce,
-    aead::{Aead, AeadCore, Generate, Key, KeyInit},
-};
-use base64::Engine;
-use sha2::{Digest, Sha256};
-
-const STRING_2: &str = "XYPL63BjoWJJKCsxK69rH2NnuycMv3cY";
-
-fn main() {
-    let input = std::fs::read_to_string(
-        "/home/<redacted>/Downloads/HITSTER_4.0.3_APKPure.xapk.out/HITSTER_4.0.3_apkcombo.com/resources/nl.jumbo.hitster.apk/res/raw/locales_v4.json",
-    );
-
-    let data = base64::engine::general_purpose::STANDARD
-        .decode(input.unwrap())
-        .unwrap();
-
-    let iv = &data[..12];
-    let ct = &data[12..];
-
-    let mut hash = Sha256::new();
-    hash.update((data.len() - 28).to_string().as_bytes());
-    hash.update(STRING_2);
-    let key = hash.finalize();
-
-    let cipher = Aes256Gcm::new(&key);
-    let plaintext = cipher.decrypt(Nonce::from_slice(iv), ct).unwrap();
-
-    std::fs::write("test.txt", plaintext).unwrap();
-}
+```rust
+        struct IntSlice {
+            len: usize,
+            elem: &[i64; len],
+        }
 ```
 
-That gave us this awesome `test.txt` file with around 31,000 lines of mappings from card IDs to Apple Music and Spotify tracks, plus ISRCs, across multiple regions.
+(This might look a bit circular, but the idea is that an array `[i64; N]` must be told how big it is – its size is an explicit part of its
+type – but an `IntSlice` knows its own size. The traditional
+dependent “vector” type is a sized linked list, more like my array
+type than my slice type.)
 
-We then looked around the code a little more and found out that all of this wasn’t really needed.
+The classic way to write a dependent pair in type theory is like,
 
-If we’d searched for an HTTPS URL first, we would’ve landed on this:
+Σ len: usize . Array(Int, len)
 
-And with a little imagination, we tried:
+The big sigma binds a variable that has a type annotation, with a
+scope covering the expression after the dot – similar syntax to a
+typed lambda expression.
 
-There was the entire thing. No encryption.
+We can expand a simple example like this into a many-armed sum type:
+either an array of length zero, or an array of length 1, or an array
+of length 2, … but in a sigma type the discriminant is user-defined
+instead of hidden.
 
-We spent around 18 hours chasing a file that, in the end, wasn’t even a real secret.
+The number of possible values of the type comes from adding up all the
+alternatives, a summation just like the big sigma summation we were
+taught in school.
 
-Credits:
+When the second element doesn’t depend on the first element, we can
+count the inhabitants like,
 
-- Mr.Corrupt from the Rust Language Discord community for helping me.
+And the sigma type simplifies to a product type.
+
+### [telescopes](https://dotat.at/@/2025-05-28-types.html#telescopes)
+
+An aside from the main topic of these notes, I also recently
+encountered the name “telescope” for a multi-part dependent tuple or
+record.
+
+The name “telescope” comes from de Bruijn’s AUTOMATH, one of the first
+computerized proof assistants. (I first encountered de Bruijn as the
+inventor of numbered lambda bindings.)
+
+## [dependent functions](https://dotat.at/@/2025-05-28-types.html#dependent-functions)
+
+The return type of a dependent function can vary according to the
+argument it is passed.
+
+For example, to construct an array we might write something like,
+
+```rust
+        fn repeat_zero(len: usize) -> [i64; len] {
+            [0; len]
+        }
+```
+
+The classic way to write the type of `repeat_zero()` is very similar
+to the `IntSlice` dependent pair, but with a big pi instead of a big
+sigma:
+
+Π len: usize . Array(Int, len)
+
+Mmm, pie.
+
+To count the number of possible (pure, total) functions *A* ➞ *B*, we
+can think of each function as a big lookup table with *A* entries each
+containing a *B*. That is, a big tuple (*B*, *B*, … *B*), that is,
+*B* * *B* * … * *B*, that is, *B*<sup>*A*</sup>. Functions are
+exponential types.
+
+We can count a dependent function, where the number of possible
+*B*s depends on which *A* we are passed,
+
+## [danger](https://dotat.at/@/2025-05-28-types.html#danger)
+
+I have avoided the terms “dependent sum” and “dependent product”,
+because they seem perfectly designed to cause confusion over whether I
+am talking about variants, records, or functions.
+
+It kind of makes me want to avoid algebraic data type jargon, except
+that there isn’t a good alternative for “sum type”. Hmf.

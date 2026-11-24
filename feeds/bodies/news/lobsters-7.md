@@ -1,66 +1,116 @@
-TL;DR: GitHub Actions accepts several invalid YAML productions, making it
-difficult (read: impossible) to parse some real-world action and workflow
-definitions with a properly conforming YAML parser.
+my major advocacy is that lua is a very good general purpose language. this is not an opinion shared by all. lua’s major design goal was extending and embedding into existing programs. I think the simplicity and flexibility in design persued towards the end of that goal extends to make lua a very good language in general. that said, it does its job quite well as an embedding language, and one of its more interesting use cases (and actually, one of its oldest use cases) is as a data or configuration format.
 
-This is related to [zizmor#1116](https://github.com/zizmorcore/zizmor/issues/1116), which has been bugging me for a year and a half.
+lua’s syntax provides many niceties. for instance, lua has an infinite family of multiline strings: the most basic one starts with `[[` and ends with `]]`. however, any amount of equal signs can be put between the two square brackets: `print([======[hello, world]======])`. the only way to close a `[===[` is with an accompanying `]===]`, not with a `]]` or a `]==]`, or a `]====]`.
 
-Last April, a user reported that [zizmor](https://docs.zizmor.sh) was rejecting a workflow containing
-a step that looks like this:
+here is a function that for any string, creates the correct multiline string to represent it:
 
-```yaml
-- name: Create NPM Remote Repository JSON
-  uses: jsdaniell/create-json@v1.2.3
-  with:
-    name: "npm-remote-template.json"
-    json: '{
-      "key": "npm-remote",
-      "rclass": "remote",
-      "packageType": "npm",
-      "url": "https://registry.npmjs.org"
-    }'
-```
+`local function stringize(str)
+    local equal_signs = ""
+    for e in str:gmatch("](=*)]") do
+        if #e >= #equal_signs then
+            equal_signs = e .. "="
+        end
+    end
+    return ("[%s[%s]%s]"):format(equal_signs, str, equal_signs)
+end
+`
+of course, you can just use string.format with `%q`, but multiline strings usually provide nicer looking and more compact results. these strings are very good for representing lua code as strings in other lua code.
 
-Apart from the use of a multi-line flow-style string for the `json:` key, nothing particularly
-stands out about this step.
+anyway, [download this file](https://citrons.xyz/big.txt). if you want to consume massive amounts of memory and possibly crash your computer, run it in cpython. if you want to see “hello, world” printed 5 million times, run it in lua. lua’s parser is designed to handle massive files with stride, which is fairly unique and quite necessary if lua is to be used for this purpose.
 
-Except: it isn't valid YAML! YAML says this about flow-style nodes that are nested inside
-of a block-style parent collection (read: map or array):
+design and implementation choices like these come together to suit lua for this purpose. I’ve seen 3 main styles of using lua code to represent data or configuration. I think lua manages to accomodate each of them well, and each have their appropriate use.
 
-> Flow nodes must be indented by at least one more space than the parent block collection.
-> Note that flow nodes may begin on a following line.
->
-> *Source*: [YAML 1.2.2 § 8.2.3](https://yaml.org/spec/1.2.2/#823-block-nodes)
+## styles of data representation
 
-That means the *correct* syntax is instead:
+### JSON style (LON?)
 
-```yaml
-- name: Create NPM Remote Repository JSON
-  uses: jsdaniell/create-json@v1.2.3
-  with:
-    name: "npm-remote-template.json"
-    json: '{
-      "key": "npm-remote",
-      "rclass": "remote",
-      "packageType": "npm",
-      "url": "https://registry.npmjs.org"
-     }'
-```
+chunks are much like function bodies. they have return values. so, one thing that one can do is just return a big table from a lua program.
 
-The difference is barely visible:
+`return {
+    foo = "bar",
+    list = {1, 2, 3},
+    rule_of_thirds = true,
+}
+`
+if you’re using this style, you can omit the return and then prepend it when you load the lua files. this makes any trailing statements syntactically invalid because the return statement must be the last statement in the block. keep in mind, though, that this does not prevent arbitrary code because function literals can be used instead.
 
-YAML is a big and complicated spec, so it didn't even occur to me that this *was*
-invalid. Instead, I opened [tree-sitter-yaml#36](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/36) to "fix" it. I've now
-opened [tree-sitter-yaml#51](https://github.com/tree-sitter-grammars/tree-sitter-yaml/pull/51) to revert that misbegotten fix.
+`return (function() arbitrary_code() end)()
+`
+trying to strip out function literals to make this technique safer is fraught and defeats the general elegance of this technique. one can fairly readily use JSON instead.
 
-On GitHub's side, I'm not sure if they have a clean path towards spec
-conformance here. Much of the code behind Actions is proprietary,
-but it seems likely that the underlying parser on their end is [YamlDotNet](https://www.nuget.org/packages/yamldotnet/).
+### INI style
 
-Actions [appears to use YamlDotNet 5.3.0](https://github.com/actions/runner/blob/7e211dc69c347b78fc398e630e74facb11a13235/src/Sdk/Sdk.csproj#L29), which was [released in 2018](https://github.com/aaubry/YamlDotNet/releases/tag/v5.3.0).
-However, even upgrading to the newest version (18.1.0 as of writing)
-wouldn't fix this particular bug, since it's [still present](https://github.com/aaubry/YamlDotNet/blob/748334a8fa7c227740018b284b71ad95cc6b7fc7/YamlDotNet/Core/Scanner.cs#L1841-L1844) on that
-version (note the `!isSingleQuoted` guard).
+what is often missed about lua is that it’s subtly full of metaprogrammability. for instance, lua globals are just stored in a table, and which table is used can be controlled by the code itself. this table is known as the “environment”. an environment may be passed to [`load`](https://www.lua.org/manual/5.4/manual.html#pdf-load) as an argument. the way this can be used is that you can load a chunk with an empty environment and then capture the values it sets as globals.
 
-My best guess is that a 2020 patch ([YamlDotNet#467](https://github.com/aaubry/YamlDotNet/pull/467)) only fixed the double-quoted
-form because YAML's official test suite only tests rule 8.2.3 with a double-quoted
-string, despite it applying to both forms.
+you can have a file like this:
+
+`-- config.lua
+foo = "bar"
+list = {1, 2, 3}
+rule_of_thirds = true
+`
+then, you can get a table with all the configuration as simply as this:
+
+`local config = {}
+assert(loadfile("config.lua", "t", config))()
+`
+
+### imperative style
+
+lua has a bit of sugar that allows you to shed the parenthesis on function calls to make them look cleaner. an imperative style is a very suitable means to represent data in lua, and it’s very powerful.
+
+`path "/path/to/things"
+
+config {
+    foo = "bar",
+    list = {1, 2, 3},
+    rule_of_thirds = true,
+}
+
+lipsum [[
+    Voluptatibus laudantium et omnis ut debitis. Similique omnis molestias
+    consequuntur. Praesentium corporis omnis nihil et quidem dolore. Veritatis
+    fugiat eaque corporis eligendi officiis praesentium. Libero quo vero
+    temporibus impedit sit inventore assumenda
+]]
+`
+*programming in lua* provides [a real world example of this](https://www.lua.org/pil/10.1.html).
+
+## security considerations
+
+the major problem with using an entire programming language to represent data is that untrusted data can be readily crafted to be malicious. indeed, I would not use this technique for untrusted data. with that in mind, it is possible to solve or mitigate the potential vulnerabilities.
+
+the main technique for sandboxing lua is controlling the environment. when using lua for data representation, an empty enivronment is the most appropriate (or, an environment that only exposes data constructors). this prevents any I/O or access to the larger program’s state. preventing access to *all* standard library functions is safest. [there are a few standard library functions that have consequences you might not expect](https://citrons.xyz/percent-p.txt).
+
+another concern is denial of service. this is trickier to prevent. it’s fairly trivial to construct a lua chunk which does not return (`while true do end`). `debug.sethook` can mitigate this somewhat. even so, it’s probably possible to construct something that uses excessive amounts of memory. that said, denial of service is significantly less problematic than the vulnerabilities that are completely avoided by depriving the untrusted code of any standard library functions.
+
+finally, **make sure to reject lua bytecode**. untrusted lua bytecode is not safe and may cause arbitrary nasal demons in the lua interpreter. `load` can accept both bytecode and lua source by default. however, passing `"t"` for the mode parameter prevents this.
+
+## why?
+
+clearly, it’s silly to bring in the entire lua interpreter where you would just use JSON or INI. where this use case of lua shines is when you’re already using lua for a project (and then you already have this powerful data description language), or when you need something with a lot of power or flexibility.
+
+these mini languages can be extended to arbitrary complexity and nuance. unlike JSON, you can add arbitrary type constructors, or anything at all. you can build any kind of language you want, and that’s how lua is designed to be used, and it’s actually approximately [the story of how it was invented](https://www.lua.org/history.html).
+
+if you’re anything like me, this will sound a little familiar. indeed, many have said similar things about lisp and forth. both of those languages have very different approaches but reach the same conclusion of “inventing your own language”. I believe lua belongs in their pantheon.
+
+## bonus content
+
+![Please do not write it as 'LUA', which is both ugly and confusing, because then it becomes an acronym with different meanings [highlighted link\] for different people. So, please, write 'Lua' right!](https://citrons.xyz/files/U9eKLdeq.png)
+
+![on acroynmfinder.com: LUA - Licking under Armpits](https://citrons.xyz/files/gszYfbTZ.png)
+
+python? js? ruby? what the hell are those? all I care about is LUA.
+
+## journal
+
+- 2025-08-29 goetta is great
+- 2025-08-25 moralities
+- 2025-08-02 mcdonalds wet bird review
+- 2025-07-30 on the possibility of composing finalizers and FFI
+- 2025-07-23 lua for data representation
+- 2025-07-09 women from my dreams: randall's employee
+- 2025-06-10 top 5 classes
+- 2025-03-21 what's in a word?
+- 2025-03-19 6 kinds of people you will meet in your everyday life
+- more...

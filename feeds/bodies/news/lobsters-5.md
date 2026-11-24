@@ -1,116 +1,15 @@
-my major advocacy is that lua is a very good general purpose language. this is not an opinion shared by all. lua’s major design goal was extending and embedding into existing programs. I think the simplicity and flexibility in design persued towards the end of that goal extends to make lua a very good language in general. that said, it does its job quite well as an embedding language, and one of its more interesting use cases (and actually, one of its oldest use cases) is as a data or configuration format.
+I assume you know about the P vs. NP problem. But what is this wacky thing [Anthropic just posted](https://github.com/anthropics/formal-math/blob/main/vp-vnp/paper.pdf)?
 
-lua’s syntax provides many niceties. for instance, lua has an infinite family of multiline strings: the most basic one starts with `[[` and ends with `]]`. however, any amount of equal signs can be put between the two square brackets: `print([======[hello, world]======])`. the only way to close a `[===[` is with an accompanying `]===]`, not with a `]]` or a `]==]`, or a `]====]`.
+You learned how to take a determinant in your linear algebra class:
 
-here is a function that for any string, creates the correct multiline string to represent it:
+The naive way is fine for 3×3 matrices, but notice that you need to perform Θ(n!) arithmetic operations here. Exercise for the reader is to find the exact number of operations (hint: start with a recurrence relation).
 
-`local function stringize(str)
-    local equal_signs = ""
-    for e in str:gmatch("](=*)]") do
-        if #e >= #equal_signs then
-            equal_signs = e .. "="
-        end
-    end
-    return ("[%s[%s]%s]"):format(equal_signs, str, equal_signs)
-end
-`
-of course, you can just use string.format with `%q`, but multiline strings usually provide nicer looking and more compact results. these strings are very good for representing lua code as strings in other lua code.
+Luckily, if you paid attention, you will remember there are faster ways to do this for big n×n matrices, like Gaussian elimination. If we stick only to adding and multiplying, we can still find a determinant in polynomial time ([there are better ways, but this is an old, readable method](https://www.sciencedirect.com/science/article/pii/0020019084900188)).
 
-anyway, [download this file](https://citrons.xyz/big.txt). if you want to consume massive amounts of memory and possibly crash your computer, run it in cpython. if you want to see “hello, world” printed 5 million times, run it in lua. lua’s parser is designed to handle massive files with stride, which is fairly unique and quite necessary if lua is to be used for this purpose.
+A related problem to the determinant is finding the permanent. It’s like a determinant without any subtraction:
 
-design and implementation choices like these come together to suit lua for this purpose. I’ve seen 3 main styles of using lua code to represent data or configuration. I think lua manages to accomodate each of them well, and each have their appropriate use.
+Unlike determinants, there is no known way to compute permanents in polynomial time. Since finding the permanent of a matrix of 0s and 1s is NP-hard (and in fact [#P-complete](https://en.wikipedia.org/wiki/Counting_problem_(complexity))), it would be pretty important if there were a way.
 
-## styles of data representation
+What the Anthropic proof that VP≠VNP means is that there is no way to do this if we are limited to arithmetic circuits of size polynomial in the input-size, which look like this:
 
-### JSON style (LON?)
-
-chunks are much like function bodies. they have return values. so, one thing that one can do is just return a big table from a lua program.
-
-`return {
-    foo = "bar",
-    list = {1, 2, 3},
-    rule_of_thirds = true,
-}
-`
-if you’re using this style, you can omit the return and then prepend it when you load the lua files. this makes any trailing statements syntactically invalid because the return statement must be the last statement in the block. keep in mind, though, that this does not prevent arbitrary code because function literals can be used instead.
-
-`return (function() arbitrary_code() end)()
-`
-trying to strip out function literals to make this technique safer is fraught and defeats the general elegance of this technique. one can fairly readily use JSON instead.
-
-### INI style
-
-what is often missed about lua is that it’s subtly full of metaprogrammability. for instance, lua globals are just stored in a table, and which table is used can be controlled by the code itself. this table is known as the “environment”. an environment may be passed to [`load`](https://www.lua.org/manual/5.4/manual.html#pdf-load) as an argument. the way this can be used is that you can load a chunk with an empty environment and then capture the values it sets as globals.
-
-you can have a file like this:
-
-`-- config.lua
-foo = "bar"
-list = {1, 2, 3}
-rule_of_thirds = true
-`
-then, you can get a table with all the configuration as simply as this:
-
-`local config = {}
-assert(loadfile("config.lua", "t", config))()
-`
-
-### imperative style
-
-lua has a bit of sugar that allows you to shed the parenthesis on function calls to make them look cleaner. an imperative style is a very suitable means to represent data in lua, and it’s very powerful.
-
-`path "/path/to/things"
-
-config {
-    foo = "bar",
-    list = {1, 2, 3},
-    rule_of_thirds = true,
-}
-
-lipsum [[
-    Voluptatibus laudantium et omnis ut debitis. Similique omnis molestias
-    consequuntur. Praesentium corporis omnis nihil et quidem dolore. Veritatis
-    fugiat eaque corporis eligendi officiis praesentium. Libero quo vero
-    temporibus impedit sit inventore assumenda
-]]
-`
-*programming in lua* provides [a real world example of this](https://www.lua.org/pil/10.1.html).
-
-## security considerations
-
-the major problem with using an entire programming language to represent data is that untrusted data can be readily crafted to be malicious. indeed, I would not use this technique for untrusted data. with that in mind, it is possible to solve or mitigate the potential vulnerabilities.
-
-the main technique for sandboxing lua is controlling the environment. when using lua for data representation, an empty enivronment is the most appropriate (or, an environment that only exposes data constructors). this prevents any I/O or access to the larger program’s state. preventing access to *all* standard library functions is safest. [there are a few standard library functions that have consequences you might not expect](https://citrons.xyz/percent-p.txt).
-
-another concern is denial of service. this is trickier to prevent. it’s fairly trivial to construct a lua chunk which does not return (`while true do end`). `debug.sethook` can mitigate this somewhat. even so, it’s probably possible to construct something that uses excessive amounts of memory. that said, denial of service is significantly less problematic than the vulnerabilities that are completely avoided by depriving the untrusted code of any standard library functions.
-
-finally, **make sure to reject lua bytecode**. untrusted lua bytecode is not safe and may cause arbitrary nasal demons in the lua interpreter. `load` can accept both bytecode and lua source by default. however, passing `"t"` for the mode parameter prevents this.
-
-## why?
-
-clearly, it’s silly to bring in the entire lua interpreter where you would just use JSON or INI. where this use case of lua shines is when you’re already using lua for a project (and then you already have this powerful data description language), or when you need something with a lot of power or flexibility.
-
-these mini languages can be extended to arbitrary complexity and nuance. unlike JSON, you can add arbitrary type constructors, or anything at all. you can build any kind of language you want, and that’s how lua is designed to be used, and it’s actually approximately [the story of how it was invented](https://www.lua.org/history.html).
-
-if you’re anything like me, this will sound a little familiar. indeed, many have said similar things about lisp and forth. both of those languages have very different approaches but reach the same conclusion of “inventing your own language”. I believe lua belongs in their pantheon.
-
-## bonus content
-
-![Please do not write it as 'LUA', which is both ugly and confusing, because then it becomes an acronym with different meanings [highlighted link\] for different people. So, please, write 'Lua' right!](https://citrons.xyz/files/U9eKLdeq.png)
-
-![on acroynmfinder.com: LUA - Licking under Armpits](https://citrons.xyz/files/gszYfbTZ.png)
-
-python? js? ruby? what the hell are those? all I care about is LUA.
-
-## journal
-
-- 2025-08-29 goetta is great
-- 2025-08-25 moralities
-- 2025-08-02 mcdonalds wet bird review
-- 2025-07-30 on the possibility of composing finalizers and FFI
-- 2025-07-23 lua for data representation
-- 2025-07-09 women from my dreams: randall's employee
-- 2025-06-10 top 5 classes
-- 2025-03-21 what's in a word?
-- 2025-03-19 6 kinds of people you will meet in your everyday life
-- more...
+This means that for P to equal NP, there must be some trick to computing permanents using AND/OR/NOT on the bits of the input that is better than addition and multiplication. There are many problems where access to Boolean operators is helpful, but it isn’t clear how they would help with the permanent. If you think of a way, go claim your $1 million.

@@ -1,205 +1,226 @@
-There's a bit of irony in the title. At the time of writing,
-[Gliver](https://codeberg.org/ebeem/gliver/issues),
-a Guile based window manager for Wayland in the style of
-[StumpWM](https://www.youtube.com/watch?v=tKt_rVO960Q) and
-[Emacs](https://www.gnu.org/software/emacs/), isn't yet in
-[Guix](https://guix.gnu.org/). There is, however,
-[an open PR to *add* Gliver to Guix](https://codeberg.org/guix/guix/pulls/11817).
-However, what that patch is really waiting on is
-[an upcoming release of Gliver](https://codeberg.org/guix/guix/pulls/11817#issuecomment-28112931)
-which will solve many bugs.
+It feels like this month (and last month..) has been nonstop chaos. [PHP2Shell](https://en.wikipedia.org/wiki/PHP2Shell) threw a nice little grenade into an already busy month, and while that was happening a [GitLab RCE took down Alpine's GitLab instance](https://alpinelinux.org/posts/GitLab-security-incident-CVE-2026-97229.html). It was a whole thing, and as frustrating as it was, I'm kind of proud to say that I got to help respond to the event and write the incident announcement. Ikke did all of the real heavy lifting, but it takes a community to keep a distribution together. Everything, and I mean everything, is kept together by volunteers lending their time and talent with no expectation that there will be a reward for the effort.
 
-Notably, that release will be `0.0.5`. If that sounds early, Gliver
-still *is* early. There are bugs, and you will probably have to file
-issues for some that you discover. There are also some noticeable
-missing features. But it doesn't matter. Gliver is everything I want
-from a desktop experience, and I suspect for many of the kinds of
-people who read my blog, it will be for them as well.
+We do it because we care for the work being done. Whether it's a critical service enabling a community of tens of thousands to distribute [hundreds of petabytes of data](https://gist.github.com/ncopa/b1515f99f5efbc82fcc8b15dcc5e1b4f) that we call "Alpine", or simply enabling a small piece of software to work for personal desires. All of it happens because someone cares enough to do the work. I love this so much, frankly. It's absolutely flabbergasting what we as a community can do with our spare time.
 
-Gliver might not be for everyone. But if the following appeals to you:
-a live-hackable, written in Guile Scheme, tiling window manager which
-looks good, feels good, and whose codebase is
-[understandable](https://gracefulliberty.com/articles/towards-understandable-software/)
-and, indeed, encourages you to understand and explore it, Gliver is
-for you.
+I enjoy giving my time to Alpine Linux, because there's a community, and because we can have an outsized impact on the world by collaborating together. It's not perfect, but it's rewarding. I think I owe my career to it in a sense. I've learned so much by simply raising my hand and being willing to give my time and learn a few new things. But there's a limit to how far you get on donated time, both personally, and as a project.
 
-## Why I think Gliver matters
+## Wiki.alpinelinux.org has been languishing a bit
 
-I think Anna Liberty's
-[Towards Understandable Software](https://gracefulliberty.com/articles/towards-understandable-software/)
-is a must-read. Call it a counter-vision to the
-[vibe bobsled](https://dustycloud.org/blog/faulty-towers-vibe-sickness-and-the-vibe-bobsled/).
-Anna lays out that software should be more understandable, not less,
-and easy to participate in even for people with no programming
-background. While Gliver doesn't itself try all the approaches Anna
-lays out, it is an understandable codebase.
+Not in the sense that it wasn't used; it gets tons of traffic and contains a treasure trove of useful information that people depend on and are excited to contribute to. But between keeping the infrastructure afloat, migrating off of Equinix to new sponsored compute, and mitigating the constant wave of problems, from scale to RCE, that plague a small engineering team trying to serve a massive consumer base, well, it's no wonder that once alice was no longer contributing, the infrastructure languished a bit. This wasn't intentional, nor was it bad. There simply wasn't spare time to contribute to it.
 
-Furthermore, Gliver is *participatory*. Gliver invites you to learn
-its internals and explore it. By default, Gliver's describe-key
-functionality opens a window where you can type the command you are
-thinking of, and it will show you what key it is bound to... but you
-can also type in a key sequence, and it'll show you what command that
-runs.
+So in November of last year ikke asked if anyone was interested in lending a bit of spare time to fixing that problem. Naturally, I raised my hand, happy to have an opportunity to do so.
 
-![ebeem's screenshot of Gliver's describe-key interface](https://dustycloud.org/misc/ebeems-gliver-screenshot.jpeg)
+> 2025-11-13 15:40:43     @ikke       Anyone helping with infra that wants to help maintaining the wiki?  
+>
+> 2025-11-13 15:57:01     durrendal   ikke: I don't mind helping out, just let me know what you need done  
+>
+> 2025-11-13 16:10:46     @ikke       durrendal: the wiki is hosted in an LXC container  
+>
+> 2025-11-13 16:18:11     durrendal   that makes sense, it tracks how most everything else is deployed. It's mediawiki, so php + a db. Is it using postgres on the backend, and do you have it behind traefik or something else?  
+>
+> 2025-11-13 16:22:07     @ikke       It uses mariadb  
+>
+> 2025-11-13 16:22:26     @ikke       There is an nginx proxy in front  
+>
+> 2025-11-13 16:22:51     @ikke       The database is in a separate container  
+>
+> 2025-11-13 16:26:56     durrendal   That's not bad, seems like a straight forward setup at first glance. I use mariadb for my zabbix deployments so that's nice and familiar  
+>
+> 2025-11-13 16:34:47     @ikke       The current setup uses a combination of git submodules and composer from what I can tell (alice was the last one taking care of it)
 
-More than that, by default Gliver opens a unix domain socket in
-`~/.local/state/gliver/repl.sock`. You can connect to this, say with
-[Geiser](https://geiser.nongnu.org/). You are live! You know that
-command you just looked up with the above describe-key interface? Why
-not try running it at the REPL! Hey, how does it work? Well Geiser
-already has a feature for that; by default typing `M-.`
-(`geiser-edit-symbol-at-point`) will jump you right to the definition,
-and you can explore how that code works! You can run commands manually
-at the REPL, you can inspect the state of the system, you can hack
-away, you can take the useful things you have learned and add them to
-your `init.scm` file so that the next time Gliver starts things are
-more the way you want them than last time. But of course there's no
-need to wait, this is a lisp style system! You can eval those changes
-and apply them immediately and carry on your way.
+*All IRC timestamps in this post are in UTC.*
 
-Maybe this all sounds pretty technical, and even technically
-elite. And I think Gliver is probably not very accessible to
-non-scheme-hackers. But on the other hand, it could help you *become*
-a Scheme hacker.
+This was essentially the sum of information I got about the wiki; it was all that was really documented. And despite my eagerness to jump in immediately and lift it up from whatever state it happened to be in, it took time to get access. We had a release to get out. We were fighting to get 3.23 finished and didn't even get it wrapped up until 12/3/25! So it's no wonder that it took until 1/16/26 before I got access to the server itself to start poking around and even begin to understand how the deployment was handled.
 
-When I started using Emacs, I was not a programmer. By extending
-Emacs, I *became* a programmer. (My background is not in CS; I was an
-interdisciplinary humanities student.) Emacs invites you to explore
-how it works by customizing it. My entire career would not have likely
-happened if Emacs did not welcome me into this process.
+And as you can guess by the fact that I'm writing this post in October of 2026, I did not get in there and immediately upgrade it and move on.
 
-Gliver takes the same approach. But instead of Emacs Lisp, which is a
-hackable but honestly not really great lisp, it uses Guile Scheme,
-which is lovely. And notably, this is the same language as Guix.
+## I'm never one to half-ass something
 
-There is more I want to say on this, and I will in a future article.
-In many ways I think Blender is also an interesting example of
-reflective software in action, and actually does expose some of the
-ideas such as visual programming for non-programmers in a way that
-Emacs and Gliver don't, with great success too. But that's to discuss
-later.
+And I think that's important. Even if I'm only giving away a limited amount of time, I hate to rush through things without fully understanding them. There's just no way I can improve something if I don't have a solid grounding. More importantly, I actually really love spelunking inside of old systems other sysadmins have set up. Everyone has a unique flair to how they deploy something. Enterprise admins end up deploying things in a real textbook manner, and when you deal with small businesses it's usually a hodgepodge of "just get it done". I haven't had a ton of opportunities to spelunk FOSS infrastructure though! What I found was interesting in its own right, mostly because I don't think I'd have deployed the service this way.
 
-But as for the choice to switch. I have gotten tired of using systems
-that feel like they know better than I do. I have spent
-most of my days using [GNOME](https://www.gnome.org/), but without
-getting too much into it, I have been burnt way too many times by a
-paternalistic attitude which seems at the center of its design
-philosophy. When I did the latest upgrade and found out that custom
-application launcher shortcuts did not work anymore, and I could not
-figure out for the life of me why, I decided I didn't actually care to
-*try* to solve the problem this time. I was going to try something
-else.
+What ikke told me was spot on: MediaWiki was a git checkout with extensions and skins vendored as submodules inside the repo. You could slot in new modules using composer, and as long as you had an appropriate underlying PHP version to work with, you were golden. But that was then mixed with actual wiki data, like images, all of it lumped together in /var/www. Very simple, but not obvious if you'd not dealt with it before.
 
-Which is when I re-discovered Gliver. Thanks to
-[ebeem](https://mastodon.social/@ebeem) for working on Gliver and
-[jfred](https://www.terracrypt.net/) for having been an earlier
-adopter than I was and who helped me with some messy
-this-isnt-yet-packaged trickiness.
+When I got into the server, MediaWiki 1.40.0 was running on PHP 8.2 on top of Alpine 3.20, but the LocalSettings.php that controlled the wiki was generated under 1.25.3. Just to give you a sense, 1.40.0 is from July 2023, and 1.25.3 is from October of 2015! It's really neat to get a sense for how long something was tended for. Of course, our friends at the Internet Archive have been archiving the Alpine Wiki since [April of 2010](https://web.archive.org/web/20100427195607/http://wiki.alpinelinux.org/wiki/Main_Page), and based on the main page I can tell you we've been using MediaWiki for a solid 16 years now, if not longer. I'm positive it's not the same exact server, but probably the same-ish data. I [made notes](https://lambdacreate.com/static/files/86/README.org) about all the little important bits I found, everything from extension inventories to known issues and interesting shell snippets I found in the server's history file. Anything can be, and is, helpful when you're spelunking. Truthfully, given the age of the deployment, the public facing nature of the server, and my relative newness to administering MediaWiki servers, I was approaching the problem with the utmost caution.
 
-## A bit more on Gliver before we wrap up
-
-I suppose I've already said most of it, but a few more details.
-One interesting aspect of Gliver is that it uses
-[River](https://codeberg.org/river/river), which is a Wayland
-compositor which is designed as a framework for building window
-managers on top of. Building small window managers had become a lot
-harder to do with the move from X11 to Wayland; River provides a
-common foundation that makes it much more possible.
-
-Gliver allegedly supports different tiling modes, but I don't use
-them, I just use manual tiling. I like splitting up my screens the way
-I like them. I know I want this thing here and that thing
-there. Gliver shines at this kind of manual flow. It also has multiple
-"tabbed" windows stacked in each pane of the frames (in Gliver, each
-of those panes is called a "container"). You can move around what
-workspace and container a window "belongs to" with
-keybindings. Personally I bound `<super>-x` to be a keymapping with
-sub-bindings for splitting things up with the same equivalent keys as
-they are in emacs, since those mappings are burned into my brain.
-
-The default theme is very nice. You can customize its colors but black
-and purple is exactly my jam already.
-
-There are some rough edges. I have filed a number of issues for the
-things I've encountered. But one of the most noticeable is that there
-are several commands you might find for launching shell commands or
-creating new workspaces where you would expect to be prompted.  For
-example, here's one of Gliver's commands for running a shell command:
+By the end of February I had MediaWiki figured out, [but it wasn't committed until March](https://git.alpinelinux.org/aports/commit/?id=7367609f39c95b464799ca81ea6ae36343d069e2). And not to bury the lede, but I mean that in the most me way possible. I went through the process of setting up a clone of the staging server in my homelab. From there I worked out how to package MediaWiki itself, and then break out all of the various extensions that comprise the core system into a proper APKBUILD. After packaging it, I was no longer surprised it hadn't been done before. The core extension list alone is absurdly long, and all told we use 36 different extensions for our wiki, so this isn't even a complete list.
 
 ```
-(define-command (shell-process-spawn-detached cmd)
-  #:interactive (string)
-  "Spawn CMD via /bin/sh in a detached subprocess (double-fork)."
-  (system (string-append cmd " &")))
+subpackages="
+	$pkgname-doc
+	$pkgname-nginx:_nginx
+	$pkgname-default-extensions:_default_extensions
+	"
+source="https://releases.wikimedia.org/mediawiki/$_pkgvermaj/mediawiki-$pkgver.tar.gz
+	mediawiki_nginx.conf
+	mediawiki_fpm.conf
+	"
+
+# Extensions bundled in the tarball that we split into subpackages.
+# Core/mandatory extensions (always shipped with core) are NOT listed here.
+# Only optional bundled extensions that users may want to enable individually.
+_extensions="
+	AbuseFilter
+	CategoryTree
+	Cite
+	CiteThisPage
+	CodeEditor
+	ConfirmEdit
+	DiscussionTools
+	Echo
+	Gadgets
+	ImageMap
+	InputBox
+	Linter
+	LoginNotify
+	Math
+	MultimediaViewer
+	Nuke
+	OATHAuth
+	PageImages
+	ParserFunctions
+	PdfHandler
+	Poem
+	ReplaceText
+	Scribunto
+	SecureLinkFixer
+	SpamBlacklist
+	SyntaxHighlight_GeSHi
+	TemplateData
+	TextExtracts
+	Thanks
+	TitleBlacklist
+	VisualEditor
+	WikiEditor
+	"
+for _ext in $_extensions; do
+	_ext_lower=$(echo "$_ext" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+	subpackages="$subpackages $pkgname-extension-$_ext_lower:_extension"
+done
 ```
 
-Or for creating a workspace:
+And given the complexity, and that this was all production infrastructure, I tried to get it merged into the community repositories before making any sort of change to the production infrastructure. Anything less wasn't really right in my mind.
 
-```
-(define-command (workspace-create name)
-  #:interactive (string)
-  "Create a new workspace."
-  (let ((output (output-current)))
-    (when output
-      (let ((workspace (make-workspace #:name (or name "New")
-                                       #:output output)))
-        (workspace-add! workspace)
-        (log-debug "Workspace ~a created." (workspace-name workspace))))))
-```
+## But there wasn't room for it
 
-Nice, these look like good commands, let's bind them to keys in our
-config! But oh wait, nothing happens! That's strange, they work at the
-REPL, why don't they work when bound to a key?
+But it sat, not because it wasn't appreciated, but because we are woefully close to the absolute maximum storage we can host through our CDN. Not that we weren't working on that either; I [started looking into our space limitations in earnest in March](https://lambdacreate.com/posts/static/files/86/alpine-mirror-analysis.txt), when it was a potential blocker to our ability to release 3.24 in June. I knew the package was too big to go into community, but I also didn't think leaving it in testing made sense for production infrastructure. So I turned my focus to the clearer, bigger problem and started working with ikke and clandmeter to figure out a path to archive our older distributions.
 
-The simple answer is that `#:interactive (string)` part you see above,
-which indicates that Gliver's UI should be asking you for a prompt and
-letting you type in something, simply isn't implemented yet! So when I
-say there are some missing features, there really are some missing
-features.
+By May that problem had turned into discussions with Jason at the Internet Archive, which, as this little aside suggests, was the least stressful component of any of this. Jason is an amazing archivist, and the work the Internet Archive is doing is a massive boon to FOSS projects.
 
-But this all may be changing very quickly. ebeem is working on a
-refactor of the GUI system to be more of a functional reactive
-programming type system, inspired by [Flutter](https://flutter.dev/).
-When that lands, I expect a number of bugs to be fixed, and a number
-of missing features like the above to land.
+![Approval from Jason Scott, the lead archivist at the Internet Archive, for Alpine to archive our historical packages with them](https://lambdacreate.com/static/images/86/ia_email.png)
 
-This does lead to the funny situation that to create a new workspace,
-I have to do it at the REPL! That's okay. It'll be fixed, and for now,
-it's a nice reminder that running things at the REPL is something I
-can absolutely do at any time with Gliver, which I appreciate.
+And of course, dear reader, I bet you can guess what happened next. I [packaged the ia tool](https://git.alpinelinux.org/aports/commit/?id=0921bb317d244f42d528fa4fc7fe89dc911a990d), built a prototype to [validate we could actually migrate things](https://archive.org/details/@durrendal/uploads), and when a prototype wasn't enough, turned it into its own tool, [arkivi](https://krei.lambdacreate.com/Alpine/arkivi), which can do partial migrations and reclaim space while it migrates data. None of that merged quickly either, because, well, we were out of space and had a release to cut. But once again, I had time to donate, and I wasn't going to provide half a solution to a problem I could solve.
 
-Speaking of the GUI, what GUI toolkit is it using, you may wonder?
-The answer is: it kind of has its own thing! Gliver has FFI bindings
-to [Cairo](https://www.cairographics.org/) for its vector graphics and
-[Pango](https://docs.gtk.org/Pango/) for fonts. That's it! It seems to
-be a good enough foundation for the rest it is using and doing.
+## Wait, I thought we were talking about the wiki?
 
-Now, how am I running Gliver at all when it isn't in Guix? The funny
-thing is that for now, I am running out of a git checkout of Gliver.
-I start up and sacrifice the not-so-proverbial
-[Cow](https://codeberg.org/cow-wm/cow) window manager and replace it
-live with Gliver in a terminal like so:
+This might seem like a bit of a detour, but I swear it's not! We are in fact still talking about upgrading the wiki! I couldn't get the core MediaWiki package merged into a stable repo, let alone any of the extensions, which means it can't be released on a stable branch. As much as I personally trust Alpine and think we do a good job keeping edge decently stable, the reality is that it's a testing area sometimes, and it makes very little sense to run production infrastructure off of it. Or if you are going to do that, you need to ensure you have the time to keep up with the constant churn. You can probably guess my concern here: I might not have that time to give.
 
-```
-killall -q cow; while true; do (killall -q gliver || true) && make run || sleep 3; done
-```
+There are so many disparate but interconnected problems going on in the background of most FOSS distributions that you just can't fathom until you live with them. And the wild part? Nothing I've described is unique. I work within a community of clever and dedicated people who turn this type of work around on the regular. But as you can imagine, I lost my momentum on actually reviving the wiki too. I got blocked by infrastructure constraints and couldn't complete the task in what I felt was a professional and sustainable manner, so I simply waited. My small problem didn't outweigh the needs of the distribution, and there were bigger problems to solve elsewhere. The wiki was stable, it was fine.
 
-Which is basically the trick in the Gliver README, just starting with
-a cow sacrifice first. Pretty ugly though, it'll be nicer when Gliver
-is just packaged in Guix.
+Until it wasn't.
 
-## Departing thoughts
+> 2026-10-21 20:56:33     @ikke       durrendal: would you have time to look at the wiki?  
+>
+> 2026-10-21 21:28:29     @ikke       From our monitoring it appears that at the peak, gitlab received ~50r/s, but it probably was even higher  
+>
+> 2026-10-21 21:33:01     durrendal   ikke: yeah happy to, php patches right?  
+>
+> 2026-10-21 21:33:20     @ikke       Yes, but also alpine upgrade  
+>
+> 2026-10-21 21:35:50     durrendal   yeah I can do that, I was waiting until mediawiki got moved to community, but I'll pin it to the version in testing and we can just deal with it all later, after the CDN has space.  
+>
+> 2026-10-21 21:36:17     durrendal   I think I only have access to the test instance currently  
+>
+> 2026-10-21 21:36:25     @ikke       right  
+>
+> 2026-10-21 21:38:56     durrendal   not a problem, just flagging it. I'll get testing done tonight. Heading home from work now and should have time shortly after
 
-Gliver is nice. It feels good, it works well. And it's participatory,
-understandable software. It's also very early. It might not be for
-everyone, but it has elements of a vision for a future I'd like to see
-for everyone.
+PHP2Shell isn't the kind of thing you leave running on a public server, and the wiki was sitting on PHP 8.2 on a branch that was already out of support. So the wiki went dark. We were forced to throw up a maintenance page and block people's access to the wiki. And of course people asked why, and when to expect it back. Like I said earlier, a lot of people depend on this resource to use our distro!
 
-If you like the idea of a scheme'y lisp machine using Guix as your
-operating system distribution but have found that the desktop
-experience was missing, well, Gliver is now here! And soon, packaged
-in a Guix near you.
+Which of course kicked off a fever pitch of building, testing, and migrating. I wasn't ready for this! I was missing extensions, I hadn't fully tested the database upgrade process, it wasn't automated, and my packages weren't in a stable repo!
 
-And, I suspect, once it is... well, we'll be seeing most of the Guix
-community moving over. It's too exciting and too nice not to!
+But I wasn't starting from zero either. The core package had been sitting in testing since March. I had a clone of stage in my homelab, and a README full of notes about every odd corner of the old install. The better part of a year that looked like stalling had at least given me some sense of how to proceed.
+
+## Why there was no quick patch
+
+It would have been nice to take the easy out at this point, but it would have been the most temporary of bandaids:
+
+- Alpine 3.20 hit end of active support in April of this year. We'd still backport changes on request, and this could absolutely have been one of those requests, but that's its own uphill battle with just as much effort behind it, and it would have resulted in a lesser fix. Realistically, a patched PHP meant moving to a supported branch.
+- On 3.24, the MediaWiki package targets PHP 8.3.
+- MediaWiki 1.40 was never going to run on PHP 8.3.
+- So MediaWiki had to move too. We got lucky here: 1.40 to 1.46.2 is still a single hop. Had we been running anything older than 1.39, it wouldn't have been nearly so straightforward. 1.45 would have been an option, but it goes EOL at the end of 2026, and I wasn't about to do all of this twice.
+
+So it was four upgrades at once: Alpine 3.20 to 3.24 (we're still working on 3.25 at the moment), PHP 8.2 to 8.3, MediaWiki 1.40 to 1.46.2, and the git submodule install to apk packages. Well, there really was no quick fix. Somewhere in that stack something would break, and it would keep creating problems down the line unless the work was done in a way that made it all easier to maintain long term.
+
+## The harder path
+
+Even if I wanted to take the quick path and just get the job done, that's the sort of logic that results in the same sort of languishing. Just run the old stuff, just upgrade the existing thing, keep it all similar, move onto the next thing. Sideload 1.46 the old way, get it up tonight, clean it up "later". I have so little time to give, and so many other important changes that need to be made. For anyone paying attention, that's only getting worse with the literal waterfall of RCEs being announced day after day after day, and we're expected to just keep up with it all. It's a lot, but it will only be worse if we cut corners and stop caring about doing it right. "Later" is exactly how the wiki got here in the first place.
+
+Plus, that's not who I am. No, I'd rather dogfood a new tool I've been working on, finish the packaging work, and prove out that everything can and will work on a v3.24 mock and provide a good stable experience. Anything less would be unprofessional, an affront to the craft, or at the very least to my sense of pride.
+
+Which leaves just one awkward bit. Despite all of my effort, the mediawiki packages are still making their way through testing. The work is never truly finished, there's always one more thing that needs to be done. But I'm confident once everything catches up the path forward is that much easier. Every mediawiki component and extension packaged provides a simpler maintenance path going forward. Nobody needs to remember anything I've described thus far. And anyone who wants to suggest an extension to make the wiki better can actively contribute to that process by packaging and testing it.
+
+## And the dogfooding, oh the dogfooding!
+
+It turns out that emergencies are great times to stress test the library coverage of a configuration management tool, especially when you need to spin up a box, test a migration, and repeat it over and over. I could have done all of this with some shell scripts or with Salt, but it's a lot more fun to use [scio](https://krei.lambdacreate.com/durrendal/scio) and figure out how well the little Lua DSL I've put together maps onto things I'd either do by hand or know well enough another way. The reps are the point. Every time something broke, I fixed it in the state, threw the box away, and ran it again from nothing, until a fresh Alpine 3.24 container could become a working wiki without me touching it. If you're curious what that looks like, the [full scio state is here](https://lambdacreate.com/static/files/86/mediawiki-test.lua).
+
+If I as a contributor only have so much time to give, and my standard is that it's done well and to the best of my abilities, well, then I'll combine pleasure and work and solve two problems in one go. Servers get upgraded, I get a production grade test case for my configuration management system, and the entire thing is held together by spare time and tenacity!
+
+I'll write more about scio in the near future. There's a lot to say, but now's not the time.
+
+## Rehearsal
+
+Did I mention I try to be meticulous? All of the preflight work isn't nearly enough when working with production infrastructure; I wanted to know exactly what I was touching. So naturally, I wrote a quick diff script to compare stage and prod, and the answer I got in the process was very reassuring. The two servers were nearly identical. The only real difference was prod's exposure layer, with go-away out front and nginx listening behind it. Then I wrote a backup script, because the existing backups weren't something I was willing to bet on. My process was obvious afterward: a throwaway incus container restored from a prod dump first, then stage, and only then prod.
+
+Good thing, too. I could see every place I might trip, and I still managed to stumble.
+
+First up was LocalSettings.php. Remember that file generated back in 2015 under 1.25.3? It had been carried forward through every upgrade since, collecting settings MediaWiki removed years ago (`$wgScriptExtension`, `$wgDBmysql5`, `$wgUseTeX`, `$wgShowIPinHeader`, `$wgSquidServers`) and path overrides pointing into a git tree that was about to stop existing. It fell over one dead path at a time. Fix a line, run the update, watch it die on the next one. Eventually I stopped playing whack-a-mole and just started over from scratch. A decade of "it still works, don't touch it", gone. I'll try my best to remember to leave a note for the next sysadmin who comes after me.
+
+Even then, once I could actually open a page on the wiki, every image on it came back with "Error creating thumbnail: File missing." The old backups had never included uploads. The database was covered, but as far as the backups were concerned, every image anyone had ever uploaded to the wiki existed in exactly one place. Nobody was careless here. In the old install the uploads sat right alongside everything else in /var/www, and I hadn't understood where things lived well enough to notice they were missing from the backups. My mock tests never checked for them either. What an obvious and embarrassing look it would have been if I hadn't caught it on staging first!
+
+But then I fucked up. On stage, I ran `php maintenance/run.php install` instead of `update`. It was late, it must have been nearing 1am or 2am at this point, and I wasn't fully paying attention. I should have stopped and rested, it could have waited another day, but I had committed to fixing this. If it's not obvious, install is for empty databases. Pointed at a real one, it overwrites an existing db with a fresh schema and admin account right on top of everything that's already there. Thank goodness I had a backup. I was able to easily restore the dump, put things back the way they were, start the whole thing over.
+
+The rest were the kind of thing that just ate time, and they make for a pretty dull story. `$wgMainCacheType = CACHE_ACCEL` needs php83-pecl-apcu, and opcache doesn't count. The 3.24 mariadb client refuses non-TLS connections by default, so everything needed `--skip-ssl` initially. The packaged php-fpm listens on a unix socket rather than 127.0.0.1:9000, which I learned by way of 502s. Restored pages rendered stale, because their old page_touched values were older than the freshly built parser cache, which `$wgCacheEpoch` fixed. And AbuseFilter's grants were redacted in the capture I was working from, so I recovered them from the backup.
+
+When it finally came together, the schema update on stage took 28 seconds. After all of that effort, 28 seconds.
+
+> 2026-10-22 06:41:46     durrendal   ikke: I was able to get stage updated to v3.24, Mediawiki to 1.46.2 on php83.  
+>
+> 2026-10-22 06:42:32     durrendal   it was more time intensive than I had hoped so I didn't get to the prod server yet, but should be able to get to it tomorrow. about 3a here so I'm off to bed  
+>
+> 2026-10-22 06:42:48     @ikke       Alright, thanks so far!  
+>
+> 2026-10-22 06:43:45     durrendal   no problem :) I think prod will take less time now that I've worked out the kinks on staging.  
+>
+> 2026-10-22 06:46:22     ncopa       durrendal: thanks alot!
+
+## Showtime
+
+> 2026-10-23 10:00:21     ncopa       durrendal: are you still working on wiki.a.o?  
+>
+> 2026-10-23 11:34:07     durrendal   ncopa: yeah sorry for the radio silence, also scrambling at work over this. I should be able to finish it today though, I'll keep you posted.  
+>
+> 2026-10-23 11:34:19     ncopa       thank you!
+
+That radio silence was the day job. PHP2Shell didn't just land on Alpine, it landed on everyone, and I spent my days scrambling over the same bug I was fixing for the wiki in the evenings.
+
+By the time I sat down with prod, the hard part was over. It had become routine and easy because I put the learning up front where it belonged. Prod got a maintenance mode, a flag file that nginx checks on every request. Touch it and the world sees a maintenance notice, while requests from the box itself still reach the wiki, so I could test everything from localhost before anyone else could see it. Then the same migrations I'd already run on stage, with no surprises this time. Rsync the uploads into /var/lib/mediawiki/images. Carry over the parts of prod that make it prod: minor tweaks to php-fpm for performance, go-away, the easy stuff.
+
+> 2026-10-24 02:40:57     durrendal    ikke ncopa the production wiki is fully upgraded and back online!  
+>
+> 2026-10-24 02:41:12     durrendal    https://wiki.alpinelinux.org/wiki/Special:Version  
+>
+> 2026-10-24 02:48:22     lotheac      nice!  
+>
+> 2026-10-24 02:57:20     durrendal    thanks :) and it's using packages instead of the old git submodule install too so hopefully this shouldn't languish ever again  
+>
+> 2026-10-24 02:57:57     durrendal    I just need to open a few MRs now
+
+## Where it stands now
+
+The wiki is on Alpine 3.24, MediaWiki 1.46.2, and PHP 8.3, and every piece of it comes from apk. Which means the next time a PHP2Shell comes along, the fix is `apk upgrade`, `run.php update`, and a php-fpm restart. No submodules or composer, nobody needs to remember something special, all that's needed is a bit of Alpine specific systems administration knowledge and we're golden. This will get better as I finish documenting the new installation, so that when I inevitably run out of spare time, the next person to raise their hand can stand on my shoulders and reach a little higher.
+
+Look, at the start of this I said there's a limit to how far you can get on donated time. I meant that, but not to signal some kind of fundamental flaw in the system. Alice tended to this before me, ikke kept it running alongside everything else, and when it needed someone, someone raised their hand. This time it was me. There are many, many people like me, what I've described is not unique. But look what it took, eleven months from "anyone want to help maintain the wiki?" to an actual upgrade, most of it spent trying to solve other problems around the one that was volunteered for. When the emergency came, it got fixed because someone was willing to pay down the technical debt all at once.
+
+That's what spare time can carry, and it's a lot. It's also why it matters that Alpine is choosing to [fund dedicated infrastructure engineering](https://opencollective.com/alpinelinux/updates/alpine-linux-is-changing-how-donations-are-used). Not because volunteers can't do the work, but because the work shouldn't depend on whether someone happens to have a free evening when the next CVE drops. Spare time built this wiki, and spare time will keep tending it. It just shouldn't have to hold it together alone.
+
+As for me, I got what I always hope to get from raising my hand, an opportunity to learn. I walked in knowing very little about Mediawiki administration, and while I wouldn't call myself an expert from one small engagement, I'm happy to have come away with a few more packages, more confidence in scio, and a once more working wiki for Alpine. And a great reminder that part of giving your spare time is knowing when to stop, nobody will ever be mad that you ran out of spare time.

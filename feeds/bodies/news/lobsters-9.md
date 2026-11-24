@@ -1,43 +1,79 @@
-University of Queensland researchers have used gravity to transmit a message through a brick wall using an elevator and a sensitive gravimeter.
+9/UX brings the classic Mac and A/UX desktop
+(a spatial desktop, a global menu bar, consistent controls and dialogs,
+icons, and resource-driven presentation)
+to [9front](https://9front.org/), built the Plan 9 way:
+rio and libdraw draw the screen,
+9P exposes every application's UI state and commands as files,
+namespaces define the working environment,
+the plumber opens documents,
+and ndb holds human-editable metadata.
 
-The unusual experiment took place in UQ’s Parnell Building, where the team of physicists sent the elevator back and forth between 2 levels, moving its 1.8-tonne counterweight between positions representing binary 0 and 1.
+> Keep the Macintosh's direct-manipulation desktop,
+> but make every meaningful object, action, and resource visible as a Plan 9 file.
 
-A gravimeter in an adjacent bathroom detected the changes in the gravitational field and translated the message into a single word, ‘Gravity’.
+It is not an emulator, a Macintosh ABI, or an A/UX reimplementation.
+Native 9front programs stay first-class,
+and existing rio programs (acme, sam, rc windows, nested rio) keep working unchanged beside 9/UX apps.
 
-Dr Charles Woffinden from the [School of Mathematics and Physics](https://smp.uq.edu.au/) said gravitational communication had an intriguing advantage.
+The pieces:
 
-“Unlike the electromagnetic signals used in modern wireless communication, a gravitational signal cannot simply be screened out by placing ordinary material in its path,” Dr Woffinden said.
+These are real frames, not mockups.
+The GUI tests embed h9 with a headless screen, inject mouse and keyboard input,
+and drive the 9P files at the same time.
 
-“Anyone who has lost phone reception in a tunnel or struggled with Wi-Fi through a solid wall will understand the appeal.
+## Visual Design
 
-“While the present system is far from practical, it demonstrates the possibility of communicating using a method that ordinary physical barriers cannot block.”
+Macintosh structure, Plan 9 colour:
+butter title bars from rio's selection yellow, acme's cream and olive,
+and rio's greygreen for the desktop,
+so 9/UX windows and legacy rio windows sit together on one screen.
+Everything reads in one bit, uses a sixteen-colour palette,
+and is drawn in whole pixels.
+Every graphic is original to 9/UX; it ships no Apple resources.
+The mockups below are generated from the same palette and metrics files as the code.
 
-[Dr Andrew Groszek](https://smp.uq.edu.au/profile/9399/andrew-groszek) said the idea came from a project to develop a contactless weighbridge.
+![Buttons, check boxes, radio buttons, text fields and scroll bars in each state](https://progrium.github.io/9ux/images/mockups/controls@3x.png)
 
-“We were aiming to determine the mass of trucks and other large vehicles by measuring their tiny gravitational pull,” Dr Groszek said.
+*Controls in each state.*
 
-“Once we had shown that the idea worked, we realised the same physics could be used to encode and transmit information.”
+![The 9/UX icon set](https://progrium.github.io/9ux/images/mockups/icons@2x.png)
 
-[Professor Andrew White](https://about.uq.edu.au/experts/812) said the biggest limitation to future gravity-based communication was its slow speed.
+*The icon set.*
 
-“Our lift was snail-paced – it’s from the 1950s – so our experiment transmitted just 1 bit per minute, meaning it took an hour to send a single word,” Professor White said.
+The [design document](https://github.com/progrium/9ux/blob/main/docs/design.md)
+describes 9/UX and its v0.1 acceptance criteria;
+[release.md](https://github.com/progrium/9ux/blob/main/docs/release.md)
+has where each one stands, the end-to-end demo, and the open issues.
+Every interface between components is a file protocol in
+[docs/protocols](https://github.com/progrium/9ux/tree/main/docs/protocols),
+and the [visual design](https://github.com/progrium/9ux/blob/main/assets/README.md)
+covers the palette, fonts, metrics, chrome, icons and cursors.
 
-“The speed of gravity communication would come down to how big the mass is, how fast you can move it and the sensitivity of the detector.
+The source is on [GitHub](https://github.com/progrium/9ux),
+under the MIT license.
+Development runs on [h9](https://progrium.github.io/hyper9/),
+which runs 9front's own compilers, mk and rio directly from the host shell, without booting a VM.
+scripts/h9.sh clones and builds the pinned h9 on its first run:
 
-“It took more than 100 years to go from the first telegraph system to the mobile phone, so while gravity communication is not practical today, it could be in the future.”
+```
 
-![Portable scientific monitoring equipment set up on a tiled floor beside a restroom partition. A small touchscreen computer displaying measurement data sits on top of a silver equipment case labelled “DELICATE INSTRUMENTS - HANDLE WITH GREAT CARE.” Multiple cables run from the case to a sensor unit mounted beneath a dark partition panel, with a battery pack and computer mouse resting on the floor nearby. The image appears to show a field-testing or measurement system . ](https://news.uq.edu.au/sites/default/files/styles/embedded_2x/public/2026-11/bathroom-floor-resized.jpg?h=a81fead4&itok=p6sGzrMJ)
+git clone https://github.com/progrium/9ux
+cd 9ux
+scripts/h9.sh --rc 'mk'
+scripts/h9.sh --gfx rio/7.out -u
+scripts/test.sh
+```
 
-*A gravimeter in an adjacent bathroom detected the changes in the gravitational field from the elevator's movement and translated the message.  (Photo credit: The University of Queensland.)*
+Use rio/6.out on amd64.
+[development.md](https://github.com/progrium/9ux/blob/main/docs/development.md)
+and [testing.md](https://github.com/progrium/9ux/blob/main/docs/testing.md)
+have the details.
 
-[Professor Matthew Davis](https://about.uq.edu.au/experts/1134) said the UQ team had established an important underlying principle.
+9/UX is at v0.1 and under active development.
+Interfaces and behaviour change without notice.
 
-“It’s not often that you get to demonstrate an entirely new way of communicating,” Professor Davis said.
+Please report bugs and send questions through
+[GitHub issues](https://github.com/progrium/9ux/issues).
 
-“We have shown experimentally that information can be encoded in the gravitational field and recovered at the other end.
-
-“Our experiment used a classical gravity sensor, but our modelling indicates that quantum sensors could, with rather ambitious assumptions, support ranges of up to about 500 metres and data rates of around 15 bits per minute.”
-
-Such sensors could eventually support communication in environments where radio waves, light and other conventional signals cannot penetrate.
-
-[Read the research](https://www.science.org/doi/10.1126/sciadv.aee0802) published in *Science Advances*.
+The 9/UX mark in the menu bar is a pixel-art Glenda by [Dan Fessler](https://danfessler.com/).
+Glenda, [the Plan 9 bunny](https://9p.io/plan9/glenda.html), was created by [Renée French](https://www.instagram.com/reneefrench/).

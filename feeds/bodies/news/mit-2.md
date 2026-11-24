@@ -1,25 +1,91 @@
-Each year, faculty and researchers across the MIT School of Engineering are recognized with prestigious awards for their contributions to research, technology, society, and education. To celebrate these achievements, the school periodically highlights select honors received by members of its departments, institutes, labs, and centers. The following individuals were recognized in summer 2026:
+When deploying deep learning models in high-stakes scenarios, researchers would like to understand how they work. Today, this requires unraveling an enormously complex network of internal processing nodes to understand what the model knows and how it will likely behave in practice.
 
-[**Faez Ahmed**](https://meche.mit.edu/people/faculty/faez@MIT.EDU), the Esther and Harold E. Edgerton Associate Professor in the Department of Mechanical Engineering, received a [2025 Air Force Office of Scientific Research Young Investigator Program Award](https://simpler.grants.gov/opportunity/3496d222-5fbb-4a6e-aa2c-4a65c9cccbb9). The award provides early-career U.S. scientists and engineers up to $450,000 over three years to support innovative research.
+Jacob Andreas would rather have the models explain themselves.
 
-[**Srini Devadas**](https://www.eecs.mit.edu/people/srini-devadas/), the Edwin Sibley Webster Professor in the Department of Electrical Engineering and Computer Science, received the [2026 ACM-IEEE CS Eckert-Mauchly Award](https://awards.acm.org/eckert-mauchly). The award recognizes pioneering contributions to computer and digital systems architecture and honors individuals whose work has had broad industrial and academic impact.
+The newly tenured associate professor develops techniques that enable artificial intelligence models to communicate accurately about what they learned from their training data, in language humans can understand.
 
-[**Elfatih Eltahir**](https://cee.mit.edu/people_individual/elfatih-eltahir/), the H. M. King Bhumibol Professor in the Department of Civil and Environmental Engineering, received the [2026 Arab Water Council Prize](https://www.arabwatercouncil.org/index.php?lang=en). Awarded under the theme “Leading Resilient and Climate-Adaptive Water Management Systems,” the prize recognizes significant contributions to understanding climate variability, water systems, and the Nile River basin.
+“Rather than needing to use all these external tools to try and understand what is going on under the hood, maybe we can train models to talk about themselves in a way that is accurate,” says Andreas, an associate professor in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL).
 
-[**William Green**](https://cheme.mit.edu/profile/william-h-green/), the Hoyt C. Hottel Professor in the Department of Chemical Engineering and the director of the MIT Energy Initiative, was awarded the prestigious [Jürgen Warnatz Gold Medal](https://www.combustioninstitute.org/jrgen_warnatz_gold_medal.php). The Warnatz Medal is one of the highest awards of the Combustion Institute and is presented biennially to one scientist in recognition of exceptional scientific contributions having a major impact on combustion applications or research.
+By studying how machines come to understand language, Andreas and his group work toward building intelligent systems that can learn about the world from human guidance and communicate effectively with human collaborators. They develop methods to make the training process more natural and efficient, so AI models learn in a way that is more like human learning.
 
-[**Neville Hogan**](https://meche.mit.edu/people/faculty/neville@mit.edu), the Sun Jae Professor in Mechanical Engineering, Emeritus, received the [IEEE International Conference on Cyborg and Bionic Systems Best Paper Award](https://attend.ieee.org/cbs-2026/awards/) for the paper, *“*Force Control Requires Stiffness Modulation During Unstable Contact Tasks.”
+Ultimately, he and his group want to help people design more accurate and robust deep-learning models that are better suited for their intended application.
 
-[**Dina Katabi**](https://www.eecs.mit.edu/people/dina-katabi/), the Thuan (1990) and Nicole Pham Professor in the Department of Electrical Engineering and Computer Science, was named to [Forbes and Know Your Value’s 2026 “50 Over 50” list](https://www.forbes.com/50over50/). The recognition honors innovators whose work is shaping the future of science, technology, business, and society.
+“We used to debug systems just by looking at their parameters and figuring out whether they make sense or not. Now, we need ‘mind-reading tools’ that can take this really complicated neural computation and translate it for us because it is just not in a language that we, as humans, know how to speak,” he says.
 
-[**Robert Langer**](https://be.mit.edu/faculty/robert-langer/), the David H. Koch (1962) Institute Professor in the departments of Biological Engineering and Chemical Engineering, received the [2026 Global Distinguished Engineer Award](https://eae-academy.eu/news/2026-global-distinguished-engineer-award-final-laureates/). Presented by the European Academy of Engineering, the award recognizes exceptional engineering leadership, original innovation, and sustained impact on technology, industry, health, sustainability, and society. Langer was also selected to receive the [2026 AIChE Shaping the Future Award](https://giving.aiche.org/events/celebration-of-chemical-engineers/2026-12-02), which recognizes a career that has transformed the impact of chemical engineering on human health and society.
+**A love of language**
 
-[**Jelena Notaros**](https://www.eecs.mit.edu/people/jelena-notaros/), an associate professor in the Department of Electrical Engineering and Computer Science, received an [Air Force Office of Scientific Research Young Investigator Research Program Award](https://simpler.grants.gov/opportunity/c342c01d-4f34-440f-8bb2-4bdd4d763df0) for her project, “Quantum Computing: Integrated-Photonics-Based Systems for Selective Addressing of Trapped Ions in Multi-Ion Chains.” Notaros also received an [SRC Young Faculty Award](https://www.src.org/award/young-faculty/), which recognizes outstanding early-career faculty members whose research demonstrates novelty, technical excellence, and significant contributions to the semiconductor research community. Additionally, she was named to [*MIT Technology Review*’s “35 Innovators Under 35” list for 2026](https://www.technologyreview.com/innovators-under-35/2026/) — a recognition that honors young innovators whose work is changing the future of science and technology.
+Andreas’ fascination with language blossomed at a young age. As a child growing up in the San Francisco Bay Area, he was a voracious reader of any book he could get his hands on.
 
-[**Kristala L. Jones Prather**](https://cheme.mit.edu/profile/kristala-l-jones-prather/), the Arthur Dehon Little Professor, MacVicar Faculty Fellow, and head of the Department of Chemical Engineering, received the [2026 AIChE Food, Pharmaceutical and Bioengineering Division Award in Chemical Engineering](https://www.aiche.org/community/awards/food-pharmaceutical-and-bioengineering-division-award-chemical-engineering). The award recognizes outstanding chemical engineering contributions in the food, pharmaceutical, and bioengineering fields.
+One such book, passed along to him by a family friend, contained a pivotal scene where the main character hacked into a computer system to save the day.
 
-[**Lindsey Raymond**](https://www.eecs.mit.edu/people/lindsey-raymond/), an assistant professor in the Department of Electrical Engineering and Computer Science, was named a [2025 Early Career Fellow by Schmidt Sciences’ AI2050 program](https://ai2050.schmidtsciences.org/fellows/). The fellowship supports ambitious, socially beneficial research addressing important challenges in artificial intelligence and its impacts on society.
+That piqued his interest in computers. A few years later, his father brought home a simple BASIC Engine that Andreas could run on their home computer, and he started immersing himself in the world of computer programming.
 
-[**Daniela Rus**](https://www.eecs.mit.edu/people/daniela-rus/), the Panasonic Professor in the Department of Electrical Engineering and Computer Science and the director of the MIT Computer Science and Artificial Intelligence Laboratory, was named to [*TIME*’s 2026 list of the 100 Most Influential People in AI](https://time.com/collection/time100-ai/2026/) in the “Thinkers” category. The annual list recognizes individuals shaping the future of artificial intelligence. Rus also received the [2026 High-Tech Prize of the Bavarian Minister-President](https://www.hightechpreise-bayern.de/en/hightech-preis-des-bayerischen-ministerpraesidenten-2026/). Jointly awarded by the Bavarian State Government and the Bavarian Academy of Sciences and Humanities, it is Germany’s most highly endowed award for technology and engineering.
+Andreas chose to major in computer science as an undergraduate at Columbia University but wasn’t sure if he wanted to pursue a career as a researcher, as a software engineer, or at a startup.
 
-[**César Terrer**](https://cee.mit.edu/people_individual/cesar-terrer/), the TianFu Group Career Development Professor and associate professor in the Department of Civil and Environmental Engineering, received both the [AGU James B. Macelwane Medal](https://www.agu.org/honors/macelwane) and the [Global Environmental Change Early Career Award](https://www.agu.org/honors/gec-early-career). Together, the honors recognize exceptional early-career contributions to earth and environmental sciences, including research on large-scale environmental change.
+His friends signed up for research projects in faculty labs, so Andreas figured he would try that, too.
+
+“I just blast emailed everyone in the computer science department who was working on anything vaguely AI-related, and the natural language processing faculty got back to me first. That is how I wound up in the field where I am now,” he says.
+
+Working in the lab of Michael Collins, the Vikram S. Pandit Professor of Computer Science at Columbia University, Andreas completed an undergraduate thesis project on machine translation. His project involved adapting existing statistical techniques for representing the meaning of language into more powerful AI systems that could translate passages of text.
+
+“I always felt like these deeper questions about how thought works or how to model the world were closer to the surface in language processing problems than in the other tasks that AI people were working on at the time,” he recalls.
+
+**A seismic shift**
+
+He wanted to keep exploring deep questions, so Andreas enrolled in graduate school at the University of California at Berkeley to pursue a career as an academic researcher.
+
+Before starting his PhD studies, he spent a year earning a master’s degree at Cambridge University in England. In that historic environment, he was inspired to contemplate the nature of language learning as he worked on computational translation problems.
+
+Those studies fueled his research when he joined the lab of Berkeley professor of computer science Dan Klein.
+
+Andreas began his studies at the time when neural networks were starting to take off. The field of natural language processing was making a seismic shift from statistical methods to this new world of deep learning.
+
+Statistical methods utilize transparent, mathematical formulas to analyze text, while deep learning techniques use opaque algorithms to automatically learn complex meanings from massive amounts of text data.
+
+“It was fun to be there as we made this transition to the modern toolkit, and learning and inventing all of that stuff when it was still new,” Andreas says.
+
+He began collaborating with scientists in computer vision labs to tackle increasingly complex questions about language learning. Together, they designed AI systems that excelled at generating natural language by teaching those systems to “see” and understand the world around them.
+
+“This was all super-exciting because there really hadn’t been a common set of tools for working with both language and vision data. Then, all of a sudden, neural networks gave us this common language,” he recalls.
+
+He completed a thesis project on the use of neural module networks, which are small fragments of neural networks that perform specific tasks, like localizing objects or logical reasoning, in a larger AI system. But it was the more speculative projects he tackled alongside his thesis, like interpretability and creating natural language descriptions of an AI model’s internal states, that would drive the focus of his group at MIT.
+
+**Faculty focus**
+
+After spending a year at the startup Semantic Machines (which spun out of his lab at Berkeley), Andreas joined the MIT faculty in 2019.
+
+“It felt like this was a fantastic opportunity to be in the homeland of AI research and collaborate with all these amazing, established people, but also do something new and figure out what the modern era in machine learning was going to look like,” he says.
+
+His group focuses on two main areas. First, they are studying the science of large language models to understand the algorithms these models deploy as they learn and process information.
+
+The tools they develop help scientists and researchers better predict how a trained model will behave in the real world. For instance, one family of techniques they developed trains large language models to explain what is going on inside other neural networks using language a human could understand.
+
+These techniques can assign a natural language description to every information-processing node in a massive neural network. For example, one such description might represent an individual node that identifies [“patches of grass near animals” in input images](https://arxiv.org/pdf/2201.11114).
+
+“That work serves as a jumping off point for a bunch of higher-level questions we ask about how these models represent meaning,” he says.
+
+On the other side, his team designs new algorithms for training machine-learning models, and for predicting how specific datasets or examples will affect different aspects of model behavior.
+
+“We don’t have a good scientific theory of what is going to happen when you train a model on a particular dataset. This is a big challenge for the field right now,” he says.
+
+**A changing environment**
+
+The speed of AI advancement presents one of the biggest challenges his lab faces. The field seems to completely change every three to five years, Andreas says, forcing him to stay nimble and ready to learn something new.
+
+That same dilemma carries over into the courses 6.461 and 6.861 (undergraduate and graduate Natural Language Processing), which Andreas co-teaches. He and his fellow instructors must redesign the course each year to keep up with the newest developments.
+
+It’s also challenging to teach the technical pieces of machine learning in an era where every assignment could be completed by a large language model rather than a human pupil.
+
+“I try to impress upon the students that having a really deep foundation in how all this technology works under the hood is the only way they are going to understand it, and will differentiate them in a world where everyone has access to a coding agent,” he says.
+
+With so much change, it is difficult to predict where the field is headed next, Andreas says. He foresees that his group’s work on interpretability will become even more important for making advanced systems like AI agents safe enough to deploy in high-stakes situations.
+
+This will be especially true as researchers design deep-learning models that can aid in scientific discovery. These models will be trained on troves of raw data from research labs that may not be well-understood by scientists yet.
+
+“Figuring out how to enable these models to verbalize all of this hidden knowledge they have about things people have never written about explicitly will be a huge challenge and opportunity for people who work in machine learning,” he says.
+
+In addition to tackling challenges in the lab, Andreas enjoys pushing himself as a hiker and backpacker. He has loved spending time in the outdoors since his childhood in California and goes on at least one or two backpacking trips each summer.
+
+He and a colleague in the Department of Mathematics are working their way across all the 4,000-foot peaks in the White Mountains of New Hampshire, making slow but steady progress.
+
+And now that he has earned tenure, Andreas is looking forward to getting back into an old hobby — singing in a chamber choir. He’s always enjoyed music and became enamored with chapel choirs and bell ringing during his time at Cambridge University.

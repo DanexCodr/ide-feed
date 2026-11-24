@@ -1,49 +1,51 @@
-A region of the brain called the striatum is critical for many cognitive and motor functions, including decision-making, control of movement, habit formation, and processing of reward. It also plays a role in addiction and is significantly affected by Huntington’s disease, schizophrenia, and other disorders.
+Self-driving cars are often controlled by deep learning models that sometimes fail in unexpected situations. For instance, the car might inexplicably brake and block the path of an oncoming emergency vehicle. A human driver or passenger may need to react rapidly to prevent a collision.
 
-In work that could help scientists devise new treatments for those diseases, MIT researchers have generated a new atlas of the neurons found within the striatum. Using single-cell RNA sequencing and other techniques, they were able to identify 31 subgroups of neurons based on which genes they express.
+To help humans better anticipate a vehicle’s mistakes, researchers from MIT and autonomous vehicle technology company [Motional](https://motional.com/) developed a new method that provides clear explanations of the underlying model’s decisions.
 
-These groups include neurons that are involved in addiction, depression, and schizophrenia. The researchers also discovered why some neurons of the striatum are more vulnerable to Huntington’s disease. All of these results, the researchers say, could help scientists develop new drugs to combat these conditions.
+Usually, the internal reasoning process of a deep learning model is opaque and difficult to understand. But the new method, called the Concept-Wrapper Network (CW-Net), translates that reasoning process into concepts that faithfully describe the autonomous vehicle’s decisions without altering its driving performance.
 
-“We see this as the foundation that will allow more studies in our Huntington’s disease and opioid use disorder projects. We needed a roadmap of what is there,” says Myriam Heiman, the Picower Professor of Neuroscience and director of MIT’s Picower Institute for Learning and Memory.
+CW-Net explains the decisions of machine learning-based planners using understandable concepts, like “approaching stopped vehicle” or “close to cyclist.” These explanations can correct misconceptions drivers and passengers have about vehicle behavior and improve their situational awareness.
 
-Heiman; Manolis Kellis, a professor of computer science in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and a member of the Broad Institute of MIT and Harvard; and Dana Gabuzda, a principal investigator at Dana-Farber Cancer Institute and a professor of neurology at Brigham and Women’s Hospital and Harvard Medical School, are the senior authors of the study, which appears today in *Cell*. MIT postdoc Raleigh Linville and MIT graduate student Benjamin James are the paper’s lead authors.
+In road tests on a private track, CW-Net explanations helped safety drivers more accurately predict vehicle behavior; a larger simulation study with nonexpert users yielded similar results. These experiments show how CW-Net can provide important feedback for engineers as they troubleshoot in-vehicle artificial intelligence systems. In the longer term, this technique could boost the safety and transparency of autonomous vehicles, while building appropriate trust in drivers and passengers.
 
-**Mapping the striatum**
+“This work shows how explanations are supportive to the human’s mental model and understanding of the behavior of a system, and how it could be used in engineering and development to improve the technology,” says Julie Shah, an MIT professor of aeronautics and astronautics, director of the Interactive Robotics Group in the Computer Science and Artificial Intelligence Laboratory (CSAIL), and co-senior author of the [paper on CW-Net](https://www.nature.com/articles/s41586-026-10950-5). “Unless we are building these technologies in a way that we can rely on and predict their behavior, then it is a shaky and unsafe foundation for their use.”
 
-The striatum, located deep within the brain, receives diverse inputs from the cortex, midbrain, hippocampus, and other regions, which it uses to coordinate planning, movement, and decision-making, as well as processing reward. In this study, the researchers focused on the most populous cell type in the striatum, a type of inhibitory neuron called the medium spiny neuron, which responds to dopamine.
+She is joined on the paper by lead author Eoin Kenny, a former MIT postdoc who is now a senior AI researcher at J.P. Morgan Chase; co-senior author Momchil Tomov, a staff research scientist at Motional; as well as Motional team members Akshay Dharmavaram, Sang Uk Lee, Tung Phan-Minh, Shreyas Rajesh, Yunqing Hu, and [Laura Major, president and CEO of Motional](https://motional.com/laura-major). The research [appears today in *Nature*](https://www.nature.com/articles/s41586-026-10950-5).
 
-Most of these medium spiny neurons belong to either the direct pathway, which helps to promote movement, or the indirect pathway, which suppresses unwanted movements. These pathways are distinguishable by what type of dopamine receptor they express — dopamine receptor 1 (D1) or dopamine receptor 2 (D2).
+**Faithful explanations**
 
-Beyond these two divisions, scientists knew that there were many subpopulations performing different roles, especially in the anatomically ventral (lower) regions of the striatum. However, it has been difficult to generate a consensus on how to classify these cells, in part because prior studies focused on specific subregions, meaning that overarching principles of striatal cellular organization were lacking.
+Machine-learning-based planners act as the “brain” of a self-driving car. These powerful deep-learning architectures process data from the vehicle’s cameras and lidar sensors, generate a high-level summary of the vehicle’s environment, decide what the car should do next, and output a trajectory for it to follow.
 
-To overcome that challenge, the researchers worked closely with brain banks in the United States and Canada to collect postmortem striatal samples representing diverse anatomical regions.
+The planners are usually black-box models, which means their internal decision-making process is so complex it is difficult to understand. This can leave scientists and safety drivers in the dark about why an autonomous vehicle made an unexpected decision, like phantom braking.
 
-Then, they used three different techniques to analyze the samples, including single-cell RNA sequencing — a method that can measure RNA molecules within individual cells to reveal which genes are being expressed. Two additional techniques — multiplexed fluorescent in situ hybridization and spatial transcriptomics — allowed the researchers to identify spatial principles of organization within the tissue.
+The researchers designed CW-Net to explain a vehicle’s decisions using understandable concepts, while ensuring those explanations accurately reflect the true reasons behind its behavior.
 
-Using these techniques, the researchers were able to identify 31 different subpopulations of neurons, including nine types of medium spiny neurons. Among their medium spiny neuron types are two “outlier” populations that appear to play important roles in schizophrenia, substance use disorder, and depression.
+“Especially in high-stakes settings like self-driving cars, it’s important that the explanations are not potentially misleading. Because CW-Net is causally faithful in how it makes decisions, that provides certain guarantees around the explanations,” Kenny says.
 
-One of those populations, known as D1 outliers, showed high expression of genes involved in addiction and substance use disorder, especially genes related to opioid response. Another population, called D2 outliers, showed high expression of genes that respond to antidepressants. And, both populations appeared to respond strongly to clozapine, an antipsychotic drug used to treat schizophrenia.
+CW-Net is a “concept classifier,” an AI algorithm that has been trained to predict the high-level concepts that exist within input data. The researchers plug the CW-Net module into the middle of an autonomous vehicle’s existing machine-learning planner architecture.
 
-Clozapine is among the most effective antipsychotics available, but it’s not widely used in the United States because it can cause a fatal blood disorder in a small percentage of patients. Now that researchers know which cells the drug acts on, they may be able to design more targeted therapeutics to overcome psychosis, but without the harmful side effects, Heiman says.
+It translates the model’s internal reasoning process into understandable concepts, like “approaching stopped vehicle” or “close to cyclist.” Then it forces the final piece of the planning model architecture to use those concepts when it decides what the vehicle should do next. In this way, CW-Net ensures the concepts faithfully explain the vehicle’s actions.
 
-**Huntington’s vulnerability**
+At the same time, CW-Net uses the concepts it classified to generate clear explanations that are output along with the vehicle trajectory, in real-time.
 
-Another key finding of the paper helps to shed light on why the dorsal (upper) part of the striatum is more vulnerable to Huntington’s disease. The disease is caused by an inherited version of the huntingtin gene that carries too many repetitive DNA segments, called CAG repeats.
+“Instead of just wondering why the car stopped, having real-time data provides feedback that lets you test the system during deployment. You could also give that data to an engineer to potentially improve the system,” Kenny says.
 
-The researchers found that dorsal populations of medium spiny neurons express higher levels of the genes MSH2 and MSH3, which play a role in increasing the number of CAG repeats found in the huntingtin gene. As more of those repeats accumulate, the mutated version of the huntingtin protein becomes more harmful to cells.
+The researchers trained CW-Net to predict concepts using a dataset of 130 million examples of scenes from self-driving cars, with multiple labeled concepts in each scene. Using such a large, labeled dataset enables it to identify concepts accurately in a wide range of settings.
 
-The researchers also found that a rare population of medium spiny neurons that forms island-like structures in the ventral striatum was more resistant to the accumulation of CAG repeats. Further study of this class of cells might help researchers learn how to induce other medium spiny neurons to become more resistant to the disease, Heiman says.
+They also designed CW-Net to mimic the driving decisions of machine-learning-based planners, so the module would not negatively impact vehicle performance.
 
-“Looking at the genes that these neurons express or don’t express might give us some clues as to how to make other medium spiny neurons resilient like them,” she says.
+In the end, CW-Net generates accurate, understandable explanations without altering the original deep learning model.
 
-**Insights into substance use disorders**
+**Improving situational awareness**
 
-The researchers also compared their findings from human tissue samples to samples from mice and found several differences, especially in the expression of genes related to drug response and substance use disorders. One such gene, which encodes the mu opioid receptor (OPRM1), is highly expressed in the human D1 outlier population, but not in the corresponding population of neurons in mice.
+To test CW-Net, the researchers deployed the module on a real autonomous driving test vehicle (a Motional robotaxi) on a private track with a safety driver. They found that CW-Net helped the safety driver better predict how the vehicle would behave in surprising situations.
 
-This means that standard mouse models may not fully capture the biology of opioid responses, and that engineering mice to express this receptor in a similar manner to humans could make those models significantly more accurate.
+For instance, the vehicle consistently stopped when it approached a cyclist, and the safety driver assumed it did so because it detected that cyclist. But CW-Net explanations revealed that the model wasn’t properly configured to detect the cyclist and chose a trajectory that would have caused a collision. Instead, it stopped because its emergency braking procedure kicked in when it got too close.
 
-“Some of the diversity we’re seeing in the human ventral striatum is species-specific and has implications for modeling substance use disorder in rodents,” Heiman says. “Now that we understand better the species differences, we can use the rodent models for specific questions that apply for conserved genes, but we could also think about humanizing some models.”
+Armed with this information about the model’s mistake, the safety driver could reduce speed or engage manual driving mode sooner in similar situations. This could also help engineers fix the model to avoid this failure in the future.
 
-The researchers hope that this map, built from tissue contributions by brain donors and their families, and assembled across disciplines and institutions, will provide an important starting point for researchers pursuing new treatments for some of the most difficult-to-treat brain disorders.
+In larger online simulation studies using real driving situations captured on the roads of Las Vegas, the researchers saw similar results. CW-Net explanations significantly improved participants’ abilities to predict how an autonomous vehicle will behave.
 
-The research was funded, in part, by the National Institutes of Health, the G. Harold and Leila Y. Mathers Charitable Foundation, the Freedom Together Foundation, the Natalia Mental Health Foundation, the Biswas Family Foundation, and the Milken Institute.
+In the future, the researchers could extend CW-Net so the module can cover more concepts and explore different training and design techniques that could boost performance and improve interpretability.
+
+“Our study shows how crucial interpretability can be to these high-stakes environments, and how it should be on the mind of people as they are making AI in the future, for self-driving cars or other safety-critical environments,” Kenny says.

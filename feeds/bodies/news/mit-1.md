@@ -1,91 +1,45 @@
-When deploying deep learning models in high-stakes scenarios, researchers would like to understand how they work. Today, this requires unraveling an enormously complex network of internal processing nodes to understand what the model knows and how it will likely behave in practice.
+*Humans experience and interact with the world through sensory information. This could mean learning correspondences between the sound of bird chirps and the word “robin,” or being able to visually identify and follow your friend “Sarah” in a crowd of people. In many cases, people are able to draw on their latent “multimodal” knowledge — information across multiple data types, from audio to video to text or spoken word — to perform these tasks without many, or sometimes even any, examples.*
 
-Jacob Andreas would rather have the models explain themselves.
+*Multimodal foundation models of artificial intelligence are increasingly gaining capabilities that mimic this. However, their apparent multimodal fluency often belies their actual understanding. An MIT-IBM Computing Research Lab team, co-led by Jim Glass, senior research scientist in the MIT Computer Science and Artificial Intelligence Laboratory, has been investigating critical failures of state-of-the-art multimodal models and developing benchmarks and data-efficient methods to overcome these performance gaps with limited supervision. He speaks about this work in the following interview.*
 
-The newly tenured associate professor develops techniques that enable artificial intelligence models to communicate accurately about what they learned from their training data, in language humans can understand.
+**Q: **What were your goals for this project, and why would you opt to address AI models’ weaknesses over scaling to larger models?**   **
 
-“Rather than needing to use all these external tools to try and understand what is going on under the hood, maybe we can train models to talk about themselves in a way that is accurate,” says Andreas, an associate professor in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL).
+**A:** This project has been going on for many years now, with roughly the same MIT-IBM team of speech and vision experts. We've wanted to explore the relationship between perception (things that you see and hear) and language, largely speaking: We have all of this absorbed knowledge and language skills, text-based, in the form of a large language model, so we wanted to know how you can relate them without using a whole bunch of annotated training data. Sometimes the models have seen certain phenomena, a latent representation of something that they have internally, but maybe due to subsequent fine-tuning or something, it disappears, so, developing techniques to try to make this capability re-emerge is a useful thing.
 
-By studying how machines come to understand language, Andreas and his group work toward building intelligent systems that can learn about the world from human guidance and communicate effectively with human collaborators. They develop methods to make the training process more natural and efficient, so AI models learn in a way that is more like human learning.
+As you study these publicly available models, you can see weaknesses even in big ones, so I think it's important to try to address these limitations. If you had an unlimited budget, you could go out and create the annotations that you need, but it's also good to be able to try to get these models to learn more on their own. We’ve done that by creating novel benchmarks that we can evaluate against, then developing techniques that perform better on these benchmarks, and getting these models to learn on their own. Throughout our research collaboration — and this has very much been a strong collaboration between MIT and IBM — we have continued to release public benchmarks for people to use, and that's a lasting artifact.
 
-Ultimately, he and his group want to help people design more accurate and robust deep-learning models that are better suited for their intended application.
+I think the overriding themes are multimodalities with language models, trying to address the shortcomings of these models, and trying to develop techniques that do not require a lot of annotated data to complete tasks better.
 
-“We used to debug systems just by looking at their parameters and figuring out whether they make sense or not. Now, we need ‘mind-reading tools’ that can take this really complicated neural computation and translate it for us because it is just not in a language that we, as humans, know how to speak,” he says.
+**Q: **Can you walk us through how the project has evolved?
 
-**A love of language**
+**A:** When we first started this project, we were trying to build models that could learn correspondences automatically, not telling the machine anything more than, “This audio caption goes with this picture,” sort of like reading a picture book to a child who's learning language. We would just show it these matching examples, and we'd show it mismatching examples. They could learn that the sequence of sounds that says “lighthouse” corresponds to a picture of a lighthouse, without any text being involved.
 
-Andreas’ fascination with language blossomed at a young age. As a child growing up in the San Francisco Bay Area, he was a voracious reader of any book he could get his hands on.
+Moving beyond speech was to include general audio, and then we started looking at video instead of still images. We would train the model, showing it matching video sequences with the corresponding audio stream and then mismatching ones, and make it reconstruct them. We would also mask some of the images or the audio, and have the model reconstruct it. The model would learn strong relationships; then, far beyond speech, it would learn what parrots sound like, or electric guitars versus acoustic guitars, for example.
 
-One such book, passed along to him by a family friend, contained a pivotal scene where the main character hacked into a computer system to save the day.
+Then, when these large language models started coming out — and this was in the early days, before it had been done by the big companies — we started to learn correspondences between audio and language. Since that time, these large multimodal models have become available, and we've started looking at what some of the limitations of these models are, and are trying to improve upon them with these more or less supervised techniques.
 
-That piqued his interest in computers. A few years later, his father brought home a simple BASIC Engine that Andreas could run on their home computer, and he started immersing himself in the world of computer programming.
+**Q: **What would you say are some recent highlights of your work?
 
-Andreas chose to major in computer science as an undergraduate at Columbia University but wasn’t sure if he wanted to pursue a career as a researcher, as a software engineer, or at a startup.
+**A:** Our [IPLoc research](https://arxiv.org/pdf/2411.13317v2) was looking at the fact that these state-of-the-art models, like GPT-40, can't localize specific objects, given just a few-shot examples. We came up with this technique where we would train it with a pseudonym substitution. There's an example there where we replaced “airplane” with “Elizabeth.” It forces the model to not fall back on things that it had previously learned about and pay more attention to the visual context.
 
-His friends signed up for research projects in faculty labs, so Andreas figured he would try that, too.
+Then, we had an audio-based paper, [OmniR1](https://sls.csail.mit.edu/archives/root/publications/2025/ARouditchenko_ASRU-2025.pdf), that was looking at audio-large language models, so these are models that can listen to something and talk about them. One of the disturbing things we found is some of these benchmarks are [multiple-choice answers](https://proceedings.iclr.cc/paper_files/paper/2026/file/d6c01b025cad37d5c8bab4ba18846c02-Paper-Conference.pdf). A lot of times, these models aren't really listening to the sound, but they're almost gaming the question by looking at the answer. What animal is roaring in this audio — like a chipmunk, a lion, an alligator, and a chickadee, or something? It's not even really paying attention to the audio, [but] just going, “Oh, lion.” Part of the reason people do that is that it’s simple to evaluate, whereas if you asked for a text response, you’d somehow have to grade whether it’s accurate. Do you get humans to evaluate it, which can be expensive and time-consuming, or do you use some other language model to be the judge that can have its own set of issues as well? One way to address that is to evaluate these models on a variety of different kinds of benchmarks.
 
-“I just blast emailed everyone in the computer science department who was working on anything vaguely AI-related, and the natural language processing faculty got back to me first. That is how I wound up in the field where I am now,” he says.
+We realized you could feed random noise, and they were still doing quite well, which shows that they're just paying attention to the question. So, we tried to develop some methods to have it pay more attention to the audio and minimize this behavior.
 
-Working in the lab of Michael Collins, the Vikram S. Pandit Professor of Computer Science at Columbia University, Andreas completed an undergraduate thesis project on machine translation. His project involved adapting existing statistical techniques for representing the meaning of language into more powerful AI systems that could translate passages of text.
+**Q: **Given resource constraints, what is your approach to adapting these large foundation models, and what blend of AI and algorithmic methods do you use that don't require extensive annotated data?
 
-“I always felt like these deeper questions about how thought works or how to model the world were closer to the surface in language processing problems than in the other tasks that AI people were working on at the time,” he recalls.
+**A:** These days, we can't create one of these very large foundation models ourselves. We don't have the resources to do that, so we're tending to use these available models and trying to adapt them, train them in a weakly supervised way, methods that don't require as much data, like our work on [test-time reinforcement learning](https://openaccess.thecvf.com/content/CVPR2026/papers/Singh_TTRV_Test-Time_Reinforcement_Learning_for_Vision_Language_Models_CVPR_2026_paper.pdf).
 
-**A seismic shift**
+Our project was not monolithic, in the sense that we're not all working on one thing. It's more like a thousand flowers bloom, so there's no one particular way that we're approaching things.
 
-He wanted to keep exploring deep questions, so Andreas enrolled in graduate school at the University of California at Berkeley to pursue a career as an academic researcher.
+**Q: **In the near future, how do you see multimodal research evolving in your MIT-IBM research team?
 
-Before starting his PhD studies, he spent a year earning a master’s degree at Cambridge University in England. In that historic environment, he was inspired to contemplate the nature of language learning as he worked on computational translation problems.
+**A:** Over the years, we probably produced two dozen or so significant collaborative papers, and during this work, it was amazing to me that the machines could learn these correspondences without being told anything. No one had ever shown that machines could do it before we did that. Some of our early work combining audio with large language models was fun, too: seeing the model talk about what it heard and then having a conversation with it. Now, we are starting to take this for granted, but at the time, it was fun to see.
 
-Those studies fueled his research when he joined the lab of Berkeley professor of computer science Dan Klein.
+Moving forward, for the coming year, with our MIT-IBM collaboration, we're going to switch gears a little bit and focus more on what's known as full-duplex spoken dialogue systems. These are models that are listening while they’re talking, so it’s more like how humans operate, and this is quite different from what we’ve been doing up until now, which is joint audio-visual work, which we will also continue.
 
-Andreas began his studies at the time when neural networks were starting to take off. The field of natural language processing was making a seismic shift from statistical methods to this new world of deep learning.
+Now, we’ll be focusing on the speech side of things. These full-duplex models have suddenly become an interesting thing to look at, because they would move you away from the rigid turn-taking approach that is used right now when you're talking to some of these models. Ultimately, I think they will be more natural to interact with.
 
-Statistical methods utilize transparent, mathematical formulas to analyze text, while deep learning techniques use opaque algorithms to automatically learn complex meanings from massive amounts of text data.
+These full-duplex models are just starting to emerge, and some of the ones that are publicly available aren't as good as the big, large language models. They can handle some of these low-level communication skills, but they're still missing some things, like the concept of time, or knowledge depth. So, we're working on trying to address some of these issues.
 
-“It was fun to be there as we made this transition to the modern toolkit, and learning and inventing all of that stuff when it was still new,” Andreas says.
-
-He began collaborating with scientists in computer vision labs to tackle increasingly complex questions about language learning. Together, they designed AI systems that excelled at generating natural language by teaching those systems to “see” and understand the world around them.
-
-“This was all super-exciting because there really hadn’t been a common set of tools for working with both language and vision data. Then, all of a sudden, neural networks gave us this common language,” he recalls.
-
-He completed a thesis project on the use of neural module networks, which are small fragments of neural networks that perform specific tasks, like localizing objects or logical reasoning, in a larger AI system. But it was the more speculative projects he tackled alongside his thesis, like interpretability and creating natural language descriptions of an AI model’s internal states, that would drive the focus of his group at MIT.
-
-**Faculty focus**
-
-After spending a year at the startup Semantic Machines (which spun out of his lab at Berkeley), Andreas joined the MIT faculty in 2019.
-
-“It felt like this was a fantastic opportunity to be in the homeland of AI research and collaborate with all these amazing, established people, but also do something new and figure out what the modern era in machine learning was going to look like,” he says.
-
-His group focuses on two main areas. First, they are studying the science of large language models to understand the algorithms these models deploy as they learn and process information.
-
-The tools they develop help scientists and researchers better predict how a trained model will behave in the real world. For instance, one family of techniques they developed trains large language models to explain what is going on inside other neural networks using language a human could understand.
-
-These techniques can assign a natural language description to every information-processing node in a massive neural network. For example, one such description might represent an individual node that identifies [“patches of grass near animals” in input images](https://arxiv.org/pdf/2201.11114).
-
-“That work serves as a jumping off point for a bunch of higher-level questions we ask about how these models represent meaning,” he says.
-
-On the other side, his team designs new algorithms for training machine-learning models, and for predicting how specific datasets or examples will affect different aspects of model behavior.
-
-“We don’t have a good scientific theory of what is going to happen when you train a model on a particular dataset. This is a big challenge for the field right now,” he says.
-
-**A changing environment**
-
-The speed of AI advancement presents one of the biggest challenges his lab faces. The field seems to completely change every three to five years, Andreas says, forcing him to stay nimble and ready to learn something new.
-
-That same dilemma carries over into the courses 6.461 and 6.861 (undergraduate and graduate Natural Language Processing), which Andreas co-teaches. He and his fellow instructors must redesign the course each year to keep up with the newest developments.
-
-It’s also challenging to teach the technical pieces of machine learning in an era where every assignment could be completed by a large language model rather than a human pupil.
-
-“I try to impress upon the students that having a really deep foundation in how all this technology works under the hood is the only way they are going to understand it, and will differentiate them in a world where everyone has access to a coding agent,” he says.
-
-With so much change, it is difficult to predict where the field is headed next, Andreas says. He foresees that his group’s work on interpretability will become even more important for making advanced systems like AI agents safe enough to deploy in high-stakes situations.
-
-This will be especially true as researchers design deep-learning models that can aid in scientific discovery. These models will be trained on troves of raw data from research labs that may not be well-understood by scientists yet.
-
-“Figuring out how to enable these models to verbalize all of this hidden knowledge they have about things people have never written about explicitly will be a huge challenge and opportunity for people who work in machine learning,” he says.
-
-In addition to tackling challenges in the lab, Andreas enjoys pushing himself as a hiker and backpacker. He has loved spending time in the outdoors since his childhood in California and goes on at least one or two backpacking trips each summer.
-
-He and a colleague in the Department of Mathematics are working their way across all the 4,000-foot peaks in the White Mountains of New Hampshire, making slow but steady progress.
-
-And now that he has earned tenure, Andreas is looking forward to getting back into an old hobby — singing in a chamber choir. He’s always enjoyed music and became enamored with chapel choirs and bell ringing during his time at Cambridge University.
+*This research has been conducted in coordination with the MIT-IBM Computing Research Lab teams of *[*Rogerio Feris*](https://research.ibm.com/people/rogerio-feris)*, *[*Brian Kingsbury*](https://research.ibm.com/people/brian-kingsbury)*, and *[*Samuel Thomas*](https://research.ibm.com/people/samuel-thomas)* of IBM Research, and *[*Hilde Kuehne*](https://hildekuehne.github.io/about.html)* of the University of Tuebingen, who is an MIT-IBM affiliated researche*r.
