@@ -1,15 +1,19 @@
-Hello friends! Ladybird is now in alpha. You can [download it](https://ladybird.org/download/) for macOS and Linux.
+Firefox on iPhone is growing fast across the world. This is especially true in the EU since 2024, when the EU Digital Markets Act (DMA) started requiring Apple to let people choose their default browser; millions have picked Firefox, and daily use on iOS has doubled. People want to choose the browser on their phone.
 
-I’ve been looking forward to writing this post for a long time. :^)
+But there remains an important limitation to what is available on iPhones: Apple forces all browsers on iOS to be built on Apple’s own browser engine.
 
-Ladybird is a browser with a new engine. The engine is our own, built from the ground up, and not a fork. The browser around it is modest, but functional.
+This has meant that companies like Mozilla cannot easily bring the full range of Firefox features and functionality to iPhone users because many of these are built within our [browser engine](https://blog.mozilla.org/netpolicy/2026/03/23/competition-innovation-and-the-future-of-the-web/), Gecko. iPhones and iPads are unique in having this restriction. On all other major operating systems, including Apple’s macOS, people can access the Gecko-powered version of Firefox.
 
-This is an alpha, so some websites won’t work, and it will crash sometimes. When that happens, tell us! You can report a broken site from inside the browser. After a crash, you can read the crash report and decide whether to send it. Our [privacy policy](https://ladybird.org/privacy/) has the details.
+As a result of the DMA, Apple began allowing alternative browser engines on iOS in the EU. It published a set of conditions that companies like Mozilla must comply with to bring their own browser engine. At the time we said Apple’s rules made it “as painful as possible” for alternatives like Gecko. In the meantime, Japan also introduced new rules requiring alternative browser engines on iOS. Apple applied very similar conditions in Japan to those in the EU.
 
-We want security nerds to hack it! A new browser gets hacked, over and over, and that’s part of the process, so we make no promises about security today. When you pwn us, please [tell us how](https://github.com/LadybirdBrowser/ladybird/blob/master/SECURITY.md) so we can harden Ladybird!
+Nearly three years since Apple introduced these conditions in the EU and almost a year since Japan, not one developer has been able to launch a non-WebKit browser on iOS. The reason is simple: Apple’s conditions remain unworkable. The real test of any rule is whether it delivers the change it was meant to achieve in practice. Compliance on paper alone falls short of that test.
 
-The alpha is a rolling channel, and we’ll be pushing out automatic updates regularly. This is the part I’m most excited about. Ladybird improves quickly, and until now you had to build it from source to see that.
+Since the DMA came into effect we’ve been working behind the scenes to test and improve Apple’s conditions so that we can bring Gecko to iOS users. Those efforts have so far largely failed.
 
-If you build websites, try yours in Ladybird and tell us what breaks. It supports WebDriver for automated testing, as well as the Firefox DevTools protocol.
+One of the conditions requires us not to disclose non-public information related to the project, but here’s an example of what we are up against: to use Gecko, we can’t simply update the Firefox app people already use and love. We’d have to build a whole separate app, a second Firefox. Then we’d have to ask every Firefox user to download it, move their bookmarks, passwords and history across, and manually switch over, step by confusing step.
 
-Thank you to [our sponsors](https://ladybird.org/#sponsors) and donors, and to everyone who has tested, reported bugs, and written code over the years. There’s still a mountain of work ahead of us, but I’m very happy that you can finally try Ladybird for yourself!
+That’s a lot to ask of people who already made their choice. A significant proportion of people would understandably give up, including many who picked Firefox from the EU’s choice screen.
+
+The conditions Apple imposes, including a level of user friction Apple would never accept for its own apps, mean that the open door feels more like a trap door.
+
+Firefox users on iPhone chose an independent browser. They should get everything that comes with it, including Gecko, the last major browser engine not developed by a big tech company. We’ll keep pushing for a real level playing field, not an opening that drops independent browsers through the floor.

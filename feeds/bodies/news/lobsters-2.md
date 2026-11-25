@@ -1,231 +1,82 @@
-I read Koukyosyumei's article "[著名なRust製OSSをLean 4で形式検証してみたら、めちゃめちゃバグが見つかった話](https://zenn.dev/koukyosyumei/articles/31c8fcf4da45b7)" (in Japanese; the title means "I formally verified well-known Rust OSS with Lean 4 and found a lot of bugs").
-The author ported well-known Rust projects into a form they could prove in Lean 4, and where a proof failed, they found a bug in the original code.
+On November 23, 2026, an unauthorized third party exploited a vulnerability in hex.pm that let them run commands on our web servers. We blocked the traffic and deployed a fix within 20 minutes. Shortly afterwards we received a report of this exact vulnerability.
 
-Many people have used Clojure's persistent data structures since around 1.0, so I expected no bugs to remain.
-Still, I wanted to see whether Lean would find something there too.
+We found no evidence of unauthorized package modifications, or database changes, or that the attacker maintained access to our systems. However, because database reads are not logged, we cannot rule out that the attacker accessed data stored in the database, including email addresses, password hashes, API key hashes, 2FA secrets, sessions, and audit logs.
 
-[hirosassa/lean-verify](https://github.com/hirosassa/lean-verify) describes a procedure for modeling a small function in Lean 4 and checking it for all inputs, so I applied it to the part of Clojure's core written in Java.
+Because email addresses may have been exposed, be careful with emails that claim to come from Hex. Please double-check that the links they contain lead to `hex.pm`. Please forward suspicious emails to [security@hex.pm](mailto:security@hex.pm).
 
-I modeled integer and bit arithmetic in Lean and searched for counterexamples.
-I checked the collections with differential testing against the `java.util` collections, and for Java interop I compared the same call with and without a type hint.
+We checked every file written to package storage during the incident against our database and found nothing unexpected. Reads of private packages in that period came from our own servers and coincide with releases the same organizations published at the time. A read made from a compromised server would look like one of ours, so we can't fully rule one out, and reads of private documentation aren't logged. We will contact affected organizations directly.
 
-I found 17 bugs that I could not find in Clojure's JIRA or on ask.clojure.org.
-They include `reduce` on `vector-of`, the hash collision node of the HAMT, and calls to functional interfaces without a type hint.
+The attacker's commands could read the credentials our servers use, so we replaced them: the storage, CDN, email and database credentials, and the keys that sign sessions and access tokens. This logged everyone out of hex.pm and Hex clients. We're building a new registry signing system that supports key rotation, with new Hex client releases in the coming days. Until then, don't trust third-party mirrors and fetch packages only from repo.hex.pm. We already deployed fixes for the vulnerability and are working on further hardening fixes.
 
-The HAMT itself showed no mismatch in 3 million operations of differential testing, and the vector tree showed none around its boundaries.
-The bugs sat in separate code outside the trees, and in places where two mechanisms meet, such as `=` and hashing.
+1. Change your password at hex.pm.
+2. Reset your 2FA at hex.pm/dashboard/security: under "Authenticator App", choose "Setup New App" and verify a code from the new entry. You get a new secret and new recovery codes, so store the new codes. This works when an organization requires 2FA, where disabling it is refused.
+3. Update your Hex client when the release with the new signing system is out in the coming days. Until then, use only repo.hex.pm, not mirrors. To update, run mix local.hex --force, and update rebar3 or Gleam if you use them.
 
-I used Clojure 1.12.7, released on 2026-11-18, and JDK 21.
-The links to the source point to the [clojure-1.12.7](https://github.com/clojure/clojure/tree/clojure-1.12.7) tag.
+All times are in UTC.
 
-## How I checked
+**November 23, 2026**
 
-The lean-verify procedure picks one function and models it as a Lean definition.
-You write a property that compares it with a naive specification computed at a wider width, and `bv_decide` searches for a counterexample.
+- 18:16 - 18:29: The attacker sent 69 malicious requests to hex.pm, six of our web servers were affected. Our error tracker Sentry recorded its first error at 18:16:00 and recorded an error for each request.
+- 18:27: We added a firewall rule to block the attacker's traffic, which took full effect between 18:30 and 18:33.
+- 18:30 - 18:31: All hex.pm servers were replaced with a patched build that rejects these payloads.
+- 18:33 - 18:38: All further requests from the attacking address were denied.
+- 18:35: We began investigating production logs and the database.
+- 18:49: We deactivated the AWS access key the affected servers used, after creating a replacement at 18:47.
+- 19:07: We received an email with a security report that described the same vulnerability.
+- 20:21: Most infrastructure credentials were rotated. The database password followed on November 24.
+- 22:58: We reported a personal data breach to IMY, the Swedish data protection authority.
+- 23:05: We reported the incident to CISA, the US Cybersecurity and Infrastructure Security Agency, which confirmed receipt at 23:43.
+- 23:26: We submitted an early warning to ENISA, the EU Agency for Cybersecurity.
 
-If you model Java's `long` and `int` as `BitVec 64` and `BitVec 32`, the wraparound of addition and multiplication maps onto `BitVec` operations.
-So do the rounding of `/` toward zero and the sign of `%`.
+**November 24, 2026**
 
-When Lean found a counterexample, I turned the value into a Clojure input and reproduced it in the original code.
-I then modeled the fixed code in Lean and proved the same property.
-Lean can only take small functions that reduce to integer and bit arithmetic, so I checked the large persistent data structures with differential testing.
+- By 10:42: We had rotated every credential the attacker could have read, including the database password, except the registry signing key and a few low-impact secrets.
+- 13:48: We published CVE-2026-129514.
 
-Each test applies the same random sequence of operations to `PersistentHashMap` and to `java.util.HashMap` and compares the results.
-For the HAMT, the keys mix partial collisions at each 5-bit level with fully identical hashes, and I ran 1,500 operations for each of 2,000 seeds.
+### The vulnerability
 
-For vectors, I compared against `ArrayList` around 32, 1056, 32800, and 1048608, where the tree gains a level.
-The operations were `conj`, `pop`, `assoc`, and their transient versions.
+The vulnerability in Hex.pm is tracked as [CVE-2026-129514](https://cna.erlef.org/cves/CVE-2026-129514.html).
 
-I checked whether anyone had reported each bug before.
-I searched Clojure's JIRA through its REST API and ask.clojure.org through web search and the site's own search, and found no matching report.
+hex.pm decoded unauthenticated request bodies in Erlang term format with `Plug.Crypto.non_executable_binary_to_term/2` which blocks most potentially harmful terms, but allows struct values through. These decoded struct values, when chained together correctly, turned into a remote command execution (RCE). This is the detailed playbook of the attack:
 
-## reduce on vector-of never finishes
+1. The entry point. A custom parser in the endpoint handled the application/vnd.hex+erlang content type using Plug.Crypto.non_executable_binary_to_term/2 with [:safe]. Because the endpoint runs this parser before routing and authentication, any unauthenticated POST with that content type reached it on every route.
+2. Fake structs got through. The decoder rejected functions and new atoms, but it never checked maps. An Elixir struct is just a map with a __struct__ key naming a module. That meant the attacker could send a value the runtime treats as a real struct, with every field set to whatever they chose.
+3. Converting the structs into an error. The decoded struct became the request's body parameters. Plug.MethodOverride then read body_params["_method"], which on a struct calls fetch/2 on the struct's module. That function didn't exist, so the request raised an UndefinedFunctionError with the attacker's struct in the stack trace.
+4. Error reporting runs inspect. Sentry, Bandit's error logging, and the JSON log formatter call inspect on request data and stack-frame arguments. Inspect is a protocol, so for a struct it runs the implementation of the module named in __struct__, which let the attacker choose which code ran next. They chose Ecto.Query.DynamicExpr.
+5. The Ecto hop. The Inspect implementation for Ecto.Query.DynamicExpr enumerated the binding field without checking that it was a list. Enumeration is itself a protocol call, so a struct placed in that field is dispatched to another implementation.
+6. The DBConnection hop. The struct placed in binding was a DBConnection.Stream. Its Enumerable implementation calls DBConnection.reduce/3, which then calls declare/4. Encoding the query failed before any connection was checked out, but the error path still ran the stream's :log option. That option was a {module, function, args} tuple taken from the request, and db_connection applied it with the log entry prepended.
+7. Command execution. An attacker-supplied {module, function, args} tuple that the server runs gives access to functions in loaded libraries and the standard library, which led to OS command execution as the BEAM's user.
 
-`vector-of` is a vector that stores its values in primitive arrays.
-Clojure implements it in `gvec.clj`, written in Clojure and separate from `PersistentVector`.
-If you `drop` from one and then `reduce` it, the call never returns once the vector has 65505 or more elements.
+While investigating, we found the same class of vulnerability in Ash: its keyset pagination accepted crafted structs in client-supplied cursors, which could lead to command execution or SQL injection. We reported it and the Ash team released a fix in ash 3.38.0 on November 24. It is tracked as [CVE-2026-124283](https://cna.erlef.org/cves/CVE-2026-124283.html).
 
-```
-(reduce + (drop 1 (into (vector-of :long) (range 65504))))
-;; => 2145354256
-(reduce + (drop 1 (into (vector-of :long) (range 65505))))
-;; => never returns
-(reduce + (drop 1 (vec (range 65505))))
-;; => 2145419760
-```
+### The fix
 
-The cause is [line 79 of gvec.clj](https://github.com/clojure/clojure/blob/clojure-1.12.7/src/clj/clojure/gvec.clj#L79), where the seq's `reduce` computes the start of the next 32-element chunk.
+**hexpm** commit [379b0a2](https://github.com/hexpm/hexpm/commit/379b0a29bcc95164249f38ad7d772a37a8ff9533) makes the decoder reject any term containing a map with a `__struct__` key, returning a 400. Because the check sits in the one decoder used for this format, it covers every route that accepts it. That closes the entry point: an attacker can no longer get a fake struct into the request params. Every hex.pm server was running the patched build by 18:31 UTC.
 
-```
-(recur result (bit-and 0xffe0 (+ aidx 32)))
-```
+We are working on hardening fixes for these libraries which should prevent such an attack in the future on multiple levels, not just one decoder check in the request pipeline:
 
-The code uses `0xffe0` to clear the low 5 bits and round down to a multiple of 32, but the mask also clears bit 16 and everything above it.
-With 65505 elements, the last chunk starts at index 65504.
-After that chunk, the start of the next one should be 65536, but the mask turns it into 0, so `reduce` goes back to the start and reads the vector again and again.
+1. plug_crypto: Document that the decoder is only safe for authenticated payloads, and add an option to reject structs.
+2. plug: Refuse struct values as body params.
+3. ecto: Check that the binding is a list before enumerating it in Inspect.
+4. db_connection: Don't apply :log callbacks taken from stream structs. Tracked as CVE-2026-133555.
 
-[![img](https://s.conao3.com/img/e4f733-mask.svg)](https://s.conao3.com/img/e4f733-mask.svg)
+Every finding in this post is based on the checks below. Where a check is still running or something can't be verified from our logs, we say so.
 
-The `0xffe0` mask has stayed in place since the [2010 commit](https://github.com/clojure/clojure/commit/5b281880) that added `internal-reduce`.
-In Lean, I wrote the property that from a position `a` that is a multiple of 32, the next chunk starts at `a + 32`.
+- 69 exploit requests, 18:16–18:29 UTC: we reviewed load balancer logs for both attacker addresses from their first request until 19:05. Their first request of any kind was at 18:14:21. The first exploit request arrived at 18:16:00 and the last one to reach a server at 18:29:33. No exploit request from either address succeeded after 18:29:33.
+- Commands ran on six web servers: we matched files created on each server to exploit request timestamps. The first appeared 3 ms after a request at 18:16:46. Six servers were hit because a restart at 18:28 brought up three new servers still on the vulnerable build.
+- Detection: our error tracker recorded the errors raised by the exploit requests between 18:16:00 and 18:29:33 UTC. Our first response on the servers followed at 18:23:55.
+- Firewall block: we checked the firewall change log and denied requests in the load balancer logs. The rule was added at 18:27, took effect between 18:30 and 18:33, and denied every request from 18:33:48 on.
+- Patched build everywhere: we checked the deployment pipeline and listed every server with its creation time and build. All web, worker and job servers were created between 18:30 and 18:31 from the fix. A local reproduction confirmed the old build runs the command and the fixed build rejects the request.
+- No lasting access: we listed running processes on the affected servers before replacing them and found no shells. Cloud audit logs show no new keys, accounts or API calls from the attacker's addresses, and no writes by hex.pm's Kubernetes service accounts.
+- No database writes: we restored a copy of the database from 18:13:59, before the attacker's first request, and compared every row of every table with the live database. Every row added, changed or removed since then is explained by an audit log entry from another address, by our background jobs, or by our own actions during the response. We found no unexpected change to tables, functions, roles or permissions. A row that was changed and then changed back, or one that a later legitimate change overwrote, would not show up in this comparison.
+- No modified packages: all 23 releases published during the incident match a publish or stage entry in our audit log, and no older release changed. Storage writes came only from our own services. All 62 package files written since 18:00 match the checksums in our database, and all 186 registry files written since 18:00 match the database contents. Documentation archives have no stored checksum to compare against.
+- Credentials not used from outside: Access logs, extended to 11,379 log objects and 15,635 records (record times 14:56-20:59): each of the 288 versions and markers listed for 18:00-20:00 has a log record for the same key within 3 seconds (231 hexpm-prod, 33 elixir_ghactions, 24 bob), and every logged write has a listed version. All 6,279 hexpm-prod requests came from the three node IPs. The logs hold no DELETE.OBJECT, no request with a version ID, no ACL or tagging write, no copy and no bucket listing by hexpm-prod.
+- Private packages and docs: CDN logs show no requests from either attacker address to private docs in the last 30 days. Direct reads from cloud storage aren't logged, so we can't fully rule them out.
+- Possible database reads: these can't be ruled out, because database reads, environment variable reads and shell commands aren't logged. Network traffic stayed within normal levels, except one worker server that peaked at 0.47 MB/s against a usual maximum of 0.29 MB/s.
+- Activity since November 19: we reviewed request logs for hex.pm, repo.hex.pm, builds.hex.pm and hexdocs.pm for both attacker addresses. We found repeated downloads of hex.pm's own dependencies which suggests the attacker built a local copy of hex.pm to test against.
+- Present since 2016: the git history of the request decoder shows the safety check was removed on February 23, 2016.
+- API key hashes can't be reversed: we reviewed how hex.pm generates and stores secrets. API keys are 128-bit random values stored as HMAC-SHA256. We consider 128 bits of randomness far beyond the reach of brute force, so we don't see a need to rotate API keys because of the exposed hashes. Passwords are hashed with bcrypt, which slows guessing but doesn't prevent it for a weak password, so we ask you to change yours.
 
-```
-import Std.Tactic.BVDecide
+### Questions
 
-def stepImpl (a : BitVec 64) : BitVec 64 := 0xffe0 &&& (a + 32)
-def stepFix (a : BitVec 64) : BitVec 64 := (~~~0x1f) &&& (a + 32)
-
-theorem impl_ok (a : BitVec 64) (h32 : a &&& 0x1f = 0) (hlt : a < 0x7fffffe0) :
-    stepImpl a = a + 32 := by
-  unfold stepImpl; bv_decide
-theorem fix_ok (a : BitVec 64) (h32 : a &&& 0x1f = 0) (hlt : a < 0x7fffffe0) :
-    stepFix a = a + 32 := by
-  unfold stepFix; bv_decide
-```
-
-`impl_ok` fails with the counterexample `a = 1073741792`, and `#eval stepImpl 65504` returns 0 as well.
-`fix_ok` uses `(bit-not 0x1f)` as the mask, and its proof goes through under the assumption that `a` is a multiple of 32 below `0x7fffffe0`.
-
-## dissoc on a HAMT collision node hides another key
-
-Clojure's hash-map is a HAMT: it splits the key's hash into 5-bit pieces and uses them to walk down the tree.
-Keys whose 32-bit hashes are identical share a `HashCollisionNode` at the bottom of the tree, and the node finds a key among them with `=`.
-
-[HashCollisionNode.without](https://github.com/clojure/clojure/blob/clojure-1.12.7/src/jvm/clojure/lang/PersistentHashMap.java#L964-L971) builds the new node with one key removed.
-It should give the new node its own hash, `this.hash`, but it passes the parameter `hash` instead.
-
-```
-return new HashCollisionNode(null, hash, count - 1, removePair(array, idx/2));
-```
-
-The parameter `hash` is the hash of the key you pass to `dissoc`.
-If you `dissoc` with a key that is `=` to the stored key but has a different hash, the node records the wrong hash.
-
-In Clojure, a vector is `=` to a Java `ArrayList` with the same elements, but the two hash differently.
-[CLJ-1372](https://clojure.atlassian.net/browse/CLJ-1372) tracks this mismatch.
-
-In the example below, I chose `a` and `b` so that both `ArrayList` keys hash to 1003.
-
-```
-(def a (java.util.ArrayList. [0 42]))
-(def b (java.util.ArrayList. [1 11]))
-[(hash a) (hash b) (hash [0 42]) (= a [0 42])]
-;; => [1003 1003 1867155179 true]
-
-(def m3 (-> (hash-map a :A b :B)
-            (dissoc [0 42])
-            (assoc a :A2)))
-[m3 (count m3) (get m3 b)]
-;; => [{[1 11] :B, [0 42] :A2} 2 nil]
-```
-
-When you print `m3`, you can see the key `b`, but `(get m3 b)` returns `nil`.
-After the `dissoc`, the node records 1867155179, the hash of `[0 42]`.
-The next `assoc` then concludes that `a`, with hash 1003, does not collide with the node, and splits the two into separate branches.
-
-A lookup of `b` follows the branch for 1003 and finds only `a` there, so it never reaches `b`.
-In this example the collision node sits on the first level of the tree, so the key passed to `dissoc` needs the same low 5 bits as 1003, and 1867155179 has them.
-
-[![img](https://s.conao3.com/img/e4f733-hamt.svg)](https://s.conao3.com/img/e4f733-hamt.svg)
-
-`disj` on a hash-set has the same bug, while the path through the transient `dissoc!` does not.
-
-I changed that line in the 1.12.7 `PersistentHashMap.java` to `this.hash` and compiled it.
-With the patched class ahead of the jar on the classpath, the same example returned `:B` for `(get m3 b)`.
-
-## removeIf gives different results with and without a type hint
-
-Since Clojure 1.12, you can pass a Clojure function directly where a Java method takes a functional interface.
-[CLJ-2864](https://clojure.atlassian.net/browse/CLJ-2864) removed the logic that read the function's return value as a Clojure truthy value.
-
-> In prior alphas, the FI adapter returns inserted Clojure truthy return logic when adapting a Clojure function to an FI with boolean return.
-
-The compiler follows this for calls where it knows the type.
-A call without a type hint goes through reflection and uses [Reflector.coerceAdapterReturn](https://github.com/clojure/clojure/blob/clojure-1.12.7/src/jvm/clojure/lang/Reflector.java#L579-L591).
-That method still applies `RT.booleanCast` to a `boolean` return value, so the same `.removeIf` call gives a different result depending on the type hint.
-
-```
-(let [l (java.util.ArrayList. [1 2 3])]
-  (.removeIf l #{1 2}) (vec l))
-;; => ClassCastException
-(let [l (identity (java.util.ArrayList. [1 2 3]))]
-  (.removeIf l #{1 2}) (vec l))
-;; => [3]
-```
-
-Wrapping the list in `identity` hides the type of `l`, so the call goes through reflection.
-
-A set used as a function returns the element itself.
-In the call with a known type, the adapter cannot turn the `Long` into a `Boolean` and throws.
-The reflective call reads the return value as true and removes the elements.
-
-[![img](https://s.conao3.com/img/e4f733-removeif.svg)](https://s.conao3.com/img/e4f733-removeif.svg)
-
-## int overflow and a negative subvec index
-
-Clojure 1.12 added `IDrop` implementations that make `drop` faster.
-The ones for string seqs and vector seqs add the current position and `n` as ints and then compare the sum with the length.
-[StringSeq.drop](https://github.com/clojure/clojure/blob/clojure-1.12.7/src/jvm/clojure/lang/StringSeq.java#L61-L68) for string seqs is one of them.
-
-```
-(drop Integer/MAX_VALUE (next (seq "abc")))
-;; => StringIndexOutOfBoundsException Index -2147483648
-(drop Integer/MAX_VALUE (seq "abc"))
-;; => ()
-```
-
-The Lean model gave the counterexample `i = 2147483646` and `n = 2147483647`.
-I changed the check to compare `n` with the remaining length `s.length() - i`.
-Under the assumptions `0 <` i < s.length()= and `0 < n`, Lean proved that the fixed check matches the naive specification for every 32-bit input.
-
-[![img](https://s.conao3.com/img/e4f733-drop.svg)](https://s.conao3.com/img/e4f733-drop.svg)
-
-For `assoc` on the result of `subvec`, [SubVector.assocN](https://github.com/clojure/clojure/blob/clojure-1.12.7/src/jvm/clojure/lang/APersistentVector.java#L661-L667) does not reject a negative index.
-
-```
-(assoc [2 3] -1 :x)
-;; => IndexOutOfBoundsException
-(let [s (assoc (subvec [0 1 2 3 4] 2 4) -1 :x)]
-  [s (.-v s)])
-;; => [[2 3] [0 :x 2 3 4]]
-```
-
-The call overwrites an element of the underlying vector outside the subvec, and returns a subvec that looks unchanged.
-[CLJ-962](https://clojure.atlassian.net/browse/CLJ-962) fixed the same bug in `nth`, but `assoc` still has it.
-
-[![img](https://s.conao3.com/img/e4f733-subvec.svg)](https://s.conao3.com/img/e4f733-subvec.svg)
-
-## Other findings
-
-The other 12 bugs have a smaller impact, and I reproduced each of them on Clojure 1.12.7.
-
-| Behavior | Example |
-| --- | --- |
-| `reduce-kv` throws on `vector-of` | `(reduce-kv f [] (vector-of :long 5 6))` |
-| With a functional interface of three or more arguments, a call with a known type truncates an `int` return value without an error | `(fn [a b c] 4294967297)` returns 1, and `(fn [a b] 4294967297)` throws `ArithmeticException` |
-| `next` on a seq of a string, a primitive array, or an infinite `repeat` keeps the metadata | `(meta (rest (with-meta (seq "abc") {:m 1})))` is `{:m 1}`, and for a vector's seq it is `nil` |
-| `(long ##NaN)` and `(int ##NaN)` return 0 | `(long ##NaN)` is 0, and `(byte ##NaN)` throws |
-| `long` clamps a double 2^63, and `int` a float 2^31, to the maximum value | `(long (Math/pow 2 63))` is `Long/MAX_VALUE` |
-| `char` wraps a BigInt at 2^64 | `(char 18446744073709551681N)` is `\A` |
-| `float` rejects `##Inf` but lets `##NaN` through | `(float ##Inf)` throws, and `(float ##NaN)` is `##NaN` |
-| Boxed and primitive doubles use different range checks when converted to byte and similar types | `(byte (identity 127.9))` is 127, and `(byte 127.9)` throws |
-| `get` truncates a fractional index on strings and Java arrays | `(get "abc" 1.9)` is `\b` |
-| `byte-array` and `short-array` reject an initial value | `(byte-array 2 7)` throws |
-| On a seq of a primitive array, `.indexOf` and `.contains` disagree | `(.indexOf (seq (byte-array [1 2 3])) 2)` is -1 |
-| `.lastIndexOf` on a list compares with `equals` instead of `=` | `(.lastIndexOf (list 1 2) (int 2))` is -1 |
-
-## Where I found nothing
-
-`PersistentHashMap` and `PersistentHashSet` matched `java.util.HashMap` over 3 million operations that mixed persistent and transient updates.
-The tests also covered maps before an update staying unchanged, `ArrayNode` splits and merges, and collision nodes down to depth 7.
-
-`PersistentTreeMap` matched `java.util.TreeMap` and kept the red-black tree invariants.
-Vectors matched `ArrayList` around every tree boundary I tested.
-
-On the numeric side, Lean proved for 64 bits that the check `Numbers` uses to pick the fast path for addition and subtraction agrees with the overflow check.
-
-For multiplication, `bv_decide` timed out at 16 bits, so I checked 8 and 10 bits.
-I proved up to 32 bits that `clojure.core/mod` matches the floored remainder.
-
-Every property I proved in Lean holds for the model shown in this article.
-I checked that each model means the same thing as the Java code by comparing it with the source and with the reproduced behavior.
+We're sorry for the inconvenience these precautions cause. If you have questions or notice anything unusual in your account, contact us at [support@hex.pm](mailto:support@hex.pm). Security reports can be sent to [security@hex.pm](mailto:security@hex.pm). We'll update this post as our investigation continues.

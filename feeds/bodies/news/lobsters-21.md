@@ -1,171 +1,116 @@
-The computer is a curious gadget. It is one of few human inventions which can exist purely — yet accurately — in the imagination. Prior to the existence of a real computing machine, mathematicians could hypothesize how it might behave. They even understood the unbounded, fractal potential of computers: If human beings have machines for computation we also have the *atom* of computation and we can recombine these atoms to great effect. Our largest and most complex computers were borne of tiny, simple computing components.
+Building a correct distributed system is really, really hard. Building a correct distributed system that has to store data and never lose it is even harder.
 
-Cixin Liu visualized this agglomeration beautifully in *The Three-Body Problem*. Liu imagines the characters of his book playing an open-world, emergent [MMORPG](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Massively_multiplayer_online_role-playing_game). The players, who know nothing about computer design, create a functional computer in-game ([a la Minecraft](https://web.archive.org/web/20210329070928/https://www.minecraft.net/en-us/article/deep-thought)) through the composition of thirty million other players, with each of those thirty million individuals acting as a computational gate. An expanse of desert acts as Liu’s silicon wafer under the gates of his meat computer. Quite naturally, the username of the player who creates the computer is `Von Neumann`.
+Many of our customers build systems where storing data reliably is paramount. Storage is hard even when nothing goes wrong. For example, some customers watch how full their disks are and compact data when necessary to reclaim space, and shard it across machines before any one disk hits its limits. Some maintain a write-ahead log so they can recover from a process restart. Others rely on a careful sequence of operations to guarantee durability and atomicity, for example writing a new copy of a file and renaming it over the old one, so that a change happens completely or not at all.
 
-Whatever hardware brings a computer to life — whether soldiers in the desert or transistors on silicon — its various parts require names. Liu’s fantasy human computer has *registers*, *stack memory*, a *system bus*, and a *hard drive*. Most of his components consist of people raising and lowering flags to control the flow of data, with one exception. Scholars with notepads comprise the hard disk — a notion we’ll revisit in a moment.
+Unfortunately, storage devices are unreliable, which only adds further complexity to every interaction with the disk. Consider a single write. If it fails with an error, the system has to decide whether it is safe to retry or whether it has to give up. If it fails because the disk is out of space, the system may have to trigger compaction before it can continue. Even creating a file can fail because the filesystem has run out of inodes, and the system then has to delete other files to make room.
 
-Liu’s component names all seem obvious to us, due to their twenty-first century ubiquity. But why these names? If I had never heard of a computer before, would I consider *stack memory* emblematic of a stack of cards or would the name seem arbitrary? When we pick apart a label like "system bus", and thus the [etymology of "omnibus"](https://web.archive.org/web/20210329070928/https://www.merriam-webster.com/dictionary/omnibus), we begin to see the exercise of *naming things* in two parts. The first, and more obvious, is the coining of terms. The more important second part is the construction of metaphors.
+Moreover, unreliability can come in the form of latency. A disk can be slow, for example because of I/O contention or a failing device, which can then stretch operations out so they overlap in ways they normally wouldn’t. If a read and a write end up happening at the same time, the reader may see the old data, the new data, or a random interleaving of the two.
 
-## Broken Metaphors
+Complexity also arises once you assume the disk will not always be there. If a write succeeds and the machine loses power immediately afterwards, a read after the restart could see all of the data, a random part of it, or none of it.
 
-We only need to revisit some [Today Show clips from 1994](https://web.archive.org/web/20210329070928/https://www.youtube.com/watch?v=95-yZ-31j9A) to recall how alien computers and computer networks were just three decades ago. In 1991 a computer was a magical box of infinite possibility. A computer — a real computing machine — is by its very nature an abstract thing and thus has always been so much more than a better calculator or a fancier accounting ledger. And yet, paradoxically, that’s precisely how we use computers today. Computers coordinate the most mundane aspects of the global economy, send me a message when my library book is due, or record a family’s new home in the government’s Land Titles database. The sprawling mycelium of computing devices across the globe behave, in aggregate, much more like the robots of retrofuturism than any of us are likely to acknowledge. The robots take us shopping and help us with video calls to our aging parents. The robots are ubiquitous, invisible, and heart-breakingly banal.
+On the Antithesis Forward Deployed Engineering team, we’ve had recurring discussions with customers who build this critical software, and who would like to inject disk faults or storage errors during their Antithesis simulations to mimic these kinds of situations and to ensure their software can handle it. One of the first things we realized is that different customers had vastly different expectations of their storage, and of the guarantees it should provide. This was further complicated by some running on the ext4 filesystem, and some on XFS or ZFS, each with its own behaviors under failure.
 
-Of course, we need not restrict ourselves to the tangible world of buttons, files, and folders. We programmers kick ourselves with broken metaphors all the time while programming the robot’s innards. Remember when we used "object-relational mapping" libraries to write objects to disk? Those were heady days, weren’t they? <sup>[[1](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_1)]</sup> I still remember my first glimpse of the Rails ActiveRecord implementation. `has_many :simply_darling_little_macros` was an epiphany back in 2004 for those of us stuck wiring the fields in our [POJOs](https://web.archive.org/web/20210329070928/https://martinfowler.com/bliki/POJO.html) to database columns by hand like mid-century telephone operators hard-wiring networks of voices, one at a time. Yessir. ORM was a thing of beauty, compared to her contemporaries. Every day at 8:00 AM I would grab a steaming cup of loam-flavoured American drip coffee and sit back to enjoy the DHH Show — marveling at his juxtapositions: a quagmire of Spring XML against his elegant Ruby macros. But that’s not what I’m talking about.
+This diversity of requirements has made it hard to build a one-size-fits-all solution up front. Instead, we worked with individual customers to build several solutions, geared to their specific use cases. For instance, to test space reclamation logic we’d simulate filling up the whole filesystem.
 
-The real question is: Why were we mapping anything at all? Why was anything required to save an object / record / document to disk beyond this?
+Once we’d got a sense of the requirements of different customers, we worked to incorporate these pieces of the puzzle into a comprehensive filesystem fault injection mechanism. In this post, we’ll give a tour of the disk faults that a “nightmare mode” fault injector needs to be able to emulate. We’ll start with the fault everyone asks for first, power failure, and explain what it took to emulate it convincingly. From there we’ll get into the subtler things a disk can do: torn writes, I/O errors (including the one behind the [fsyncgate](https://danluu.com/fsyncgate/) bug), and the latency faults that shake out concurrency bugs.
 
-| ActiveRecord | Crux |
-| --- | --- |
-| `class Facility < ApplicationRecord belongs_to :facility_group has_many :phone_number_authentications has_many :users, through: :phone_number_authentications has_and_belongs_to_many :teleconsultation_medical_officers, -> { distinct }, class_name: "User", association_foreign_key: :user_id, join_table: "officers" has_many :encounters has_many :blood_pressures, through: :encounters, source: :blood_pressures has_many :blood_sugars, through: :encounters, source: :blood_sugars has_many :patients, -> { distinct }, through: :encounters has_many :prescription_drugs has_many :appointments has_many :teleconsultations has_many :drug_stocks has_many :registered_patients has_many :registered_diabetes_patients has_many :registered_hypertension_patients has_many :assigned_patients has_many :assigned_hypertension_patients ... end facility.save` | `[:crux.tx/put facility]` |
+Before we get into faults, we’ll give some background on how file writes work in the “happy path” case.
 
-<sup>[[2](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_2)]</sup>
+## [The happy path](https://antithesis.com/blog/2026/nightmare-mode/#the-happy-path)
 
-Today, ActiveRecord is void. Mapping objects into databases is outmoded. The idea has a certain appeal, no doubt. I *record* (verb) my *records* (noun) to disk. When they are read back into memory via `has_one :superfluous_abstraction` the virtual machine makes them *active* — singing, dancing, and procreating through the object lifecycle — until they are *recorded* back into Postgres. But this act of recording doesn’t necessitate mapping. Object mapping is a broken metaphor.
+When a program writes to a file, the data does not go to disk right away. Instead, it goes into the kernel’s page cache. The kernel then writes it to disk on its own schedule, through a process called writeback. If a program needs the data on disk immediately, it can call fsync, which tells the kernel to write that file’s data to disk and doesn’t return until the write has finished. Data that is written but not fsynced could be destroyed by a power loss.
 
-In fact, object mapping is a broken metaphor built on broken metaphors. We have a `User` object in memory we want to save to disk. That’s all. Instead of a command equivalent to "computer, save the user" we are met with forty years' worth of anachronisms. We must worry about join tables, floating point value coercion, and whether or not our TIMESTAMP columns are automatic.
+The diagram below shows these steps for a successful write to disk:
 
-The mapping is a symptom; the anachronism is the disease. Our objects can and should maintain symmetry with the database unless we tell them otherwise. To do so, we must choose a new storage metaphor for the next forty years.
+![Diagram of a successful write: the program writes data into the kernel page cache, then fsync flushes it to disk.](https://antithesis.com/optimized-images/3d4324d6f35ade6b0e1074f4ed3823e51aa9539f0a212f1b5b77b46107ff78c5.webp)
 
-End users understand the metaphors of buttons, folders, and desktops as user interfaces. So it is for us developers and our database metaphors. There is some surface area to a database that allows us to store, query, and listen. This is our user interface. It is also our storage metaphor.
+## [Power loss](https://antithesis.com/blog/2026/nightmare-mode/#power-loss)
 
-Each structure has a preferred location within the cube. Rows in a relational database table will subscribe to a hard schema, a flat depth, and a common shape. Document stores will subscribe to a softer schema, a nested depth, and (potentially) unique shapes. Triples do not dictate schema by their nature but they have negligible depth and negligible variety. The uncomplicated nature of triples is reminiscent of LISP’s absence of syntax. That makes them attractive…​ but esoteric.
+Now let’s start looking at what happens when things go wrong. We started with power loss because it seemed like the fault most of our customers would care about.
 
-| ** | There are visual examples provided for each storage metaphor’s preferred structure. They are intended to be fun and illustrative rather than realistic and boring. |
-| --- | --- |
+Antithesis already has a related fault type, [node kills](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/#node-termination), which randomly SIGKILL a container. The SIGKILL destroys the process, but has no effect on the machine, which keeps running, so the kernel and its page cache carry on as if nothing happened. Every write the process completed still makes its way to disk, fsync or no fsync, courtesy of the kernel’s writeback mechanism. As far as the process is concerned, a SIGKILL is a fairly polite way to die, since you only lose data that the process never handed to the kernel.
 
-I was fifteen years old in 1996. My highschool had an "Information Processing" class for Grade 10 students, from which I distinctly remember an argument between a close friend and the teacher while they stooped over a PowerMac running ClarisWorks. My friend insisted that learning a spreadsheet was unnecessary since the word processor already provided "tables". Although my teacher understood that the word processor’s tables were insufficient for accounting, I do remember his argument eventually came down to "just trust me on this one" rather than diving into the semantics of ClarisWorks' internal data representation. My friend’s confusion was only exacerbated the following week when a desktop database was added to the mix. In his mind, *a table is a table is a table.*
+The diagram below shows how data that was written but never fsynced survives the SIGKILL and lands on disk anyway:
 
-It’s easy to see where this confusion comes from. Most people do not care what a computer thinks about rows in a table. A table is an intuitive concept, even to children. But we all know, just as my teacher understood, that text in an arbitrary table is effectively meaningless, text in a spreadsheet table is meaningful but unconstrained, and text in a database is constrained by datatype. When your tables have constraints you can build schema, views, atomic writes, and table-to-table relationships on top of them. That’s powerful stuff.
+![Diagram showing written but unsynced data surviving a SIGKILL: the kernel's writeback still flushes it from the page cache to disk.](https://antithesis.com/optimized-images/d7198398ba92b16910162ce154d701b96b20976c1ead4cc03b96400510306574.webp)
 
-Looking back at Cixin Liu’s "hard drive" comprised of scholars with notepads, our confidence in the meat computer is likely to go up if we can put some hard limitations on what kinds of data the scholars are allowed to write, and where. The scholar who writes whatever she wants wherever she wants is not a very useful component. She must adhere to the sensibilities of the computer.
+A power failure is less polite. It loses everything the kernel accepted but hadn’t synced yet. Data that has been written but not yet fsynced is simply gone:
 
-Tables are powerful precisely because of their handicaps. They are not mathematically perfect constructions sent to us from the Heavens or Harvard. <sup>[[3](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_3)]</sup> Instead, they are intuitive, flat, and readily map to business processes. Tables have served us well for three or four decades and most businesses can still survive on software built with tables alone. For a while. Businesses in the 1990s could survive on paper for a while, too.
+![Diagram showing a power failure: written but unsynced data in the page cache is lost and never reaches disk.](https://antithesis.com/optimized-images/cec610d5335ba4cf41ec91986270835f5de17ad7647afd63bc737f8be5b25093.webp)
 
-Skip ahead nearly a decade to 2004. I stumbled across [Prevayler](https://web.archive.org/web/20210329070928/https://prevayler.org/) during my years at University. "10,000 times faster than Oracle? This thing is going to be *huge*," I thought. We all know how that turned out. Years later when my younger colleagues were getting excited about Couch and MongoDB, I found myself put off by the lack of standard querying and the entire shoot-from-the-hip attitude document databases were pitching. "Schemaless! No SQL! Just shove things in the database and figure it out later!" No thanks.
+Unfortunately, when we’re simulating faults in Antithesis, we can’t just pull the plug on the machine. So the next best option was to fake it. That meant dealing with the two things that stop a container kill from causing data or cache loss: the kernel’s page cache, which holds on to unsynced data, and the kernel’s writeback, which saves unsynced data to disk.
 
-Over a decade later, I don’t know of a single object database or document database in those ex-colleagues' production systems. Everyone uses Postgres. Why?
+The problem was that both of these live inside the kernel, out of our reach. Currently, there is no way to ask the kernel to forget what’s in its cache, or to stop the kernel’s automatic writeback. However, we found a way around this: [LazyFS](https://github.com/dsrhaslab/lazyfs), an open-source filesystem from INESC TEC and Jepsen.
 
-Object DBs simply never took off. An object isn’t a simple or intuitive concept; an object is type-matching dynamic dispatch implemented over a collection of closures which in turn share a second collection of lexically-bound variables which themselves are — you guessed it — more objects. <sup>[[4](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_4)]</sup> These trees of objects are nested indefinitely. Many of us have made a career out of object-oriented programming but the essence of an object is *message passing*, not structs for disk serialization.
+LazyFS uses [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace), a Linux feature that lets a userspace program act as a filesystem. Because every read and write goes through LazyFS, it can hold written data in its own internal cache, emulating the kernel’s page cache in user space. Writes to LazyFS stay in the internal cache until the program calls fsync, and only then does LazyFS write it to persistent storage. Also, there is no background writeback to save it in the meantime. This gives us the ability to “forget” unsynced data at any convenient moment, simply by clearing the cache. If we do that at the same moment we kill the application, the two together are indistinguishable from a real power loss.
 
-Document DBs, on the other hand, were not such a bad idea. They were just poorly implemented. Standard query languages? Nope. Schemaless? Nope. Relationships? Not really. Append-only, immutable data? That gets pretty expensive when you denormalize all your records into a deeply-nested rat’s nest.
+Here’s a diagram of we can use LazyFS to emulate power loss:
 
-Developers want languages built on research and standards. Even a fragmented standard like SQL is better than a homebrew query language. MongoDB lacked basic joins [until version 3.2](https://web.archive.org/web/20210329070928/https://www.mongodb.com/blog/post/joins-and-other-aggregation-enhancements-coming-in-mongodb-3-2-part-1-of-3-introduction) but this was an honest mistake. MongoDB engineers believed their customers could survive on schemaless, denormalized data with no relationships. We now know this isn’t true. All databases [have schema](https://web.archive.org/web/20210329070928/https://sadalage.com/post/schema_less_databases/). <sup>[[5](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_5)]</sup> All databases [have relationships](https://web.archive.org/web/20210329070928/http://www.sarahmei.com/blog/2013/11/11/why-you-should-never-use-mongodb/). <sup>[[6](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_6)]</sup> Our schema and relationships may be implicit but they are truths we must face.
+![Diagram of emulated power loss with LazyFS: unsynced writes held in LazyFS's internal cache are discarded when the application is killed.](https://antithesis.com/optimized-images/f4b753251698184957b8e7877b7f33199f3569e8f8d737d79cddd866712ad294.webp)
 
-Neo4j, on the other hand, is a document database that actually works. Neo4j is a property graph and property graphs do not pretend relational data doesn’t exist — or that it exists but somehow isn’t important. Unfortunately, Neo4j has its own homebrew query language, Cypher, with its own baggage. Although an open standard [since 2017](https://web.archive.org/web/20210329070928/http://www.opencypher.org/), Cypher queries are difficult to compose because [the language lacks a foundation in logic](https://web.archive.org/web/20210329070928/https://medium.com/terminusdb/graph-fundamentals-part-2-labelled-property-graphs-ba9a8edb5dfe):
+Before settling on FUSE, we looked at a couple of other mechanisms for injecting faults. eBPF was tempting, since it makes some faults, like returning a particular error code from a syscall, easy to implement. However, it would be difficult to emulate power failure, since it only allows us to watch and tweak calls as they go by. It can’t hold on to data and release it (or lose it) later, which is the trick we needed. We also thought about using a custom block device, but that had the opposite problem: it can hold data, but it sits at the wrong level of abstraction. Since it’s below the filesystem, it sees blocks rather than syscalls, which makes syscall-level faults hard to implement. Power loss is especially tricky because you can’t tell data that arrived through an fsync from data the kernel’s writeback happened to push out. That would cost us the strictness that catches missing fsyncs.
 
-> From the perspective of a formal query language, it is a mess — with structures that break compositionality for no good reason, and it remains a good 70 years behind the frontier of formal graph logic.
+So LazyFS was very useful to us, and we want to extend a thank you to the authors for writing such a high quality tool. We ran a patched version (extended with additional fault types) for a while on a number of customer tenants, and it found some subtle data loss bugs.
 
-Rather than hide behind a deeply-nested document model or inglorious query languages, we can put our faith in decades of research. Computer Science tends to invent things long before they hit the market so it’s likely a high-caliber document store need not invent anything from scratch. An immutable document store supported by a well-understood query language for traversing relationships would feel natural to users and developers alike — the best parts of MongoDB and Neo4j without the dross.
+After that, we decided to implement our own FUSE filesystem: Amnesia. We wanted to move to Rust for its memory safety, and to rework the design so the model was simpler and faster, since we planned to build a lot more on top of it.
 
-Skip ahead another decade to 2014. Clojure already won my heart prior to its 1.0 release in 2009. By 2014 I was building a company on it. I was excited about the possibility of Clojure-style simplicity in database form: The triple-store.
+For instance, Amnesia works directly on inodes, whereas LazyFS uses the path for every operation and has to map it back to the inode. Since a path is only a name for a file, this makes operations like renames, hard links, and deleting a file that is still open awkward to track. Working with inodes instead makes that complexity disappear. Amnesia also never touches a real disk. LazyFS writes synced data through to the backing filesystem. Amnesia keeps both the volatile state and the “durable” state in memory, which allows us to model an fsync as a bookkeeping update instead of another real I/O. This makes it much faster, and just as safe, because the machine never actually loses power. We made a number of other changes too, which we will get into below.
 
-Roughly, there are two categories of triples: [RDF triples](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Semantic_triple), which attempt to encode relationship semantics, and [EAV triples](https://web.archive.org/web/20210329070928/https://en.wikipedia.org/wiki/Entity%E2%80%93attribute%E2%80%93value_model), which only encode the relationship. A semantic triple might look something like `[Bob belongs_to CommunistParty]` where an EAV triple is more likely to take the shape `[Bob :party CommunistParty]`. Rather than debate the semantics of semantic triples, we’ll treat them as loosely equivalent for this story. Caveat lector.
+Beyond the design, LazyFS introduced us to the subtler effects of a real power loss: torn writes and torn sequences of writes, both caused by the fact that the kernel and the disk do not persist data in the order or the units a program might expect.
 
-My team was immediately attracted to triples. The declarative logic of Datalog, with its Prolog origins, felt like the perfect way to ask questions of a database. Having never worked with triple-stores before, there was a purity to EAV triples none of us had ever imagined possible during our career with relational databases. An immutable store of pure facts? Count us in!
+It also made us aware of the wrinkles of working at the FUSE layer. For instance, the kernel page cache still sits in front of the FUSE filesystem, and it can be holding copies of the data we just “lost” by emulating a power failure. Thankfully, LazyFS had already worked out the right FUSE settings and patterns to make sure the program never sees them.
 
-Alas. Just as a child grows up and learns her parents and teachers are not infallible, so does the star-struck developer seduced by the siren song of purity. I know better now. These days, when I read my friend Abhinav’s [Haskell articles](https://web.archive.org/web/20210329070928/https://abhinavsarkar.net/tags/haskell/), full of beautiful and orderly code, I look back on my time with the triples and remind myself that purity can be a dangerous waste of time. Rather than squandering my finite time on this planet searching for the bottom of the purity rabbit hole, I instead watch Haskell from afar with profound respect and terror.
+## [Disk I/O errors](https://antithesis.com/blog/2026/nightmare-mode/#disk-i-o-errors)
 
-```clojure
-[63 :db/ident :user/name]
-[63 :db/valueType :db.type/string]
-[63 :db/cardinality :db.cardinality/one]
+Building on FUSE made it easy to add disk I/O errors, another fault type that our customers wanted. The obvious approach is to simply return the error, and that model alone was enough to find some bugs. But because we emulate the kernel page cache, we can sometimes apply the possible side effects of these errors to it, which gives us a higher degree of fidelity.
 
-[64 :db/ident :user/url]
-[64 :db/valueType :db.type/string]
-[64 :db/cardinality :db.cardinality/one]
+Out of the box, LazyFS does not simulate disk I/O errors as a form of fault injection, so this was new ground for us. We added the ability to return a few disk I/O error types on syscalls. One of the most interesting ones was EIO (“Error: Input/Output”, the generic “disk failed” error) on fsync.
 
-[64 :db/ident :user/stream]
-[64 :db/valueType :db.type/ref]
-[64 :db/cardinality :db.cardinality/many]
+This error can interact with the kernel page cache in surprising ways. This is exactly what’s behind the infamous fsyncgate bug. The discovery led to PostgreSQL fixing how it handles a failed fsync (it now crashes and recovers from its log rather than trying again), and it changed how the rest of us read fsync’s promise for good. As Craig Ringer, the PostgreSQL developer who reported the problem, [put it](https://danluu.com/fsyncgate/):
 
-[64 :db/ident :post/user]
-[64 :db/valueType :db.type/ref]
-[64 :db/cardinality :db.cardinality/one]
+> When fsync() returns success it means “all writes since the last fsync have hit disk” but we assume it means “all writes since the last SUCCESSFUL fsync have hit disk”.
 
-[64 :db/ident :post/title]
-[64 :db/valueType :db.type/string]
-[64 :db/cardinality :db.cardinality/one]
+To understand why Craig is correct, we need some background on what happens during an fsync on a typical Linux filesystem such as ext4. The kernel’s page cache holds file data in fixed-size chunks called pages, and marks a page as “dirty” when it has been changed but not yet written to disk. When a program calls fsync, the kernel sends each of the file’s dirty pages to the storage device through a driver. Crucially, the kernel clears a page’s dirty flag before handing it off. The fsync then waits for the driver to report whether each write succeeded.
 
-[64 :db/ident :post/body]
-[64 :db/valueType :db.type/string]
-[64 :db/cardinality :db.cardinality/one]
+Now suppose one of those writes to the device fails. The fsync will then return EIO, but nothing goes back and marks the page dirty again. As far as the kernel is concerned, that page is now clean, so neither the next fsync nor the background writeback will ever try to submit it to the device again. Since there are no dirty pages associated with the file, the next fsync succeeds. Unless the program happens to write the same data again and re-dirties the pages, that data never reaches the disk.
 
-[64 :db/ident :post/likes]
-[64 :db/valueType :db.type/ref]
-[64 :db/cardinality :db.cardinality/many]
+We can emulate this scenario in the FUSE layer. When the fault fires, fsync returns EIO and the affected pages are marked clean in our internal cache, without being written to persistent storage. A retried fsync then succeeds, but the data will be lost at the next emulated power failure unless the program writes it again and calls fsync.
 
-[1234 :user/name   "Joe"]
-[1234 :user/url    "..."]
-[1234 :user/stream [9090]]
+Building on FUSE also let us add “disk latency”, another commonly requested fault type.
 
-[5678 :user/name   "Jane"]
-[5678 :user/url    "..."]
-[5678 :user/stream [...]]
+Disk latency is really about finding concurrency bugs. Talking to the disk can be slow and unpredictable, and programs that assume otherwise can have races. These races can occur for several reasons. For example, data may land on the disk in an unpredictable order, or land in the kernel page cache in pieces rather than all at once. So we wanted to make those races easier to find.
 
-[8912 :user/name   "Lu"]
-[8912 :user/url    "..."]
-[8912 :user/stream [...]]
+We currently support two kinds of latency fault:
 
-[9090 :post/user  5678]
-[9090 :post/title "today"]
-[9090 :post/body  "go fly a kite"]
-[9090 :post/likes [8912 1234]]
-```
+1. **Completing operations out of order.** Instead of answering syscalls in the order they arrive, we let the fuzzer decide the order they complete in. Since Amnesia sits underneath the program and sees every operation as a request, it can decide whether to answer immediately or hold on to the request. For instance, when data from a write operation arrives, we sometimes hold onto it with a deadline while other operations continue to be processed (the deadline provides a backstop: once it passes, the operation finishes no matter what). The fuzzer then decides when the parked operation should be executed next. ![Diagram of operations completing out of order: Amnesia parks a write while later operations complete, and the fuzzer decides when the parked write finishes.](https://antithesis.com/optimized-images/517acc09c5140ad247d7c209601e8f64be70bfd0b0aa24aa0e5e0cc944eb33a8.webp)
+2. **Partially completed operations.** Syscalls aren’t atomic, and a read racing a write can see the write partially applied. Suppose a program overwrites a few kilobytes of a file while another thread reads the same range. On ext4 the reader can see the old contents, the new contents, or a patchwork of old and new chunks. We let the fuzzer pick which of those the reader gets. We implemented this in Amnesia by holding a write and splitting it into small chunks. Instead of applying them all, we let the fuzzer decide which chunks are applied immediately and which are held back. Combined with the out-of-order completion above, this means a read that arrives while the write is parked will likely be answered from the partially applied state, so it sees the same mix of old and new data that a real race could produce. ![Diagram of a partially applied write: the write is split into chunks, some applied and some parked, so a concurrent read sees a mix of old and new data.](https://antithesis.com/optimized-images/c061e047ec8be598b37f454414dbfd0ca3e155ba63e083c2e0b9c9fad56b34c8.webp)
 
-Back in 2014 our triple-store of choice had a hard schema, not unlike the schema definitions in most relational databases. However, it went so much deeper than that. Creating schema for our facts felt like Carl Sagan’s famous quote, reified: "If you wish to make an apple pie from scratch, you must first invent the universe." We really wanted to build our system out of triples but it felt as though we were bootstrapping the universe just to get to square one. Square one, as it turns out, is simply:
+Similarly, reads can be held and split into pieces that are captured at different moments. For instance, a single read can return the start of the file from before a write and the end from after it. With several operations parked on the same file at once, the fuzzer picks the order they finish in. We ensure that every combination it tries is a legal interleaving that the kernel page cache or disk could have produced.
 
-```clojure
-[:crux.tx/put record]
-```
+We built our FUSE filesystem to work hand in hand with the Antithesis fault injector and fuzzer. This lets us inject power failures, torn writes and disk I/O errors at moments our fuzzer considers “interesting”. It also means disk faults are controlled the same way as our other faults, so we get the benefits of [swarm testing](https://www.youtube.com/watch?v=wzfC7Q-xNik) along the way.
 
-We found that bootstrapping wasn’t our only challenge. Schema or no schema, triples are not really *natural.* Beautiful, yes. Pure, yes. Natural, no. Try as we might, the team never had the epiphany with triples we had each experienced with Clojure.
+Unlike our normal [node kills](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/#node-termination) fault, which could be interesting at any moment, with power failures we only need to sample one moment from one of the three categories of moments where a power failure can land: before the syscall, during it, or after it. Consider a single disk operation. Within “before” or “after”, the exact timing doesn’t matter: if power failure is emulated anywhere in that window it will lead to the same outcome. The interesting states that are uncovered “during” an operation are relatively short, so these moments are rare especially in systems that touch the disk infrequently. By tying the fault to the disk operation itself, we let the fuzzer spend less energy finding these vulnerable states and more energy exploring from them.
 
-In retrospect, it feels as though there must be an underlying reason RDF has never enjoyed general database success. Despite more than two decades of research and implementation, RDF remains the storage metaphor of museum artefacts and government statistics. <sup>[[7](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_7)]</sup> <sup>[[8](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_8)]</sup> The elevation of purity above all else is a certainly one problem with triples. Their true deficiency, however, is hidden in plain sight: triples by their very nature only describe relationships. Despite their name, relational databases consign the very notion of a "relationship" to the realm of the derivative. Triples have the opposite problem. Triples treat nouns as second-class citizens.
+Our disk fault injector helps the fuzzer by decreasing the uninteresting state space it has to explore. Instead of letting the fuzzer cut the power at arbitrary instants, it makes the decision on each syscall and injects the fault from inside the FUSE filesystem.
 
-What exactly is a "record"? To understand the record completely, we must look back over the history of computers, back over businesses which predate computers, and back over all of recorded human history. Before we take that trip, though, let’s quickly read the first dictionary entry:
+Each time the program is in the middle of a disk operation, there are three specific points where the injector may fire a power failure: before any of the operation has been applied to the internal cache, after part of it has been applied, and after all of it has been applied (but before the syscall returns). These three points line up with the three categories above: nothing applied, partly applied, or fully applied. When it does fire a power failure, the FUSE filesystem kills the container, deletes the internal cache, and makes sure any active syscalls are handled correctly. We call these *correlated faults*, because the timing of each power failure is tied to a specific disk operation.
 
-> a thing constituting a piece of evidence about the past, especially an account kept in writing or some other permanent form
+Our work on disk fault injection has already earned its keep by uncovering a number of bugs in customer software. One open-source [bug](https://github.com/etcd-io/bbolt/issues/1335) that we can share is in bbolt, the storage engine behind etcd. We injected all the disk faults in this post while testing the system, but the relevant ones for this particular bug are power failure and error injection.
 
-Computer Scientists will understand: "evidence about the past" is equivalent to "facts on a timeline" and "permanent form" is a synonym for "immutable data".
+The issue comes from bbolt committing a transaction in two steps that are each followed by an fsync. First it writes the new data pages, then it writes a single meta page that points at them.
 
-Once upon a time in computing history, tapes were composed of files which were composed of records. It could be argued that the "record" is actually the most natural of the three, given that humans have been organizing information into records since long before the computer. Sometimes those records were flat rows in an accountant’s ledger but they were often written on card stock:
+We found a case where the data pages are written successfully, but the fsync of the meta page fails with an EIO. That causes etcd to exit, which is fine.
 
-These sorts of records can be seen for hundreds of years into humanity’s past, at least as far back as the double-entry bookkeeping of 14th Century Venice. It could even be argued that all three storage metaphors we’ve examined so far — the table, the document, and the triple — can claim the title of "record".
+On restart, bbolt reads the meta page back through the kernel page cache, where the unpersisted meta page still exists, and wrongly treats that transaction as committed. It rebuilds its free page list from that meta page, so the next commits can reuse pages that the on-disk meta page still points to.
 
-But relational databases fail the dictionary definition. Most lack a meaningful, first-class representation of time with which to view the past. The flip side of that coin is the absence of immutability. If you want immutable records for your `inventory` table you are often stuck managing an `inventory_audits` table in the application tier…​ wastefully duplicating the built-in Write-Ahead Log of your database in the process.
+Once the cached meta page is evicted, through our emulation of memory pressure or power loss, what remains on disk is an old meta page pointing at overwritten pages. From then on bbolt panics at every open. The etcd node’s write-ahead log can’t help rebuild the store, because the node never gets past opening it.
 
-Triples fail our mental model instead. The client record card is natural. Specifying each individual fact about your client is not. If we want to see that natural record, triples force synecdoche on us. We must ascribe meaning to identities so triples like `[Bob has_email "bob@newhart.com"]` and `[Bob has_phone +15551234567]` can be glued together into "Bob". The truth is, there is no "Bob" — only facts about Bob. If triples are to say anything about the form of the data they contain, we must slather them in complicated ontologies.
+This bug could only be found by an I/O error followed by a power failure, which is exactly the kind of problem our disk fault injection finds.
 
-It is possible to find a middle path between hard, flat rows in tables and infinitely malleable triples. Surprisingly, documents are that middle path.
+We’ve covered a lot of ground: power failures, torn writes and torn sequences, disk I/O errors (including the one behind fsyncgate), and the latency faults that shake out concurrency bugs. All of these are available in our disk fault injector today, and the list keeps growing as customers tell us what keeps them up at night.
 
-["Flat is better than nested"](https://web.archive.org/web/20210329070928/https://www.python.org/dev/peps/pep-0020/) is a guideline, not a rule. If we can employ nesting conservatively, the storage metaphor of "documents" can avoid the MongoDB rat’s nest. If we add a standard query language to that, we may really be on to something.
+Our disk fault injector is customizable, so you don’t have to turn everything on. You can start with the faults that worry you most — power loss for a storage engine, for example, or I/O errors — and add more over time.
 
-The Client Record Card from a few paragraphs ago is a useful visual aid — it is both a record and a document. "Address" is embedded within the card but the physical constraints of the card prevent us from nesting nests of nests the same way we enjoy foldering folders of folders. Nothing crazy is happening.
+If you’re an existing customer, ask your forward deployed engineer to deploy disk faults in your environment. If you’re not, and you’d like to see how your system holds up in nightmare mode, [get in touch](https://antithesis.com/company/contact/).
 
-Any developer who has sent or received data over an HTTP API in the past ten years is already accustomed to this sort of document. We can all imagine encoding this card in JSON. Nothing crazy will happen.
-
-To ensure nothing crazy will ever happen, our storage metaphor of "documents" must play by the rules. The dictionary says our database must store *immutable facts on a timeline.* <sup>[[9](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_9)]</sup> Computer Science says our database must speak a standard query language. Our experience and intuition says our database should provide us lightweight references between our documents and discourage deep nesting.
-
-```clojure
-{:user/name   "Joe"
- :user/url    "..."
- :user/stream [9090]}
-
-{:user/name   "Jane"
- :user/url    "..."
- :user/stream [...]}
-
-{:user/name   "Lu"
- :user/url    "..."
- :user/stream [...]}
-
-{:crux.db/id  9090
- :post/user   "Jane"
- :post/title  "today"
- :post/body   "go fly a kite"
- :post/likes  ["Lu" "Joe"]}
-```
-
-These are not abstruse or mystical ideas, but they do demand a reappraisal of the database. We can’t just tack immutability onto MongoDB or temporality onto Postgres. <sup>[[10](https://web.archive.org/web/20210329070928/https://opencrux.com/blog/crux-strength-of-the-record.html#_footnotedef_10)]</sup> We must rebuild the foundation. We must record a *graph* of *immutable facts* on a *timeline* tolerant of *growth* and query them by *time-aware logic*. That’s a mouthful, so let’s just call it a *Record*. This is the new metaphor.
-
-Liu’s scholars in the desert would do precisely this. Each scholar’s document may refer to another scholar’s document. The system (and the user) must be able to read the documents — consistently. Given enough paper, the scholars would never scribble out old documents and rewrite them. Instead, they would maintain a record of every document they’d ever written, ordered by date. The documents are the audit log. Whether we say *record* or *document*, the storage metaphor is the user interface for the scholars, just as it is for us.
+And if there’s a disk failure you’ve been bitten by that we haven’t covered, we’d love to hear about it. The best faults in this post came from exactly those conversations :)

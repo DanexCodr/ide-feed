@@ -1,82 +1,59 @@
-On November 23, 2026, an unauthorized third party exploited a vulnerability in hex.pm that let them run commands on our web servers. We blocked the traffic and deployed a fix within 20 minutes. Shortly afterwards we received a report of this exact vulnerability.
+> **tl;dr** [trynix.dev](https://trynix.dev/) boots GUI programs now. Try [solitaire](https://trynix.dev/?pkg=aisleriot&engine=unkernel&run=sol+%26&boot=1), [GL gears](https://trynix.dev/?pkg=mesa-demos&engine=unkernel&run=es2gears_wayland+%26&boot=1), [xeyes](https://trynix.dev/?pkg=xeyes&engine=unkernel&run=xeyes+%26&boot=1), [a voice](https://trynix.dev/?pkg=espeak-ng&engine=unkernel&run=espeak-ng+%27Hello+from+the+Nix+multiverse%27&boot=1), [the weather over curl](https://trynix.dev/?pkg=curl&engine=unkernel&run=curl+-s+wttr.in%2FSan%2BFrancisco%3F0&boot=1), or [Firefox](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+%26&boot=1).
 
-We found no evidence of unauthorized package modifications, or database changes, or that the attacker maintained access to our systems. However, because database reads are not logged, we cannot rule out that the attacker accessed data stored in the database, including email addresses, password hashes, API key hashes, 2FA secrets, sessions, and audit logs.
+I remember watching the talk [The Birth & Death of JavaScript](https://www.destroyallsoftware.com/talks/the-birth-and-death-of-javascript) by [Gary Bernhardt](https://x.com/garybernhardt) and falling in love with the whimsical yet dreadfully serious unfolding of the story of how JavaScript will come to dominate all software.
 
-Because email addresses may have been exposed, be careful with emails that claim to come from Hex. Please double-check that the links they contain lead to `hex.pm`. Please forward suspicious emails to [security@hex.pm](mailto:security@hex.pm).
+Others have noted the inevitability of JavaScript’s dominance, so perhaps it was not surprising that Atwood’s Law holds true.
 
-We checked every file written to package storage during the incident against our database and found nothing unexpected. Reads of private packages in that period came from our own servers and coincide with releases the same organizations published at the time. A read made from a compromised server would look like one of ours, so we can't fully rule one out, and reads of private documentation aren't logged. We will contact affected organizations directly.
+> **Atwood’s Law**Any application that can be written in JavaScript, will eventually be written in JavaScript.
+> — [Jeff Atwood, 2009](https://blog.codinghorror.com/all-programming-is-web-programming/)
 
-The attacker's commands could read the credentials our servers use, so we replaced them: the storage, CDN, email and database credentials, and the keys that sign sessions and access tokens. This logged everyone out of hex.pm and Hex clients. We're building a new registry signing system that supports key rotation, with new Hex client releases in the coming days. Until then, don't trust third-party mirrors and fetch packages only from repo.hex.pm. We already deployed fixes for the vulnerability and are working on further hardening fixes.
+I highly recommend watching the talk if you have not already seen it, but the short and skinny is a lookback from 2035 and how JavaScript came to be the defacto language for all software.
 
-1. Change your password at hex.pm.
-2. Reset your 2FA at hex.pm/dashboard/security: under "Authenticator App", choose "Setup New App" and verify a code from the new entry. You get a new secret and new recovery codes, so store the new codes. This works when an organization requires 2FA, where disabling it is refused.
-3. Update your Hex client when the release with the new signing system is out in the coming days. Until then, use only repo.hex.pm, not mirrors. To update, run mix local.hex --force, and update rebar3 or Gleam if you use them.
+In Bernhardt’s retelling of events, the date is worked back from 2035, however unsurprisingly, large language models have rapidly sped up the timeline. What was once perceived to be the end-state at 2035 has arrived years earlier and you can witness it unfolding at [trynix.dev](https://trynix.dev/).
 
-All times are in UTC.
+One of the most impressive creations I’ve managed to build leveraging [nixpkgs-multiverse](https://fzakaria.com/2026/08/09/nixpkgs-multiverse-every-version-that-ever-existed) is [https://trynix.dev](https://trynix.dev/).
 
-**November 23, 2026**
+It still baffles my mind that I can run **any Nix package**, over 300,000 distinct package versions, straight from my browser. Truly insane capability.
+I was however a little dismayed at the speed of the QEMU emulation in the browser. It was slow enough that the creation tipped more towards novelty than practicality.
 
-- 18:16 - 18:29: The attacker sent 69 malicious requests to hex.pm, six of our web servers were affected. Our error tracker Sentry recorded its first error at 18:16:00 and recorded an error for each request.
-- 18:27: We added a firewall rule to block the attacker's traffic, which took full effect between 18:30 and 18:33.
-- 18:30 - 18:31: All hex.pm servers were replaced with a patched build that rejects these payloads.
-- 18:33 - 18:38: All further requests from the attacking address were denied.
-- 18:35: We began investigating production logs and the database.
-- 18:49: We deactivated the AWS access key the affected servers used, after creating a replacement at 18:47.
-- 19:07: We received an email with a security report that described the same vulnerability.
-- 20:21: Most infrastructure credentials were rotated. The database password followed on November 24.
-- 22:58: We reported a personal data breach to IMY, the Swedish data protection authority.
-- 23:05: We reported the incident to CISA, the US Cybersecurity and Infrastructure Security Agency, which confirmed receipt at 23:43.
-- 23:26: We submitted an early warning to ENISA, the EU Agency for Cybersecurity.
+I woke on November 20th and saw [Domen Kožar](https://x.com/domen_koz) sharing a single message in our [TacoSprint](https://tacosprint.org) Discord channel: [unkernel.dev](https://unkernel.dev)
 
-**November 24, 2026**
+[![A message from Domen sharing the website unkernel.dev on a Discord channel](https://fzakaria.com/assets/images/derived/domen_discord_unkernel-1404w.webp)](https://fzakaria.com/assets/images/domen_discord_unkernel.png)
 
-- By 10:42: We had rotated every credential the attacker could have read, including the database password, except the registry signing key and a few low-impact secrets.
-- 13:48: We published CVE-2026-129514.
+It was the fast browser Linux experience I had sought to achieve, *but with Nix*.
 
-### The vulnerability
+> **Aside**
+> What is [unkernel](https://unkernel.dev)?
+> It is Linux compiled *to* WebAssembly, allowing the kernel and system components to run at wasm speed while only user programs are emulated. It was published by [Pooya Parsa](https://x.com/_pi0_) on November 19th, 2026.
 
-The vulnerability in Hex.pm is tracked as [CVE-2026-129514](https://cna.erlef.org/cves/CVE-2026-129514.html).
+In an AI induced manic frenzy, I adopted the new engine along with a slough of long-wished features almost immediately.
 
-hex.pm decoded unauthenticated request bodies in Erlang term format with `Plug.Crypto.non_executable_binary_to_term/2` which blocks most potentially harmful terms, but allows struct values through. These decoded struct values, when chained together correctly, turned into a remote command execution (RCE). This is the detailed playbook of the attack:
+The proof is in the pudding: unkernel delivers remarkable speed improvements over [qemu-wasm](https://github.com/ktock/qemu-wasm),<sup>1</sup>1With a very healthy set of patches applied to make it even faster.  especially on first runs where kernel work dominates. The new engine is able to deliver 2x to 32x faster performance depending on the workload.<sup>2</sup>2The [benchmark page](https://trynix.dev/bench/) tracks both engines over time, measured through the real page and shell.
 
-1. The entry point. A custom parser in the endpoint handled the application/vnd.hex+erlang content type using Plug.Crypto.non_executable_binary_to_term/2 with [:safe]. Because the endpoint runs this parser before routing and authentication, any unauthenticated POST with that content type reached it on every route.
-2. Fake structs got through. The decoder rejected functions and new atoms, but it never checked maps. An Elixir struct is just a map with a __struct__ key naming a module. That meant the attacker could send a value the runtime treats as a real struct, with every field set to whatever they chose.
-3. Converting the structs into an error. The decoded struct became the request's body parameters. Plug.MethodOverride then read body_params["_method"], which on a struct calls fetch/2 on the struct's module. That function didn't exist, so the request raised an UndefinedFunctionError with the attacker's struct in the stack trace.
-4. Error reporting runs inspect. Sentry, Bandit's error logging, and the JSON log formatter call inspect on request data and stack-frame arguments. Inspect is a protocol, so for a struct it runs the implementation of the module named in __struct__, which let the attacker choose which code ran next. They chose Ecto.Query.DynamicExpr.
-5. The Ecto hop. The Inspect implementation for Ecto.Query.DynamicExpr enumerated the binding field without checking that it was a list. Enumeration is itself a protocol call, so a struct placed in that field is dispatched to another implementation.
-6. The DBConnection hop. The struct placed in binding was a DBConnection.Stream. Its Enumerable implementation calls DBConnection.reduce/3, which then calls declare/4. Encoding the query failed before any connection was checked out, but the error path still ran the stream's :log option. That option was a {module, function, args} tuple taken from the request, and db_connection applied it with the log entry prepended.
-7. Command execution. An attacker-supplied {module, function, args} tuple that the server runs gives access to functions in loaded libraries and the standard library, which led to OS command execution as the BEAM's user.
+JavaScript & WebAssembly nirvana.
 
-While investigating, we found the same class of vulnerability in Ash: its keyset pagination accepted crafted structs in client-supplied cursors, which could lead to command execution or SQL injection. We reported it and the Ash team released a fix in ash 3.38.0 on November 24. It is tracked as [CVE-2026-124283](https://cna.erlef.org/cves/CVE-2026-124283.html).
+Amazingly not only does the kernel boot quickly, it also enables networking, full-fledged graphical and audio experiences directly in the browser.
 
-### The fix
+**Windows.** A program’s Wayland surfaces are composited in the page by [wland](https://github.com/pithings/wland), and they float over the terminal you started them from.
 
-**hexpm** commit [379b0a2](https://github.com/hexpm/hexpm/commit/379b0a29bcc95164249f38ad7d772a37a8ff9533) makes the decoder reject any term containing a map with a `__struct__` key, returning a 400. Because the check sits in the one decoder used for this format, it covers every route that accepts it. That closes the entry point: an attacker can no longer get a fake struct into the request params. Every hex.pm server was running the patched build by 18:31 UTC.
+[![trynix.dev in a browser, with xeyes, an X11 program, in a window over the console](https://fzakaria.com/assets/images/trynix-xeyes.webp)](https://fzakaria.com/assets/images/trynix-xeyes.webp)
 
-We are working on hardening fixes for these libraries which should prevent such an attack in the future on multiple levels, not just one decoder check in the request pipeline:
+**GL.** The VM includes a minimal Mesa build with only the virgl driver, compiled to WebAssembly, rendering through your browser’s WebGL2.
 
-1. plug_crypto: Document that the decoder is only safe for authenticated payloads, and add an option to reject structs.
-2. plug: Refuse struct values as body params.
-3. ecto: Check that the binding is a list before enumerating it in Inspect.
-4. db_connection: Don't apply :log callbacks taken from stream structs. Tracked as CVE-2026-133555.
+[![trynix.dev in a browser, with es2gears drawing through WebGL2 in a window over the console, and the terminal reporting about 60 frames a second](https://fzakaria.com/assets/images/trynix-gears.webp)](https://fzakaria.com/assets/images/trynix-gears.webp)
 
-Every finding in this post is based on the checks below. Where a check is still running or something can't be verified from our logs, we say so.
+**Sound.** The VM has an ALSA sound card, and can play audio through your browser.
 
-- 69 exploit requests, 18:16–18:29 UTC: we reviewed load balancer logs for both attacker addresses from their first request until 19:05. Their first request of any kind was at 18:14:21. The first exploit request arrived at 18:16:00 and the last one to reach a server at 18:29:33. No exploit request from either address succeeded after 18:29:33.
-- Commands ran on six web servers: we matched files created on each server to exploit request timestamps. The first appeared 3 ms after a request at 18:16:46. Six servers were hit because a restart at 18:28 brought up three new servers still on the vulnerable build.
-- Detection: our error tracker recorded the errors raised by the exploit requests between 18:16:00 and 18:29:33 UTC. Our first response on the servers followed at 18:23:55.
-- Firewall block: we checked the firewall change log and denied requests in the load balancer logs. The rule was added at 18:27, took effect between 18:30 and 18:33, and denied every request from 18:33:48 on.
-- Patched build everywhere: we checked the deployment pipeline and listed every server with its creation time and build. All web, worker and job servers were created between 18:30 and 18:31 from the fix. A local reproduction confirmed the old build runs the command and the fixed build rejects the request.
-- No lasting access: we listed running processes on the affected servers before replacing them and found no shells. Cloud audit logs show no new keys, accounts or API calls from the attacker's addresses, and no writes by hex.pm's Kubernetes service accounts.
-- No database writes: we restored a copy of the database from 18:13:59, before the attacker's first request, and compared every row of every table with the live database. Every row added, changed or removed since then is explained by an audit log entry from another address, by our background jobs, or by our own actions during the response. We found no unexpected change to tables, functions, roles or permissions. A row that was changed and then changed back, or one that a later legitimate change overwrote, would not show up in this comparison.
-- No modified packages: all 23 releases published during the incident match a publish or stage entry in our audit log, and no older release changed. Storage writes came only from our own services. All 62 package files written since 18:00 match the checksums in our database, and all 186 registry files written since 18:00 match the database contents. Documentation archives have no stored checksum to compare against.
-- Credentials not used from outside: Access logs, extended to 11,379 log objects and 15,635 records (record times 14:56-20:59): each of the 288 versions and markers listed for 18:00-20:00 has a log record for the same key within 3 seconds (231 hexpm-prod, 33 elixir_ghactions, 24 bob), and every logged write has a listed version. All 6,279 hexpm-prod requests came from the three node IPs. The logs hold no DELETE.OBJECT, no request with a version ID, no ACL or tagging write, no copy and no bucket listing by hexpm-prod.
-- Private packages and docs: CDN logs show no requests from either attacker address to private docs in the last 30 days. Direct reads from cloud storage aren't logged, so we can't fully rule them out.
-- Possible database reads: these can't be ruled out, because database reads, environment variable reads and shell commands aren't logged. Network traffic stayed within normal levels, except one worker server that peaked at 0.47 MB/s against a usual maximum of 0.29 MB/s.
-- Activity since November 19: we reviewed request logs for hex.pm, repo.hex.pm, builds.hex.pm and hexdocs.pm for both attacker addresses. We found repeated downloads of hex.pm's own dependencies which suggests the attacker built a local copy of hex.pm to test against.
-- Present since 2016: the git history of the request decoder shows the safety check was removed on February 23, 2016.
-- API key hashes can't be reversed: we reviewed how hex.pm generates and stores secrets. API keys are 128-bit random values stored as HMAC-SHA256. We consider 128 bits of randomness far beyond the reach of brute force, so we don't see a need to rotate API keys because of the exposed hashes. Passwords are hashed with bcrypt, which slows guessing but doesn't prevent it for a weak password, so we ask you to change yours.
+[![trynix.dev in a browser, with espeak-ng typed at the prompt and the console bar saying "sound: click to play"](https://fzakaria.com/assets/images/trynix-voice.webp)](https://fzakaria.com/assets/images/trynix-voice.webp)
 
-### Questions
+**Network.** `curl`, `git clone` and `pip install` work. Each TCP connection goes over one WebSocket to a [Wisp](https://github.com/MercuryWorkshop/wisp-protocol) relay.<sup>3</sup>3Thank you to [@_pi0_](https://x.com/_pi0_) for adding [trynix.dev](https://trynix.dev) to his Wisp relay allow-list.
 
-We're sorry for the inconvenience these precautions cause. If you have questions or notice anything unusual in your account, contact us at [support@hex.pm](mailto:support@hex.pm). Security reports can be sent to [security@hex.pm](mailto:security@hex.pm). We'll update this post as our investigation continues.
+[![trynix.dev in a browser, with curl in the guest printing a live San Francisco weather report from wttr.in](https://fzakaria.com/assets/images/trynix-weather.webp)](https://fzakaria.com/assets/images/trynix-weather.webp)
+
+The best joke in Bernhardt’s talk is a browser running inside another browser: the Windows GIMP under Wine, in Chrome, in Firefox. Of course, I had to try it with trynix. 😈
+
+Here is [Firefox in trynix](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+https%3A%2F%2Ftrynix.dev+%26&boot=1), and it loading [trynix.dev](https://trynix.dev), and then loading Firefox again inside itself.<sup>4</sup>4Don’t get too excited: this took over 4 hours. The inner Firefox needed JIT disabled, the middle one ran without GL, and the outer page used a Wisp relay on my laptop since [wisp.unkernel.dev cannot reach itself](https://gist.github.com/fzakaria/ef9fda19c8b5f3238e41bab577462797).
+
+[![trynix.dev in a browser, booted with Firefox; that Firefox shows trynix.dev booting Firefox again, and the inner Firefox shows trynix.dev](https://fzakaria.com/assets/images/trynix-inception.webp)](https://fzakaria.com/assets/images/trynix-inception.webp)
+
+Sit and bask in that insanity. That is Firefox, on Linux compiled to WebAssembly, in a Firefox tab, loading the site and then loading Firefox again inside itself. 🤯
