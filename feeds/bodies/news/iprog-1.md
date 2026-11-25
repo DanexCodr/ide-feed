@@ -1,91 +1,9 @@
-Page 1 of 2Expressions, you have been using them since you started programming and even before but they deserve more of your attention. Come and meet some oddities in C. 
+If you think programmers are having a rough time of it as AI extends its influence ever further in our realm, then spare a thought for the mathematicians who are suffering deeper cuts than us by far. We can view AI as our magic little helper, but they are faced with an existential crisis - what exactly is mathematics today? Mathematics is a subject based on reasoning and logic and, while our current crop of AI models might sometimes lack perfect logic, they seem to do a good job of organizing material to create a chain of reasoning.  AI has gone from dumb proof assistants, through sovling student level math problems, to currently tackling the greatest questions mathematics has to offer. Mathematics is strange in that part of its organization has been to post lists of the most important problems in various sub-fields. The mathematician David Hilbert is likely responsible for popularizing the idea with his list of 23 problems in 1900, but others joined in, such as Erdos and his list of number and combinatorial problems. Today, perhaps the best known is the Clay Mathematics list of Millennial Problems, each with a prize of $1 million for the solution.  What is important here is to realize that these lists are not just for fun. They have shaped the lives of many mathematicians who devoted their working lives to, perhaps not solving the problem, but at least making progress towards a solution. Imagine how you would feel if an AI suddenly produced a proof of your life's goal. At best, you are going to feel a desire to know what it was you had missed that allowed the AI to complete what you couldn't. Unfortunately, even this isn't very possible due to the extensive length and slop-like quality of the proof. It is fair to say that currently the state of things is that an AI generates a proof together with an automatic confirmation of the proof via the automated proof assistant LEAN, but humans are left wondering what it is all about. It is closer to a spirit from the mathematical underworld suddenly appearing and saying "yes, your theorem is true", without any explanation. This might not be so bad if the theorems being proven were of no importance, but AI's masters have picked the big ones. Back in September the first was the [Navier-Stokes problem](<https://www.i-programmer.info/news/105-artificial-intelligence/19150-open-ai-claims-ai-has-solved-a-millenium-prize-problem.html>), which is about the solution to a differential equation that governs fluid flow - I suppose you could say that it's physics as well as math. The question was could the equation produce non-physical results. In particular, could a stationary fluid pushed by a smooth force reach speeds that grow without limit in finite time. Open AI provided that it could happen, and at the moment it does look as if this one has been settled - but it is still pending human review.  But the big, big one is probably the most recent - the Riemann hypothesis. This originated in 1859 and to date progress has been slow. It is a simple observation, but very difficult to see how to proceed to prove that it is always so. The Riemann function is a complex function involving the primes and so far all of its non-trivial roots have a real part 1/2. You can work out the function and find its roots, and so far they all conform to the hypothesis, and that's more than 1013 of them. In fact. it is generally believed that the hypothesis is true and many mathematical results have been proved true assuming it. What this means is that the impact on mathematics of a proof is slightly less than it might have been. Now we have two proofs. On November 20th, Levent Alpöge of Anthropic announced that he and Claude had a proof. At the same time Alessandro Masullo also released a human proof and the differences are huge. The human proof is 940 pages, the AI proof is 17.4 million lines of LEAN code with 250,000 pages of text. While it is possible to say that the method used by the human proof is classical Selberg trace-formula, currently it is impossible to say what the AI proof is based on. All we can say is that the LEAN code has been verified, whereas the human proof has already had some flaws flagged and is being revised.  There are also papers that point out flaws in the AI proof, but overall the consensus seems to be that it is probably valid. It is going to take some time to find out exactly what it all means, and this brings me to the idea that the role of he mathematician is not in proving theorems, but in understanding theorems. Some mathematicians, Terrance Tao for example, believe that AI will poison the well of mathematics by placing huge and possibly flawed proofs on the web where other AIs will learn from their possibly erroneous methods and conclusions.  Just as programmers are discovering that what they do isn't just coding, mathematicians have to learn that proving things is not their main goal - it is understanding that makes math valuable. Just to have the answer handed down from on high, isn't very useful.  In both areas - programming and math - what we need are explanations that help a human understand and have confidence in the results. Can AI do this? There is only one barrier to this achievement and that is the possibility that humans are just not intelligent enough to understand the explanations. 
 
-## Deep C Dives  
-Adventures in C
+#### More Information
 
-#### By Mike James
+<https://alpo.ge/remark.pdf> <https://leanprover-community.github.io/blog/posts/riemann-hypothesis/>
 
-[](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=4fa8081139e7fc62d7870dd10e56111b&language=en_US&ref_=as_li_ss_tl>) Buy from [Amazon](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=d753370b74431428dbd05015b78a60da&language=en_US&ref_=as_li_ss_tl>).
+#### Related Articles
 
-#### Contents
-
-**Preface  
-Prolog C  
-Dive**
-
-  1. **All You Need Are Bits  
-Extract**: [All You Need Are Bits](<https://www.i-programmer.info/programming/111-cc/18606-deep-c-dives-all-you-need-are-bits.html>)****
-  2. **These aren’t the types you’re looking for  
-** **Extract** : [Ty](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)[pe](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)
-  3. [Type Casting](<https://www.i-programmer.info/programming/111-cc/19099-deep-c-dives-type-casting.html>)
-  4. **Expressions  
-Extract: **[Some Oddities](<https://www.i-programmer.info/programming/111-cc/19304-deep-c-dives-expressions-some-oddities.html>)***************NEW!************
-  5. **Bits and More Bits  
-Extract: **[Bits!](<https://www.i-programmer.info/programming/111-cc/17953-deep-c-dives-bits.html>)**  
-**
-  6. [The Brilliant But Evil for](<https://www.i-programmer.info/programming/111-cc/17630-deep-c-dives-the-brilliant-but-evil-for.html>)
-  7. [Into the Void](<https://www.i-programmer.info/programming/111-cc/17253-deep-c-dives-into-the-void.html>)
-  8. [Blocks, Stacks and Locals](<https://www.i-programmer.info/programming/111-cc/18717-deep-c-dives-blocks-stacks-and-locals.html>)
-  9. [Static ](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)[Storage](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)
-  10. [Pointers](<https://www.i-programmer.info/programming/111-cc/18924-deep-c-dives-pointers.html>)
-  11. **The Array and Pointer Arithmetic**
-  12. [Heap, The Third Memory Allocation](<https://www.i-programmer.info/programming/111-cc/18752-deep-c-dives-heaps.html>)
-  13. **First Class Functions  
-Extract: **[First Class Functions](<https://www.i-programmer.info/programming/111-cc/17433-deep-c-dives-first-class-functions.html>)**  
-**
-  14. **Structs and Objects  
-** **Extract** : [Value Structs](<https://www.i-programmer.info/programming/111-cc/18275-deep-c-dives-value-structs.html>)****
-  15. [The Union](<https://www.i-programmer.info/programming/111-cc/17788-deep-c-dives-the-union.html>)
-  16. [Undefined Behavior](<https://www.i-programmer.info/programming/111-cc/18653-deep-c-dives-undefined-behavior.html>)
-  17. **Exceptions and the Long Jump  
-**
-
-<ASIN:B0D6LZZQ8R>
-
-## Dive 4
-
-## Expressions
-
-_“I don’t know what the language of the year 2000 will look like,  
-but I know it will be called Fortran.”_ _CA Hoare, 1982_ One of the most important concepts in any programming language is the expression and C has expressions for most things and knowing how to use them is a big part of effective C programming. What might surprise you is that there was a time when expressions didn’t exist – they had to be invented. The generally accepted first implementation of expressions was in Fortran in 1957. John Backus and his team at IBM worked out how to compile expressions into machine code and the same algorithms are at work today, compiling C expressions into machine code. C A Hoare might have been wrong about what we call the language, but there is a little bit of Fortran in every modern language.
-
-#### In Chapter but not in this extract
-
-  * Expressions and Statements
-  * C Expressions 
-  * Compile v Runtime Expressions
-  * Side Effects and Sequence Points
-  * Auto Promotion
-  * Some Oddities
-
-The whole idea of an expression is so obvious that you almost certainly don’t need a conducted tour of all of C’s operators and how they interact. However, there are a few strange and almost unlikely things that you might not have noticed. None of them have the advantage of clarity of purpose, but you will encounter them in other people’s code.
-
-#### Assignment is an operator
-
-When you write a=b this is an expression just like a+b and the result is the value stored in b or the value of the expression on the right hand side. That is, a=b takes a and b and produces the result b. As a side effect it also sets a to the value stored in b, which is what you usually assume assignment to do! Notice that this implies that a cannot be an expression in its own right. What advantage would this have? The most obvious is that you can use it to set more than one variable: a = b = c = 2*2; which sets a, b and c to 4.  You can use variables, even ones that are being assigned, in the expression:
-
-    int b = 3;
-    a = b = c = 2*b;
-
-as the expression is worked out before the side effect is enacted. This sets all of the variables to 6. Another use is to save a result while computing a conditional. For example:
-
-        int a,b = 0;
-        while( (a = 2*b) < 10){
-            b = b+1;
-        }
-
-The assignment within the while loop sets a to 2*b and evaluates to 2*b, which is then compared to 10. At the end of the loop you will find that a is 10 and b is 5. It is arguable that this is confusing, but it does avoid having to compute the expression twice. In short, you can test an expression and save its value. Notice that all of the assignment operators behave in this way. For example:
-
-    int a = 0,b = 0;
-    b = a+ =1;
-
-sets a and b to 1. You can even go as far as:
-
-    int a = 1,b = 2;
-    b+ = a+ =3;
-
-This is evaluated as a is set to the contents of a plus 3 with the assignment returning 4 as its result. Then b is set to the contents of b plus the expression to the right, i.e. 4. As a result a is set to 4 and b is set to 6. You can see that this is the same as:
-
-    b = a+b = a+3;
-
-but of course you can’t use this form as you cannot assign a value to a+b. It is probably better not to use such confusing constructs
+[Open AI Claims AI Has Solved A Millennium Prize Problem](<https://www.i-programmer.info/news/105-artificial-intelligence/19150-open-ai-claims-ai-has-solved-a-millenium-prize-problem.html>) [ DeepMind Solves Math Olympiad And Proves Not Everything Is An LLM](<https://www.i-programmer.info/news/105-artificial-intelligence/17369-deepmind-solves-math-olympiad-and-proves-not-everything-is-an-llm.html>) [The Machine In The Ghost](<https://www.i-programmer.info/news/112-theory/7404-the-machine-in-the-ghost.html>) [ Math And Programming - Perfectly Matched](<https://www.i-programmer.info/professional-programmer/103-i-programmer/9804-does-math-help-programming-or-programming-help-math.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

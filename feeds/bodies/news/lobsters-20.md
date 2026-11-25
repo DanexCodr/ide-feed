@@ -1,56 +1,218 @@
-Non-browser applications have historically relied on a slowly changing set of
-            trust roots maintained by the operating system or platform vendors. These trust roots
-            are often based on browser root programs, but lack the data that allow browsers to make
-            fine-grained trust decisions: revocation data for end entities, intermediates and
-            roots (like
-            [CRLite](https://blog.mozilla.org/security/2020/01/09/crlite-part-1-all-web-pki-revocations-compressed/)
-            and
-            [OneCRL](https://blog.mozilla.org/security/2015/03/03/revoking-intermediate-certificates-introducing-onecrl/)), distrust dates and Certificate Transparency policy.
+This post introduces a new algorithm for extracting hexadecimal
+digits of \(\pi\) without computing the preceding digits. It beats the
+standard term-by-term evaluations of Bailey–Borwein–Plouffe (BBP), Bellard, and Huvent
+on operation
+count. Even against [Huvent’s eight-term formula](https://www.stylewarning.com/posts/beating-bellard/),
+the savings are about 61% fewer divisions and 38% fewer
+full modular exponentiations.
 
-The
-            [October 2026 eMudhra incident](https://emudhra.we-have-a-problem.com/)
-            showed the cost. Browsers blocked the affected intermediates quickly, while other clients were unable
-            to restrict only the affected intermediates. Instead, they had to wait for platform trust store
-            updates to remove the parent root certificates and spent significant time and effort
-            to mitigate the impact on their applications across different platforms and environments.
+The key insights come from the following identity:
 
-upki ships these signals as a compact local cache that's updated automatically,
-            independently of applications, so every TLS stack on a machine can share one copy.
-            Its checks only ever narrow what a client accepts: they never make it trust a
-            certificate it would otherwise reject.
+The underlying series goes back to Euler, but has been rearranged to
+exploit more efficient evaluation. Collecting its terms by odd
+denominator lets us share the arithmetic in two places:
 
-Sponsorships are annual and pay for maintainer time on the roadmap and on ongoing
-          maintenance. We don't sell individual features; priorities are open for discussion with
-          sponsors.
+1. The common denominator \(M=2k+1\) means we can add four remainders and divide once. The surprise is that we don’t have to compute those remainders independently either. The gaps between the exponents are small multiples of \(k\) plus constants, so one starting power and the step \(2^k\bmod M\) let us reach the others by multiplication.
+2. Two full exponentiations modulo \(3M\) serve both denominators \(M\) and \(3M\). That gives us up to eight powers of two, and we still only divide once.
 
-For more information, contact [Dirkjan Ochtman](mailto:dirkjan@ochtman.nl).
+Together, these two tricks save about a million full exponentiations per
+million hexadecimal places skipped compared with Huvent, before any
+machine-specific optimization. In practice, this algorithm leads
+to an implementation that runs in nearly 40% less wall-clock time.
 
-| Included | Supporter**$15k**per year | Sustainer**$50k**per year | Strategic partner**$150k+**per year |
-| --- | --- | --- | --- |
-| Logo on the project README and site | Listed | Larger | Featured |
-| Quarterly roadmap calls with the maintainers |  |  |  |
-| Priority on issues you report | – |  |  |
-| Design partner on future ideas | – | – |  |
-| Production-quality hosted infrastructure | – | – |  |
+## The BBP trick and formula convergence
 
-## Roadmap
+To see where the savings come from, let’s recall the BBP
+trick. To skip \(n\) hex digits, shift \(\pi\) left by \(d=4n\) bits and
+take the fractional part. Shifting by \(d\) bits adds \(d\) to each
+exponent, so we’re left adding and subtracting terms of the form \(2^E/N\).
+When \(E\ge 0\), write \(2^E=qN+r\). Then \(2^E/N=q+r/N\), and we don’t
+care about \(q\): it’s an integer. Even at \(d=4{,}000{,}000\), we can
+compute \(r=2^E\bmod N\) without ever constructing a four-million-bit
+numerator.
 
-Sponsors help set priorities through quarterly roadmap calls.
+The terms with \(E<0\) make up the tail. They decay geometrically, so we
+sum them directly, keeping enough guard bits to settle the last digit we
+want.
 
-1. Shipped Revocation Clients outside the browser accept revoked end-entity certificates. upki syncs compact CRLite filters several times a day and checks revocation offline.
-2. 1 Next Root distrusts When root programs distrust a CA or intermediate, other clients keep trusting it until a trust store package update arrives, as the eMudhra incident showed. upki will ship OneCRL data, so distrust takes effect at the next cache update.
-3. 2 Applied for funding Merkle Tree Certificates Post-quantum signatures would add kilobytes to every TLS handshake. Merkle Tree Certificates can bring down the costs, but clients need landmarks delivered ahead of time to minimize handshake overhead. upki will distribute landmarks alongside its other data.
-4. 3 Planned CT enforcement Clients that don't enforce Certificate Transparency accept certificates that were never publicly logged, so misissuance can go unnoticed. Clients also don't benefit from certificate transparency logs blocking compromised/distrusted roots from obtaining proof of inclusion. upki will deliver and maintain an up-to-date log list and policy inputs, so applications don't have to configure logs manually.
-5. 4 Planned Intermediate preloading Servers that send an incomplete certificate chain work in browsers but fail verification in other clients. upki will ship the known intermediate certificates, so clients can complete the chain as browsers do, without expensive network fetching.
-6. + Future idea Fleet trust roots Root changes, including private PKI roots, reach machines through OS packages or configuration management, which can be slow and uneven across a fleet. upki's sync mechanism could distribute root sets to every machine.
-7. + Future idea More integrations The checks only protect applications whose TLS stack uses upki. upki could gain native support in OpenSSL upstream, GnuTLS, NSS or in language runtimes.
+The above is essentially the BBP trick, and is the basis for three decades
+of digit extraction algorithms.
 
-### Ongoing maintenance
+As such, when I was programmatically looking for efficient BBP-formula,
+I ranked them by how many fractions I’d have to evaluate to reach a given
+digit. Each fraction in the main loop costs me a modular exponentiation and
+a division. Bellard’s formula
+advances 10 bits for every seven fractions; Huvent’s formula advances 12
+bits for every eight. After finding Huvent’s formula independently, I’ve
+tried feverishly to find one with a better ratio, without success. So I
+looked toward ways of optimizing existing series.
 
-Every check depends on data that's refreshed several times a day, on upstream sources
-              and formats that keep changing, and on prompt fixes when security issues come up.
+One clue tipped me off. There’s a choice hiding in the last step of
+[Bellard’s terse derivation](https://bellard.org/pi/pi_bin/pi_bin.html). He has
+one sum in powers of \(1/4\) and another in powers of \(1/1024\). Since
+\(4^5=1024\), splitting the first sum into five progressions lets him write
+both sums in powers of \(1/1024\). What if, instead of lining up the powers,
+we lined up the *denominators*?
 
-Sponsorship pays for releases, security response, dependency updates, keeping the data
-              pipeline running and in step with upstream changes, supporting distribution packagers
-              and maintaining
-              [C2SP specifications](https://c2sp.org/upki-revocation@v1.0.0).
+## Lining up denominators
+
+Lining up denominators seemed hard with the many-term series of Bellard and
+Huvent. One good place I found to try this is a series [Euler](https://scholarlycommons.pacific.edu/euler-works/706/)
+wrote down in 1779, as noted by
+[Craig-Wood](https://scholarlycommons.pacific.edu/euleriana/vol3/iss1/3/), who
+used it himself to write an extraction program<sup>[1](https://www.stylewarning.com/posts/faster-digit-extraction/#fn:1)</sup>. In Euler’s
+original formulation, there are six rows:
+
+[Takahashi](https://tsukuba.repo.nii.ac.jp/record/2001720/files/RJ_51-1-177.pdf)
+writes this more straightforwardly as two sums distinguished by their exponential
+factors:
+
+Notice the denominators of the fractions. Since \(4m+2=2(2m+1)\), we can halve the
+numerator of the middle fraction and leave \(2m+1\) in the denominator.
+As \(m\) runs over the nonnegative integers, \(2m+1\) gives every positive
+odd integer. The other two progressions, \(4m+1\) and \(4m+3\), split that
+same list between them. So each odd denominator appears twice in each sum.
+
+For example, consider the denominator 13. The first progression hits it at \(m=3\); the middle one hits it
+at \(m=6\), where the original denominator was 26. That’s two contributions
+from the sum in powers of \(1/64\) and two from the sum in powers of
+\(1/1024\). The powers are different, but *all four numerators can be added
+before we divide by 13*. We can collect terms this way for every odd denominator.
+
+To derive the boxed formula directly, we can start
+with a multiplication of Gaussian integers: \((3-i)^2(7-i)=50(1-i)\).
+Taking complex arguments gives Hutton’s arctangent identity
+from the 18th century:
+
+Bellard lists this identity as equation (7). His logarithm trick works on
+both angles: \(1-(1+i)/4=(3-i)/4\), and \(1-(1+i)/8=(7-i)/8\). So if we put
+
+then \(I_2=\arctan(1/3)\), \(I_3=\arctan(1/7)\), and we want \(\pi=8I_2+4I_3\).
+Every time \(j\) goes up by four, \((1+i)^j/2^{uj}\) is multiplied by
+\(-4/2^{4u}\). That’s \(-1/64\) in the first sum and \(-1/1024\) in the second.
+
+For an odd denominator \(N=2k+1\), the two contributions in each logarithm
+come from \(j=N\) and \(j=2N\). All further doublings give multiples of
+four, where \((1+i)^j\) is real and contributes nothing. At \(j=N\) the imaginary
+part of \((1+i)^N\) is \((-1)^{\lfloor k/2\rfloor}2^k\); at \(j=2N\)
+we’re looking at \((2i)^N=(-1)^k 2^N i\). At \(j=N\), the first logarithm
+multiplies the imaginary part by \(8/2^{2(2k+1)}\), giving the numerator
+term \((-1)^{\lfloor k/2\rfloor}2^{1-3k}\).
+Collect the other three contributions in the same way and we have the
+boxed formula.
+
+## Four powers in two exponentiations
+
+After the shift by \(d\), that is, multiplying the sum by \(2^d\),
+the four exponents, in the order we wrote them, are
+
+Call a power *active* if its exponent is nonnegative. The slowest-decaying exponent
+is \(E_1\), which stays nonnegative up to \(k=\lfloor(d+1)/3\rfloor\). That’s about \(d/3\) odd
+denominators, and we divide just once for each one. Even the largest modulus
+is only \(2d/3+O(1)\), compared with about \(d\) for Bellard or
+Huvent, and \(2d\) for the original BBP formula.
+
+As for the remainders \(r_j=2^{E_j}\bmod N\), notice that the middle two exponents
+differ by \(k\). If we already have
+\(r_3\) and \(x=2^k\bmod N\), then \(r_2\) is just
+\(xr_3\bmod N\). In fact, we can step from the smallest exponent up to the largest:
+
+Start at the smallest active power. We pay for one full exponentiation to
+get it and one to get \(x\); the rest are a handful of multiplications. Past
+\(k\approx d/5\) only \(E_1\) is active, so don’t bother computing \(x\).<sup>[2](https://www.stylewarning.com/posts/faster-digit-extraction/#fn:2)</sup>
+That’s two exponentiations for the first \(d/5\) denominators and one for the
+remaining \(d/3-d/5\), or about \(8d/15\) altogether.
+
+## Two denominators for the price of one
+
+So far we’ve paid for one division by 13 and another by 39. Call the
+signed sums of their active powers \(A\) and \(B\). Since 39 is three
+times 13, their combined contribution is
+
+We only want the fractional part, so we can compute both numerators
+modulo 39, take the remainder of \(3A+B\), and divide by 39 just once.
+
+Now consider the step powers. For 13 the index is 6; for 39 it’s 19.
+Since \(19=3\cdot6+1\), once we have \(x=2^6\bmod39\), we get the step
+for 39 by cubing and doubling: \(2^{19}\equiv2x^3\pmod{39}\).
+
+In general, tripling a denominator \(M=2k+1\) changes its index from \(k\)
+to \(3k+1\). Substitute that index into the four exponents above to get
+the partner’s exponents. Now read the active exponents from *both*
+numerators in increasing order. The common \(d\) cancels in every gap,
+leaving a small multiple of \(k\) plus a constant. We need just two full
+exponentiations modulo \(3M\): one for the first power in the list and
+one for the step \(2^k\). Multiplication takes us up the rest of the list.
+
+We never need to compute the step just for \(3M\). Its largest exponent,
+\(d-2-9k\), is smaller than the *second* exponent for \(M\), \(d-1-5k\).
+If \(3M\) has even one active power, \(M\) already has at least two.
+
+We don’t want to pair 39 with 13 and then pair it again with 117. So we
+start pairs only at odd \(M\) not divisible by three. If \(3M\) has an
+active power, we take it with \(M\); otherwise we process \(M\) alone.
+Odd multiples of nine, like 117, stay unpaired.
+
+The denominators that no longer need their own turn are precisely the odd
+multiples of three that aren’t multiples of nine. That’s two out of every
+nine odd denominators, both where we need one exponentiation and where
+we need two. Multiplying the counts above by \(7/9\) gives about \(7d/27\) divisions and
+\(56d/135\) full exponentiations, compared to \(2d/3\) of each for Huvent.
+
+Here is how the formulas compare in terms of how far into \(\pi\)
+we get per expensive arithmetic operation, expressed as “bits per operation”:
+
+| Formula | Bits per full mod. exp. | Bits per division |
+| --- | --- | --- |
+| BBP, term by term | 4/4 = 1.00 | 4/4 = 1.00 |
+| Euler, term by term | 5/4 = 1.25 | 5/4 = 1.25 |
+| Bellard, term by term | 10/7 ≈ 1.43 | 10/7 ≈ 1.43 |
+| Huvent, term by term | 12/8 = 1.50 | 12/8 = 1.50 |
+| This post | 135/56 ≈ 2.41 | 27/7 ≈ 3.86 |
+
+## Notes on a high-performance implementation
+
+I implemented both the algorithm of this post and Huvent using AVX-512
+IFMA. Here’s how long each took to extract 12 hex digits on my computer.
+
+| Hex digits skipped | Threads | Huvent (ms) | This post (ms) | % faster |
+| --- | --- | --- | --- | --- |
+| 1,000,000 | 1 | 8.09 | 4.88 | +65.7% |
+| 100,000,000 | 1 | 962 | 584 | +64.7% |
+| 1,000,000 | 32 | 4.23 | 3.82 | +10.9% |
+| 100,000,000 | 32 | 64.4 | 42.4 | +51.8% |
+| 1,000,000,000 | 32 | 655 | 410 | +59.9% |
+| 1,000,000,000,000 | 32 | 845,685 | 520,907 | +62.3% |
+
+Returning to the pair 13 and 39, while 39 is active, I never reduce modulo
+13: changing the numerator for 13 by a multiple of 13 changes its tripled
+contribution by a multiple of 39. So I do all the squaring and multiplying
+modulo 39. Since 39 is odd, I can compute its inverse modulo a power of two
+once and reuse it for every Montgomery multiplication in the pair. I triple
+the numerator for 13, add the one for 39, and convert back from Montgomery
+form just once for the final division.
+
+There’s a nice trick inside each exponentiation, too. Suppose a Montgomery
+reduction leaves \(-14\) modulo 39. Normally I’d add 39 to get 25. But if
+I’m going to square it next, 14 is just as good: \(14^2\equiv25^2\pmod{39}\).
+Even if the current exponent bit calls for doubling first, the next square
+still erases the sign. So for all but the last bit, I use vector absolute
+values instead of correcting the sign. On the last bit I do the usual
+reduction, since the numerator needs the actual residue rather than its negative.
+That change made the exponentiation loop about 8% faster on Zen 5.
+
+Each vector lane handles a different odd modulus. I batch moduli with
+the same set of active powers so that one
+lane doesn’t sit idle while another steps through three extra residues.
+The hardware multiplies 52-bit inputs, so the largest modulus matters:
+ours is about \(2d/3\), compared with \(d\) for Huvent. That lets
+us reach about 50% farther into \(\pi\) before we need wider arithmetic.
+
+I originally went looking for a series with fewer fractions per bit.
+If you evaluate every fraction separately, Euler’s series actually needs *more*
+fractions per bit than Huvent’s, so it has been easy to pass over.
+Sharing the modular arithmetic across common and paired denominators is what
+makes it faster, and I suspect similar tricks apply to other BBP-type series.
+
+1. His [implementation](https://github.com/ncw/euler_bbp/blob/775f95fc7901f184bcdf14673dec51dd81b034e8/euler_bbp.go#L131-L160) evaluates 21 fractions separately for every 30 bits of offset. [↩︎](https://www.stylewarning.com/posts/faster-digit-extraction/#fnref:1)
+2. There’s a way to thin out the far end of the loop even more. At \(j=4m+3\), the real and imaginary parts of \((1+i)^j\) are opposites. Add the real part of each logarithm and the two slow powers cancel for \(N\equiv3\pmod4\). We still have to subtract the real logarithms we added, using series for \(\log(1+2^{-2})\), \(\log(1+2^{-3})\), and \(\log(1-2^{-4})\). That leaves half as many moduli above \(d/2\), at the cost of more streams of powers to juggle below it. [↩︎](https://www.stylewarning.com/posts/faster-digit-extraction/#fnref:2)

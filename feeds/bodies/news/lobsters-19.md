@@ -1,283 +1,370 @@
-The [Cerise](https://cerise-project.org/) project<sup>[1](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:cerise)</sup> was started almost 10 years ago at Aarhus University.
-Its goal is to develop formal methods to verify properties of capability machines, in particular involving non-monotonicity,
-and to prove end-to-end results in the presence of unknown code.
-Cerise has been extended to model different aspects of capability machines,
-and has involved work by and collaborations with several other universities,
-including Dominique Devriese’s research group at KU Leuven,
-and the universities of Cambridge and Edinburgh.
+I’d like to share a wee pattern I’ve found useful for writing simple WebSocket apps in Haskell - specifically for my side project [wordify](https://wordify.gordo.life) - an [open source](https://github.com/Happy0/wordify-webapp/) ~ multiplayer crossword board game ~ .
 
-Cerise started as pen-and-paper proofs about idealised machines and focused
-initially on reasoning about control-flow integrity of encapsulation for
-stack-based calling conventions, but over time our research group has scaled up
-the approach along three dimensions. First, we made our proofs foundational:
-Cerise now builds on the Iris separation logic framework inside the Rocq theorem
-prover, which has been critical to ensure correctness despite the growing
-intricacy of our proofs. Second, we have investigated how to reason about a
-wider range of properties, e.g., involving MMIO and attestation. Third, we made
-Cerise work with an instruction set closer to the CHERIoT Sail model, and
-verified programs using those instructions.
+I have in mind websocket applications where there’s some sort of ‘resource’ that is shared between multiple websocket clients that need to be kept updated as the state changes such as:
 
-When I started my PhD, CHERIoT had just been announced.
-I seized the opportunity to apply the verification techniques of Cerise
-to the CHERIoT switcher, for example to check that it isolates compartments and enforces no-capture.
-To that end, we started a sub-project of Cerise, which we call Griotte<sup>[2](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:griotte)</sup>.
+- A ‘Game’ resource for a turn based game such as a Chess or Noughts and Crosses (that’s “tic-tac-toe” to some of you) where we keep track of the game state.
+- A ‘Chat’ resource where we keep track of things like the users in the room and whether they are currently online, etc
 
-As part of our verification effort in this Griotte project, we uncovered two
-bugs in the CHERIoT switcher: (1) the ability for a malicious (or buggy)
-scheduler to resuscitate an exited thread in a deprecated state, thereby getting
-access to a capability that it should not be able to have access to anymore, and
-(2) the ability for a malicious caller to leverage the stack high watermark
-register to trigger a fault in the switcher, thereby getting access to the
-callee’s stack frame and thus private data.
+For simplicity, we’ll implement a multiplayer server for Noughts and Crosses (as we’ll call it in a parochially defiant act of patriotism against the US-centric internet :P) to illustrate the pattern.
 
-## Reasoning about unknown code
+I’ll be exploring a pattern where we maintain a Map of all the Noughts and Crosses games we have in progress safely such that all the connected websockets see the same game updates.
 
-The CHERI/CHERIoT threat model includes interactions with unknown compartments
-containing arbitrary code, which can be buggy or malicious, and which can share 
-objects in memory. Reasoning about arbitrary code is hard, because it
-requires characterising all the possible behaviours of that code. The challenge
-is that when trying to characterise what an unknown compartment can affect, we
-have to account not only for what it is passed directly (if an unknown
-compartment is physically passed a write capability to a region of memory, then
-it is behaviourally passed the ability to overwrite that region of memory), but
-also what it is passed indirectly—and this involves not only recursive
-access (if an unknown compartment is physically passed a read capability to a
-region of memory, then it is behaviourally passed the ability to acquire
-whatever ability is given by the capabilities in that region of memory), but
-also access through non-monotonic domain transitions (if an unknown compartment
-is physically passed a sealed entry point capability to a “counter”
-compartment’s `incr` function, then it is behaviourally passed the ability to
-affect the counter—but only by incrementing it). A unique feature of 
-Cerise is the ability to reason also about the latter part of the challenge.
+## The Core Game Server
 
-What makes it difficult to design such a characterisation is that it should at
-the same time be precise enough, and simple enough to verify the programs that
-we care about. At a very high level, Griotte defines a language to succinctly
-describe what is affected—and to state that something is *not* affected. The
-kind of properties that we want to describe are not only memory safety
-properties (if I share a buffer to the caller, then I have the guarantee that it
-cannot access the global data that I never shared), but also no-capture
-properties (if I share a buffer to the caller with its global permission
-stripped, then I have the guarantee that it cannot preserve a copy across
-calls), and many others (including secrecy, etc.).
+There’s a few different options for writing web apps in haskell. Yesod is the one I’m most familiar with. The canonical examples on Yesod WebSockets illustate how to use a shared broadcast [TChan](https://hackage.haskell.org/package/stm-2.5.3.1/docs/Control-Concurrent-STM-TChan.html) as the basis for a chat server (blog [here](https://www.yesodweb.com/blog/2014/03/wai-yesod-websockets), code example [here](https://github.com/yesodweb/yesod/blob/master/yesod-websockets/chat.hs).))
 
-## Separation logic and logical relations
+```
+data App = App (TChan Text)
 
-Technically, we developed a reasoning system in two parts.
-First, we defined (and proved sound) a separation logic that allows us to verify known code line by line,
-showing that it satisfies expected pre- and post-conditions,
-and that it preserves the expected invariants.
-We used this both on the code of the switcher,
-and on the code of specific compartments of interest, for example a key-value store<sup>[3](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:kvs)</sup>.
-We designed this separation logic so it is reusable,
-and we expect that other such compartments of interest could be verified with it.
+chatApp :: WebSocketsT Handler ()
+chatApp = do
+    sendTextData ("Welcome to the chat server, please enter your name." :: Text)
+    name <- receiveData
+    sendTextData $ "Welcome, " <> name
+    App writeChan <- getYesod
+    readChan <- atomically $ do
+        writeTChan writeChan $ name <> " has joined the chat"
+        dupTChan writeChan
+    (e :: Either SomeException ()) <- try $ race_
+        (forever $ atomically (readTChan readChan) >>= sendTextData)
+        (sourceWS $$ mapM_C (\msg ->
+            atomically $ writeTChan writeChan $ name <> ": " <> msg))
 
-Second, we defined a logical relation in separation logic,
-which is effectively an over-approximation of the effect of unknown code
-that can be used by the separation logic
-to reason about a jump to unknown code (through the switcher) in one single step.
-As such, it works like a universal contract<sup>[4](https://cheriot.org/verification/2026/11/24/griotte-verification-effort.html#fn:contract)</sup> for CHERIoT.
-Crucially, the frame rule of separation logic
-tells us that if we can establish that the resources (both in an informal sense, and in the technical sense of separation logic) of the caller
-are disjoint from those of the logical relation,
-then they will be preserved by the call.
+    atomically $ case e of
+        Left _ -> writeTChan writeChan $ name <> " has left the chat"
+        Right () -> return ()
 
-For example, if calling unknown code with a capability to a shared buffer,
-while keeping some private data,
-the logical relation requires that the unknown code is only passed capabilities that are *safe to share*
-in a technical sense.
+main :: IO ()
+main = do
+    chan <- atomically newBroadcastTChan
+    warp 3000 $ App chan
+```
 
-We then define a universal contract, stating that if an adversary has only access to
-*safe to share* capabilities, it can then execute safely and only produce other *safe to share* capabilities.
+In these examples, a global channel is accessed via `getYesod` which holds the channel state. It is duplicated by each websocket to subscribe to new messages in the chatroom.
 
-## Verification in the presence of compartments and a trusted switcher
+This shared TChan broadcast channel is a useful abstraction which will form part of our implementation but unlike the materials above we’ll need to maintain multiple gmaes at once with their own channel.
 
-We started by developing a simplified model of CHERIoT
-and a mini version of the CHERIoT-RTOS.
-In particular, we modelled the compartmentalisation mechanisms and 
-the cross-compartment call path of the switcher. 
-Our simplified model mirrors the main features of the CHERIoT hardware (including the new deep
-locality and deep immutability permissions).
-While our mini switcher doesn’t follow CHERIoT’s switcher instruction-by-instruction, 
-it implements the same steps.
+A naive approach might be to plonk our games in a `Map GameId GameState` stored in a [TVar](https://hackage.haskell.org/package/stm-2.4.2/docs/Control-Concurrent-STM-TVar.html). A TVar is a mutable variable that can be updated by multiple threads (or websocket handlers) and can be updated transactionally along with other TVars (which we’ll get into later.)
 
-In this model, we proved on a range of small examples that 
-the CHERIoT hardware-software co-design
-implements the expected memory-safety properties,
-and that the switcher’s *overall design* enforces both compartmentalisation and stack safety.
+```
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TVar (TVar, newTVarIO)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
-Our “end-to-end” results about concrete examples
-assume that the machine starts in a state that corresponds
-to the firmware image having been properly loaded.
-We have not verified the loader itself, and so it is part of our TCB.
-Technically, we consider executions only starting from a “loader-final” state.
-The loader is deterministic and so it is relatively easy to dump the contents of memory from a
-device (or simulator) after the loader has run and verify that a specific execution of the loader meets the
-properties required by our “loader-final” state.
+data GameMap = TVar (Map GameId GameState)
+data App = App GameMap
 
-We expect that it should be possible to prove the loader correct,
-but this is future work for now.
+main :: IO ()
+main = do
+    gameMap <- newTVarIO Map.empty
+    warp 3000 $ App gameMap
+```
 
-## The cherry on top: Concurrency, exception handling and optimisations
+We’ll also set up our `GameState` types including our board state, our two players, channel to broadcast move updates, etc:
 
-Our initial model was a simplification of CHERIoT:
-it didn’t support exceptions or concurrency/context switching,
-and some optimisations of the switcher (such as the stack high watermark)
-were left out.
+```
+type GameId = T.Text
+data Player = Player { username ::T.Text, userId:: T.Text }
+type ConnectionCount = Int
 
-The CHERIoT team has been dedicated to making CHERIoT trustworthy,
-and has been very supportive of our verification effort.
-To that end, they included, in the switcher’s source, detailed comments about the expected 
-invariants and behaviour of the switcher, in the form of pre- and post-conditions
-for the execution blocks.
-They pointed out that the complicated control flow in the switcher’s exception path 
-was a likely source of errors.
+-- A board square is either empty, an X or an O
+data Square = Empty | X | O deriving (Eq)
 
-Our efforts showed that the cross-compartments call (and return) path that we verified 
-was straightforward
-(although stating no-capture and stack safety at the separation logic level is not trivial!),
-but a good starting point.
-However, as pointed out by the CHERIoT team,
-the features that we initially left out are more prone to mistakes:
-the switcher’s exception handler (responsible for context switching and error handling)
-has a more fiddly and convoluted execution path,
-and the stack high watermark creates a new point of trust.
+instance ToJSON Square where
+    toJSON Empty = toJSON ("" :: Text)
+    toJSON X = toJSON ("X" :: Text)
+    toJSON O = toJSON ("O" :: Text)
 
-By pursuing our verification effort to include the features missing from our initial model,
-some of the examples that we proved in the simplified setup
-did not work anymore, which actually uncovered bugs in the switcher.
+-- For simplicity, a board is just a list of 9 squares - we flatten it out to a 1 dimensional representation
+type Board = [Square] 
 
-### “High is too low”: Stack high watermark and exception handler
+data GameUpdate = NewBoard Board
 
-The first bug that we uncovered comes from an interaction between the exception handler
-and the stack high watermark.
+data GameState = GameState {
+    board:: TVar Board,
+    player1 :: Player,
+    player2 :: Player,
+    -- The channel will be updated each time a move is made to notify listening websockets
+    gameChan :: TChan GameUpdate,
 
-In the presence of an exception handler,
-any instruction must either ensure that it cannot fault,
-or that the exception handler can safely execute (either by force-unwinding to the caller, or by
-giving control to the error handler of the faulting compartment).
-In our proof, this manifests as each instruction coming with a proof obligation
-that even when the instruction can fault, all invariants of the system are maintained.
+    -- The number of connected websockets to this game
+    gameConnections :: TVar ConnectionCount
+}
 
-On the other hand, the stack high watermark (SHWM) is an optimisation allowing the switcher
-to clear only the stack frame used during the call.
-Specifically, the SHWM tracks, in hardware, the highest address of the stack that has been written to,
-and the switcher only clears up to this address, instead of the whole shared stack region.
-The code of the switcher relied on an invariant for the SHWM:
-it should always be in between the bounds of the stack capability at the point of a cross-compartment call.
-To that end, the switcher always re-sets it in the bounds of the stack capability at
-cross-compartment calls and returns.
-This invariant was very dynamic by nature,
-because the bounds of the stack change in between cross-compartment calls.
+data GameMap = TVar (Map GameId GameState)
+```
 
-However, it turns out that this invariant did not hold:
-a malicious caller could craft a stack pointer with restricted bounds, 
-together with a stack object outside of this restricted stack to be used 
-later by a callee.
-This scenario can lead to a fault in the switcher return path of the callee,
-before it has cleared the callee stack frame,
-which then allows a malicious caller to recover the entire callee’s private state.
+Since we’re using a TVar each WebSocket thread can load a new game into the game map if necessary by running [modifyTVar](https://hackage.haskell.org/package/stm-2.5.3.1/docs/Control-Concurrent-STM-TVar.html#v:modifyTVar) to update the map.
 
-We identified this problem when we tried to adapt our proof
-from a simplified switcher (without the SHWM),
-to a more faithful switcher (with the SHWM).
-The proof got stuck when we had to show that an adversary
-could not move the SHWM outside of the bounds of the stack.
-After a bit of investigation, we realised that it was not because we had failed to correctly capture the informal invariant,
-but because that invariant was not preserved.
-More specifically, it seemed to be possible for an attacker to move SHWM below the base of the stack capability.
+That just won’t do though! Only one thread can update the map entries at a time, and we have aspirations of being the Internet’s go-to Noughts and Crosses server! We’ll need something that scales better than that while we’ve still got the luxury of vertically scaling one machine along our path to world domination.
 
-We first tried to relax this (expected) invariant and allow SHWM to move below the base of the stack capability,
-but this condition was guarding a fault in the cross-compartment return-path.
-With the relaxed invariant, we had to prove that the fault was safe,
-which turned out to be impossible to prove, due to the callee’s stack frame being preserved.
-That’s how we realised that it was possible to mount an attack,
-with a subtle construction to move the SHWM below the base of the stack capability
-and exploiting the fault in the switcher’s return path to recover the uncleared callee’s stack frame.
+[stm-containers](https://nikita-volkov.github.io/stm-containers/) to the rescue! It uses a Hash Array Mapped Trie datastructure to split the map into chunks that can be updated inside independent STM transactions allowing for more concurrency.
 
-The fix (merged in [PR #799](https://github.com/CHERIoT-Platform/cheriot-rtos/pull/799))
-ended up being pretty simple:
-by forbidding malicious callers from changing the base of the stack,
-it ensures that malicious callers cannot craft a stack object outside of the stack that would
-move the SHWM outside of the stack bounds.
-This does not prevent the caller from calling the callee with less than the maximum possible
-amount of stack space,
-but does require that the shared stack region is truncated in the same direction as normal stack allocation.
+```
+import qualified StmContainers.Map as M
+data GameMap = M.Map GameId GameState
+```
 
-We could validate the fix in our setup, by completing the proof, before the merge.
+Our next challenge is to load the game state into the game map when the first websocket connects and remove it from the map when it’s no longer needed so that we don’t run out of memory in our path to world domination.
 
-### “You’re not really over yet”: Concurrency with a malicious scheduler
+## Loading the Game
 
-While verifying the context switching path in our simplified switcher,
-and in particular the path that an exited thread takes,
-we needed to define “what it means for a thread to exit”,
-and what is the authority that an exited thread still holds.
-We first looked at the scheduler’s code, in which exited threads are never meant to be scheduled anymore.
-Intuitively, we would think that an exited thread has no continuation.
+Imagine our Yesod ‘App’ type also had a GameRepository that was a data store we could use to access and persist our TicTacToe games:
 
-However, the scheduler is not trusted for confidentiality or integrity 
-(which are the properties we are verifying!), which means that in our model,
-we consider the scheduler as any other adversary compartment
-(and therefore, from our perspective, it contains arbitrary code).
-In particular, a malicious (or buggy) scheduler could schedule an exited thread,
-in which case the switcher re-instated that thread’s last context (as stored in the context switching save area),
-independently from whether that thread had exited.
-Because the thread exit path of the switcher never cleared the save area,
-an exited thread’s last context turned out to be whatever was left after the last preemption (or fault), 
-which means that it could contain local capabilities that should not have been captured—clearly violating no-capture.
+```
+data App = App { gameRepository :: GameRepository, gameMap :: GameMap }
+```
 
-We caught this bug because our formal verification method—focused on integrity and confidentiality—captures the threat model of CHERIoT,
-where the scheduler is no different from other adversaries with respect to those properties.
-The way the problem manifested in our proof is that we had to define what the authority of the continuation of an exited thread is,
-to account for what would happen if the thread were scheduled in a stale state.
-However, this looked fishy, and so we started questioning whether we should even have to consider such a situation.
+```
+data GameEntity = GameEntity {
+    gameEntityBoard :: Board,
+    gameEntityPlayer1 :: Player,
+    gameEntityPlayer2 :: Player
+}
 
-There are two disjoint sub-problems:
-(1) having access to an old register file (potentially breaking no-capture guarantees),
-and (2) an exited thread being re-scheduled.
-Sub-problem (1) is dangerous for integrity and confidentiality.
-Sub-problem (2) is a design question—what should happen if the scheduler reschedules an exited thread.
+loadGame :: GameRepository -> GameId -> IO (Either Text GameEntity)
+```
 
-The fix (merged in [PR #769](https://github.com/CHERIoT-Platform/cheriot-rtos/pull/769))
-then fixed those problems:
-(1) the register file is cleared in the exit thread path (preventing an exited thread from using stale values)
-and (2) an exited thread becomes an idle thread looping in a `wfi` (wait-for-interrupt) loop.
-This fix was one of several possible fixes considered but was chosen because the scheduler always has the ability to run the idle thread (which loops in a `wfi` instruction).
-This meant that the ability to schedule an exited thread could be trivially shown to not increase the power of the scheduler.
+We will leverage this function to load the game into the cache when it’s not already populated.
 
-## What now?
+We will use [Software Transactional Memory (STM)](https://academy.fpblock.com/haskell/library/stm/) abstraction to ensure that if two websocket connections try to insert an entry into the game map at the same time, they both end up with the same ‘GameState’ instance so that they receive game updates on the broadcast channel.
 
-With the fixed bugs, we have verified our Griotte switcher on top of our Griotte ISA,
-assuming that the loader initialises the machine properly.
+```
+getGameState :: GameRepository -> GameMap -> GameId -> IO (Either Text GameState)
+getGameState gameRepository gameMap gameId = do
+    existing <- atomically $ do
+        cached <- M.lookup gameId gameMap
+        case cached of
+            Just gameState -> Just <$> registerSharer gameState
+            Nothing -> return Nothing
+    case existing of
+        Just gameState ->
+            return $ Right gameState
+        Nothing -> do
+            -- Note: there are ways we could make this code less nested with branches but
+            -- I have kept it like this for simplicity rather than get fancy
+            loaded <- loadGame gameRepository gameId
+            case loaded of
+                Left err ->
+                    return $ Left err
+                Right entity -> do
+                    -- Set up the shared board state TVar and channel, etc
+                    freshState <- mapGameState entity
+                    -- It's important we recheck in the same transaction as writing the entry
+                    -- to the cache that another thread hasn't inserted it in the meantime so
+                    -- that we can make sure we're sharing the same TVars and channels, etc
+                    atomically $ do
+                        cached' <- M.lookup gameId gameMap
+                        case cached' of
+                            Just gameState -> Right <$> registerSharer gameState
+                            Nothing -> do
+                                M.insert freshState gameId gameMap
+                                Right <$> registerSharer freshState
+  where
+    registerSharer :: GameState -> STM GameState
+    registerSharer gameState = do
+        modifyTVar' (gameConnections gameState) (+ 1)
+        return gameState
 
-That gave us confidence to scale our verification to be based on
-the whole authoritative [cheriot-sail](https://github.com/CHERIoT-Platform/cheriot-sail) ISA, 
-using the `sail-to-rocq` extraction, and our proofs of that are now complete.
-It means that we are quite confident that 
-the [current upstream](https://github.com/CHERIoT-Platform/cheriot-rtos/blob/e2dad05078bd25ed6f1ab993e14f332aa8c20557/sdk/core/switcher/entry.S) 
-switcher, together with the hardware, implement thread and compartments isolation, as well as no-capture.
+    mapGameState :: GameEntity -> IO GameState
+    mapGameState GameEntity { gameEntityBoard = b, gameEntityPlayer1 = p1, gameEntityPlayer2 = p2 } = do
+        boardVar <- newTVarIO b
+        chan <- newBroadcastTChanIO
+        connVar <- newTVarIO 0
+        return GameState
+            { board = boardVar
+            , player1 = p1
+            , player2 = p2
+            , gameChan = chan
+            , gameConnections = connVar
+            }
+```
 
-In the future we would also like to verify the loader, and we also hope that our
-logical machinery can be used to verify correctness and security of applications
-running atop CHERIoT.
+In our `getGameState` function, if we don’t find the game already present in our game map then we attempt to load it freshly and insert it into the map. We do this insertion inside an STM transaction via the [atomically](https://hackage.haskell.org/package/stm-2.5.3.1/docs/Control-Monad-STM.html#v:atomically) function.
 
-## Other formal verification work you might be interested in
+This means that if there is a conflict in the middle of the transaction because one or more other websocket threads have tried to load the game in another concurrent transaction, the transaction inside the `atomically` ‘block’ will be retried by the unsuccessful writing websocket threads. They will then read the newly inserted entry and increment the sharer count via `registerSharer`, meaning  that all threads are reading from the same broadcast channel.
 
-The focus of Cerise and Griotte has been *advanced* properties of capability machines,
-in particular involving non-monotonic domain transitions.
-As such, it is complementary to other formal verification work:
+## Taming the Herd
 
-- Nienhuis et al. [2] and Bauereiß et al. [3] prove capability monotonicity of real ISAs for CHERI-MIPS and Morello, respectively; and Hammond et al. [4] builds on top of those proofs and Cerise to recover some non-monotonic domain transitions
-- Ploix et al. [5] proves that the CHERIoT-Ibex implements the CHERIoT-Sail model
-- Duque Antón et al. [6] and Rosemeyer [7] prove security properties at the level of the RTL
-- Work on an abstract specification of the CHERIoT ISA and switcher at Google.
+There’s an improvement we can make to make sure that multiple threads don’t try to load our game at the same time, wasting trips to the database just to throw the result away. This could happen in a thundering herd of observers to watch the latest tournament game between Noughts and Crosses grandmasters!
 
-## References
+We will use an [MVar](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent-MVar.html) to allow a thread to lay claim to responsibility for loading the resource and signal any other threads waiting when it has done so. MVar’s [readMVar](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent-MVar.html#v:readMVar) function allows the caller to wait (block) until it has been populated with a value (or it will return immediately if it’s already populated with a value.)
 
-1. Sander Huyghebaert, Steven Keuchel, Coen De Roover and Dominique Devriese. [Formalizing, Verifying and Applying ISA Security Guarantees as Universal Contracts](http://doi.org/10.1145/3576915.3616602). *Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security*, Association for Computing Machinery (2023), 2083–2097. [doi] BibTeX @inproceedings{huyghebaert2023, author = {Huyghebaert, Sander and Keuchel, Steven and De Roover, Coen and Devriese, Dominique}, title = {Formalizing, Verifying and Applying ISA Security Guarantees as Universal Contracts}, booktitle = {Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security}, series = {CCS '23}, publisher = {Association for Computing Machinery}, year = {2023}, month = nov, pages = {2083--2097}, doi = {10.1145/3576915.3616602} }
-2. Kyndylan Nienhuis, Alexandre Joannou, Thomas Bauereiss, Anthony Fox, Michael Roe, Brian Campbell, Matthew Naylor, Robert M. Norton, Simon W. Moore, Peter G. Neumann, Ian Stark, Robert N. M. Watson and Peter Sewell. [Rigorous engineering for hardware security: Formal modelling and proof in the CHERI design and implementation process](http://doi.org/10.1109/SP40000.2020.00055). *2020 IEEE Symposium on Security and Privacy (SP)*, IEEE (2020), 1003–1020. [doi] BibTeX @inproceedings{nienhuis2020, author = {Nienhuis, Kyndylan and Joannou, Alexandre and Bauereiss, Thomas and Fox, Anthony and Roe, Michael and Campbell, Brian and Naylor, Matthew and Norton, Robert M. and Moore, Simon W. and Neumann, Peter G. and Stark, Ian and Watson, Robert N. M. and Sewell, Peter}, title = {Rigorous engineering for hardware security: Formal modelling and proof in the CHERI design and implementation process}, booktitle = {2020 IEEE Symposium on Security and Privacy (SP)}, publisher = {IEEE}, year = {2020}, month = may, pages = {1003--1020}, doi = {10.1109/SP40000.2020.00055} }
-3. Thomas Bauereiss, Brian Campbell, Thomas Sewell, Alasdair Armstrong, Lawrence Esswood, Ian Stark, Graeme Barnes, Robert N. M. Watson and Peter Sewell. [Verified Security for the Morello Capability-enhanced Prototype Arm Architecture](http://doi.org/10.1007/978-3-030-99336-8_7). *Programming Languages and Systems (ESOP 2022)*, Springer International Publishing (2022), 174–203. [doi] BibTeX @inproceedings{bauereiss2022, author = {Bauereiss, Thomas and Campbell, Brian and Sewell, Thomas and Armstrong, Alasdair and Esswood, Lawrence and Stark, Ian and Barnes, Graeme and Watson, Robert N. M. and Sewell, Peter}, title = {Verified Security for the Morello Capability-enhanced Prototype Arm Architecture}, booktitle = {Programming Languages and Systems (ESOP 2022)}, series = {Lecture Notes in Computer Science}, publisher = {Springer International Publishing}, year = {2022}, pages = {174--203}, isbn = {9783030993368}, doi = {10.1007/978-3-030-99336-8_7} }
-4. Angus Hammond, Ricardo Almeida, Thomas Bauereiss, Brian Campbell, Ian Stark and Peter Sewell. [Morello-Cerise: A Proof of Strong Encapsulation for the Arm Morello Capability Hardware Architecture](https://dl.acm.org/doi/pdf/10.1145/3729329). *Proceedings of the ACM on Programming Languages 9*, PLDI (2025), 1961–1983. [pdf] [doi] BibTeX @article{hammond2025, author = {Hammond, Angus and Almeida, Ricardo and Bauereiss, Thomas and Campbell, Brian and Stark, Ian and Sewell, Peter}, title = {Morello-Cerise: A Proof of Strong Encapsulation for the Arm Morello Capability Hardware Architecture}, journal = {Proceedings of the ACM on Programming Languages}, volume = {9}, number = {PLDI}, publisher = {Association for Computing Machinery}, year = {2025}, month = jun, pages = {1961--1983}, issn = {2475-1421}, doi = {10.1145/3729329}, pdf = {https://dl.acm.org/doi/pdf/10.1145/3729329} }
-5. Louis-Emile Ploix, Alasdair Armstrong, Tom Melham, Ray Lin, Haolong Wang and Anastasia Courtney. [Comprehensive Formal Verification of Observational Correctness for the CHERIoT-Ibex Processor](https://arxiv.org/abs/2502.04738). 2025. [doi] BibTeX @misc{ploix2025, author = {Ploix, Louis-Emile and Armstrong, Alasdair and Melham, Tom and Lin, Ray and Wang, Haolong and Courtney, Anastasia}, title = {Comprehensive Formal Verification of Observational Correctness for the CHERIoT-Ibex Processor}, publisher = {arXiv}, year = {2025}, doi = {10.48550/arXiv.2502.04738}, url = {https://arxiv.org/abs/2502.04738} }
-6. Anna Lena Duque Antón, Johannes Müller, Philipp Schmitz, Tobias Jauch, Alex Wezel, Lucas Deutschmann, Mohammad Rahmani Fadiheh, Dominik Stoffel and Wolfgang Kunz. [VeriCHERI: Exhaustive Formal Security Verification of CHERI at the RTL](https://doi.org/10.1145/3676536.3676841). *Accepted for publication at the 43rd International Conference on Computer-Aided Design (ICCAD ‘24)*, Association for Computing Machinery (2024). [doi] BibTeX @inproceedings{vericheri2024, author = {Duque Ant{\'o}n, Anna Lena and M{\"u}ller, Johannes and Schmitz, Philipp and Jauch, Tobias and Wezel, Alex and Deutschmann, Lucas and Fadiheh, Mohammad Rahmani and Stoffel, Dominik and Kunz, Wolfgang}, title = {VeriCHERI: Exhaustive Formal Security Verification of CHERI at the RTL}, doi = {https://doi.org/10.1145/3676536.3676841}, year = {2024}, month = oct, location = {New York, USA}, publisher = {Association for Computing Machinery}, booktitle = {Accepted for publication at the 43rd International Conference on Computer-Aided Design (ICCAD `24)} } Abstract Protecting data in memory from attackers continues to be a concern in computing systems. CHERI is a promising approach to achieve such protection, by providing and enforcing fine-grained memory protection directly in the hardware. Creating trust for the entire system stack, however, requires a gap-free verification of CHERI’s hardware-based protection mechanisms. Existing verification methods for CHERI target the abstract ISA model rather than the underlying hardware implementation. Fully ensuring the CHERI security guarantees for a concrete RTL implementation is a challenge in previous flows and demands high manual efforts. This paper presents VeriCHERI, a novel approach to security verification. It is conceptionally different from previous works in that it does not require any ISA specification. Instead of checking compliance with a golden ISA model, we check against well-established global security objectives of confidentiality and integrity. Fully covering these objectives, VeriCHERI uses as few as four unbounded properties to exhaustively prove or disprove any vulnerability. We demonstrate the effectiveness and scalability of VeriCHERI on a RISC-V based processor implementing a CHERI variant.
-7. Tita Rosemeyer. [Formal Verification of Capability-Safety in the CHERIoT-Ibex Processor](https://www.cs.ox.ac.uk/tom.melham/grads/Rosemeyer-2025-FVC). 2025. [pdf] BibTeX @mastersthesis{titarosemeyer2025, author = {Rosemeyer, Tita}, title = {Formal Verification of Capability-Safety in the CHERIoT-Ibex Processor}, school = {University of Oxford}, year = {2025}, pdf = {https://www.cs.ox.ac.uk/tom.melham/grads/Rosemeyer-2025-FVC} }
+The game entry in our game map will now either be a game loaded into the cache (`LoadedGame`) or a game that is currently being loaded by another websocket (`LoadingGame`.) `LoadingGame` will contain an MVar that can be read to receive a signal that the other thread has completed loading the game.
+
+```
+data GameEntry = LoadedGame GameState | LoadingGame (MVar ())
+type GameMap = M.Map GameId GameEntry
+```
+
+When we first try to retrieve a game, we have to decide the action we need to take based on the cache state, which we represent with this type:
+
+```
+data CacheDecision
+    -- The game is already in the cache
+    = Hit GameState
+    -- We're awaiting another thread loading the game
+    | Await (MVar ())
+    -- We have claimed ownership over loading the game
+    | Claimed (MVar ())
+```
+
+When we load a game we transactionally lay claim to loading the resource if it’s not already loaded or is currently being loaded by writing a ‘LoadingGame’ entry to cache:
+
+```
+getGameState :: GameRepository -> GameMap -> GameId -> IO (Either Text GameState)
+getGameState gameRepository gameMap gameId = do
+    pendingMvar <- newEmptyMVar
+    decision <- atomically $ do
+        cached <- M.lookup gameId gameMap
+        case cached of
+            Just (LoadedGame gameState) ->
+                Hit <$> registerSharer gameState
+            Just (LoadingGame existingMvar) ->
+                return $ Await existingMvar
+            Nothing -> do
+                M.insert (LoadingGame pendingMvar) gameId gameMap
+                return $ Claimed pendingMvar
+    case decision of
+        Hit gameState ->
+            return $ Right gameState
+        Await existingMvar -> do
+            -- Once signalled that the game has been loaded, we recursively start again
+            readMVar existingMvar
+            getGameState gameRepository gameMap gameId
+        Claimed ownedMvar ->
+            loadAndPublish ownedMvar
+```
+
+This is performed in an STM transaction, so if multiple threads try to insert their ‘MVar’ claiming ownership then the losers of the race will retry the transaction and see the winning thread’s claim when they read the map again. They will then block on it being populated by the winning thread using using [readMVar](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent-MVar.html#v:readMVar), which serves as a signal that they can now load the game from the cache.
+
+When loading the resource we must make sure that threads don’t wait on the MVar indefinetly if an error is thrown while retrieving the game so we clean up the claim if an error occurs while trying to load the game.
+
+```
+    loadAndPublish :: MVar () -> IO (Either Text GameState)
+    loadAndPublish ownedMvar = do
+        attempted <- tryLoad
+        result <- case attempted of
+            Left ioErr -> do
+                -- An exception was thrown in the IO action. We remove the claim
+                -- to allow another threat to attempt to load it
+                atomically $ M.delete gameId gameMap
+                return $ Left (T.pack (show ioErr))
+            Right (Left err) -> do
+                -- The action returned a 'Left.' We remove the claim to allow another thread
+                -- to attempt to load it
+                atomically $ M.delete gameId gameMap
+                return $ Left err
+            Right (Right entity) -> do
+                freshState <- mapGameState entity
+                atomically $ do
+                    -- Replace the 'Loading' cache entry with the loaded game entry
+                    M.insert (LoadedGame freshState) gameId gameMap
+                    _ <- registerSharer freshState
+                    return ()
+                return $ Right freshState
+        -- Wake up any threads currently waiting on our LoadingGame placeholder.
+        putMVar ownedMvar ()
+        return result
+      where
+        tryLoad :: IO (Either IOException (Either Text GameEntity))
+        tryLoad = try (loadGame gameRepository gameId)
+```
+
+# Cache Expiry
+
+Our last challenge is to make sure that entries are removed from the cache when it’s safe to do so (there are no websocket subscriptions.) Our Noughts and Crosses server will be very busy with many games being started and ended and we can’t have ourselves running out of heap space due to a memory leak of games remaining in the cache!
+
+When we think of garaunteeing the safe release of scarce resources, one of the options our mind turns to is the [resourcet](https://hackage.haskell.org/package/resourcet) package. This package allows us to use the type system to make sure a resource will be cleaned up when it is no longer being used. See [this blog entry](https://www.yesodweb.com/blog/2011/12/resourcet) for more on how it works if you are unfamilar with it.
+
+We will use the resourcet package’s [allocate](https://hackage.haskell.org/package/resourcet-1.3.0/docs/Control-Monad-Trans-Resource.html#v:allocate) function to register the action that must be taken when the game resource is no longer in scope (due to the websocket disconnecting or an exception being thrown.)
+
+We have the ‘gameConnections’ variable already tracking the number of websocket handlers that are subscribed to the game. On connection, we will increment it via our `registerSharer` function as usual and on disconnection if the connection count has reached 0 we will remove it from the cache:
+
+```
+getGameState :: MonadResource m => GameRepository -> GameMap -> GameId -> m (Either Text GameState)
+getGameState gameRepository gameMap gameId = do
+    (_releaseKey, result) <- allocate acquireGameState releaseGameState
+    return result
+  where
+    acquireGameState :: IO (Either Text GameState)
+    acquireGameState = do
+        pendingMvar <- newEmptyMVar
+        decision <- atomically $ do
+            cached <- M.lookup gameId gameMap
+            case cached of
+                Just (LoadedGame gameState) ->
+                    Hit <$> registerSharer gameState
+                Just (LoadingGame existingMvar) ->
+                    return $ Await existingMvar
+                Nothing -> do
+                    M.insert (LoadingGame pendingMvar) gameId gameMap
+                    return $ Claimed pendingMvar
+        case decision of
+            Hit gameState ->
+                return $ Right gameState
+            Await existingMvar -> do
+                readMVar existingMvar
+                acquireGameState
+            Claimed ownedMvar ->
+                loadAndPublish ownedMvar
+
+    releaseGameState :: Either Text GameState -> IO ()
+    releaseGameState (Left _) =
+        -- Acquire reported a loading error and already cleaned up its placeholder,
+        -- so there's no sharer count to decrement.
+        return ()
+    releaseGameState (Right gameState) = atomically $ do
+        modifyTVar' (gameConnections gameState) (subtract 1)
+        remaining <- readTVar (gameConnections gameState)
+        when (remaining <= 0) $ M.delete gameId gameMap
+```
+
+We registered the `releaseGameState` function as the function that should be ran when the resource goes out of scope. It will check if there’s any sharers left, and if there are not it will remove the game from the game map.
+
+Again, the STM abstraction has served us well. The transaction inside `atomically` will be restarted if either the ‘gameConnections’ TVar or game map is updated by another websocket thread.
+
+If a new websocket connection retrieves the game from the cache at the same time as it is being removed in another transaction, either:
+
+- The transaction removing the cache entry is restarted, meaning the websocket doesn’t end up with an orphaned game state and channel it will never get updates on
+- Or the transaction retrieving the item from the cache is aborted, meaning the websocket thread has to insert it threshly and it will be visible to other websockets
+
+*Note*: the conditional deletion can be achieved slightly more efficiently with stm-container’s [focus](https://hackage-content.haskell.org/package/stm-containers-1.2.2/docs/StmContainers-Map.html#v:focus) function to avoid having to traverse the map a second time to do the deletion.
+
+We can now use this game ‘resource’ in our websocket handler inside `runResourceT`:
+
+```
+websocketHandler :: App -> GameId -> WebSocketsT Handler ()
+websocketHandler app gameId = do
+    userId <- lift requireAuthId
+    websocketConnection <- ask
+    runResourceT $ do
+        result <- getGameState (gameRepository app) (gameMap app) gameId
+        case result of
+            Left _err -> return ()
+            Right gameState ->
+                liftIO $ race_
+                    (handleIncomingMessages websocketConnection gameState userId)
+                    (handleOutgoingMessages websocketConnection gameState userId)
+```
+
+We use [race_](https://hackage-content.haskell.org/package/async-2.2.6/docs/Control-Concurrent-Async.html#v:race_) to spawn two green threads to manage the Websocket connection.
+
+`handleOutgoingMessages` will read from the shared broadcast channel and write to the websocket to inform the client of board changes.
+
+`handleIncomingMessages` will read from the websocket to make moves on behalf of the user. It will validate the move, update the state and write to the shared broadcast channel.
+
+When either `handleIncomingMessages` or `handleOutgoingMessages` fails on reading or writing to the socket due to it being disconnected, `runResourceT` will catch the error and run the `releaseGameState` function that we registered to run on resource deallocation in our `getGameState` function before rethrowing the error.
+
+If you want to see a full implementation (mostly vibe coded other than what we’ve discussed here) of our demo noughts and crosses server, I’ve uploaded it to github [here](https://github.com/Happy0/vibe-noughts-and-crosses-demo). The [NoughtsAndCrosses.hs](https://github.com/Happy0/vibe-noughts-and-crosses-demo/blob/main/src/Handler/NoughtsAndCrosses.hs) file contains all the logic we’ve been discussing in this blog entry.
+
+## Conclusion
+
+This pattern can be applied in any situation where it’s important that multiple threads need to share the same reference to something that is dynamically loaded. This is a requirement beyond that of a traditional cache where it doesn’t particularly matter if an item is evicted from the cache (per some eviction policy) while there’s still threads holding on to it, for example.
+
+If you think you might find this pattern useful for something, I’ve published it as a library named [shared-resource-cache](https://hackage.haskell.org/package/shared-resource-cache). Source [here](https://github.com/Happy0/shared-resource-cache).
+
+*Note*: it works slightly differently to what we’ve explored here: when there are no ‘sharers’ of the given resource, it is not cleared from the cache immediately. Instead, it is cleared when there has been no sharers for at least a configured amount of time.
+
+Feel free to send me a [game invite](https://wordify.gordo.life/create-lobby) on wordify. My username is happy0 :).
