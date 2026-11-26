@@ -1,84 +1,163 @@
-Recently, I bought a used Sony Ericsson S500i – one of the most beautiful phones IMO.
-I vividly remember getting online on this phone while away from home and downloading games from the Sony Ericsson shop (and the exorbitant mobile data charges that came with it!).
+Qualcomm’s laptop effort had humble beginnings. Their early Arm-based laptops used cell phone SoCs, and suffered from [noticeably poor performance](https://www.notebookcheck.net/Asus-NovaGo-Windows-Laptop-with-Snapdragon-835-Review-Repetition-of-the-Netbook-Dilemma.271884.0.html) even against lower end Intel chips. But breaking into the PC market was going to be a marathon rather than a sprint, and Qualcomm has been persistent. Qualcomm created higher performance Snapdragon variants targeted at laptops, which became increasingly competent with each generation. Now, Qualcomm’s Snapdragon X2 Elite Extreme can deliver CPU performance that challenges the best of its x86-64 competition. To deliver that performance, Qualcomm relies on the third generation of their in-house Oryon architecture, which I’ll call Oryon 3 for short.
 
-But when I tried using it again in 2026, I couldn’t connect to the mobile network. Even though I had a SIM card compatible with the phone, 2G had been shut down for some time, leaving no way to access the Internet over a mobile connection.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7579d739-fa7c-4268-8b3b-4db72e51f1b3_1274x718.png)
 
-USB wasn’t an option either. On many phones of this era, USB tethering was designed to share the phone’s Internet connection with a computer, not the other way around<sup>[1](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:1)</sup>. But there is a way…
+The Snapdragon X2 Elite deploys Oryon 3 in both E-Core and P-Core variants, which Qualcomm confusingly calls “performance” and “prime” cores, respectively. P-Cores are the star of the show in the Snapdragon X2 Elite, where they provide both maximum single threaded performance while also providing the bulk of multithreaded throughput. That’s because Qualcomm has P-Cores outnumber their E-Cores by a factor of two, creating an inverted hybrid strategy compared to Intel’s. Thanks to this strategy, Qualcomm’s Oryon 3 P-Core variant shoulders most of the burden when it comes to Qualcomm’s PC market ambitions.
 
-## Getting online via Bluetooth
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F561f60ef-a76c-4c9e-aabd-d5907f1a79cc_690x75.png)
 
-Bluetooth supports various profiles, which define how devices use Bluetooth for specific purposes. One of these is Personal Area Networking (PAN), which allows devices to communicate over Bluetooth as if they were connected to an Ethernet network.
+Oryon 3 takes on this burden by deploying an architecture with a strong resemblance to the first Oryon generation. Qualcomm technically has a second generation Oryon core, but only used it in phones. [Their website](https://www.qualcomm.com/processors/oryon) also suggests it’s a very minor change over the first generation, so I’ll be treating first generation Oryon as Oryon 3’s direct predecessor.
 
-PAN carries Ethernet frames over Bluetooth, including IP traffic. This allows a device acting as a PAN User (PANU) to access the Internet through another device acting as a Network Access Point (NAP). The NAP forwards the traffic to the Internet, much like a Wi-Fi hotspot, but over Bluetooth instead<sup>[2](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:2)</sup>.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F190e658d-11f6-4bdf-a0b1-d472149e53b6_1148x878.png)
 
-Although Bluetooth PAN is much less common nowadays, many devices still support the profile. One common use case was sharing a phone’s mobile Internet connection with a laptop. But why not reverse the direction? We can use a network-connected computer as a NAP and access the Internet from an old Java phone, provided the phone supports PANU<sup>[3](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:3)</sup>.
+Similarity to Oryon 1 is a good thing, because that gives Oryon 3 just about everything you could ask for from a 2026-era high performance design. From Oryon 1, Oryon 3 inherits an out-of-order window in excess of 600 micro-ops. Qualcomm has also carried forward a two-level cache setup that emphasizes speed over capacity. Compared to its predecessor, Oryon 3 takes things up a notch by pushing clock speeds to 5 GHz. It’s a huge 16% increase over the 4.3 GHz speed that Oryon 1 could reach, and is enough to offer a generational performance gain on its own. But Qualcomm doesn’t stop there. Oryon 3 increases core width to 9 micro-ops, up from 8 in its predecessor, and makes a number of improvements throughout the pipeline. Qualcomm brings SVE2 and SME support to the new core as well, keeping it up-to-date with the evolving aarch64 architecture and opening up new software optimization opportunities. In its role as a maximum performance architecture, Oryon 3 faces off against the likes of AMD’s Zen 5 and Intel’s Lion Cove. Arm’s Cortex X925 is another competitor, thanks to Nvidia’s laptop push with N1X.
 
-### Setting up Bluetooth NAP on Raspberry Pi 5
+# A Faster Frontend
 
-From what I’ve seen on forums, many older Sony Ericsson, Nokia, and other phones seem to **support PANU even if it is not mentioned in the documentation**. I couldn’t find any confirmation for the S500i, so I decided to give it a try by setting up a Bluetooth NAP and seeing whether the phone could connect.
+Setting aside clock speed, Oryon 3’s headline architectural improvement is a core width increase from 8 to 9 ups. At the frontend, Qualcomm supports this by adding another decode slot. The fetch and decode pipeline otherwise looks mostly unchanged. Oryon 1 already had over-provisioned instruction cache bandwidth at 64 bytes per cycle, which is more than sufficient to feed a 8-wide or 9-wide aarch64 decoder. Qualcomm has also kept a 192 KB, 6-way instruction cache with hardware coherency, as well as a 256 entry 8-way instruction TLB. These large structures should help the core use its fastest instruction delivery path more often than its peers, which have smaller instruction caches and instruction TLBs. Impressively, Qualcomm managed to keep these large structures and add an extra decode slot while keeping a 13 cycle branch mispredict penalty. Clock speed increases often come with compromises like longer pipelines or smaller structures, but here Qualcomm is able to have their cake and eat it too.
 
-I used Linux for this, but I’m sure you Windows and Mac wizards can figure out how to make it work on your systems too.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F386c94c3-719c-4247-8a34-7b9d11a307d1_1274x715.png)
 
-> Note: After finishing this blog, I found out that there is a way to do the same thing on Windows, see: [Getting old Java phones online again (Windows Edition)](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again-windows.html).
+Testing instruction bandwidth with a stream of NOPs validates the increased decoder width when the test loop fits within the instruction cache. Improvements continue at larger instruction footprints. Oryon 3 is able to sustain about 4 NOPs/cycle from L2, compared to 2 per cycle on Oryon 1. Qualcomm might have changed something with instruction prefetching from L2, or they might have widened datapaths between the instruction cache and L2. Whatever the case, Oryon 3 now matches the likes of AMD’s Zen 5 and Intel’s Lion Coves in terms of streaming code from L2, while boasting a much larger L2. AMD and Intel’s cores do have a L3 that provides more capacity than Qualcomm’s L2, but fetching code from that L3 will cause another drop in instruction throughput.
 
-I found an old guide showing how to get a Sony Ericsson K800i online over Bluetooth using Debian Etch<sup>[3](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:3)</sup>. While the basic idea still works, the guide relies on tools and configurations that are long obsolete. I worked out a different approach using modern BlueZ and NetworkManager, without the old scripts and manual network configuration.
+High core throughput places pressure on the branch predictor, which must follow the instruction stream fast enough to keep the core fed. Oryon 3 improves by expanding its predecessor’s ability to handle taken branches back-to-back. Oryon 1 could only do “zero-bubble” taken branches within a 8 KB instruction footprint. Oryon 3 can do so within a 2048 branch footprint, regardless of branch spacing and code footprint. Perhaps Qualcomm switched to using a fully decoupled 2048 entry BTB. Realistically, that means Oryon 3 should be able to do zero-bubble taken branches over a branch footprint 2x to 4x larger than its predecessor, considering typical branch spacing.
 
-I bought a Raspberry Pi 5 a few years ago to run small services at home, and it turned out to be a great fit for this project. Raspberry Pi boards have had built-in Bluetooth since the Raspberry Pi 3 Model B, so there’s no need for any additional Bluetooth hardware<sup>[4](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:4)</sup>.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fe5571888-5d95-4c0a-9513-62e3d0c85f11_1523x720.png)
 
-Modern devices mostly don’t advertise the Bluetooth NAP service by default, so the following steps show how to enable it explicitly.
+Compared to AMD and Intel’s latest cores, Qualcomm lacks any ability to handle more than one taken branch per cycle. Arm’s newer cores are also capable of doing two taken branches per cycle. I suspect AMD, Arm, and Intel decided that handling multiple taken branches per cycle became more profitable once their cores got wide enough, so seeing Qualcomm build a very wide core without that ability is surprising. Perhaps clock speed factors into that decision, because going from 4.3 to 5 GHz is a huge jump. If so, Qualcomm’s choice would be justified because a clock speed increase of that magnitude probably offers a larger performance increase than going for two taken branches per cycle. Of course, it’s impossible to know if branch predictor paths presented a timing challenge for Oryon.
 
-> Note: This guide is written for Raspberry Pi OS based on Debian 13 (Trixie), but I also tested the setup on my ThinkPad E14 running Arch Linux, and it worked there too. It should work on any other Linux distribution with BlueZ and NetworkManager, although package installation and service management may differ.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F836892e3-ca64-49ac-a721-edc905f3172b_1947x814.png)
 
-1. Install Bluez and NetworkManager (usually, installed by default). ` sudo apt update sudo apt install -y bluez network-manager `
-2. Enable Bluetooth. ` sudo systemctl enable --now bluetooth `
-3. Create a Bluetooth NAP profile and share the Internet connection. ` sudo nmcli connection add \ type bluetooth \ con-name "Bluetooth-NAP" \ ifname btnap0 \ bluetooth.type nap \ ipv4.method shared \ ipv6.method disabled ` This configuration enables IPv4 sharing through NetworkManager. The Raspberry Pi acts as a gateway for devices connected over Bluetooth, assigning IP addresses and forwarding their traffic to the Internet. It works with either an Ethernet or Wi-Fi connection.
-4. Activate the created profile. ` sudo nmcli connection up "Bluetooth-NAP" `
-5. (Optionally) Enable automatic activation on boot. ` sudo nmcli connection modify "Bluetooth-NAP" connection.autoconnect yes `
-6. Verify that the NAP service is available. `bluetoothctl show ` Look for: `UUID: NAP (00001116-0000-1000-8000-00805f9b34fb) ` This indicates that BlueZ has registered the NAP service.
+For branches with dynamic taken/not-taken behavior, Oryon 3 has a 2-cycle conditional predictor. Testing with branches whose outcomes correlate with increasingly long history lengths shows an average 0.5 cycle increase in time per branch over an always- taken reference run, as long as the test stays within the conditional predictor’s capabilities. Because I randomly generate patterns so that each branch is taken roughly 50% of the time, a 0.5 cycle average penalty suggests Qualcomm only incurs the 2-cycle timing if the direction predictor disagrees with a base prediction. Direction prediction starts falling apart with more than 32K patterns in play, which is an improvement over the approximately 24K patterns that first generation Oryon could handle in this test.
 
-### Connecting the S500i
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ff6b89c25-e63c-4535-8093-908afe09074a_1517x766.png)
 
-1. Enable Bluetooth on the phone and make it discoverable.
-2. Pair the Raspberry Pi with the phone using bluetoothctl.
-  - Start the Bluetooth control utility: ` bluetoothctl `
-  - Configure the Raspberry Pi to accept pairing requests: ` power on agent off agent KeyboardDisplay default-agent pairable on discoverable on ` Note: Run each command separately in the interactive bluetoothctl prompt
-  - Start scanning for nearby Bluetooth devices: ` scan on `
-  - Look for your phone in the output. It should appear under the name configured on the phone. For example: ` [NEW] Device 00:23:F1:XX:XX:XX S500i `
-  - Disable the scanning: ` scan off `
-  - Pair the Raspberry Pi with the phone. ` pair 00:23:F1:XX:XX:XX ` Replace the example address with your phone’s actual Bluetooth address. Enter the same PIN on both devices. If everything goes well, bluetoothctl will report that pairing was successful.
-  - Mark the phone as trusted on the Raspberry Pi: ` trust 00:23:F1:XX:XX:XX ` This allows the Raspberry Pi to authorize future supported connections from the phone without repeatedly asking for approval.
+For comparison, Zen 5’s conditional predictor can handle roughly 48K patterns before falling apart. Unlike Oryon 3, and unlike some older Zen generations, Zen 5 does not show an increase in branch latency compared to an always-taken pattern.
 
-### Accessing the Internet from a Java phone
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc94adb39-2140-47ab-b18c-556b0ea00b65_1790x804.png)
 
-This part is phone-specific because it requires changing the phone’s Internet settings. The menu names and available options may differ between models.
+Indirect branches can go to multiple targets, and present another level of difficulty because the branch predictor has to select between previously seen targets, and must store more than one target per branch. Oryon 3 has a 2-cycle indirect predictor that can track 2048 indirect targets, matching its predecessor.
 
-1. Check that the phone can discover the NAP service. On the S500i, select Raspberry Pi under `Connectivity / Bluetooth / My devices` and browse its services. Look for `Network access`. If it appears, the phone can discover the Raspberry Pi’s NAP service.
-2. Configure the phone’s Internet connection. Go to `Connectivity / Internet settings / Internet profiles`. Create an Internet profile using the Bluetooth connection if one is available. Some phones automatically create a Bluetooth data account when a PAN connection is established. The exact behavior varies between models and firmware versions.
-3. Test the connection. Open the phone’s browser and try loading a simple website, like [frogfind.com](https://frogfind.com). While the phone is attempting to connect, run the following command on the Raspberry Pi: ` bridge link show master btnap0 ` If you see an interface named bnep0 with state forwarding, the phone has successfully established a Bluetooth PAN connection to the Raspberry Pi.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F9dcff0b4-1f73-4cb6-a668-223591ae2bee_1024x727.png)
 
-*Hooray! We are on the net!*
+A single branch can jump to 256 targets without incurring a significant penalty. This could mean at least eight of the bits that Oryon 3 uses to index into its indirect target array are influenced by branch history.
 
-### Browsing the web on the Java phone
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F49bc8876-b4ab-4c99-9ed3-4932b9a8a691_1091x618.png)
 
-You can now go and browse the Web. Well, at least a very small part of it.
+A 50 entry return stack handles return predictions, just as on Oryon 1. However, testing shows that Oryon 3 can use all 50 entries before hitting a performance degradation. When call depth exceeds return stack capacity, Oryon 3 degrades gracefully rather than immediately taking a drastic penalty as Oryon 1 does. Oryon 1’s performance drop is heavy enough to suggest it’s mispredicting every return after the return stack overflows.
 
-Most of the default links in the Sony Ericsson browser no longer work, but, for example, good old [frogfind.com](https://frogfind.com) works just fine.
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F54dd3d7b-c0fd-4819-a9a6-fe46bff962b6_1495x753.png)
 
-If you want a more modern, feature-rich alternative to the default browser, there is another option. By some miracle, Opera still provides [download links](https://www.opera.com/download/mobile-versions) ([archive](https://web.archive.org/web/20261116100558/https://www.opera.com/download/mobile-versions)) for Opera Mini 4.5 for Java phones on its official website, which is just incredible. Even better, many of its default links still work and serve today’s news!
+Perhaps Qualcomm implemented a new mechanism to keep a single overflow from messing up the entire return stack, and lets Oryon 3 only mispredict returns whose addresses get forced out on an overflow. Whatever this optimization is, it gives Oryon 3 return prediction behavior in-line with many other cores, including [AMD’s Zen 5](https://chipsandcheese.com/p/amds-strix-point-zen-5-hits-mobile) and Intel’s Skymont. In capacity terms, AMD’s Zen 5 has a slightly larger 52 entry return stack.
 
-Unlike the Sony Ericsson’s built-in browser, Opera Mini 4.5 can also access modern HTTPS websites through Opera’s proxy servers, which handle encryption and process webpages before sending them to the phone<sup>[5](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:5)</sup>. This makes a surprisingly large portion of the modern web accessible, although many websites remain out of reach due to modern web standards, the phone’s limited hardware, and, well, the web being the web.
+# Rename/Allocate Optimizations
 
-Even with Opera Mini (while it still works), browsing the modern web on a phone this old is still pretty hit-or-miss. Fortunately, there are a couple of projects that make life easier for old browsers:
+Optimizations at the rename and allocate stage on Qualcomm’s big core are remarkably similar to those on its [little core counterpart](https://chipsandcheese.com/p/performance-oryon-qualcomms-little). Both cores can eliminate up to two register-to-register MOVs per cycle. They can also eliminate up to two add-immediate instructions, as long as their immediates sum to 255 or less. It’s slightly strange that Qualcomm has kept the same optimization capability even though the big core is more than twice as wide as its little core companion. That results in degraded microbenchmark figures when I chain dependent MOVs or add-immediate instructions without a break, because the wider core can get more of those instructions into the same rename group, which means the two-per-cycle restriction causes more missed optimization opportunities.
 
-- [FrogFind](https://frogfind.com/about) – simplifies modern webpages into basic HTML that vintage computers can handle. It turns out to be pretty handy for an underpowered phone from almost 20 years ago, too.
-- [ProtoWeb proxy](https://protoweb.org/about/) – takes a different approach, bringing back websites from the mid-to-late 1990s through a proxy. Those pages aren’t always convenient to navigate on the S500i’s tiny screen, but then again, browsing the web on phones back then wasn’t exactly convenient either. So it’s a pretty authentic experience!
+# Backend: Large, and Largely Unchanged
 
-### And then there’s WAP!
+One of the best strategies in CPU architecture is to avoid changing something that isn’t broken. Oryon 3’s backend at a high level is basically identical to the one in its predecessor. That makes sense because if Oryon 1 encountered performance issues, they likely had little to do with its backend strategy. Qualcomm specifies a reorder buffer capacity of over 650 micro-ops for both Oryon 1 and Oryon 3. Microbenchmarking puts capacity at 675 micro-ops for Oryon 3, and [680 on Oryon 1](https://chipsandcheese.com/p/qualcomms-oryon-core-a-long-time-in-the-making). Register files and memory ordering queues see little to no movement in size as well.
 
-There’s another little corner of the web that’s still alive: a small community of enthusiasts keeping old WAP websites running, serving WML pages designed for early mobile browsers. These sites can still be browsed on compatible phones, without relying on an emulator! And maybe it’s time to bring a few more WML sites online…
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F3968d760-3d3d-4f30-a7d8-ceda2da642b4_1273x715.png)
 
-## Closing Words
+Qualcomm’s choice to avoid major backend changes is justified, because Oryon 3’s backend structures remain competitively sized even against emerging competition like AMD’s Zen 6. Execution throughput also remains competitive. Oryon 3 does have slightly smaller memory ordering queues, and weaker vector execution throughput compared to its x86-64 counterparts. The latter comes down to having a smaller 128-bit vector width, which is especially a disadvantage against Zen 5. However, that should only affect a small minority of applications.
 
-I watched Action Retro’s video<sup>[6](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:6)</sup> about bringing FrogFind to WAP, where he converts the FrogFind homepage into WML for older mobile browsers. Building a small HTML-to-WML converter could be a really cool project. And with Internet access already working over Bluetooth, developing and testing it on physical hardware should be much easier, without having to build an entire 2G network like dosdude1 did<sup>[7](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:7)</sup>. Of course, this approach won’t work for every old phone, but for those that support Bluetooth networking, it doesn’t require any additional radio hardware.
+Even though Oryon 3’s backend is similar to its predecessor, there’s still plenty of change under the hood. Predication is a central feature in SVE2 and SME, so Oryon 3 gets a new 120 entry predicate register file. The predicate registers themselves only have to be 16 bits wide because of Oryon 3’s 128-bit vector length. But while the predicate register file doesn’t need a lot of storage, it does need to be hooked up to every major execution unit block. Predicate generation can happen from both the scalar and vector side. All four vector pipes and four load/store pipes support predication, meaning a lot of reads from the predicate register file.
 
-I’d also love to see a community-maintained list of phones that support Bluetooth PANU, since many manufacturers never bothered to document it (including Sony Ericsson with the S500i). It would make it much easier for anyone to figure out whether their phone can get online this way or whether they’ll need to get a bit more creative ;-)
+New SVE2 and SME instructions also require changes to backend logic. SVE’s vector length agnostic design rides heavily on predicate generation instructions like those of the WHILE* variety (like WHILELO). Oryon 3 breaks WHILE* instructions into two micro-ops, which execute through the integer pipes to deliver a throughput of one WHILE* instruction per cycle. Predicate generation instructions that don’t require a GPR input, like PTRUE and CMPEQ, execute through two FP/vector pipes. Besides predication focused changes, SVE2 adds new math instructions like CDOT, meaning more execution unit functionality behind the vector/FP ports.
+
+## Load/Store
+
+Like Oryon 1, Oryon 3 has a four-pipe load/store unit. Memory dependencies are handled by a robust store forwarding mechanism, which can do fast forwarding for all cases where a load overlaps a prior store. Oryon 3 is able to do that even when the load isn’t contained within the older store, meaning the load/store unit is able to combine data from both an in-flight store and data fetched from the L1 data cache. A dependent store+load pair has a latency of 6 cycles on the integer side, or 8 cycles on the vector/FP side. While Oryon 3 can’t do zero-latency store forwarding the way AMD’s Zen 5 and [Intel’s Lion Cove](https://chipsandcheese.com/p/lion-cove-intels-p-core-roars) can, the ability to avoid the 14 or 19 cycle penalty those cores take in partial overlap cases is quite nice. Arm’s Cortex [X925](https://chipsandcheese.com/p/arms-cortex-x925-reaching-desktop)has the weakest store forwarding capabilities of the bunch, with no zero-cycle capability and a 12-13 cycle partial overlap penalty.
+
+For independent accesses, Oryon 3 prefers 16B alignment for stores. Stores that cross a 16B boundary take a slight penalty, though curiously there’s no penalty for crossing a 64B cacheline boundary. Perhaps Oryon 3 has a special optimization for speeding up line-crossing stores. The same characteristics apply on the vector side.
+
+SVE introduces scatter and gather functionality to the load/store unit, forcing it to handle possibly non-contiguous accesses from a single instruction. Testing with LD1W gathers (32-bit elements) achieves a core-wide throughput of 1-2 elements per cycle. Gathers therefore have lower throughput not just compared to contiguous loads, but also equivalent scalar loads. However, Oryon 3 has an optimization that allows repeated gather loads to the same address to execute at 4/cycle. Gathers therefore seem capable of using all four LSU pipes, and don’t go down a smaller subset of specialized pipes. However, the general case seems to rely on a complex flow that involves several micro-ops, resulting in lower throughput.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F62729738-9989-49b6-83e8-62adcb701aa7_1878x813.png)
+
+Dependent gathers have 14 cycle latency, which is acceptable for a non-contiguous load operation. Zen 5 handles vaguely equivalent AVX2 gathers with 19 cycle latency.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F51ed1392-9e84-4689-ae9a-5a2b9546ae91_1897x875.png)
+
+The load/store unit also has to translate program-visible virtual addresses to physical addresses that correspond to DRAM locations (or possibly MMIO). Qualcomm sized up the L1 DTLB from a 224 entry 7-way structure on Oryon 1, to a 256 entry 8-way one on Oryon 3. Perhaps Qualcomm always intended for the L1 DTLB to be 256 entries and 8-way set associative like the instruction-side L1 TLB, but couldn’t fit the last way into Oryon 1. A 256 entry L1 DTLB covers 1 MB of address space using 4 KB pages, which is a lot compared to the smaller L1 DTLBs on other designs. An 8K entry L2 TLB handles larger memory footprints, and serves both instruction and data accesses. The L2 TLB’s capacity is also impressive compared to the competition.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F57cc04ad-291a-4bf3-bc5b-f2164cb4891f_572x107.png)
+
+Comparing with Zen 5 can be complicated because AMD can opportunistically use a single TLB entry to cover up to four consecutive 4 KB pages, provided the translations have the same attributes and lead to contiguous physical pages. Zen 5 can cover more address space with its TLBs despite a lower entry count if it can make maximum use of that page coalescing capability, though I don’t have data on how effective that is in practice.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F59ebea0c-5463-495e-9a86-3e9e3f8e128e_1273x711.png)
+
+Testing with performance counters validates Qualcomm’s large TLB sizes. The core’s PMU indicates a rise in L1D TLB misses after 1 MB, when testing accesses with a 4 KB stride. L2 TLB misses rise after 32 MB, though they only sharply increase after 64 MB.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F6a0bb355-5438-422d-8005-c0ff94119d16_1674x807.png)
+
+Qualcomm specifies 2-cycle latency for L2 TLB accesses, which would be incredible for a 8K entry L2 TLB. However, comparing L2 latency with 4 KB and 2 MB pages suggests that a L2 TLB hit costs at least an extra 6-7 cycles of latency.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc8a09610-7728-48bd-b048-d3b203c9ace0_1763x856.png)
+
+# Cache and Memory Access
+
+Qualcomm’s Snapdragon X Elite used a two-level caching strategy that emphasizes speed over the ability to scale last level cache capacity and the number of cores served by each last level cache instance. For the Snapdragon X2 Elite Qualcomm upgraded the cache subsystem by increasing L2 capacity from 12 to 16 MB for the P-Core clusters. This cache capacity increase boosts the amount of cache a single core can allocate into. It also helps account for each cluster having six cores instead of four, though cache per core still drops slightly from 3 MB on Oryon 1 to 2.66 MB in Oryon 3.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F2a641e1c-36eb-4845-863a-f135d8960f7d_1273x716.png)
+
+16 MB of CPU-side last level cache isn’t large by 2026 standards. AMD’s standard Zen 5 configurations use 32 MB of L3 cache, while Intel’s Arrow Lake has 36 MB of L3. However, Qualcomm’s caching capacity is fine next to the 16 MB of L3 that AMD puts in their mainstream Strix Point mobile chip’s performance cluster, and Qualcomm makes their L2 fast for the capacity it provides. With [20-23 cycle latency](https://chipsandcheese.com/p/qualcomms-system-level-architecture) depending on which core is making the access, Qualcomm’s L2 can return data faster than the 46 cycle latency that AMD’s optimization guide specifies for Zen 5’s L3. AMD’s 46 cycle figure seems to apply to configurations with 32 MB of L3, like on the Ryzen 9 9900X. A Zen 5 variant with 96 MB of L3 incurs several extra cycles of latency, showing how a triple level cache subsystem can enable last level cache capacity scaling because the core-private L2 cache reduces sensitivity to L3 latency. Intel’s Lion Cove is Oryon 3’s opposite with respect to caching strategy, with four cache levels to enable capacity/speed tradeoffs at L2 and L3.
+
+20+ cycles of L2 latency is still high compared to 14 cycles on AMD’s Zen 5, so Oryon 3 uses a large 96 KB 6-way L1D. Unusually for a high frequency design, Oryon 3 achieves 3 cycle L1D latency. It’s an impressive achievement, because even Arm’s lower clocked Cortex X925 has 4 cycle latency to a smaller 64 KB L1D.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F17d81126-7d9c-48ae-ad8d-0f28810391f3_1779x739.png)
+
+Oryon 3 only shows a slight latency increase as a pointer chasing test spills out of the L1D when using a 64 byte stride. Using a shorter stride increases the length of the pointer chasing chain, and more clearly shows the L1D’s capacity. Qualcomm seems to have a “correlated miss caching” (CMC) style prefetcher like many of Arm’s designs, which tracks when a cache miss for one address is likely to be followed by a second miss to another address. This type of prefetcher can follow pointer chasing chains and defeat latency testing if the tested chain falls within what the prefetcher can remember. If Qualcomm is doing this, and they do suggest it by indicating they have “pointer” prefetching algorithms, then the data above points to it being a L1D prefetcher.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fbc02af97-0c51-41d6-91e7-2819c9fd1052_1276x716.png)
+
+Arm in contrast places their CMC prefetcher at L2, which lets it be more aggressive because a larger L2 cache is less sensitive to having some capacity wasted by useless prefetches. For example, the CMC prefetcher on Arm’s Cortex A78 is able to reduce latency across the Mediatek Genio 1200’s 2 MB L3 when testing with a 64B stride compared to a 8B stride (at least 32K pointer destination predictions compared to 8K on Oryon 3).
+
+## Bandwidth
+
+Oryon 3’s L1D can service four accesses per cycle, all four of which can be loads, and two of which can be stores. Compared to Zen 5 and Lion Cove, Oryon 3’s maximum load bandwidth is held back by its 128-bit vector width. However, Oryon 3 should remain very competitive when running code that can’t be well vectorized, or vectorized code that doesn’t scale to longer vector lengths.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7fb075fb-2f19-486b-a80d-a930cf84d5f3_1859x821.png)
+
+L2 bandwidth is just under 32B/cycle for reads, in terms of how much data the core can get into registers. Qualcomm states that each core has a 64B/cycle datapath to L2. This can be validated by only accessing the first 128 bits of each 64B line, and treating that as loading the entire line because cache fills happen at 64B line granularity. Doing so gives about 48B/cycle of inferred L2 to L1D bandwidth. A read-modify-write pattern that creates equal traffic in both the L1D fill and writeback directions also reaches 48B/cycle.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F95a650b8-256a-44f1-ac57-b2d443962607_1686x747.png)
+
+I have[a separate](https://chipsandcheese.com/p/qualcomms-system-level-architecture) piece for more on the Snapdragon X2 Elite’s system level memory subsystem characteristics. Overall though, there’s a lot to like about Oryon 3’s memory subsystem. As long as you don’t benefit from having more than 16 MB of last level cache in each core cluster, Qualcomm’s cache setup should be more than a match for the triple level setups used by Intel, AMD, and other Arm cores.
+
+# Performance: SPEC CPU2026
+
+Because running Linux on the Snapdragon X2 Elite Extreme is complicated at the moment and difficult considering other time constraints (Chips and Cheese isn’t a job after all, and I have a real job to pay attention to), I tested SPEC CPU2026 using Windows Subsystem on Linux. I’m pinning the vmmemWSL process to a P-Core for predictability. Results show the Oryon 3 P-Core delivering desktop-level SPEC CPU2026 integer scores, even though it’s implemented in a laptop. That’s an impressive showing because desktop chips enjoy advantages like higher cache capacity, lower DRAM latency, and higher clock speeds. A comparison against a typical AMD or Intel mobile part would almost certainly hand Oryon 3 a victory rather than a tie.
+
+Qualcomm does score slightly behind Zen 5 in SPEC’s floating point suite, but manages to stay ahead of Intel. Individual subtests show modest differences between the cores, though there are outliers. 706.stockfish for example hands Zen 5 a large win, because GCC 14.2.0 was able to vectorize a large part of it to use AVX-512.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F634a76fb-5d57-490a-991f-8fe07f64aeed_1468x690.png)
+
+However, AVX-512 does not give AMD a huge lead in SPEC’s floating point workloads. 749.fotonik3d and 765.roms execute a lot of AVX-512 instructions on Zen 5, but Oryon 3 is able to compensate with higher IPC. Both workloads tend to be more memory bound as well, reducing the benefit of AMD’s higher vector throughput.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F219dc83c-462e-42cc-84e0-f2094bf85671_1467x686.png)
+
+Further performance analysis is difficult without more work because WSL only passes through a subset of performance monitoring events. However, there’s enough data to show that Qualcomm’s branch prediction accuracy is up there with the best. Overall branch prediction accuracy is actually a bit better than that of AMD’s Zen 5. Oryon 3 even scores a win in 723.llvm, which is SPEC CPU2026’s toughest branch prediction workload.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fed82186c-3036-436f-98fd-58491e9f38ac_1720x1383.png)
+
+Performance counters also show the merit of Oryon 3’s large L1D. L1D cache sizes have remained stubbornly stagnant outside of Qualcomm (and Apple) cores. In 1998, AMD rolled out their Athlon core with a 64 KB L1 data cache. No current cores from AMD, Intel, or Arm have a larger L1D, and I don’t put Lion Cove’s 192 KB “level 1 of the level 1 cache” in the same category as a conventional L1D because of its higher latency.
+
+![](https://chipsandcheese.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fb1d16c81-da6a-4b1f-a3db-267cff221a2f_1810x895.png)
+
+Each vendor’s performance monitoring unit accounts for L1D misses differently, but the differences are large enough to show that Qualcomm can service a lot more requests out of its fastest cache level than Intel or AMD.
+
+# Final Words
+
+Third generation Oryon is a top-notch core with everything needed to succeed on a level playing field. Qualcomm has given their core a large out-of-order engine, is able to run it at 5 GHz, and feeds it with a competent branch predictor and a low latency cache setup. Oryon 3 joins [Arm’s Cortex X925](https://chipsandcheese.com/p/arms-cortex-x925-reaching-desktop) in delivering desktop-level performance, and both Arm cores should be seen as serious pacing challenges for Intel and AMD.
+
+Oryon 3 isn’t perfect of course. A wider SVE vector width could improve its situation relative to Zen 5 in vectorized workloads. Going to six vector/floating point pipes like in Arm’s Cortex X925 is an option too, though it may be difficult to pull off without regressing clock speeds. Qualcomm’s branch predictor could pick up some of the two taken branches per cycle goodness that’s now common on AMD, Arm, and Intel cores. Cache capacity could be an issue too, because a two-level cache setup forces a tightly coupled L2 design to meet latency requirements. That could make cache capacity difficult to scale.
+
+All of those are areas for improvement, rather than significant weaknesses. SPEC scores for example show that a core doesn’t need to sustain two taken branches per cycle to be up there with the best, at least not in this generation. As for cache capacity, I can’t think of a consumer scenario where that makes a huge impact except for gaming. Games of course struggle with a binary translation issue, which is outside Qualcomm’s control.
+
+Binary translation does bring up a problem for Oryon 3 though, because having a good core is only one piece of the puzzle. The software ecosystem that Qualcomm has to work with is a persistent sticking point, because while Windows on Arm has improved over the years, it’s still not as polished as a native x86-64 setup. Qualcomm has also struggled with Linux support. It’s a missed opportunity, because Linux is increasingly being seen as a strong alternative to Windows due to Windows 11’s misplaced priorities. Linux applications are also more likely to have aarch64 versions, minimising the importance of binary translation. Beyond the software ecosystem, Qualcomm’s laptop push faces headwinds because high DRAM costs push consumers to defer buying new devices. Laptops with soldered memory are especially vulnerable, because there’s no chance of buying a device with less memory with hopes of upgrading it later once prices drop. These challenges must be frustrating for hardware engineers who worked on Oryon 3, because they’ve built their most competitive CPU architecture yet, but need more puzzle pieces to fall into place.
+
+I hope Qualcomm continues to run the marathon of breaking into the PC market, and the puzzle pieces line up soon to enable success. Oryon 3 is an excellent core. I’ve used the Zenbook A16 laptop sampled by Asus on a recent casual trip, and used it as a daily driver for a few weeks. The laptop is subjectively as fast as my desktop back at home, and shows just how far Qualcomm has gone. I want to see the people who worked on it rewarded for what they achieved. I also hope to see the Oryon line grow with future generations, and keep pushing the leading edge of single threaded performance.
+
+Great to see Oryon scoring high . What GCC flags are used for this SPEC build?

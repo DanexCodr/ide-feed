@@ -1,59 +1,93 @@
-> **tl;dr** [trynix.dev](https://trynix.dev/) boots GUI programs now. Try [solitaire](https://trynix.dev/?pkg=aisleriot&engine=unkernel&run=sol+%26&boot=1), [GL gears](https://trynix.dev/?pkg=mesa-demos&engine=unkernel&run=es2gears_wayland+%26&boot=1), [xeyes](https://trynix.dev/?pkg=xeyes&engine=unkernel&run=xeyes+%26&boot=1), [a voice](https://trynix.dev/?pkg=espeak-ng&engine=unkernel&run=espeak-ng+%27Hello+from+the+Nix+multiverse%27&boot=1), [the weather over curl](https://trynix.dev/?pkg=curl&engine=unkernel&run=curl+-s+wttr.in%2FSan%2BFrancisco%3F0&boot=1), or [Firefox](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+%26&boot=1).
+Over the past decade, one of the most contentious Postgres feature requests has been for query hints. The planner is remarkably effective at making good decisions, but it doesn’t always do so, and query hints have been proposed as a way to fill that gap. They’ve been a popular feature on other databases for years, and some would say that they are essential for production usage to ensure that indexes are used effectively and queries are planned sensibly. While [pg_hint_plan](https://www.postgresql.org/about/news/pg_hint_plan-v160-released-2712/) has existed for a while, the Postgres community has historically been divided on this topic, with the general consensus being that planner failures were bugs that should be fixed instead of being worked around.
 
-I remember watching the talk [The Birth & Death of JavaScript](https://www.destroyallsoftware.com/talks/the-birth-and-death-of-javascript) by [Gary Bernhardt](https://x.com/garybernhardt) and falling in love with the whimsical yet dreadfully serious unfolding of the story of how JavaScript will come to dominate all software.
+Postgres 19 brings 2 new contrib modules that collectively provide the plan hint experience without affecting all queries or SQL syntax. [pg_plan_advice](https://www.postgresql.org/docs/19/pgplanadvice.html) works at the session level, allowing you to simply SET how the next queries will be planned. The technique supports a decent list of features, letting you specify scan method, join order, join method, parallelism, partitionwise joins, and semijoin uniqueness.
 
-Others have noted the inevitability of JavaScript’s dominance, so perhaps it was not surprising that Atwood’s Law holds true.
+The companion extension provided is [pg_stash_advice](https://www.postgresql.org/docs/19/pgstashadvice.html). This is meant to apply to query identifiers instead of specific queries, so rather than using SET to hint, you instead find a specific query identifier and tell Postgres to always apply your hints only to that query. It supports the same capabilities for affecting query plans as pg_plan_advice, so most of this article applies to it as well.
 
-> **Atwood’s Law**Any application that can be written in JavaScript, will eventually be written in JavaScript.
-> — [Jeff Atwood, 2009](https://blog.codinghorror.com/all-programming-is-web-programming/)
+Under the hood, these extensions work by telling the planner that it should not pick the options you didn’t select. This can’t actually force Postgres to pick the plan that you actually want, so if there’s no viable way to actually use the hint, the advice will be partially or fully ignored. In addition, there is no check that the advice is good- the planner will happily accept input that actively degrades query performance. In practice, this means that it can be similar to existing `enable_` knobs you may have already used to force certain plans on queries. For example, if you’re trying to convince the planner to use an index, here’s the old way and the new way you’d consider. They do similar things, but the advice extensions provide a lot more capability and granularity:
 
-I highly recommend watching the talk if you have not already seen it, but the short and skinny is a lookback from 2035 and how JavaScript came to be the defacto language for all software.
+## The scenarios  #
 
-In Bernhardt’s retelling of events, the date is worked back from 2035, however unsurprisingly, large language models have rapidly sped up the timeline. What was once perceived to be the end-state at 2035 has arrived years earlier and you can witness it unfolding at [trynix.dev](https://trynix.dev/).
+I’ve put together a few examples of queries where you might want to consider using pg_plan_advice, and did some testing to see how well it works in practice. All of these tests ran on ClickHouse Managed Postgres, on a m6gd.xlarge machine with 4 vCPUs, 16GB RAM, and a 237GB local NVME drive. The tests are fairly artificial, as the planner is remarkably clever and it’s surprisingly difficult to construct scenarios that reliably give it trouble.
 
-One of the most impressive creations I’ve managed to build leveraging [nixpkgs-multiverse](https://fzakaria.com/2026/08/09/nixpkgs-multiverse-every-version-that-ever-existed) is [https://trynix.dev](https://trynix.dev/).
+pg_plan_advice ships as a contrib module, so you’ll probably want to add it to your server’s `shared_preload_libraries` or take one of the following steps to get it working in a PG19 environment:
 
-It still baffles my mind that I can run **any Nix package**, over 300,000 distinct package versions, straight from my browser. Truly insane capability.
-I was however a little dismayed at the speed of the QEMU emulation in the browser. It was slow enough that the creation tipped more towards novelty than practicality.
+This post uses a lot of SET commands for demonstration purposes. If you are looking to use pg_plan_advice in a production system, please keep in mind that these should instead generally be `SET LOCAL` in a transaction to prevent unexpected effects on other queries.
 
-I woke on November 20th and saw [Domen Kožar](https://x.com/domen_koz) sharing a single message in our [TacoSprint](https://tacosprint.org) Discord channel: [unkernel.dev](https://unkernel.dev)
+## Scenario 1: `ORDER BY… LIMIT` #
 
-[![A message from Domen sharing the website unkernel.dev on a Discord channel](https://fzakaria.com/assets/images/derived/domen_discord_unkernel-1404w.webp)](https://fzakaria.com/assets/images/domen_discord_unkernel.png)
+The planner generally assumes that rows in a table are spread somewhat evenly. Unfortunately, the ISO Standard User does not actually exist, so a lot of database writes are clustered around bursts of correlated activity. This can lead to a scenario where the planner knows a few percent of rows match a given filter, starts walking through a primary key column to find them, and ends up scanning nearly the whole index before getting enough hits.
 
-It was the fast browser Linux experience I had sought to achieve, *but with Nix*.
+Here’s the query we’ll use for this:
 
-> **Aside**
-> What is [unkernel](https://unkernel.dev)?
-> It is Linux compiled *to* WebAssembly, allowing the kernel and system components to run at wasm speed while only user programs are emulated. It was published by [Pooya Parsa](https://x.com/_pi0_) on November 19th, 2026.
+```
+1SELECT * FROM events WHERE status = 'failed' ORDER BY id LIMIT 10;
+```
 
-In an AI induced manic frenzy, I adopted the new engine along with a slough of long-wished features almost immediately.
+Running it does, indeed, give us a terrible plan.
 
-The proof is in the pudding: unkernel delivers remarkable speed improvements over [qemu-wasm](https://github.com/ktock/qemu-wasm),<sup>1</sup>1With a very healthy set of patches applied to make it even faster.  especially on first runs where kernel work dominates. The new engine is able to deliver 2x to 32x faster performance depending on the workload.<sup>2</sup>2The [benchmark page](https://trynix.dev/bench/) tracks both engines over time, measured through the real page and shell.
+Excellent, we’ve reproduced the failure! The index scan looks like it should be reasonable, and the cost of 66.77 is trivial: the planner clearly expected to find all 10 rows it needed immediately. Unfortunately, it had to gather and discard 10,000,000 rows before finding a useful result, which obviously took far longer than you’d expect.
 
-JavaScript & WebAssembly nirvana.
+You’ve probably noticed the “Generated Plan Advice” section in this explain plan as well. This is another new feature; we’re using `EXPLAIN (ANALYZE, BUFFERS, PLAN_ADVICE)` here. Since we didn’t provide plan advice, this output just shows the plan it actually used.
 
-Amazingly not only does the kernel boot quickly, it also enables networking, full-fledged graphical and audio experiences directly in the browser.
+We could definitely fix this with a new index, but that isn’t always a good option when you see this kind of thing in the wild, so let’s try a bitmap heap scan. It works by first constructing a bitmap of potential row locations using a bitmap index scan, and then decodes it to fetch the underlying data. It’s better suited to bulk operations, so it’s a good bet given how uncooperative the index scan is proving to be. Here’s all we need to do to actually use it:
 
-**Windows.** A program’s Wayland surfaces are composited in the page by [wland](https://github.com/pithings/wland), and they float over the terminal you started them from.
+```
+1SET LOCAL pg_plan_advice.advice = 'BITMAP_HEAP_SCAN(events)';
+```
 
-[![trynix.dev in a browser, with xeyes, an X11 program, in a window over the console](https://fzakaria.com/assets/images/trynix-xeyes.webp)](https://fzakaria.com/assets/images/trynix-xeyes.webp)
+Here’s the new EXPLAIN.
 
-**GL.** The VM includes a minimal Mesa build with only the virgl driver, compiled to WebAssembly, rendering through your browser’s WebGL2.
+The parallelism makes it a bit tricky to read, but a few things stand out. First, we got <10ms execution time, so the bitmap heap scan actually did help. Second, we can now see the supplied plan advice at the bottom of the EXPLAIN output, and the matched feedback (without a failed flag) makes it clear that the planner actually used our advice. Please note that this does not necessarily mean that the planner benefited from the advice.
 
-[![trynix.dev in a browser, with es2gears drawing through WebGL2 in a window over the console, and the terminal reporting about 60 frames a second](https://fzakaria.com/assets/images/trynix-gears.webp)](https://fzakaria.com/assets/images/trynix-gears.webp)
+## Scenario 2: `JOIN` correlation  #
 
-**Sound.** The VM has an ALSA sound card, and can play audio through your browser.
+JOINs can be a source of planner complications, as statistics are resolutely single-table. The planner has a limited ability to predict how many rows will be pruned by filters on JOINed tables, so it can be way off base on selectivity. In general, it assumes that filters on different tables are independent of each other, which is a fairly easy assumption to violate with the following setup:
 
-[![trynix.dev in a browser, with espeak-ng typed at the prompt and the console bar saying "sound: click to play"](https://fzakaria.com/assets/images/trynix-voice.webp)](https://fzakaria.com/assets/images/trynix-voice.webp)
+Here’s our baseline query. It’s just a simple join, filter, and limit:
 
-**Network.** `curl`, `git clone` and `pip install` work. Each TCP connection goes over one WebSocket to a [Wisp](https://github.com/MercuryWorkshop/wisp-protocol) relay.<sup>3</sup>3Thank you to [@_pi0_](https://x.com/_pi0_) for adding [trynix.dev](https://trynix.dev) to his Wisp relay allow-list.
+Here’s our first plan, with the planner doing the heavy lifting for us:
 
-[![trynix.dev in a browser, with curl in the guest printing a live San Francisco weather report from wttr.in](https://fzakaria.com/assets/images/trynix-weather.webp)](https://fzakaria.com/assets/images/trynix-weather.webp)
+This plan is honestly pretty terrible. The planner correctly understands that there are 500K or so `trial_start` rows, and that 1% of customers are `enterprise` customers. It then multiplies these numbers by each other, which leads it to predict that 5000 rows will match, and it only needs 10. Unfortunately, the filters aren’t as independent as it’s estimating, so only 20 out of the 500K rows actually have the values it’s looking for. As such, it ends up scanning a lot more rows than it was counting on to get this result. You can see as much in the row estimates above: the planner predicts 5288 rows when we know there are only 20, which is right in line with the math.
 
-The best joke in Bernhardt’s talk is a browser running inside another browser: the Windows GIMP under Wine, in Chrome, in Firefox. Of course, I had to try it with trynix. 😈
+To fix this, let’s try giving plan advice. We want the join order to prioritize accounts first, as that will give us a vastly more selective filter to cut down on row counts.
 
-Here is [Firefox in trynix](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+https%3A%2F%2Ftrynix.dev+%26&boot=1), and it loading [trynix.dev](https://trynix.dev), and then loading Firefox again inside itself.<sup>4</sup>4Don’t get too excited: this took over 4 hours. The inner Firefox needed JIT disabled, the middle one ran without GL, and the outer page used a Wisp relay on my laptop since [wisp.unkernel.dev cannot reach itself](https://gist.github.com/fzakaria/ef9fda19c8b5f3238e41bab577462797).
+```
+1SET LOCAL pg_plan_advice.advice = 'JOIN_ORDER(a act)';
+```
 
-[![trynix.dev in a browser, booted with Firefox; that Firefox shows trynix.dev booting Firefox again, and the inner Firefox shows trynix.dev](https://fzakaria.com/assets/images/trynix-inception.webp)](https://fzakaria.com/assets/images/trynix-inception.webp)
+Here’s what it gives us:
 
-Sit and bask in that insanity. That is Firefox, on Linux compiled to WebAssembly, in a Firefox tab, loading the site and then loading Firefox again inside itself. 🤯
+A nearly 200x improvement is absurdly better. By adjusting the join order, we’re able to take full advantage of the `accounts` table’s much lower number of rows matching the `enterprise` filter, which lets us dramatically cut down on the number of rows to scan. You probably won’t get quite as big a speedup in most cases in production, but this pattern comes up every now and then, and having a tool to address it is priceless.
+
+This is probably the use case that fits the plan advice feature best. It’s rare, but there are not a lot of good alternatives for dealing with it. I’ve come across similar challenges perhaps a half dozen times, and while I was able to find workarounds, they got pretty hacky and difficult to reason around.
+
+## Scenario 3: Handling stale hints  #
+
+We’ve got some promising results in scenario 1, but what happens if the data changes to be less lumpy while our hint is still in place? To test this, let’s set every third row to the failed state:
+
+```
+1UPDATE events SET status = 'failed' WHERE id % 3 = 0;
+2VACUUM ANALYZE events;
+```
+
+This means we only need to walk a few rows to get what we’re looking for, so the planner estimate should be able to get us a good outcome. Sure enough, if we run without any hints, we get this:
+
+That’s the kind of result we wanted to see in the first place! Let’s see how we do with the earlier hint to use a bitmap heap scan in place:
+
+That’s 7,000 times worse, and the feedback doesn’t show a problem because it’s still `matched`. Now that the artificial data condition tripping up the planner is gone, the planner has no problem doing a better job than our hinted alternate. This is a good reminder that all hints should be regularly checked for ongoing necessity — otherwise, your performance fixes can lead to performance issues.
+
+## Conclusion  #
+
+We’ve gone through a few scenarios, and it’s clear that `pg_plan_advice` is a powerful but situational tool. It’s not easy to construct scenarios that reliably confuse the planner, but they show up in production often enough that it’s worth having a tool to address them. pg_plan_advice is new enough that it’s hard to say for sure, but I’d bet from what I’ve shown here that the following workflow will serve you well:
+
+1. If you get a mysteriously slow query and tuning doesn’t get the results you wanted, then plan advice is a good thing to try.
+2. If it works, then baking it into the transaction with `SET LOCAL` is a good way to improve performance.
+  1. You can also tie it to the query ID with pg_stash_advice. If you do so, note that this needs special handling for HA failover since it is not WAL-logged, and is not well explored.
+3. If you do set advice, check on it in a few months, as shifting data and query patterns can make it counterproductive.
+
+### Get started with ClickHouse Managed Postgres today
+
+Interested in seeing how ClickHouse Managed Postgres works on your data? Get started with ClickHouse Cloud in minutes and receive $300 in free credits.
+
+Interested in seeing how ClickHouse works on your data? Get started with ClickHouse Cloud in minutes and receive $300 in free credits.

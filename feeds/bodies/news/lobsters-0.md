@@ -50,5 +50,3 @@ Confused about [mailing lists](https://www.openwall.com/lists/) and their use?
 [Read about mailing lists on Wikipedia](https://en.wikipedia.org/wiki/Electronic_mailing_list)
 and check out these
 [guidelines on proper formatting of your messages](https://www.complang.tuwien.ac.at/anton/mail-news-errors.html).
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50647181)

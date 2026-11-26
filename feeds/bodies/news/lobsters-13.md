@@ -1,132 +1,72 @@
-> **tl;dr** [tabc](https://github.com/fzakaria/tabc) is a container runtime, like runc, that runs each container in a Chromium tab.
-> `docker run --runtime tabc alpine` works and starts in under a second. 
-> On a Mac it needs no hypervisor and no Linux VM; Linux for everyone!
+*The fourth in a five-part series on European-funded open source projects in hardware and software.*
 
-Despite my zealot love for [Nix](https://nixos.org), there is no denying the convenience and ubiquity of Docker.
-Containers have become the standard unit of software deployment, providing a consistent environment across different machines and simplifying the management of dependencies.<sup>1</sup>1Containers are not even a “real” thing within the Linux kernel although there are [recent attempts](https://lore.kernel.org/all/20261019-cells-rfc-6f4c85415f29@toxicpanda.com/) to formalize them as a kernel-level abstraction.
+#### Three Homes, No Data Center
 
-Despite all the footguns you can get yourself into by writing a non-reproducible Dockerfile, it was a still a remarkable step forward in making software deployment more predictable and portable.
+Deuxfleurs, a French nonprofit, keeps its servers in members' homes in Lille, Nantes, and Massy: two or three second-hand Lenovo ThinkCentre mini PCs each, with a copy of the same data so its websites stay up when one of them loses power or fiber line. Quentin Dufour, one of the founders, says some major French websites already serve their pages from this setup. Next, the collective wants its email to work the same way.
 
-Nothing has really challenged Docker’s dominance in the container space and it’s reliance on Linux as the underlying platform. The absurdity of the situation has become that developers on MacOS end up running a Linux virtual machine to simply run containers.
+The software for self-hosting email in this manner is called Aerogramme, and it isn't finished. Deuxfleurs still runs its own mail on Dovecot, a long-established open source mail server, and plans to move to Aerogramme around January 2027.
 
-People, even the creator of Docker, believed a common runtime for software isolation would have been a game-changer and that WebAssembly could have played that role if it had existed earlier.
+The collective is heading the opposite way from almost everyone else. According to the independent daily DNS measurements published by RIPE Labs, email for the million busiest domains on the web has consolidated dramatically: In 2016, 44.6 percent of these domains used small or self-hosted servers, and that share halved to 22.4 percent by July 2026. Small regional hosting companies and independents are losing accounts to corporate providers like Google and Microsoft, who together handled 38.6 percent of these busy domains.
 
-> “If WASM+WASI existed in 2008, we wouldn’t have needed to created Docker. That’s how important it is.” - [Solomon Hykes, 2019](https://x.com/solomonstre/status/1111004913222324225)
+Email is older than the Internet itself, and it still runs on open standards anyone can implement. Any server can deliver to any other, and any standards-compliant client can read any mailbox. It’s the hosting that has concentrated into a very few hands, eroding autonomy and giving hosting providers power over the data that travels through digital correspondence.
 
-Here we are, 7 years later, we still have Docker, and WebAssembly is mostly used for speeding up web applications.
+Two cases illustrate how this can limit operational independence. In May 2025, staff at the International Criminal Court (ICC) told the Associated Press that the court's chief prosecutor lost access to his Microsoft email account after he was named in US sanctions; Microsoft denies suspending services but hasn’t explained what happened to his account. In February 2026, the Dutch government told its parliament that the tax administration was moving about 40,000 workplaces to Microsoft 365 for lack of a short-term alternative, while acknowledging that Microsoft could be forced under state pressure to stop delivering services.
 
-Is there another way to achieve the same level of isolation and portability without relying on the host being Linux?
+The Dutch government reversed course in October: The tax administration, customs, and the benefits agency will run mail and calendar on their own servers from 2027, with European open source tools for storage and collaboration to follow. The question now: How are developers working to decentralize email hosting on a wider scale? Each obstacle pushing organizations off of small or self-hosted email servers has open source projects working on a solution. Three of them show how the pieces fit; all of them supported by NGI Zero, the EU-funded programs that enable open source research and development.
 
-What if though Docker ran its containers on WebAssembly instead of directly on the Linux kernel?
+#### How Email Got Away from Us
 
-What if the isolation provided by the browser could replace the kernel-level isolation that containers rely on?
+In the 1990s, running your own mail server was ordinary. Universities and small companies did it, and so did Mauro De Gennaro. In 1993, as a teenager, he fetched mail for users of his bulletin board over UUCP: the dial-up protocol Unix machines used to exchange mail. He has worked on mail software for most of the three decades since. When he looked at the open source stack again about six years ago, he saw "it's the same software that companies and servers have been using for over 20 years."
 
-This idea, the holy grail of running Linux in a browser is not new. [JSLinux](https://bellard.org/jslinux/) did it in 2011, and [v86](https://github.com/copy/v86), [WebVM](https://webvm.io) and [qemu-wasm](https://github.com/ktock/qemu-wasm) are also attempts in the same direction. They all have their share of limitations: 32-bit only, performance issues, incomplete hardware emulation, that make them impractical for general-purpose use.
+He counts 12 separate programs to run a conventional self-hosted setup. Each has its own configuration format and logs, written by different people in different styles. The software works well, he says, but was "designed and documented for other developers." Bundles such as Mailcow and Mail-in-a-Box install the whole set at once: “They abstract the complexity," De Gennaro says, "but they do not remove it." Since all of it was designed for a single machine, running it as a cluster server is possible in the same way it's possible to take a Fiat Cinquecento and turn it electric: "It was not designed for that." Google launched Gmail into that friction in 2004, with a gigabyte of free storage, and let companies run their own domain's mail on it. "Then they started billing," De Gennaro says. The users were captive, and moving email is disruptive enough that few of them left.
 
-[unkernel](https://github.com/pithings/unkernel) is a newly developed project by [Pooya Parsa](https://github.com/pithings) that changes the economics of what is possible. unknernel compiles the Linux kernel to WebAssembly, allowing it to run directly in the browser without relying on traditional hardware emulation. Only your container’s own code goes through an emulator, and everything else the kernel does runs at near native speed.
+Ben Bucksch joined the Mozilla mail team in the late 1990s, where his first contribution made email links clickable; he also served in leadership for the Thunderbird Council and invented AutoConfig, which lets a mail client set up an account from nothing but an email address. In his telling, the lock-in started within the client.
 
-It is now practical to run Linux containers directly in the browser, leveraging the isolation provided by WebAssembly and the browser environment with acceptable performance.
+IT departments think about email as servers; “what users want is to keep their workflow," Bucksch says. Microsoft shaped those workflows with Outlook's calendar and corporate features: Outlook works properly only with Microsoft Exchange, and Microsoft is pushing Exchange customers into its cloud. By some estimates, about 75 percent of professional mailboxes are on Office 365. "If we want to free the lock-in," he says, "we need to start with the client."
 
-[![A terminal. On Linux, docker run with the runtime set to tabc prints Linux aarch64 from an x86-64 host. On a Mac, tabc run alpine prints Linux aarch64, and a check for Docker, Colima, QEMU or Lima finds no VM running.](https://fzakaria.com/assets/images/tabc-demo.webp)](https://fzakaria.com/assets/images/tabc-demo.webp)
+Dufour and Armaël Guéneau of Deuxfleurs locate the problem in operations. IMAP is the protocol most clients use to read mail. An IMAP server has to serve webmail that queries the server for every view, desktop clients such as Thunderbird that synchronize whole mailboxes, and phones that do some of each. Implementing it is hard; the reliability people expect is harder. When the tax office sends you an email, Dufour says, "it must work." The expertise to run mail at that level, Guéneau says, "tends to be captured by hyperscalers."
 
-That is a real `docker run`, on a real Docker daemon, starting a real Alpine image. This works even on a Mac with no Docker installed and no Linux virtual machine running. 🤯
+As Dufour tells it, Google didn't adapt existing mail software; it built Gmail on top of its distributed storage. Open source mail software was designed for one machine first, so adding distribution later, he says, requires "really huge trade-offs."
 
-In my [last post](https://fzakaria.com/2026/11/23/2035-came-early) I was inspired from Gary Bernhardt’s [The Birth & Death of JavaScript](https://www.destroyallsoftware.com/talks/the-birth-and-death-of-javascript) and its discussion of the evolution of software isolation.
+Reclaiming email is more complex than deciding to run your own server and navigating the software. Your service has to fluently speak with the large providers and support migration without disrupting service. And, of course, it needs sustainable funding.
 
-In the talk, Bernhardt imagines a project called METAL that moves the JavaScript VM into the kernel. The VM already keeps programs apart, so the hardware no longer has to. Process isolation becomes the VM’s job.
+Today, publicly funded teams are working on solving each of those three problems.
 
-We did not need to move the VM into the kernel. A browser tab is the VM Bernhardt imagined.
+#### Rebuilding Server, Client, and Storage
 
-## [§](https://fzakaria.com/2026/11/25/browser-tabs-as-a-container-runtime#one-tab-per-container)One tab per container
+Stalwart, the server from De Gennaro’s team, focuses on streamlining the software to replace 12 programs with one: Installation takes two commands and a six-screen web wizard. It speaks every common mail and collaboration protocol: SMTP for sending, IMAP and POP3 for reading, JMAP for web-based mail, and CalDAV and CardDAV for calendars and contacts. Spam filtering, sender authentication, and TLS encryption are built in. Give it a token for a DNS provider such as Cloudflare or Route 53, and the server publishes its own mail records. Behind the wizard are nearly 3,000 settings across 176 screens, which most operators never touch. De Gennaro calls Stalwart "the software at the other end of your email client or calendar client."
 
-[tabc](https://github.com/fzakaria/tabc) is a OCI container runtime that runs each container in its own browser tab. That means you can use it with Docker just like any other runtime.
+Stalwart 1.0 was released in October 2026 after five and a half years of development. NGI Zero funded the project with two grants: one for the mail server, and one for calendars, contacts, and file storage.
 
-Whereas the default Docker runtime, [runc](https://github.com/opencontainers/runc), starts your program as a process on the host’s kernel, tabc leverages the browser as its execution environment, running each container in a separate tab with its own instance of the Linux kernel compiled to WebAssembly.<sup>2</sup>2The tab boots [unkernel](https://github.com/pithings/unkernel), and the “container” runs within it.
+For users who can’t leave Outlook features behind, there’s Parula. Keeping the application logic strictly separate from a thin interface layer, and a well thought-out common logic, so a new protocol takes “just a few thousand lines of code,” Bucksch and his team at Beonex GmbH built an Outlook-like interface alongside a modern interface, a chat-style view and a classic three-pane view. It runs on a JMAP server or any other mail server and offers shared team mailboxes, delegated access so an assistant can run a manager’s calendar, and free/busy lookups for team meetings. It speaks IMAP, JMAP, and POP3, plus four from Microsoft: Exchange Web Services (EWS), Exchange ActiveSync, Microsoft Graph, and Outlook Web Access.
 
-This is the part that I’m most excited about: at no point does your container ever touch the host’s kernel and require Linux.
-All tabc asks of the host is a browser, nothing needs Linux underneath.
+Partially funded by NGI Zero, Parula also removes a dependence most people never notice. Multi-factor login typically runs through Google's or Microsoft's identity services; an AutoConfig extension allows a client to discover and log in directly to an organization's own identity server. Bucksch says that Parula is the first desktop client that does this.
 
-This is a complete rethinking of the container stack on macOS. Docker on a Mac is a Linux virtual machine with a nice installer. Docker Desktop, [Colima](https://github.com/abiosoft/colima), OrbStack and Podman Machine all boot a Linux VM first. Even Apple’s own [container](https://github.com/apple/container) tool boots a VM per container.
+Aerogramme, an IMAP server that doesn't keep any state of its own, answers the operations problem in the storage. It doesn’t send or receive mail, so it needs a separate mail transfer agent such as Postfix; then it encrypts each mailbox on Garage, compatible with Amazon’s S3 interface. Garage replicates every piece of data in three locations, so users can still read and write their mail if a site goes offline. This design for power cuts and residential Internet connections gave up perfect synchronization, but it spreads maintenance work among five to ten members rather than requiring one big server host to give up all his weekends.
 
-Isn’t WebAssembly a virtual machine? Technically yes, in the same way the JVM is: it runs code for a made-up CPU.
-The difference is that it is all software. Nothing asks macOS for a hypervisor.
+The research problem, Dufour says, is mapping the mail, calendar, and contact protocols cleanly onto object storage. Aerogramme is still on the way, with internal deployment planned for January 2027 and a public beta a few months later. To get there, a second grant funded through NGI Zero is supporting a hunt for edge cases where a network delay or a failure halfway through writing could lose a message.
 
-On Linux, Docker pulls the image and hands it to tabc. A Mac with no Linux VM has no Docker daemon to do that, so tabc run pulls the image itself.
+The three projects already interoperate with each other and with other email programs on the NLnet list funded by NGI Zero. Parula lists Stalwart as a supported server; Stalwart can keep its messages in Garage. Bucksch and De Gennaro both name Mox as another server built as a single package. Different teams, working separately, have split the email problem and built solutions that fit back together.
 
-```
-$ tabc run -it alpine sh
-/ # uname -sm
-Linux aarch64
-```
+###### Subscribe to our [Linux Newsletters](https://us2.list-manage.com/subscribe?u=1c76cb37f73773b4962ae429b&id=15836edcb2)  
 
-Without Linux and namespaces, what is giving the container its isolation?
+Find [Linux and Open Source Jobs](https://opensourcejobhub.com/)  
 
-The browser! 💡
+Subscribe to our [ADMIN Newsletters](https://us2.list-manage.com/subscribe?u=1c76cb37f73773b4962ae429b&id=6820c9c211)
 
-Browsers such as Chromium are an incredibly battle-tested sandbox, and we only use them for web pages. 🤦
-Rather than simply relying on the host kernel’s isolation mechanisms, tabc leverages the browser’s sandbox to create an additional layer of security.<sup>3</sup>3Every container may also get a browser of its own, with its own profile, so two containers share no process and no storage.
+# Support Our Work
 
-Starting a container in a browser tab is surprisingly fast, and most of the time is spent starting the browser itself.
-On my Linux laptop<sup>4</sup>4I ran fifteen runs of `echo hi` from an Alpine bundle on a Ryzen 7 7840U.  a container takes roughly 0.87 seconds from command to exit. This startup cost can be
-eliminated by using your browser’s already running instance via `--open` or `--link`, *more on that later*.
+*Linux Magazine* content is made possible with support from readers like you. Please consider contributing when you’ve found an article to be beneficial.
 
-Unkernel has drastically improved the performance of running Linux in the browser but since the processes themselves are still emulated, 
-there can be some noticeable delay for larger compute-heavy workloads.
+## News
 
-> **Aside**
-> You can get a sense of the performance impact on a lot of packages by visiting [https://trynix.dev](https://trynix.dev).
-> You have access to over 300,000 packages from [Nixpkgs](https://nixos.org/nixpkgs/) that run directly in your browser using [Unkernel](https://unkernel.dev).
-
-Although some of these slowdowns seem excessive, many workloads are still well within acceptable limits for interactive use that let this go beyond trivial examples and novelty.
-
-Depending on whether you have every container running in its own browser instance or sharing tabs within a single browser, the memory overhead can be more dramatic.
-An idle container costs ~540 MiB of host memory split between the tab that holds the guest, the browser process, and helper processes.<sup>5</sup>5For scale, [Firecracker](https://firecracker-microvm.github.io/) quotes under 5 MiB of overhead per microVM and 125 ms to boot.
-
-Nevertheless, this overhead is acceptable for many interactive use cases where the convenience of
-running containers in browser tabs outweighs the memory cost.
-
-Did you remember when I said you can run this on MacOS without a Linux VM !?
-
-> **Aside**
-> The idea of a container in WebAssembly was attempted before with [container2wasm](https://github.com/container2wasm/container2wasm).
-> It however emulated the entire machine, including the kernel, rather than just the program so it was way heavier and slower than what tabc does.
-
-By default the browser is hidden. It does not have to be. Ready to cook ? 🧑‍🍳
-
-This is where the idea kind of comes together and becomes borderline magical: the browser tab itself becomes the container, and you can interact with it just like any other tab.
-
-```
-$ tabc run -it --open -p 8123:80 nginx:alpine sh
-```
-
-With `--open`, tabc leverages the desktop environment to open the container’s page in the default browser. Even crazier is that the page itself is a pty, so you have cross-terminal interaction between the browser tab and the terminal you started it from.
-
-You then can visit the container’s web server at the port exposed, in this case `localhost:8123`, in you guessed it: another browser tab in *the same browser*.
-
-Once you have containers you can start, they then can become composed: `docker compose`.
-Nothing beyond the `runtime: tabc` key in the Compose file changes. Everything else from compose continues to work: network, volumes, and all.<sup>6</sup>6The `--dashboard` flag opens the tabc dashboard, where the tabs are panes in a single browser page.
-
-> **Tip**
-> Since MacOS has no Docker daemon for compose, tabc brings its own lightweight one to handle it: `tocker`.
->
-> ```
-> $ tocker --dashboard compose up
-> ```
-
-We just started two containers in the browser: a web server and a Redis instance, each running in its own tab pane and communicating with each other by service name.
-
-## [§](https://fzakaria.com/2026/11/25/browser-tabs-as-a-container-runtime#everything-is-a-tab)Everything is a tab
-
-Unix’s big bet was that everything is a file. In the browser, everything is a tab.
-Our mail, our editors and our terminals already moved there.
-We can now add containers to the list.
-
-```
-$ nix run github:fzakaria/tabc -- run alpine echo hi
-hi
-```
-
-That works on Linux and on an Apple Silicon Mac on any recent browser.<sup>7</sup>7On Linux the Nix package brings its own Chromium unless you pass `--open`. 
-The [README](https://github.com/fzakaria/tabc) has more details on setup and usage.
-
-Solomon Hykes was half right. WebAssembly became the runtime, and Docker stayed anyway.
+- [System76 Announces the New Thelio Prime Desktop](http://www.linux-magazine.com/Online/News/System76-Announces-the-New-Thelio-Prime-Desktop) [Hardware](http://www.linux-magazine.com/tags/view/Hardware) , [Linux](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux) , [Thelio](http://www.linux-magazine.com/tags/view/Desktop/Thelio) The makers of the Thelio desktop line and Pop!_OS have released a powerful small form factor PC.
+- [A Must See KDE Documentary](http://www.linux-magazine.com/Online/News/A-Must-See-KDE-Documentary) [Community](http://www.linux-magazine.com/tags/view/Community) , [KDE](http://www.linux-magazine.com/tags/view/Desktop/KDE) It doesn't matter what desktop environment you prefer, this KDE documentary should top your list of things to watch.
+- [New KORA Linux Distro to Harness the Power of Local AI](http://www.linux-magazine.com/Online/News/New-KORA-Linux-Distro-to-Harness-the-Power-of-Local-AI) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Operating Systems](http://www.linux-magazine.com/tags/view/Operating+Systems) The development team behind CyanogenMod, Android, and Playtron unveils KORA, a Linux distribution built specifically for AI nerds.
+- [Epic Games Targets Linux for New Launcher](http://www.linux-magazine.com/Online/News/Epic-Games-Targets-Linux-for-New-Launcher) [Steam](http://www.linux-magazine.com/tags/view/Games/Steam) , [SteamOS](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux/SteamOS) The Epic Games new launcher is still in preview, but it looks to land on several Linux distributions.
+- [Fedora 45 Now Available](http://www.linux-magazine.com/Online/News/Fedora-45-Now-Available) [Fedora](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux/Fedora) , [Operating Systems](http://www.linux-magazine.com/tags/view/Operating+Systems) The latest iteration of Fedora has arrived with Gnome 51 and KDE Plasma 6.8.
+- [Linux 7.4 is "Much Healthier" Thanks to AI](http://www.linux-magazine.com/Online/News/Linux-7.4-is-Much-Healthier-Thanks-to-AI) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) At nearly 42 million lines, Linux 7.4 is the largest merge in the kernel’s history.
+- [Working Exploit for a Linux Kernel Flaw Made Public](http://www.linux-magazine.com/Online/News/Working-Exploit-for-a-Linux-Kernel-Flaw-Made-Public) [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) , [Security](http://www.linux-magazine.com/tags/view/Security) , [vulnerability](http://www.linux-magazine.com/tags/view/Security/vulnerability) Even before a bug received its CVE identifier or an upstream fix, the local privilege escalation vulnerability exploit found its way into the wild.
+- [r/opensource Bans AI-Assisted and AI-Related Projects](http://www.linux-magazine.com/Online/News/r-opensource-Bans-AI-Assisted-and-AI-Related-Projects) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Community](http://www.linux-magazine.com/tags/view/Community) , [projects](http://www.linux-magazine.com/tags/view/Community/projects) The de facto subreddit for all things open source has not only banned AI-related projects but also users who "don't speak English."
+- [Bottlenecks Discovered by Meta Engineers Lead to Scalability Improvements](http://www.linux-magazine.com/Online/News/Bottlenecks-Discovered-by-Meta-Engineers-Lead-to-Scalability-Improvements) [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) , [Performance](http://www.linux-magazine.com/tags/view/HPC/Performance) Thanks to a small group of engineers at Meta, the Linux kernel module kernfs has been improved, which has led to some serious gains.
+- [PwnEscape Poses VM Vulnerability](http://www.linux-magazine.com/Online/News/PwnEscape-Poses-VM-Vulnerability) [cyberattack](http://www.linux-magazine.com/tags/view/Security/cyberattack) , [KVM](http://www.linux-magazine.com/tags/view/Virtualization/KVM) , [vulnerability](http://www.linux-magazine.com/tags/view/Security/vulnerability) A guest-to-host escape flaw in Linux KVM, named PwnEscape, might be yet another means of attacking Linux.

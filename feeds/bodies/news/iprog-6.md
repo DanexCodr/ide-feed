@@ -1,9 +1,91 @@
-PHP 8.6 has been released. The yearly update adds partial function applications and default values for read-only properties. There's also a new clamp() function, a \Time\Duration class, and a new polling API. And of course it comes with all the fixes for PHP2Shell (as well as the related follow-up vulnerability, phpAfterShell), meaning you will not need to patch an older branch. PHP began life as a simple scripting language designed to build web pages, but has developed into a general server side web language . It is now used for eight out of ten websites using server-side code. It was recently in the news due to the discovery of the security vulnerabilities that had been in the language for decades, that allowed unauthenticated remote code execution (RCE). The patches released to update older versions of PHP were incorporated in PHP 8.6 during its development. The first improvement in this release is a Partial Function application that allows some of a function's arguments to be provided in advance, using ? and ... placeholders for the rest. The result is a Closure, and the function is only called once the remaining arguments are passed to it. The next improvement is a new \Time\Duration class. The Duration class represents elapsed time as measured by a stopwatch. Its representation is independent of any time and timezone and can represent a range of more than 250 years with nanosecond precision. The PHP team says this makes it well-suited to represent timeouts or benchmark timings in an expressive way. A new clamp() function has also been added. This can be used to make sure that a given value (numeric or otherwise) falls within a specified range. If the value isn't in the acceptable range, the nearest boundary value is returned. A new Io\Poll API has also been added. This efficiently monitors many streams at once using the best mechanism available on each platform (epoll, kqueue, event ports, or WSAPoll), without the scalability limits of stream_select(). It is designed as a common foundation that event loop libraries such as ReactPHP and AMPHP can build on. Stream error handling is also new in this release, meaning stream operations can now be configured to throw a StreamException or to fail silently instead of emitting warnings. Errors are reported as structured StreamError objects with a StreamErrorCode enum case, the wrapper name, and the affected path or URL, and can also be retrieved later with stream_last_errors() or passed to a custom error handler. A new SortDirection enum provides a shared, type-safe way to express sort order with its ascending and descending cases. Until now, every library had to define its own way of representing sort direction, resulting in a mix of incompatible integers, strings, booleans, and custom enums. Since SortDirection is built into PHP, libraries can accept it in their public APIs without needing adapter code. Another change is that function and method parameters can now have their own DocComments, allowing each parameter to be documented right next to its declaration, without repeating its name and type in a @param tag. PHP 8.6 is available for download now.
+Page 1 of 2Expressions, you have been using them since you started programming and even before but they deserve more of your attention. Come and meet some oddities in C. 
 
-#### More Information
+## Deep C Dives  
+Adventures in C
 
-[PHP Website](<http://php.net/>)
+#### By Mike James
 
-#### Related Articles
+[](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=4fa8081139e7fc62d7870dd10e56111b&language=en_US&ref_=as_li_ss_tl>) Buy from [Amazon](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=d753370b74431428dbd05015b78a60da&language=en_US&ref_=as_li_ss_tl>).
 
-[PHP 8.5 Adds URI Extension](<https://www.i-programmer.info/news/87-web-development/18522-php-85-adds-uri-extension.html>) [PHP 8.4 Adds Property Hooks](<https://www.i-programmer.info/news/98-languages/17645-php-84-adds-property-hooks.html>) [Is PHP in Trouble?](<https://www.i-programmer.info/news/98-languages/17106-is-php-in-trouble.html>) [PHP 8.3 Released](<https://www.i-programmer.info/news/98-languages/16788-php-83-released.html>) [Updated For PHP 8.3](<https://www.i-programmer.info/news/90-tools/16773-phpstorm-updated-for-php-83.html>) [PHP Adds Read-Only Classes](<https://www.i-programmer.info/news/98-languages/15970-php-adds-read-only-classes.html>) [PHP - Essential But Underappreciated](<https://www.i-programmer.info/news/87-web-development/14871-php-essential-but-underappreciated.html>) [Ten Minutes to PHP](<https://www.i-programmer.info/programming/php/926-ten-minutes-to-php.html>) [PHP Is Best?](<https://www.i-programmer.info/news/98-languages/13057-php-is-best.html>) [PHP 8.0 Adds Metadata To Classes](<https://www.i-programmer.info/news/98-languages/14203-php-80-adds-metadata-to-classes.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+#### Contents
+
+**Preface  
+Prolog C  
+Dive**
+
+  1. **All You Need Are Bits  
+Extract**: [All You Need Are Bits](<https://www.i-programmer.info/programming/111-cc/18606-deep-c-dives-all-you-need-are-bits.html>)****
+  2. **These aren’t the types you’re looking for  
+** **Extract** : [Ty](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)[pe](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)
+  3. [Type Casting](<https://www.i-programmer.info/programming/111-cc/19099-deep-c-dives-type-casting.html>)
+  4. **Expressions  
+Extract: **[Some Oddities](<https://www.i-programmer.info/programming/111-cc/19304-deep-c-dives-expressions-some-oddities.html>)***************NEW!************
+  5. **Bits and More Bits  
+Extract: **[Bits!](<https://www.i-programmer.info/programming/111-cc/17953-deep-c-dives-bits.html>)**  
+**
+  6. [The Brilliant But Evil for](<https://www.i-programmer.info/programming/111-cc/17630-deep-c-dives-the-brilliant-but-evil-for.html>)
+  7. [Into the Void](<https://www.i-programmer.info/programming/111-cc/17253-deep-c-dives-into-the-void.html>)
+  8. [Blocks, Stacks and Locals](<https://www.i-programmer.info/programming/111-cc/18717-deep-c-dives-blocks-stacks-and-locals.html>)
+  9. [Static ](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)[Storage](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)
+  10. [Pointers](<https://www.i-programmer.info/programming/111-cc/18924-deep-c-dives-pointers.html>)
+  11. **The Array and Pointer Arithmetic**
+  12. [Heap, The Third Memory Allocation](<https://www.i-programmer.info/programming/111-cc/18752-deep-c-dives-heaps.html>)
+  13. **First Class Functions  
+Extract: **[First Class Functions](<https://www.i-programmer.info/programming/111-cc/17433-deep-c-dives-first-class-functions.html>)**  
+**
+  14. **Structs and Objects  
+** **Extract** : [Value Structs](<https://www.i-programmer.info/programming/111-cc/18275-deep-c-dives-value-structs.html>)****
+  15. [The Union](<https://www.i-programmer.info/programming/111-cc/17788-deep-c-dives-the-union.html>)
+  16. [Undefined Behavior](<https://www.i-programmer.info/programming/111-cc/18653-deep-c-dives-undefined-behavior.html>)
+  17. **Exceptions and the Long Jump  
+**
+
+<ASIN:B0D6LZZQ8R>
+
+## Dive 4
+
+## Expressions
+
+_“I don’t know what the language of the year 2000 will look like,  
+but I know it will be called Fortran.”_ _CA Hoare, 1982_ One of the most important concepts in any programming language is the expression and C has expressions for most things and knowing how to use them is a big part of effective C programming. What might surprise you is that there was a time when expressions didn’t exist – they had to be invented. The generally accepted first implementation of expressions was in Fortran in 1957. John Backus and his team at IBM worked out how to compile expressions into machine code and the same algorithms are at work today, compiling C expressions into machine code. C A Hoare might have been wrong about what we call the language, but there is a little bit of Fortran in every modern language.
+
+#### In Chapter but not in this extract
+
+  * Expressions and Statements
+  * C Expressions 
+  * Compile v Runtime Expressions
+  * Side Effects and Sequence Points
+  * Auto Promotion
+  * Some Oddities
+
+The whole idea of an expression is so obvious that you almost certainly don’t need a conducted tour of all of C’s operators and how they interact. However, there are a few strange and almost unlikely things that you might not have noticed. None of them have the advantage of clarity of purpose, but you will encounter them in other people’s code.
+
+#### Assignment is an operator
+
+When you write a=b this is an expression just like a+b and the result is the value stored in b or the value of the expression on the right hand side. That is, a=b takes a and b and produces the result b. As a side effect it also sets a to the value stored in b, which is what you usually assume assignment to do! Notice that this implies that a cannot be an expression in its own right. What advantage would this have? The most obvious is that you can use it to set more than one variable: a = b = c = 2*2; which sets a, b and c to 4.  You can use variables, even ones that are being assigned, in the expression:
+
+    int b = 3;
+    a = b = c = 2*b;
+
+as the expression is worked out before the side effect is enacted. This sets all of the variables to 6. Another use is to save a result while computing a conditional. For example:
+
+        int a,b = 0;
+        while( (a = 2*b) < 10){
+            b = b+1;
+        }
+
+The assignment within the while loop sets a to 2*b and evaluates to 2*b, which is then compared to 10. At the end of the loop you will find that a is 10 and b is 5. It is arguable that this is confusing, but it does avoid having to compute the expression twice. In short, you can test an expression and save its value. Notice that all of the assignment operators behave in this way. For example:
+
+    int a = 0,b = 0;
+    b = a+ =1;
+
+sets a and b to 1. You can even go as far as:
+
+    int a = 1,b = 2;
+    b+ = a+ =3;
+
+This is evaluated as a is set to the contents of a plus 3 with the assignment returning 4 as its result. Then b is set to the contents of b plus the expression to the right, i.e. 4. As a result a is set to 4 and b is set to 6. You can see that this is the same as:
+
+    b = a+b = a+3;
+
+but of course you can’t use this form as you cannot assign a value to a+b. It is probably better not to use such confusing constructs

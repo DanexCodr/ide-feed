@@ -53,5 +53,3 @@ On Android, SSH is technically "available" through Termux, although it can be fi
 SSH also still poses limits around audio (as agents are increasingly used with dictation), and despite how much the Kitty graphics protocol helps, it leaves a lot of optimization on the table due to a lack of stronger client-side state and streaming protocols.
 
 My SSH-native compositing system and microVM desktop environment based on it are the backbone of my broader attempt to create an actually pleasant agent sandbox :). A cloud computer without cloud friction if you will. Another article which describes how I added a "timeline" feature to `zydra.sh` that allows you to rewind the VM as if watching a livestream is available here: [Agents need an undo button](https://zydra.sh/articles/agents-need-an-undo-button/). You can read more about me and my background on my [portfolio](https://teledream.dev), too.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50589784)

@@ -1,91 +1,13 @@
-Page 1 of 2Expressions, you have been using them since you started programming and even before but they deserve more of your attention. Come and meet some oddities in C. 
+The results of State of HTML 2026 survey are out, revealing how web developers balance standard HTML and CSS against JavaScript and their adoption of AI-assisted coding. The survey, run during October 2026 by Devographics, attracted 2019 respondents, with an average age of 36 and 14 years experience. **Progressive Enhancement** One of the new questions included in this 4th edition of the survey, relates to Progressive Enhancement, that is a move away from JavaScript to more native capability in HTML/CSS, something that Devographics clearly favors. The survey probed Web developers' attitude towards progressive enhancement with the question:  _In your typical work context, how important is it that the websites or web apps you build be able to function without JavaScript?_ Commenting on the distribution of responses the report says: _a full 43% of respondents do not concern themselves with making their apps or sites work without JavaScript. While on the other end of the spectrum, it's a requirement for only 4%._ This aligns with the fact that respondents to the question: _How do you divide you time between writing HTML/CSS and JavaScript (or TypeScript) code?_ reported a median split of 63% toward JavaScript or TypeScript. **AI Code Generation** The tendency to rely on scripting rather than declarative markup also appears in the AI Code Generation data. Respondents reported a median of 50% of their code being AI-generated. This is lower than the 63% median reported in the [_State of Devs survey_](<https://www.i-programmer.info/news/99-professional/19198-devs-mental-state-revealed.html>), but higher than for CSS code, what sat at a median of just 13%. Taken alongside the 63% JavaScript/TypeScript balance, the figures suggest AI tools are being used heavily to generate procedural script rather than HTML and CSS, potentially leaving developers with more generated code to inspect and maintain.
 
-## Deep C Dives  
-Adventures in C
+#### Browser AI APIs
 
-#### By Mike James
+Finally, in the Browser AI APIs section, developers were asked which AI capabilities they would like browsers to support natively. Practical comprehension and accessibility features ranked well ahead of generative media tools. Respondents were allowed to select up to three options, with translation being overwhelmingly the top choice: Local browser support for translation, speech recognition, and captions can reduce latency and improve content accessibility, though 325 respondents selected "None"—indicating that a substantial share of developers would still prefer improvements to core HTML standards and native UI controls over built-in AI APIs. The [State of JS Survey](<https://survey.devographics.com/en-US/survey/state-of-js/2026>) is currently underway and is open unitl December 5th. This is the 10th edition of the survey of the JavaScript ecosystem. 
 
-[](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=4fa8081139e7fc62d7870dd10e56111b&language=en_US&ref_=as_li_ss_tl>) Buy from [Amazon](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=d753370b74431428dbd05015b78a60da&language=en_US&ref_=as_li_ss_tl>).
+#### More Information
 
-#### Contents
+[State of HTML 2026](<https://2026.stateofhtml.com/en-US/>)
 
-**Preface  
-Prolog C  
-Dive**
+#### Related Articles
 
-  1. **All You Need Are Bits  
-Extract**: [All You Need Are Bits](<https://www.i-programmer.info/programming/111-cc/18606-deep-c-dives-all-you-need-are-bits.html>)****
-  2. **These aren’t the types you’re looking for  
-** **Extract** : [Ty](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)[pe](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)
-  3. [Type Casting](<https://www.i-programmer.info/programming/111-cc/19099-deep-c-dives-type-casting.html>)
-  4. **Expressions  
-Extract: **[Some Oddities](<https://www.i-programmer.info/programming/111-cc/19304-deep-c-dives-expressions-some-oddities.html>)***************NEW!************
-  5. **Bits and More Bits  
-Extract: **[Bits!](<https://www.i-programmer.info/programming/111-cc/17953-deep-c-dives-bits.html>)**  
-**
-  6. [The Brilliant But Evil for](<https://www.i-programmer.info/programming/111-cc/17630-deep-c-dives-the-brilliant-but-evil-for.html>)
-  7. [Into the Void](<https://www.i-programmer.info/programming/111-cc/17253-deep-c-dives-into-the-void.html>)
-  8. [Blocks, Stacks and Locals](<https://www.i-programmer.info/programming/111-cc/18717-deep-c-dives-blocks-stacks-and-locals.html>)
-  9. [Static ](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)[Storage](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)
-  10. [Pointers](<https://www.i-programmer.info/programming/111-cc/18924-deep-c-dives-pointers.html>)
-  11. **The Array and Pointer Arithmetic**
-  12. [Heap, The Third Memory Allocation](<https://www.i-programmer.info/programming/111-cc/18752-deep-c-dives-heaps.html>)
-  13. **First Class Functions  
-Extract: **[First Class Functions](<https://www.i-programmer.info/programming/111-cc/17433-deep-c-dives-first-class-functions.html>)**  
-**
-  14. **Structs and Objects  
-** **Extract** : [Value Structs](<https://www.i-programmer.info/programming/111-cc/18275-deep-c-dives-value-structs.html>)****
-  15. [The Union](<https://www.i-programmer.info/programming/111-cc/17788-deep-c-dives-the-union.html>)
-  16. [Undefined Behavior](<https://www.i-programmer.info/programming/111-cc/18653-deep-c-dives-undefined-behavior.html>)
-  17. **Exceptions and the Long Jump  
-**
-
-<ASIN:B0D6LZZQ8R>
-
-## Dive 4
-
-## Expressions
-
-_“I don’t know what the language of the year 2000 will look like,  
-but I know it will be called Fortran.”_ _CA Hoare, 1982_ One of the most important concepts in any programming language is the expression and C has expressions for most things and knowing how to use them is a big part of effective C programming. What might surprise you is that there was a time when expressions didn’t exist – they had to be invented. The generally accepted first implementation of expressions was in Fortran in 1957. John Backus and his team at IBM worked out how to compile expressions into machine code and the same algorithms are at work today, compiling C expressions into machine code. C A Hoare might have been wrong about what we call the language, but there is a little bit of Fortran in every modern language.
-
-#### In Chapter but not in this extract
-
-  * Expressions and Statements
-  * C Expressions 
-  * Compile v Runtime Expressions
-  * Side Effects and Sequence Points
-  * Auto Promotion
-  * Some Oddities
-
-The whole idea of an expression is so obvious that you almost certainly don’t need a conducted tour of all of C’s operators and how they interact. However, there are a few strange and almost unlikely things that you might not have noticed. None of them have the advantage of clarity of purpose, but you will encounter them in other people’s code.
-
-#### Assignment is an operator
-
-When you write a=b this is an expression just like a+b and the result is the value stored in b or the value of the expression on the right hand side. That is, a=b takes a and b and produces the result b. As a side effect it also sets a to the value stored in b, which is what you usually assume assignment to do! Notice that this implies that a cannot be an expression in its own right. What advantage would this have? The most obvious is that you can use it to set more than one variable: a = b = c = 2*2; which sets a, b and c to 4.  You can use variables, even ones that are being assigned, in the expression:
-
-    int b = 3;
-    a = b = c = 2*b;
-
-as the expression is worked out before the side effect is enacted. This sets all of the variables to 6. Another use is to save a result while computing a conditional. For example:
-
-        int a,b = 0;
-        while( (a = 2*b) < 10){
-            b = b+1;
-        }
-
-The assignment within the while loop sets a to 2*b and evaluates to 2*b, which is then compared to 10. At the end of the loop you will find that a is 10 and b is 5. It is arguable that this is confusing, but it does avoid having to compute the expression twice. In short, you can test an expression and save its value. Notice that all of the assignment operators behave in this way. For example:
-
-    int a = 0,b = 0;
-    b = a+ =1;
-
-sets a and b to 1. You can even go as far as:
-
-    int a = 1,b = 2;
-    b+ = a+ =3;
-
-This is evaluated as a is set to the contents of a plus 3 with the assignment returning 4 as its result. Then b is set to the contents of b plus the expression to the right, i.e. 4. As a result a is set to 4 and b is set to 6. You can see that this is the same as:
-
-    b = a+b = a+3;
-
-but of course you can’t use this form as you cannot assign a value to a+b. It is probably better not to use such confusing constructs
+[Devs' Mental State Revealed](<https://www.i-programmer.info/news/99-professional/19198-devs-mental-state-revealed.html>) [Time To Be Counted In State of Devs Survey 2026](<https://www.i-programmer.info/news/99-professional/19108-time-to-be-counted.html>) [How AI Is Rewriting the Path to a Software Engineering Career](<https://www.i-programmer.info/news/99-professional/18989-how-ai-is-rewriting-the-path-to-a-software-engineering-career.html>) [Programming In The Age of AI](<https://www.i-programmer.info/news/99-professional/17971-programming-in-the-age-of-ai.html>) [AI Incresingly Embraced by Web Devs](<https://www.i-programmer.info/news/87-web-development/18880-ai-increasingly-embraced-by-web-devs.html>) [The Ongoing State Of JavaScript](<https://www.i-programmer.info/news/167-javascript/17288-the-ongoing-state-of-javascript.html>) [ ](<https://www.i-programmer.info/news/167-javascript/17288-the-ongoing-state-of-javascript.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
