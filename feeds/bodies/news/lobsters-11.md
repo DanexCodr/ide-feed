@@ -1,59 +1,19 @@
-> **tl;dr** [trynix.dev](https://trynix.dev/) boots GUI programs now. Try [solitaire](https://trynix.dev/?pkg=aisleriot&engine=unkernel&run=sol+%26&boot=1), [GL gears](https://trynix.dev/?pkg=mesa-demos&engine=unkernel&run=es2gears_wayland+%26&boot=1), [xeyes](https://trynix.dev/?pkg=xeyes&engine=unkernel&run=xeyes+%26&boot=1), [a voice](https://trynix.dev/?pkg=espeak-ng&engine=unkernel&run=espeak-ng+%27Hello+from+the+Nix+multiverse%27&boot=1), [the weather over curl](https://trynix.dev/?pkg=curl&engine=unkernel&run=curl+-s+wttr.in%2FSan%2BFrancisco%3F0&boot=1), or [Firefox](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+%26&boot=1).
+TL;DR I made a romhack which implements the most common urban legends from the gen 1 Pokemon games.
 
-I remember watching the talk [The Birth & Death of JavaScript](https://www.destroyallsoftware.com/talks/the-birth-and-death-of-javascript) by [Gary Bernhardt](https://x.com/garybernhardt) and falling in love with the whimsical yet dreadfully serious unfolding of the story of how JavaScript will come to dominate all software.
+Catching Mew under the truck
 
-Others have noted the inevitability of JavaScript’s dominance, so perhaps it was not surprising that Atwood’s Law holds true.
+- Spam A to increase catch chance
+- Magikarp splash has a 1/256 chance to 1-shot KO
+- Talk to Bill 100 times and you can go to his garden
+- You can catch all three starters in Bill's garden
+- You can catch Pikablu in Bill's garden
+- You can battle Professor Oak after completing the Pokedex
+- ... and of course, Mew is under the truck
 
-> **Atwood’s Law**Any application that can be written in JavaScript, will eventually be written in JavaScript.
-> — [Jeff Atwood, 2009](https://blog.codinghorror.com/all-programming-is-web-programming/)
+The old fashioned way! I did not make the actual getting to the truck any easier. You have to either trade for a Pokemon that knows CUT, to avoid entering the S.S. Anne. Or, you can enter the ship and collect the CUT HM as usual, then backtrack to a trainer on the ship that you have not already defeated, battle them, and let them win. This will teleport you back to the nearest Pokecentre without triggering the S.S. Anne to leave.
 
-I highly recommend watching the talk if you have not already seen it, but the short and skinny is a lookback from 2035 and how JavaScript came to be the defacto language for all software.
+### Download
 
-In Bernhardt’s retelling of events, the date is worked back from 2035, however unsurprisingly, large language models have rapidly sped up the timeline. What was once perceived to be the end-state at 2035 has arrived years earlier and you can witness it unfolding at [trynix.dev](https://trynix.dev/).
+I don't want to host the rom directly because Nintendo will eviscerate me. What I have below is a patching tool: select an original, unmodified ROM file that you ripped from your personal copy you've had since you were twelve, and it will patch it, and save the modified version. Under no circumstances should you use a ROM file ripped by anyone else, because that would be very naughty.
 
-One of the most impressive creations I’ve managed to build leveraging [nixpkgs-multiverse](https://fzakaria.com/2026/08/09/nixpkgs-multiverse-every-version-that-ever-existed) is [https://trynix.dev](https://trynix.dev/).
-
-It still baffles my mind that I can run **any Nix package**, over 300,000 distinct package versions, straight from my browser. Truly insane capability.
-I was however a little dismayed at the speed of the QEMU emulation in the browser. It was slow enough that the creation tipped more towards novelty than practicality.
-
-I woke on November 20th and saw [Domen Kožar](https://x.com/domen_koz) sharing a single message in our [TacoSprint](https://tacosprint.org) Discord channel: [unkernel.dev](https://unkernel.dev)
-
-[![A message from Domen sharing the website unkernel.dev on a Discord channel](https://fzakaria.com/assets/images/derived/domen_discord_unkernel-1404w.webp)](https://fzakaria.com/assets/images/domen_discord_unkernel.png)
-
-It was the fast browser Linux experience I had sought to achieve, *but with Nix*.
-
-> **Aside**
-> What is [unkernel](https://unkernel.dev)?
-> It is Linux compiled *to* WebAssembly, allowing the kernel and system components to run at wasm speed while only user programs are emulated. It was published by [Pooya Parsa](https://x.com/_pi0_) on November 19th, 2026.
-
-In an AI induced manic frenzy, I adopted the new engine along with a slough of long-wished features almost immediately.
-
-The proof is in the pudding: unkernel delivers remarkable speed improvements over [qemu-wasm](https://github.com/ktock/qemu-wasm),<sup>1</sup>1With a very healthy set of patches applied to make it even faster.  especially on first runs where kernel work dominates. The new engine is able to deliver 2x to 32x faster performance depending on the workload.<sup>2</sup>2The [benchmark page](https://trynix.dev/bench/) tracks both engines over time, measured through the real page and shell.
-
-JavaScript & WebAssembly nirvana.
-
-Amazingly not only does the kernel boot quickly, it also enables networking, full-fledged graphical and audio experiences directly in the browser.
-
-**Windows.** A program’s Wayland surfaces are composited in the page by [wland](https://github.com/pithings/wland), and they float over the terminal you started them from.
-
-[![trynix.dev in a browser, with xeyes, an X11 program, in a window over the console](https://fzakaria.com/assets/images/trynix-xeyes.webp)](https://fzakaria.com/assets/images/trynix-xeyes.webp)
-
-**GL.** The VM includes a minimal Mesa build with only the virgl driver, compiled to WebAssembly, rendering through your browser’s WebGL2.
-
-[![trynix.dev in a browser, with es2gears drawing through WebGL2 in a window over the console, and the terminal reporting about 60 frames a second](https://fzakaria.com/assets/images/trynix-gears.webp)](https://fzakaria.com/assets/images/trynix-gears.webp)
-
-**Sound.** The VM has an ALSA sound card, and can play audio through your browser.
-
-[![trynix.dev in a browser, with espeak-ng typed at the prompt and the console bar saying "sound: click to play"](https://fzakaria.com/assets/images/trynix-voice.webp)](https://fzakaria.com/assets/images/trynix-voice.webp)
-
-**Network.** `curl`, `git clone` and `pip install` work. Each TCP connection goes over one WebSocket to a [Wisp](https://github.com/MercuryWorkshop/wisp-protocol) relay.<sup>3</sup>3Thank you to [@_pi0_](https://x.com/_pi0_) for adding [trynix.dev](https://trynix.dev) to his Wisp relay allow-list.
-
-[![trynix.dev in a browser, with curl in the guest printing a live San Francisco weather report from wttr.in](https://fzakaria.com/assets/images/trynix-weather.webp)](https://fzakaria.com/assets/images/trynix-weather.webp)
-
-The best joke in Bernhardt’s talk is a browser running inside another browser: the Windows GIMP under Wine, in Chrome, in Firefox. Of course, I had to try it with trynix. 😈
-
-Here is [Firefox in trynix](https://trynix.dev/?pkg=firefox&engine=unkernel&mem=2048&run=firefox+https%3A%2F%2Ftrynix.dev+%26&boot=1), and it loading [trynix.dev](https://trynix.dev), and then loading Firefox again inside itself.<sup>4</sup>4Don’t get too excited: this took over 4 hours. The inner Firefox needed JIT disabled, the middle one ran without GL, and the outer page used a Wisp relay on my laptop since [wisp.unkernel.dev cannot reach itself](https://gist.github.com/fzakaria/ef9fda19c8b5f3238e41bab577462797).
-
-[![trynix.dev in a browser, booted with Firefox; that Firefox shows trynix.dev booting Firefox again, and the inner Firefox shows trynix.dev](https://fzakaria.com/assets/images/trynix-inception.webp)](https://fzakaria.com/assets/images/trynix-inception.webp)
-
-Sit and bask in that insanity. That is Firefox, on Linux compiled to WebAssembly, in a Firefox tab, loading the site and then loading Firefox again inside itself. 🤯
+Source code available on [github](https://github.com/wheybags/pokemon_childhood_version/). Thanks to the [pret/pokered](https://github.com/pret/pokered) contributors, without whose hard labour this would not have been possible. Also BTW I actually tried the Mew under the truck thing when I was a kid. I was devastated when it didn't work. Satisfaction at long last.

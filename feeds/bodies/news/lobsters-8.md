@@ -1,93 +1,113 @@
-Elastic IP addresses (EIPs) in AWS are internet routable addresses available for use on cloud systems, by anyone. A common DNS mistake can leave them open for attackers to grab, which can lead to credential theft and worse. We demonstrated the attack is still possible in 2026, including finding real takeovers on US treasury domains, which were reported and fixed via a bug bounty program.
+I recently finished adding support for idempotency tokens to
+`amazonka` (the unofficial Haskell AWS SDK), using the [client
+token support provided by AWS](https://docs.aws.amazon.com/ec2/latest/devguide/ec2-api-idempotency.html). Implementing this required making
+some fairly substantial changes to the generator, the bespoke Haskell
+program that turns the service definitions in [`botocore`](https://github.com/boto/botocore/) into
+cabal packages. `amazonka` is over a decade old, and the
+generator has evolved as AWS have added new styles of APIs for their
+different services. Some services return XML, some return JSON, some
+return raw bytes, some return additional information in HTTP response
+headers, and so on. As a result, the generator’s logic had been extended
+each time and had grown gnarly.
 
-The cost to us for doing this was just $3 per valid takeover - what a bargain! We only covered less than 1% of the total IP space, so there are many more out there for attackers to grab. So, **now **is the time to review your DNS records and get those dangling records squashed ASAP.
+To untangle things, I resolved to make one of my favourite
+programming moves, “make the plan a value” or “decide what to do, and
+then do it”. This move decouples two parts of a program by introducing
+an intermediate data structure (a “plan”, or a value of a “plan type”)
+describing *what* is to be done before any action is taken.
 
-As of the time of writing, the attack still works in practice, and though there are some controls to ban attackers abusing the system, there are sufficient gaps to make the attack practical, and at a reasonable cost.
+I really like this pattern because the “deciding what to do” part of
+a program is often more complicated than the “doing” part. Separating
+the two often turns the “deciding” part into a pure function that
+produces a plan, making test cases simpler to write. And then if the
+“doing” phase is also complicated (because of remote API calls,
+rollbacks, parallel execution, or whatever else), it’s more manageable
+because those complications are not entangled with the planning logic.
+You also get to add a `--dry-run` flag almost for free, which
+is [really
+useful for testing](https://henrikwarne.com/2026/01/31/in-praise-of-dry-run/). (Henrik observes that testing for a
+`dryRun` variable everywhere pollutes the code somewhat. I
+think if he split his code into a planning phase and consumed that plan
+with either a “dry run” printer or a “real” executor, the inline checks
+that he dislikes would disappear.)
 
-![](https://cdn.prod.website-files.com/61dd9339d05701829d0b3241/6afd71baeea85841a881f58f_4c5e532b.png)
+This technique isn’t subtle or obscure. I’ve seen it called [the plan-execute
+pattern](https://mmapped.blog/posts/29-plan-execute), and the [“routing
+slip” enterprise integration pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/RoutingTable.html) is literally about centralising
+the decision logic before execution. I’ve previously called it a [“tiny DSL”](https://jackkelly.name/blog/archives/2020/04/03/the_power_of_tiny_dsls/),
+and Matt Parsons sells its benefits in his [Three
+Layer Haskell Cake](https://www.parsonsmatt.org/2018/03/22/three_layer_haskell_cake.html) article:
 
-## Practical EIP takeover
+> Often times, a simple non-recursive sum type “command” suffices as an
+> interface between a pure function and an effectful one. A list of
+> commands adds a lot of flexibility without dramatically complicating
+> things.
 
-To test how exploitable it is to claim the AWS host that a dangling DNS record points to, we needed to find a way to cycle through available EIPs with automation. The full EIP space is a maximum of ~80 million IP addresses (in practice, probably half that), and these are allocated at random, so you can’t simply claim the IP address that you want.
+Having resolved to introduce a plan type, how do we work it into a
+venerable program like the Amazonka generator? For this part of the
+generator, it means separating the analysis of the loaded service
+definitions from the generation of the `instance AWSRequest`
+declarations. I did this by introducing a `Config` record of
+simple data and a function
+`instanceD :: Config -> Decl ()` that builds Haskell code
+from that config record.
 
-To do this, we’d need to repeatedly allocate and release Elastic IPs from AWS’s EC2 pool, and check each address against the DNS records in our scope.
+I found the generator’s logic too difficult to understand and replace
+in a single change, so I replaced it incrementally using the [strangler
+fig pattern](https://martinfowler.com/bliki/StranglerFigApplication.html). The most complicated part of this change was response
+parsing, so I added to the `Config` record an enumeration of
+ported response parsers, and a fall back to “do things the old way” for
+everything else:
 
-### Targets
+```
+-- | How to generate the parser for AWS's response to an API call.
+data ResponseParser
+  = -- | Perform no parsing and return an empty response. The response
+    -- constructor in 'responseType' must take no arguments.
+    ParseNull
+  | -- | Parse the entire response as JSON.
+    ParseAllJSON
+  | -- | Parse the entire response as XML, with an optional wrapper.
+    ParseAllXML (Maybe Text)
+  | DoItTheOldWay
+```
 
-We wanted to report any dangling records we found, so we built our target list from public bug bounty scopes.
+One thing that makes Amazonka’s generator rewarding to hack on is
+that the service bindings act as an extensive and automatic [golden test](https://cs-syd.eu/posts/2023-12-21-golden-tests)
+suite. Any changes to the generated bindings show up in diffs, and so if
+there are no diffs and the generator doesn’t crash, the change probably
+didn’t break anything. This makes the process of replacing the entangled
+code relatively simple (not easy):
 
-Using the [bbscope](https://bbscope.com/) API, we pulled wildcard scope entries and passed them into [subfinder](https://github.com/projectdiscovery/subfinder) to enumerate subdomains. We resolved the A records for each host and stored anything not in private or reserved ranges in a DynamoDB table for use later in our pipeline.
+The end result [worked
+well](https://github.com/brendanhay/amazonka/blob/546b030e38b12972bef6c39c68c439cd3e64c4aa/gen/src/Gen/Output/Operation/AWSRequest.hs#L33-L163) and kept the individual commits readable (example: [factoring
+out status code parsing](https://github.com/brendanhay/amazonka/commit/6638af1f9d15994c600086c16b3187ccb4a651b5)). Adding the idempotency machinery was then
+[straightforward](https://github.com/brendanhay/amazonka/commit/fd0d2cff0b479132a76e8c56453907837cb436ca).
 
-### Claiming Addresses
+The data types in the Amazonka example represent parameters to a
+Haskell code template, but this refactoring also works for more
+expressive plan types, such as “tiny DSLs”, “lists of commands”, or
+“free structures”. The trick is to keep a “do it the old way”
+constructor in your plan type until the “old way” has been refactored
+away.
 
-By default, a new AWS account can hold five Elastic IPs per region. The loop works with five, but a higher quota means more addresses per cycle. Since [Service Quotas](https://docs.aws.amazon.com/servicequotas/) automatically approves an increase to 25 Elastic IPs per region without a support case, we requested the increase in every region.
+A well-chosen plan type introduces a [narrow
+waist](https://www.oilshell.org/blog/2022/02/diagrams.html) that decouples producers and consumers of your plan type, and
+the most obvious wins come from introducing alternate consumers of the
+plan: things like testability, `--dry-run`, and simpler
+executors all follow from that. A less obvious benefit is that you can
+also analyse and transform the plan itself. This is a great place to add
+pre-execution sanity checks or access controls. I regret that [my tiny DSLs
+post](https://jackkelly.name/blog/archives/2020/04/03/the_power_of_tiny_dsls/) inverted a transformation by interpreting it as matrix
+multiplications and inverting the result; it would have been simpler to
+provide an `invert :: [Transform] -> [Transform]`
+function.
 
-With the quota increased, we ran a Python script to claim addresses with each cycle following this flow:
+Introducing alternate producers of the plan type can also pay off,
+but needs a bit more imagination:
 
-1. Allocate 25 Elastic IPs in the current region.
-2. Store each address, checking for duplicates.
-3. Look up each address in the database.
-4. Keep and log any address that matches a target’s A record.
-5. Release every address that didn’t match.
-6. Move to the next region and repeat.
-
-![](https://cdn.prod.website-files.com/61dd9339d05701829d0b3241/6afdc033097b32f258d33e5e_Flow%20diagram%20for%20Tom%20Steer%27s%20new%20research.png)
-
-In a single region, releasing and immediately allocating a new IP often returned the same address, suggesting AWS recycles recently released addresses first. Rotating through regions gave each pool time to move on, so by the time the tool returned to the original region, it would be allocated a fresh set of IPs.
-
-In just 48 hours, we cycled through 450,000 unique IP addresses before AWS banned the account. This was enough to find 28 live EIP takeovers in the bug bounty scope. We had covered less than 1% of the total EIP space, and already had 28 high impact findings. A determined attacker using a wider scope than bug bounty and running the campaign for an extended period of time would likely find hundreds or even thousands of DNS records that could be hijacked.
-
-### The ban hammer
-
-After 48 hours, our account received an abuse warning from Amazon with the action “*Blocked the ability to allocate and associate Elastic IP in all regions”*. This not only stopped us from allocating new IP addresses but also from using our existing matched ones. We wanted to report our findings to customers and bug bounty programs, so we needed to be able to host PoCs on these addresses as evidence the takeover was a success.
-
-Fortunately (or unfortunately depending on how you look at it) AWS allows you to transfer Elastic IPs between accounts, so we created a new account in our testing organization and moved the matching IPs across. It worked without any issues, despite sitting in the same organization as the banned account. New accounts under an organization can be created without going through the verification process again, so an attacker who gets an account restricted could simply spin up another account and carry on. What was the point of the ban again?
-
-We decided not to continue the full attack from the new account to avoid further abuse complaints, and instead decided to reach out to AWS with some suggestions that could make this attack less practical:
-
-- Introduce a new quota on the number of Elastic IPs that can be allocated per month. Using this kind of hard cap rate limit (which could be set to some reasonable amount for large organizations), the attack would be much less likely to succeed.
-- Apply abuse restrictions at the organization level instead of at the account level. This would force an attacker to create a whole new organization each time they’re banned, which is more effort.
-
-AWS has since responded. They informed us that they have no plans to change anything here. More on their response in the disclosure section below.
-
-## Real takeovers we found
-
-Across our limited target list of bug bounty targets, we were able to claim and control 28 EIPs which matched a live DNS record in the scope, with almost half belonging to government bodies. Bear in mind, we only ran the automation for 48 hours, and we would likely have found more, had we continued.
-
-The most notable were five US Treasury subdomains pointing to addresses we now controlled:
-
-- ftp.treasury.gov
-- irssearch.treasury.gov
-- pcp.treasury.gov
-- rdgw.treasury.gov
-- ww5.treasury.gov
-
-![](https://cdn.prod.website-files.com/61dd9339d05701829d0b3241/6afd71baeea85841a881f58c_16456720.png)
-
-We also got hits across a range of public bug bounty and vulnerability disclosure programs, including a university, two government bodies, a financial services company, and a large networking vendor. The rest belonged to Intruder customers, who we reported to directly.
-
-## Impact
-
-Once an attacker holds the IP behind a dangling DNS record, they have full control over what that subdomain serves. US government websites tell visitors they can trust a site if its domain ends in *.gov* and it uses HTTPS - so if an attacker successfully takes over a domain, their site passes the test and users would trust it without question. The attacker can even pass a certificate authority’s domain validation and get a trusted TLS certificate for the domain to make it look completely legitimate.
-
-This legitimacy could lead to phishing using a convincing real government domain to steal users credentials. The attacker could also host services on that domain to gather incoming information, and steal data (e.g. credentials) from any old automations that still point at it.  That’s particularly dangerous, since those credentials could provide immediate access to other systems not related to the initial takeover.
-
-A subdomain which has been taken over can also interact with cookies scoped to its parent domain. If *treasury.gov* sets cookies with *Domain=treasury.gov*, they are sent to every subdomain, including ones an attacker controls, which could enable session theft in other *treasury.gov* applications.
-
-## How practical is it?
-
-AWS publishes 80 million IPv4 addresses for EC2, and our 450,000 allocated IPs cover 0.56% of that space. At our rate of about 9,400 IP addresses per hour, one account would take a year to cycle through every published address.
-
-That’s slow for an attacker with one account. With multiple accounts, it comes down quickly. If bans really do apply only per account, as our experience suggests, 10 accounts could sweep the full space in around five weeks.
-
-Realistically, the ***acquirable ***space is much smaller. Much of it is made up of auto-assigned public IPs or addresses held long-term by other customers, so a real sweep would take less time than these figures suggest.
-
-An opportunistic attacker doesn’t need to cover the whole space to find something worth having. Even at 0.56% coverage, we landed 28 subdomains.
-
-Targeting a specific organization narrows the search. An attacker would start by enumerating the target’s subdomains and identifying records that point to unused EC2 addresses. As AWS publishes the region of each range, they can look up exactly which region to search. For a target in *eu-west-2*, that’s around 2.2 million addresses rather than 80 million. However, when we allocated repeatedly in the same region, we saw a much higher duplicate rate, slowing the search. A targeted attacker therefore has a smaller haystack, but a slower way of searching it.
-
-## Responsible disclosure
-
-All findings were reported through the relevant bug bounty and vulnerability disclosure programs, and affected Intruder customers were contacted directly. We also shared our observations on the abuse controls with AWS.
-
-AWS confirmed with us that they don’t plan to make changes, as they see the takeover as depending on customer-side DNS records rather than an issue in their services. They also told us they treat rapid allocation and release as a policy violation and have controls against it. Whilst this is true, they could do more to prevent the issue in our opinion, and the vulnerability class remains open due to their position.
+“Making the plan a value” works well in any language, but Haskell’s
+laziness makes it especially nice. Lazy evaluation can avoid
+materialising the whole plan in memory if it is consumed right away.
+Even in strict languages, the decoupling benefits are great enough that
+the extra memory use is often worth it.

@@ -1,218 +1,84 @@
-This post introduces a new algorithm for extracting hexadecimal
-digits of \(\pi\) without computing the preceding digits. It beats the
-standard term-by-term evaluations of Bailey–Borwein–Plouffe (BBP), Bellard, and Huvent
-on operation
-count. Even against [Huvent’s eight-term formula](https://www.stylewarning.com/posts/beating-bellard/),
-the savings are about 61% fewer divisions and 38% fewer
-full modular exponentiations.
+Recently, I bought a used Sony Ericsson S500i – one of the most beautiful phones IMO.
+I vividly remember getting online on this phone while away from home and downloading games from the Sony Ericsson shop (and the exorbitant mobile data charges that came with it!).
 
-The key insights come from the following identity:
+But when I tried using it again in 2026, I couldn’t connect to the mobile network. Even though I had a SIM card compatible with the phone, 2G had been shut down for some time, leaving no way to access the Internet over a mobile connection.
 
-The underlying series goes back to Euler, but has been rearranged to
-exploit more efficient evaluation. Collecting its terms by odd
-denominator lets us share the arithmetic in two places:
+USB wasn’t an option either. On many phones of this era, USB tethering was designed to share the phone’s Internet connection with a computer, not the other way around<sup>[1](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:1)</sup>. But there is a way…
 
-1. The common denominator \(M=2k+1\) means we can add four remainders and divide once. The surprise is that we don’t have to compute those remainders independently either. The gaps between the exponents are small multiples of \(k\) plus constants, so one starting power and the step \(2^k\bmod M\) let us reach the others by multiplication.
-2. Two full exponentiations modulo \(3M\) serve both denominators \(M\) and \(3M\). That gives us up to eight powers of two, and we still only divide once.
+## Getting online via Bluetooth
 
-Together, these two tricks save about a million full exponentiations per
-million hexadecimal places skipped compared with Huvent, before any
-machine-specific optimization. In practice, this algorithm leads
-to an implementation that runs in nearly 40% less wall-clock time.
+Bluetooth supports various profiles, which define how devices use Bluetooth for specific purposes. One of these is Personal Area Networking (PAN), which allows devices to communicate over Bluetooth as if they were connected to an Ethernet network.
 
-## The BBP trick and formula convergence
+PAN carries Ethernet frames over Bluetooth, including IP traffic. This allows a device acting as a PAN User (PANU) to access the Internet through another device acting as a Network Access Point (NAP). The NAP forwards the traffic to the Internet, much like a Wi-Fi hotspot, but over Bluetooth instead<sup>[2](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:2)</sup>.
 
-To see where the savings come from, let’s recall the BBP
-trick. To skip \(n\) hex digits, shift \(\pi\) left by \(d=4n\) bits and
-take the fractional part. Shifting by \(d\) bits adds \(d\) to each
-exponent, so we’re left adding and subtracting terms of the form \(2^E/N\).
-When \(E\ge 0\), write \(2^E=qN+r\). Then \(2^E/N=q+r/N\), and we don’t
-care about \(q\): it’s an integer. Even at \(d=4{,}000{,}000\), we can
-compute \(r=2^E\bmod N\) without ever constructing a four-million-bit
-numerator.
+Although Bluetooth PAN is much less common nowadays, many devices still support the profile. One common use case was sharing a phone’s mobile Internet connection with a laptop. But why not reverse the direction? We can use a network-connected computer as a NAP and access the Internet from an old Java phone, provided the phone supports PANU<sup>[3](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:3)</sup>.
 
-The terms with \(E<0\) make up the tail. They decay geometrically, so we
-sum them directly, keeping enough guard bits to settle the last digit we
-want.
+### Setting up Bluetooth NAP on Raspberry Pi 5
 
-The above is essentially the BBP trick, and is the basis for three decades
-of digit extraction algorithms.
+From what I’ve seen on forums, many older Sony Ericsson, Nokia, and other phones seem to **support PANU even if it is not mentioned in the documentation**. I couldn’t find any confirmation for the S500i, so I decided to give it a try by setting up a Bluetooth NAP and seeing whether the phone could connect.
 
-As such, when I was programmatically looking for efficient BBP-formula,
-I ranked them by how many fractions I’d have to evaluate to reach a given
-digit. Each fraction in the main loop costs me a modular exponentiation and
-a division. Bellard’s formula
-advances 10 bits for every seven fractions; Huvent’s formula advances 12
-bits for every eight. After finding Huvent’s formula independently, I’ve
-tried feverishly to find one with a better ratio, without success. So I
-looked toward ways of optimizing existing series.
+I used Linux for this, but I’m sure you Windows and Mac wizards can figure out how to make it work on your systems too.
 
-One clue tipped me off. There’s a choice hiding in the last step of
-[Bellard’s terse derivation](https://bellard.org/pi/pi_bin/pi_bin.html). He has
-one sum in powers of \(1/4\) and another in powers of \(1/1024\). Since
-\(4^5=1024\), splitting the first sum into five progressions lets him write
-both sums in powers of \(1/1024\). What if, instead of lining up the powers,
-we lined up the *denominators*?
+> Note: After finishing this blog, I found out that there is a way to do the same thing on Windows, see: [Getting old Java phones online again (Windows Edition)](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again-windows.html).
 
-## Lining up denominators
+I found an old guide showing how to get a Sony Ericsson K800i online over Bluetooth using Debian Etch<sup>[3](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:3)</sup>. While the basic idea still works, the guide relies on tools and configurations that are long obsolete. I worked out a different approach using modern BlueZ and NetworkManager, without the old scripts and manual network configuration.
 
-Lining up denominators seemed hard with the many-term series of Bellard and
-Huvent. One good place I found to try this is a series [Euler](https://scholarlycommons.pacific.edu/euler-works/706/)
-wrote down in 1779, as noted by
-[Craig-Wood](https://scholarlycommons.pacific.edu/euleriana/vol3/iss1/3/), who
-used it himself to write an extraction program<sup>[1](https://www.stylewarning.com/posts/faster-digit-extraction/#fn:1)</sup>. In Euler’s
-original formulation, there are six rows:
+I bought a Raspberry Pi 5 a few years ago to run small services at home, and it turned out to be a great fit for this project. Raspberry Pi boards have had built-in Bluetooth since the Raspberry Pi 3 Model B, so there’s no need for any additional Bluetooth hardware<sup>[4](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:4)</sup>.
 
-[Takahashi](https://tsukuba.repo.nii.ac.jp/record/2001720/files/RJ_51-1-177.pdf)
-writes this more straightforwardly as two sums distinguished by their exponential
-factors:
+Modern devices mostly don’t advertise the Bluetooth NAP service by default, so the following steps show how to enable it explicitly.
 
-Notice the denominators of the fractions. Since \(4m+2=2(2m+1)\), we can halve the
-numerator of the middle fraction and leave \(2m+1\) in the denominator.
-As \(m\) runs over the nonnegative integers, \(2m+1\) gives every positive
-odd integer. The other two progressions, \(4m+1\) and \(4m+3\), split that
-same list between them. So each odd denominator appears twice in each sum.
+> Note: This guide is written for Raspberry Pi OS based on Debian 13 (Trixie), but I also tested the setup on my ThinkPad E14 running Arch Linux, and it worked there too. It should work on any other Linux distribution with BlueZ and NetworkManager, although package installation and service management may differ.
 
-For example, consider the denominator 13. The first progression hits it at \(m=3\); the middle one hits it
-at \(m=6\), where the original denominator was 26. That’s two contributions
-from the sum in powers of \(1/64\) and two from the sum in powers of
-\(1/1024\). The powers are different, but *all four numerators can be added
-before we divide by 13*. We can collect terms this way for every odd denominator.
+1. Install Bluez and NetworkManager (usually, installed by default). ` sudo apt update sudo apt install -y bluez network-manager `
+2. Enable Bluetooth. ` sudo systemctl enable --now bluetooth `
+3. Create a Bluetooth NAP profile and share the Internet connection. ` sudo nmcli connection add \ type bluetooth \ con-name "Bluetooth-NAP" \ ifname btnap0 \ bluetooth.type nap \ ipv4.method shared \ ipv6.method disabled ` This configuration enables IPv4 sharing through NetworkManager. The Raspberry Pi acts as a gateway for devices connected over Bluetooth, assigning IP addresses and forwarding their traffic to the Internet. It works with either an Ethernet or Wi-Fi connection.
+4. Activate the created profile. ` sudo nmcli connection up "Bluetooth-NAP" `
+5. (Optionally) Enable automatic activation on boot. ` sudo nmcli connection modify "Bluetooth-NAP" connection.autoconnect yes `
+6. Verify that the NAP service is available. `bluetoothctl show ` Look for: `UUID: NAP (00001116-0000-1000-8000-00805f9b34fb) ` This indicates that BlueZ has registered the NAP service.
 
-To derive the boxed formula directly, we can start
-with a multiplication of Gaussian integers: \((3-i)^2(7-i)=50(1-i)\).
-Taking complex arguments gives Hutton’s arctangent identity
-from the 18th century:
+### Connecting the S500i
 
-Bellard lists this identity as equation (7). His logarithm trick works on
-both angles: \(1-(1+i)/4=(3-i)/4\), and \(1-(1+i)/8=(7-i)/8\). So if we put
+1. Enable Bluetooth on the phone and make it discoverable.
+2. Pair the Raspberry Pi with the phone using bluetoothctl.
+  - Start the Bluetooth control utility: ` bluetoothctl `
+  - Configure the Raspberry Pi to accept pairing requests: ` power on agent off agent KeyboardDisplay default-agent pairable on discoverable on ` Note: Run each command separately in the interactive bluetoothctl prompt
+  - Start scanning for nearby Bluetooth devices: ` scan on `
+  - Look for your phone in the output. It should appear under the name configured on the phone. For example: ` [NEW] Device 00:23:F1:XX:XX:XX S500i `
+  - Disable the scanning: ` scan off `
+  - Pair the Raspberry Pi with the phone. ` pair 00:23:F1:XX:XX:XX ` Replace the example address with your phone’s actual Bluetooth address. Enter the same PIN on both devices. If everything goes well, bluetoothctl will report that pairing was successful.
+  - Mark the phone as trusted on the Raspberry Pi: ` trust 00:23:F1:XX:XX:XX ` This allows the Raspberry Pi to authorize future supported connections from the phone without repeatedly asking for approval.
 
-then \(I_2=\arctan(1/3)\), \(I_3=\arctan(1/7)\), and we want \(\pi=8I_2+4I_3\).
-Every time \(j\) goes up by four, \((1+i)^j/2^{uj}\) is multiplied by
-\(-4/2^{4u}\). That’s \(-1/64\) in the first sum and \(-1/1024\) in the second.
+### Accessing the Internet from a Java phone
 
-For an odd denominator \(N=2k+1\), the two contributions in each logarithm
-come from \(j=N\) and \(j=2N\). All further doublings give multiples of
-four, where \((1+i)^j\) is real and contributes nothing. At \(j=N\) the imaginary
-part of \((1+i)^N\) is \((-1)^{\lfloor k/2\rfloor}2^k\); at \(j=2N\)
-we’re looking at \((2i)^N=(-1)^k 2^N i\). At \(j=N\), the first logarithm
-multiplies the imaginary part by \(8/2^{2(2k+1)}\), giving the numerator
-term \((-1)^{\lfloor k/2\rfloor}2^{1-3k}\).
-Collect the other three contributions in the same way and we have the
-boxed formula.
+This part is phone-specific because it requires changing the phone’s Internet settings. The menu names and available options may differ between models.
 
-## Four powers in two exponentiations
+1. Check that the phone can discover the NAP service. On the S500i, select Raspberry Pi under `Connectivity / Bluetooth / My devices` and browse its services. Look for `Network access`. If it appears, the phone can discover the Raspberry Pi’s NAP service.
+2. Configure the phone’s Internet connection. Go to `Connectivity / Internet settings / Internet profiles`. Create an Internet profile using the Bluetooth connection if one is available. Some phones automatically create a Bluetooth data account when a PAN connection is established. The exact behavior varies between models and firmware versions.
+3. Test the connection. Open the phone’s browser and try loading a simple website, like [frogfind.com](https://frogfind.com). While the phone is attempting to connect, run the following command on the Raspberry Pi: ` bridge link show master btnap0 ` If you see an interface named bnep0 with state forwarding, the phone has successfully established a Bluetooth PAN connection to the Raspberry Pi.
 
-After the shift by \(d\), that is, multiplying the sum by \(2^d\),
-the four exponents, in the order we wrote them, are
+*Hooray! We are on the net!*
 
-Call a power *active* if its exponent is nonnegative. The slowest-decaying exponent
-is \(E_1\), which stays nonnegative up to \(k=\lfloor(d+1)/3\rfloor\). That’s about \(d/3\) odd
-denominators, and we divide just once for each one. Even the largest modulus
-is only \(2d/3+O(1)\), compared with about \(d\) for Bellard or
-Huvent, and \(2d\) for the original BBP formula.
+### Browsing the web on the Java phone
 
-As for the remainders \(r_j=2^{E_j}\bmod N\), notice that the middle two exponents
-differ by \(k\). If we already have
-\(r_3\) and \(x=2^k\bmod N\), then \(r_2\) is just
-\(xr_3\bmod N\). In fact, we can step from the smallest exponent up to the largest:
+You can now go and browse the Web. Well, at least a very small part of it.
 
-Start at the smallest active power. We pay for one full exponentiation to
-get it and one to get \(x\); the rest are a handful of multiplications. Past
-\(k\approx d/5\) only \(E_1\) is active, so don’t bother computing \(x\).<sup>[2](https://www.stylewarning.com/posts/faster-digit-extraction/#fn:2)</sup>
-That’s two exponentiations for the first \(d/5\) denominators and one for the
-remaining \(d/3-d/5\), or about \(8d/15\) altogether.
+Most of the default links in the Sony Ericsson browser no longer work, but, for example, good old [frogfind.com](https://frogfind.com) works just fine.
 
-## Two denominators for the price of one
+If you want a more modern, feature-rich alternative to the default browser, there is another option. By some miracle, Opera still provides [download links](https://www.opera.com/download/mobile-versions) ([archive](https://web.archive.org/web/20261116100558/https://www.opera.com/download/mobile-versions)) for Opera Mini 4.5 for Java phones on its official website, which is just incredible. Even better, many of its default links still work and serve today’s news!
 
-So far we’ve paid for one division by 13 and another by 39. Call the
-signed sums of their active powers \(A\) and \(B\). Since 39 is three
-times 13, their combined contribution is
+Unlike the Sony Ericsson’s built-in browser, Opera Mini 4.5 can also access modern HTTPS websites through Opera’s proxy servers, which handle encryption and process webpages before sending them to the phone<sup>[5](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:5)</sup>. This makes a surprisingly large portion of the modern web accessible, although many websites remain out of reach due to modern web standards, the phone’s limited hardware, and, well, the web being the web.
 
-We only want the fractional part, so we can compute both numerators
-modulo 39, take the remainder of \(3A+B\), and divide by 39 just once.
+Even with Opera Mini (while it still works), browsing the modern web on a phone this old is still pretty hit-or-miss. Fortunately, there are a couple of projects that make life easier for old browsers:
 
-Now consider the step powers. For 13 the index is 6; for 39 it’s 19.
-Since \(19=3\cdot6+1\), once we have \(x=2^6\bmod39\), we get the step
-for 39 by cubing and doubling: \(2^{19}\equiv2x^3\pmod{39}\).
+- [FrogFind](https://frogfind.com/about) – simplifies modern webpages into basic HTML that vintage computers can handle. It turns out to be pretty handy for an underpowered phone from almost 20 years ago, too.
+- [ProtoWeb proxy](https://protoweb.org/about/) – takes a different approach, bringing back websites from the mid-to-late 1990s through a proxy. Those pages aren’t always convenient to navigate on the S500i’s tiny screen, but then again, browsing the web on phones back then wasn’t exactly convenient either. So it’s a pretty authentic experience!
 
-In general, tripling a denominator \(M=2k+1\) changes its index from \(k\)
-to \(3k+1\). Substitute that index into the four exponents above to get
-the partner’s exponents. Now read the active exponents from *both*
-numerators in increasing order. The common \(d\) cancels in every gap,
-leaving a small multiple of \(k\) plus a constant. We need just two full
-exponentiations modulo \(3M\): one for the first power in the list and
-one for the step \(2^k\). Multiplication takes us up the rest of the list.
+### And then there’s WAP!
 
-We never need to compute the step just for \(3M\). Its largest exponent,
-\(d-2-9k\), is smaller than the *second* exponent for \(M\), \(d-1-5k\).
-If \(3M\) has even one active power, \(M\) already has at least two.
+There’s another little corner of the web that’s still alive: a small community of enthusiasts keeping old WAP websites running, serving WML pages designed for early mobile browsers. These sites can still be browsed on compatible phones, without relying on an emulator! And maybe it’s time to bring a few more WML sites online…
 
-We don’t want to pair 39 with 13 and then pair it again with 117. So we
-start pairs only at odd \(M\) not divisible by three. If \(3M\) has an
-active power, we take it with \(M\); otherwise we process \(M\) alone.
-Odd multiples of nine, like 117, stay unpaired.
+## Closing Words
 
-The denominators that no longer need their own turn are precisely the odd
-multiples of three that aren’t multiples of nine. That’s two out of every
-nine odd denominators, both where we need one exponentiation and where
-we need two. Multiplying the counts above by \(7/9\) gives about \(7d/27\) divisions and
-\(56d/135\) full exponentiations, compared to \(2d/3\) of each for Huvent.
+I watched Action Retro’s video<sup>[6](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:6)</sup> about bringing FrogFind to WAP, where he converts the FrogFind homepage into WML for older mobile browsers. Building a small HTML-to-WML converter could be a really cool project. And with Internet access already working over Bluetooth, developing and testing it on physical hardware should be much easier, without having to build an entire 2G network like dosdude1 did<sup>[7](https://antcating.github.io/2026/11/23/getting-old-java-phones-online-again.html#fn:7)</sup>. Of course, this approach won’t work for every old phone, but for those that support Bluetooth networking, it doesn’t require any additional radio hardware.
 
-Here is how the formulas compare in terms of how far into \(\pi\)
-we get per expensive arithmetic operation, expressed as “bits per operation”:
-
-| Formula | Bits per full mod. exp. | Bits per division |
-| --- | --- | --- |
-| BBP, term by term | 4/4 = 1.00 | 4/4 = 1.00 |
-| Euler, term by term | 5/4 = 1.25 | 5/4 = 1.25 |
-| Bellard, term by term | 10/7 ≈ 1.43 | 10/7 ≈ 1.43 |
-| Huvent, term by term | 12/8 = 1.50 | 12/8 = 1.50 |
-| This post | 135/56 ≈ 2.41 | 27/7 ≈ 3.86 |
-
-## Notes on a high-performance implementation
-
-I implemented both the algorithm of this post and Huvent using AVX-512
-IFMA. Here’s how long each took to extract 12 hex digits on my computer.
-
-| Hex digits skipped | Threads | Huvent (ms) | This post (ms) | % faster |
-| --- | --- | --- | --- | --- |
-| 1,000,000 | 1 | 8.09 | 4.88 | +65.7% |
-| 100,000,000 | 1 | 962 | 584 | +64.7% |
-| 1,000,000 | 32 | 4.23 | 3.82 | +10.9% |
-| 100,000,000 | 32 | 64.4 | 42.4 | +51.8% |
-| 1,000,000,000 | 32 | 655 | 410 | +59.9% |
-| 1,000,000,000,000 | 32 | 845,685 | 520,907 | +62.3% |
-
-Returning to the pair 13 and 39, while 39 is active, I never reduce modulo
-13: changing the numerator for 13 by a multiple of 13 changes its tripled
-contribution by a multiple of 39. So I do all the squaring and multiplying
-modulo 39. Since 39 is odd, I can compute its inverse modulo a power of two
-once and reuse it for every Montgomery multiplication in the pair. I triple
-the numerator for 13, add the one for 39, and convert back from Montgomery
-form just once for the final division.
-
-There’s a nice trick inside each exponentiation, too. Suppose a Montgomery
-reduction leaves \(-14\) modulo 39. Normally I’d add 39 to get 25. But if
-I’m going to square it next, 14 is just as good: \(14^2\equiv25^2\pmod{39}\).
-Even if the current exponent bit calls for doubling first, the next square
-still erases the sign. So for all but the last bit, I use vector absolute
-values instead of correcting the sign. On the last bit I do the usual
-reduction, since the numerator needs the actual residue rather than its negative.
-That change made the exponentiation loop about 8% faster on Zen 5.
-
-Each vector lane handles a different odd modulus. I batch moduli with
-the same set of active powers so that one
-lane doesn’t sit idle while another steps through three extra residues.
-The hardware multiplies 52-bit inputs, so the largest modulus matters:
-ours is about \(2d/3\), compared with \(d\) for Huvent. That lets
-us reach about 50% farther into \(\pi\) before we need wider arithmetic.
-
-I originally went looking for a series with fewer fractions per bit.
-If you evaluate every fraction separately, Euler’s series actually needs *more*
-fractions per bit than Huvent’s, so it has been easy to pass over.
-Sharing the modular arithmetic across common and paired denominators is what
-makes it faster, and I suspect similar tricks apply to other BBP-type series.
-
-1. His [implementation](https://github.com/ncw/euler_bbp/blob/775f95fc7901f184bcdf14673dec51dd81b034e8/euler_bbp.go#L131-L160) evaluates 21 fractions separately for every 30 bits of offset. [↩︎](https://www.stylewarning.com/posts/faster-digit-extraction/#fnref:1)
-2. There’s a way to thin out the far end of the loop even more. At \(j=4m+3\), the real and imaginary parts of \((1+i)^j\) are opposites. Add the real part of each logarithm and the two slow powers cancel for \(N\equiv3\pmod4\). We still have to subtract the real logarithms we added, using series for \(\log(1+2^{-2})\), \(\log(1+2^{-3})\), and \(\log(1-2^{-4})\). That leaves half as many moduli above \(d/2\), at the cost of more streams of powers to juggle below it. [↩︎](https://www.stylewarning.com/posts/faster-digit-extraction/#fnref:2)
+I’d also love to see a community-maintained list of phones that support Bluetooth PANU, since many manufacturers never bothered to document it (including Sony Ericsson with the S500i). It would make it much easier for anyone to figure out whether their phone can get online this way or whether they’ll need to get a bit more creative ;-)
