@@ -1,307 +1,132 @@
-I've been playing with CSS mixins recently, and I'm super excited about what this new CSS construct will bring to the way we write CSS. I think the CSS we'll write when CSS mixins are available will look very different from the CSS we write today.
+> **tl;dr** [tabc](https://github.com/fzakaria/tabc) is a container runtime, like runc, that runs each container in a Chromium tab.
+> `docker run --runtime tabc alpine` works and starts in under a second. 
+> On a Mac it needs no hypervisor and no Linux VM; Linux for everyone!
 
-## What's a mixin?
+Despite my zealot love for [Nix](https://nixos.org), there is no denying the convenience and ubiquity of Docker.
+Containers have become the standard unit of software deployment, providing a consistent environment across different machines and simplifying the management of dependencies.<sup>1</sup>1Containers are not even a “real” thing within the Linux kernel although there are [recent attempts](https://lore.kernel.org/all/20261019-cells-rfc-6f4c85415f29@toxicpanda.com/) to formalize them as a kernel-level abstraction.
 
-In its simplest form, a mixin is a named piece of CSS code that you define once and can reuse elsewhere in a style sheet. In that sense, it's very similar to a custom property (also known as a CSS variable) or a CSS function.
+Despite all the footguns you can get yourself into by writing a non-reproducible Dockerfile, it was a still a remarkable step forward in making software deployment more predictable and portable.
 
-The big difference is what mixins can hold:
+Nothing has really challenged Docker’s dominance in the container space and it’s reliance on Linux as the underlying platform. The absurdity of the situation has become that developers on MacOS end up running a Linux virtual machine to simply run containers.
 
-- A custom property holds a single value (or part of a value).
-- A CSS function is similar: it can only be used as part of a CSS property value.
-- A mixin, however, holds any number of declarations, including nested rules.
+People, even the creator of Docker, believed a common runtime for software isolation would have been a game-changer and that WebAssembly could have played that role if it had existed earlier.
 
-So, instead of just returning the value `red`, a mixin can return `background: red; color: white; border-radius: 2px;` all at once.
+> “If WASM+WASI existed in 2008, we wouldn’t have needed to created Docker. That’s how important it is.” - [Solomon Hykes, 2019](https://x.com/solomonstre/status/1111004913222324225)
 
-## Why now?
+Here we are, 7 years later, we still have Docker, and WebAssembly is mostly used for speeding up web applications.
 
-My team at Microsoft is implementing mixins in the Chromium open source project. They've covered a lot of ground, and we're getting ready to ship this in Chromium-based browsers. Native CSS mixins are getting very close!
+Is there another way to achieve the same level of isolation and portability without relying on the host being Linux?
 
-I can't wait for other browsers to catch up, so that we can all use mixins in earnest.
+What if though Docker ran its containers on WebAssembly instead of directly on the Linux kernel?
 
-> CSS mixins are experimental. To try the code snippets and demo in this article, use a recent Chromium browser, open `about://flags`, and enable the **Experimental Web Platform features** flag.
+What if the isolation provided by the browser could replace the kernel-level isolation that containers rely on?
 
-## Learn to use mixins
+This idea, the holy grail of running Linux in a browser is not new. [JSLinux](https://bellard.org/jslinux/) did it in 2011, and [v86](https://github.com/copy/v86), [WebVM](https://webvm.io) and [qemu-wasm](https://github.com/ktock/qemu-wasm) are also attempts in the same direction. They all have their share of limitations: 32-bit only, performance issues, incomplete hardware emulation, that make them impractical for general-purpose use.
 
-You define a mixin with the `@mixin` rule, and you use it with `@apply`. Mixin names start with two dashes, like custom properties.
+[unkernel](https://github.com/pithings/unkernel) is a newly developed project by [Pooya Parsa](https://github.com/pithings) that changes the economics of what is possible. unknernel compiles the Linux kernel to WebAssembly, allowing it to run directly in the browser without relying on traditional hardware emulation. Only your container’s own code goes through an emulator, and everything else the kernel does runs at near native speed.
 
-Let's define the `--visually-hidden` mixin:
+It is now practical to run Linux containers directly in the browser, leveraging the isolation provided by WebAssembly and the browser environment with acceptable performance.
 
-```css
-@mixin --visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
+[![A terminal. On Linux, docker run with the runtime set to tabc prints Linux aarch64 from an x86-64 host. On a Mac, tabc run alpine prints Linux aarch64, and a check for Docker, Colima, QEMU or Lima finds no VM running.](https://fzakaria.com/assets/images/tabc-demo.webp)](https://fzakaria.com/assets/images/tabc-demo.webp)
+
+That is a real `docker run`, on a real Docker daemon, starting a real Alpine image. This works even on a Mac with no Docker installed and no Linux virtual machine running. 🤯
+
+In my [last post](https://fzakaria.com/2026/11/23/2035-came-early) I was inspired from Gary Bernhardt’s [The Birth & Death of JavaScript](https://www.destroyallsoftware.com/talks/the-birth-and-death-of-javascript) and its discussion of the evolution of software isolation.
+
+In the talk, Bernhardt imagines a project called METAL that moves the JavaScript VM into the kernel. The VM already keeps programs apart, so the hardware no longer has to. Process isolation becomes the VM’s job.
+
+We did not need to move the VM into the kernel. A browser tab is the VM Bernhardt imagined.
+
+## [§](https://fzakaria.com/2026/11/25/browser-tabs-as-a-container-runtime#one-tab-per-container)One tab per container
+
+[tabc](https://github.com/fzakaria/tabc) is a OCI container runtime that runs each container in its own browser tab. That means you can use it with Docker just like any other runtime.
+
+Whereas the default Docker runtime, [runc](https://github.com/opencontainers/runc), starts your program as a process on the host’s kernel, tabc leverages the browser as its execution environment, running each container in a separate tab with its own instance of the Linux kernel compiled to WebAssembly.<sup>2</sup>2The tab boots [unkernel](https://github.com/pithings/unkernel), and the “container” runs within it.
+
+This is the part that I’m most excited about: at no point does your container ever touch the host’s kernel and require Linux.
+All tabc asks of the host is a browser, nothing needs Linux underneath.
+
+This is a complete rethinking of the container stack on macOS. Docker on a Mac is a Linux virtual machine with a nice installer. Docker Desktop, [Colima](https://github.com/abiosoft/colima), OrbStack and Podman Machine all boot a Linux VM first. Even Apple’s own [container](https://github.com/apple/container) tool boots a VM per container.
+
+Isn’t WebAssembly a virtual machine? Technically yes, in the same way the JVM is: it runs code for a made-up CPU.
+The difference is that it is all software. Nothing asks macOS for a hypervisor.
+
+On Linux, Docker pulls the image and hands it to tabc. A Mac with no Linux VM has no Docker daemon to do that, so tabc run pulls the image itself.
+
+```
+$ tabc run -it alpine sh
+/ # uname -sm
+Linux aarch64
 ```
 
-And now, let's use it somewhere else in our code:
+Without Linux and namespaces, what is giving the container its isolation?
 
-```css
-.skip-link {
-  @apply --visually-hidden;
-}
+The browser! 💡
+
+Browsers such as Chromium are an incredibly battle-tested sandbox, and we only use them for web pages. 🤦
+Rather than simply relying on the host kernel’s isolation mechanisms, tabc leverages the browser’s sandbox to create an additional layer of security.<sup>3</sup>3Every container may also get a browser of its own, with its own profile, so two containers share no process and no storage.
+
+Starting a container in a browser tab is surprisingly fast, and most of the time is spent starting the browser itself.
+On my Linux laptop<sup>4</sup>4I ran fifteen runs of `echo hi` from an Alpine bundle on a Ryzen 7 7840U.  a container takes roughly 0.87 seconds from command to exit. This startup cost can be
+eliminated by using your browser’s already running instance via `--open` or `--link`, *more on that later*.
+
+Unkernel has drastically improved the performance of running Linux in the browser but since the processes themselves are still emulated, 
+there can be some noticeable delay for larger compute-heavy workloads.
+
+> **Aside**
+> You can get a sense of the performance impact on a lot of packages by visiting [https://trynix.dev](https://trynix.dev).
+> You have access to over 300,000 packages from [Nixpkgs](https://nixos.org/nixpkgs/) that run directly in your browser using [Unkernel](https://unkernel.dev).
+
+Although some of these slowdowns seem excessive, many workloads are still well within acceptable limits for interactive use that let this go beyond trivial examples and novelty.
+
+Depending on whether you have every container running in its own browser instance or sharing tabs within a single browser, the memory overhead can be more dramatic.
+An idle container costs ~540 MiB of host memory split between the tab that holds the guest, the browser process, and helper processes.<sup>5</sup>5For scale, [Firecracker](https://firecracker-microvm.github.io/) quotes under 5 MiB of overhead per microVM and 125 ms to boot.
+
+Nevertheless, this overhead is acceptable for many interactive use cases where the convenience of
+running containers in browser tabs outweighs the memory cost.
+
+Did you remember when I said you can run this on MacOS without a Linux VM !?
+
+> **Aside**
+> The idea of a container in WebAssembly was attempted before with [container2wasm](https://github.com/container2wasm/container2wasm).
+> It however emulated the entire machine, including the kernel, rather than just the program so it was way heavier and slower than what tabc does.
+
+By default the browser is hidden. It does not have to be. Ready to cook ? 🧑‍🍳
+
+This is where the idea kind of comes together and becomes borderline magical: the browser tab itself becomes the container, and you can interact with it just like any other tab.
+
+```
+$ tabc run -it --open -p 8123:80 nginx:alpine sh
 ```
 
-That's all you need to do. The browser will apply the mixin's declarations to the element as if they were written directly in the element's style block, so it's exactly as if you had written:
+With `--open`, tabc leverages the desktop environment to open the container’s page in the default browser. Even crazier is that the page itself is a pty, so you have cross-terminal interaction between the browser tab and the terminal you started it from.
 
-```css
-.skip-link {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
+You then can visit the container’s web server at the port exposed, in this case `localhost:8123`, in you guessed it: another browser tab in *the same browser*.
+
+Once you have containers you can start, they then can become composed: `docker compose`.
+Nothing beyond the `runtime: tabc` key in the Compose file changes. Everything else from compose continues to work: network, volumes, and all.<sup>6</sup>6The `--dashboard` flag opens the tabc dashboard, where the tabs are panes in a single browser page.
+
+> **Tip**
+> Since MacOS has no Docker daemon for compose, tabc brings its own lightweight one to handle it: `tocker`.
+>
+> ```
+> $ tocker --dashboard compose up
+> ```
+
+We just started two containers in the browser: a web server and a Redis instance, each running in its own tab pane and communicating with each other by service name.
+
+## [§](https://fzakaria.com/2026/11/25/browser-tabs-as-a-container-runtime#everything-is-a-tab)Everything is a tab
+
+Unix’s big bet was that everything is a file. In the browser, everything is a tab.
+Our mail, our editors and our terminals already moved there.
+We can now add containers to the list.
+
+```
+$ nix run github:fzakaria/tabc -- run alpine echo hi
+hi
 ```
 
-Except now, you have a nice little reusable mixin that you can apply wherever you need it.
+That works on Linux and on an Apple Silicon Mac on any recent browser.<sup>7</sup>7On Linux the Nix package brings its own Chromium unless you pass `--open`. 
+The [README](https://github.com/fzakaria/tabc) has more details on setup and usage.
 
-## Mixin parameters
-
-That's not all, a mixin can take parameters, with optional types and default values too. Consider this `--button` mixin:
-
-```css
-@mixin --button(--bg <color>: royalblue, --fg <color>: white) {
-  background: var(--bg);
-  color: var(--fg);
-  padding: .5em 1em;
-
-  &:hover { background: color-mix(in oklch, var(--bg), black 20%); }
-}
-```
-
-It applies some colors and spacing to a button-like element, checking that the supplied colors have the right type and falling back to default values if needed. It even handles hover states automatically.
-
-You can use this mixin either with its default values or by passing your own arguments:
-
-```css
-/* Using the default button styles. */
-.primary { @apply --button; }
-
-/* Overriding one of the default button colors. */
-.danger { @apply --button(crimson); }
-
-/* Overriding both default button colors. */
-.custom { @apply --button(palegreen, black); }
-```
-
-If you pass more arguments than the mixin has parameters, the `@apply` does nothing.
-
-## Conditional mixins
-
-A mixin can also hold conditional rules, such as `@media`, `@supports` and `@container`.
-
-For example, you can create a mixin that applies styles conditionally to the viewport size:
-
-```css
-@mixin --tablet-up {
-  background: lightgray;
-
-  @media (width >= 48rem) {
-    background: darkgray;
-  }
-}
-```
-
-This becomes even more powerful when combined with `@contents`. See the next section.
-
-## Mixin contents
-
-Arguments are not the only way to customize a mixin. A mixin can also accept an entire block of CSS from the call site. Inside the mixin, `@contents` marks the spot where that block goes.
-
-For example, here's a `--card` mixin that defines a couple of declarations and accepts a block of CSS from where the mixin is used:
-
-```css
-@mixin --card {
-  padding: 1rem;
-  border: 1px solid;
-
-  @contents;
-}
-```
-
-When calling the mixin, you can pass other declarations inside a block, which will be inserted at the `@contents` location within the mixin:
-
-```css
-.note {
-  @apply --card {
-    background: lightyellow;
-  }
-}
-```
-
-Here, `.note` gets the padding and border from the mixin, and then its own background, in the place where `@contents` appears.
-
-`@contents` can have a fallback, which applies when the caller passes no block: `@contents { background: white; }`. If the caller passes an empty block, `@apply --card {}`, the fallback does not apply.
-
-The ability to provide your own block of styles when applying a mixin is very useful, for example when using a mixin as a condition. Consider this mixin:
-
-```css
-@mixin --if-dark-mode {
-  @media (prefers-color-scheme: dark) {
-    @contents;
-  }
-}
-```
-
-You can use it to define styles that only apply in dark mode, while keeping the rest of your CSS unaffected. For example:
-
-```css
-.header {
-  background: white;
-  color: black;
-
-  @apply --if-dark-mode {
-    background: black;
-    color: white;
-  }
-}
-```
-
-Conditional mixins combined with `@contents` gives us something we've been wanting for a long time: **named breakpoints**:
-
-```css
-@mixin --mobile {
-  @media (width < 40rem) {
-    @contents;
-  }
-}
-
-@mixin --tablet {
-  @media (40rem <= width < 64rem) {
-    @contents;
-  }
-}
-
-@mixin --desktop {
-  @media (width >= 64rem) {
-    @contents;
-  }
-}
-```
-
-These mixins don't apply any styles of their own, they just conditionally apply styles that are given to them depending on the media query. This is great because we now have a way to give custom names to a series of responsive design breakpoints that can be maintained in one place.
-
-Let's use them here to see how clean our responsive design code can be:
-
-```css
-.sidebar {
-  @apply --mobile {
-    display: none;
-  }
-
-  @apply --tablet {
-    inline-size: 12rem;
-  }
-
-  @apply --desktop {
-    inline-size: 20rem;
-  }
-}
-```
-
-## Private variables
-
-Finally, a mixin can keep private variables to itself, by declaring them in an `@private` block. The element that applies the mixin can't see these variables:
-
-```css
-@mixin --gradient-text(--from: tomato, --to: gold) {
-  @private {
-    --angle: 90deg;
-  }
-  background: linear-gradient(var(--angle), var(--from), var(--to));
-  background-clip: text;
-  color: transparent;
-}
-```
-
-## An experiment: theming with mixins
-
-Mixins are very versatile. You will find many ways to use them, and I don't think there will be one good way and one bad way to use them. Different teams will work out what works for them.
-
-In this section, I explored one way in which mixins might be used. I don't know if it will make sense in a real project yet, but I found it interesting to try.
-
-Imagine a white-label website. You own the site and control its markup and default CSS. But you also want your customers to be able to theme the site to match their brand.
-
-Here's the idea:
-
-1. You write clean, semantic HTML, which contains all of the content.
-2. You write the basic CSS for it. This is your white-label version. It has the basic layout, the headers and the sidebars, but no strong colors, no animations, no design direction.
-3. You apply undefined mixins in all the logical places of your site. For example, you apply a mixin at the overall page level, another one in the header, another one for the sidebar, and so on. These mixins are not defined, so they do nothing, and you continue to see the default look.
-4. You let customers define the mixins. A customer's design is a style sheet that uses the @mixin rule to actually define the mixins which your basic CSS code uses. When that style sheet loads, the definitions apply at every place that uses them.
-
-In your style sheet, you'd apply mixins like this:
-
-```css
-body      { @apply --page; }
-header    { @apply --masthead; }
-header h1 { @apply --site-title; }
-```
-
-And your customer could define the mixins something like this:
-
-```css
-@mixin --page {
-  font: 1.2rem/1.6 Georgia, serif;
-  background: lightyellow;
-}
-
-@mixin --masthead {
-  background: darkblue;
-  color: white;
-}
-
-@mixin --site-title {
-  font-size: 2rem;
-  font-weight: bold;
-}
-```
-
-## But why?
-
-You might remember the [CSS Zen Garden](https://csszengarden.com/). It had one HTML page, and anyone could submit a new design by writing a new style sheet for it. It showed the power of clean, semantic HTML, with styles, layouts and animations in a separate file. The designs were wildly different from one another and extremely creative.
-
-But there's a problem when you do this for customers. You expose your entire markup and it becomes a public API. Customers start writing very specific selectors that depend on how your HTML is organized, and you can't change that HTML any more without breaking their customizations. I've done this at a previous job, and I know how painful this can be.
-
-The other option is to expose CSS variables. You keep control of your entire HTML and CSS, and only expose a set of customization variables that are used throughout your code. For example, you define a set of color palette variables, a set of spacing variables, typography variables, etc.
-
-Customers override values only, which is very safe, but can also be limiting. What if they later ask you to have access to the page layout? You now need to expose more variables and make sure they continue working correctly.
-
-Mixins sit somewhere in between. You remain in control of your HTML and can change it whenever you want. You expose logically named mixins that correspond to the various areas and surfaces of your page.
-
-As long as you keep applying the same mixins in the right places, customizations continue to work.
-
-But you can also go much further than variables. Each mixin is an entry point where a customer can add any declarations, pseudo-elements, media queries and animations.
-
-## The Mixin Zen Garden
-
-I built a small demo, heavily inspired by the CSS Zen Garden, to test this: the [Mixin Zen Garden](https://patrickbrosset.com/lab/mixins-zen-garden/) **(this will only work with a browser that supports CSS mixins).**
-
-It's a simple webpage that has static HTML. The HTML never changes, but you can view the page with different designs that all use CSS mixins as described above:
-
-Try the six designs:
-
-(If you write your own design, please share by [opening an issue on my repo](https://github.com/captainbrosset/patrickbrosset.com/issues).)
-
-Here are some things I learned while building it:
-
-- Mixins that do nothing are fine. A design doesn't need to define every mixin. This makes small designs very short.
-- One mixin per logical area of the page is more than enough. A design can put colors, spacing, typography, and decorations in the same mixin.
-- Name mixins by role. Choose a mixin by what the role of the element is, such as `--sidebar-heading`, not by how it should look or what it currently is. Every design can decide what that role looks like, and you can change the HTML structure without changing the mixin names.
-
-But, I also discovered limits:
-
-- Well, I've said this already, but it bears repeating: mixins are experimental. They work in Chromium only, behind a flag.
-- Nested selectors can reach into your markup again. A custom design can define a nested selector in a mixin to reach into the HTML markup. For example: `@mixin --masthead { & h2 { ... }}`. Doing this exposes your HTML markup again, making it part of the API contract, which we wanted to avoid. Now, if this were to become a real customization mechanism, we could validate custom designs to ensure they only use allowed selectors within mixins.
-
-## What's next
-
-Theming is only one use of mixins. Other ideas I want to try:
-
-- More uses of named breakpoints, because they allow breakpoints to be defined once for the whole site and reused consistently.
-- Mixins across shadow DOM boundaries. A document-level mixin applies inside shadow roots and this feels like a great way to style a component's insides from the page.
-- Enforcing accessibility and progressive enhancement best practices in a central place to ensure your team policies are applied consistently. If developers just apply mixins in their style sheets, then you can ensure best practices from within the mixins themselves.
-
-CSS mixins might change the way we write and organize CSS pretty profoundly. I'm looking forward to seeing what you build with them. If you try the demo, or experiment with mixins on your own projects, let me know!
+Solomon Hykes was half right. WebAssembly became the runtime, and Docker stayed anyway.

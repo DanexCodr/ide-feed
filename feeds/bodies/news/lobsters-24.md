@@ -1,93 +1,29 @@
-Over the past decade, one of the most contentious Postgres feature requests has been for query hints. The planner is remarkably effective at making good decisions, but it doesn’t always do so, and query hints have been proposed as a way to fill that gap. They’ve been a popular feature on other databases for years, and some would say that they are essential for production usage to ensure that indexes are used effectively and queries are planned sensibly. While [pg_hint_plan](https://www.postgresql.org/about/news/pg_hint_plan-v160-released-2712/) has existed for a while, the Postgres community has historically been divided on this topic, with the general consensus being that planner failures were bugs that should be fixed instead of being worked around.
-
-Postgres 19 brings 2 new contrib modules that collectively provide the plan hint experience without affecting all queries or SQL syntax. [pg_plan_advice](https://www.postgresql.org/docs/19/pgplanadvice.html) works at the session level, allowing you to simply SET how the next queries will be planned. The technique supports a decent list of features, letting you specify scan method, join order, join method, parallelism, partitionwise joins, and semijoin uniqueness.
-
-The companion extension provided is [pg_stash_advice](https://www.postgresql.org/docs/19/pgstashadvice.html). This is meant to apply to query identifiers instead of specific queries, so rather than using SET to hint, you instead find a specific query identifier and tell Postgres to always apply your hints only to that query. It supports the same capabilities for affecting query plans as pg_plan_advice, so most of this article applies to it as well.
-
-Under the hood, these extensions work by telling the planner that it should not pick the options you didn’t select. This can’t actually force Postgres to pick the plan that you actually want, so if there’s no viable way to actually use the hint, the advice will be partially or fully ignored. In addition, there is no check that the advice is good- the planner will happily accept input that actively degrades query performance. In practice, this means that it can be similar to existing `enable_` knobs you may have already used to force certain plans on queries. For example, if you’re trying to convince the planner to use an index, here’s the old way and the new way you’d consider. They do similar things, but the advice extensions provide a lot more capability and granularity:
-
-## The scenarios  #
-
-I’ve put together a few examples of queries where you might want to consider using pg_plan_advice, and did some testing to see how well it works in practice. All of these tests ran on ClickHouse Managed Postgres, on a m6gd.xlarge machine with 4 vCPUs, 16GB RAM, and a 237GB local NVME drive. The tests are fairly artificial, as the planner is remarkably clever and it’s surprisingly difficult to construct scenarios that reliably give it trouble.
-
-pg_plan_advice ships as a contrib module, so you’ll probably want to add it to your server’s `shared_preload_libraries` or take one of the following steps to get it working in a PG19 environment:
-
-This post uses a lot of SET commands for demonstration purposes. If you are looking to use pg_plan_advice in a production system, please keep in mind that these should instead generally be `SET LOCAL` in a transaction to prevent unexpected effects on other queries.
-
-## Scenario 1: `ORDER BY… LIMIT` #
-
-The planner generally assumes that rows in a table are spread somewhat evenly. Unfortunately, the ISO Standard User does not actually exist, so a lot of database writes are clustered around bursts of correlated activity. This can lead to a scenario where the planner knows a few percent of rows match a given filter, starts walking through a primary key column to find them, and ends up scanning nearly the whole index before getting enough hits.
-
-Here’s the query we’ll use for this:
-
-```
-1SELECT * FROM events WHERE status = 'failed' ORDER BY id LIMIT 10;
-```
-
-Running it does, indeed, give us a terrible plan.
-
-Excellent, we’ve reproduced the failure! The index scan looks like it should be reasonable, and the cost of 66.77 is trivial: the planner clearly expected to find all 10 rows it needed immediately. Unfortunately, it had to gather and discard 10,000,000 rows before finding a useful result, which obviously took far longer than you’d expect.
-
-You’ve probably noticed the “Generated Plan Advice” section in this explain plan as well. This is another new feature; we’re using `EXPLAIN (ANALYZE, BUFFERS, PLAN_ADVICE)` here. Since we didn’t provide plan advice, this output just shows the plan it actually used.
-
-We could definitely fix this with a new index, but that isn’t always a good option when you see this kind of thing in the wild, so let’s try a bitmap heap scan. It works by first constructing a bitmap of potential row locations using a bitmap index scan, and then decodes it to fetch the underlying data. It’s better suited to bulk operations, so it’s a good bet given how uncooperative the index scan is proving to be. Here’s all we need to do to actually use it:
-
-```
-1SET LOCAL pg_plan_advice.advice = 'BITMAP_HEAP_SCAN(events)';
-```
-
-Here’s the new EXPLAIN.
-
-The parallelism makes it a bit tricky to read, but a few things stand out. First, we got <10ms execution time, so the bitmap heap scan actually did help. Second, we can now see the supplied plan advice at the bottom of the EXPLAIN output, and the matched feedback (without a failed flag) makes it clear that the planner actually used our advice. Please note that this does not necessarily mean that the planner benefited from the advice.
-
-## Scenario 2: `JOIN` correlation  #
-
-JOINs can be a source of planner complications, as statistics are resolutely single-table. The planner has a limited ability to predict how many rows will be pruned by filters on JOINed tables, so it can be way off base on selectivity. In general, it assumes that filters on different tables are independent of each other, which is a fairly easy assumption to violate with the following setup:
-
-Here’s our baseline query. It’s just a simple join, filter, and limit:
-
-Here’s our first plan, with the planner doing the heavy lifting for us:
-
-This plan is honestly pretty terrible. The planner correctly understands that there are 500K or so `trial_start` rows, and that 1% of customers are `enterprise` customers. It then multiplies these numbers by each other, which leads it to predict that 5000 rows will match, and it only needs 10. Unfortunately, the filters aren’t as independent as it’s estimating, so only 20 out of the 500K rows actually have the values it’s looking for. As such, it ends up scanning a lot more rows than it was counting on to get this result. You can see as much in the row estimates above: the planner predicts 5288 rows when we know there are only 20, which is right in line with the math.
-
-To fix this, let’s try giving plan advice. We want the join order to prioritize accounts first, as that will give us a vastly more selective filter to cut down on row counts.
-
-```
-1SET LOCAL pg_plan_advice.advice = 'JOIN_ORDER(a act)';
-```
-
-Here’s what it gives us:
-
-A nearly 200x improvement is absurdly better. By adjusting the join order, we’re able to take full advantage of the `accounts` table’s much lower number of rows matching the `enterprise` filter, which lets us dramatically cut down on the number of rows to scan. You probably won’t get quite as big a speedup in most cases in production, but this pattern comes up every now and then, and having a tool to address it is priceless.
-
-This is probably the use case that fits the plan advice feature best. It’s rare, but there are not a lot of good alternatives for dealing with it. I’ve come across similar challenges perhaps a half dozen times, and while I was able to find workarounds, they got pretty hacky and difficult to reason around.
-
-## Scenario 3: Handling stale hints  #
-
-We’ve got some promising results in scenario 1, but what happens if the data changes to be less lumpy while our hint is still in place? To test this, let’s set every third row to the failed state:
-
-```
-1UPDATE events SET status = 'failed' WHERE id % 3 = 0;
-2VACUUM ANALYZE events;
-```
-
-This means we only need to walk a few rows to get what we’re looking for, so the planner estimate should be able to get us a good outcome. Sure enough, if we run without any hints, we get this:
-
-That’s the kind of result we wanted to see in the first place! Let’s see how we do with the earlier hint to use a bitmap heap scan in place:
-
-That’s 7,000 times worse, and the feedback doesn’t show a problem because it’s still `matched`. Now that the artificial data condition tripping up the planner is gone, the planner has no problem doing a better job than our hinted alternate. This is a good reminder that all hints should be regularly checked for ongoing necessity — otherwise, your performance fixes can lead to performance issues.
-
-## Conclusion  #
-
-We’ve gone through a few scenarios, and it’s clear that `pg_plan_advice` is a powerful but situational tool. It’s not easy to construct scenarios that reliably confuse the planner, but they show up in production often enough that it’s worth having a tool to address them. pg_plan_advice is new enough that it’s hard to say for sure, but I’d bet from what I’ve shown here that the following workflow will serve you well:
-
-1. If you get a mysteriously slow query and tuning doesn’t get the results you wanted, then plan advice is a good thing to try.
-2. If it works, then baking it into the transaction with `SET LOCAL` is a good way to improve performance.
-  1. You can also tie it to the query ID with pg_stash_advice. If you do so, note that this needs special handling for HA failover since it is not WAL-logged, and is not well explored.
-3. If you do set advice, check on it in a few months, as shifting data and query patterns can make it counterproductive.
-
-### Get started with ClickHouse Managed Postgres today
-
-Interested in seeing how ClickHouse Managed Postgres works on your data? Get started with ClickHouse Cloud in minutes and receive $300 in free credits.
-
-Interested in seeing how ClickHouse works on your data? Get started with ClickHouse Cloud in minutes and receive $300 in free credits.
+Title possibly signs checks the article doesn’t have backing for. This is just a brief pro forma project update.Not much new functionality or anything to announce, last few months have mostly been bug fixes and technical debt cleanup. Most big parts of the search engine are in place, and while there are many things that could be better, we’re less likely to straight up see massive new features, at least in the immediate future. Per familiar intuition from binary searches, the closer you get to your goal the smaller and more deliberate steps you need to take in order to get even closer.Sponsorship updateIt’s been a pretty good couple of months for the project.SerpApi sponsored the project with $10k a while back. Other donations and API-key sales have been going up month-over-month since this summer.The search engine has been working pretty well and feels like it’s going in a good direction,
+possibly due to a bunch of bug fixes and ongoing optimization work;  
+I assume this is part of what’s driving up the donations.
+Claude also seems to have a hangup on Marginalia Search
+because I keep seeing it in very clearly Claude-authored search engine listicles and youtube videos.
+Possibly part of why it’s been getting so much attention lately?
+I don’t have any analytics so I really have really no idea where people are coming from,
+how many users I have, or what they’re up to.At any rate, the operation isn’t perpetually self-sustaining yet,
+but number going up like it has whispers actually getting there might yet be possible.On a related matter, I’ve been pretty slow about mailing out free API keys,  
+you might have to wait a week or sometimes two.I swear this isn’t because I’m nefariously trying to push people to buy a key,
+I’ve been getting over a dozen emails per day some days with people wanting a key,
+and they sometimes pile up into mountains of emails I need to reply to,
+and hoo boy is the process of handling these ever a bunch of manual
+copying of things from email to form, and then copying from form back to email again
+(ironically the exact sort of tedious workflow I’ve spent a good
+part of my career helping people streamline and automate).C++ Index…?Apart from fixing bugs and minor improvements, I’ve been experimenting with migrating the index code off Java to C++.I’ve still not fully decided whether this is the direction we want to go,
+in general rewrites especially across language boundaries just aren’t worth it and it kinda goes against my better judgement,
+but we’re currently CPU bottlenecked and there might be some juice left to squeeze by skipping the JVM tax,
+and additionally Java really chafes for this sort of use case.Don’t get me wrong, the new Java FFM API is miles better than anything we had before, but handling off-heap memory is still awkward
+and leads to a bunch of duplicated implementations or reimplementations of stuff like sorting and searching algorithms
+that already exists for on-heap structures but not off;
+bobbing in and out of native code is awkward and makes the logic difficult to follow,
+it just chafes.Should be noted the reason I’m even chasing optimizations in the index boils down to the fact that for an internet search engine,
+performance is recall. The search engine is only as good as the number of results it can rank within the query’s execution budget.To be honest I’m not 100% convinced we’ll see that much performance impact,
+and if we do I doubt it will be *massive*, as the Java implementation is already very optimized,
+and what we’re mostly bottlenecked on isn’t the sort of places where you see big differences between the languages.Thus far the buffer pool has been translated, and part of the main inverse index structure. These are some of the most finnicky parts of the index, and a reasonable canary for whether it’s plausible. Based on what I’ve accomplished it’s encouraging to see how much more expressive C++ is for this type of work. The vastly improved ergonomics may be a motivating factor for continuing this even if the performance doesn’t materialize.I’m doing this quite slowly one component at a time, measuring twice and cutting once, finding good abstractions that lean into C++’s strengths rather than doing a straight translation. In part because this is supremely fiddly and technical work, and in part because there genuinely isn’t any rush and if there is much performance to gain it’s probably in staring at the problem long enough I find better alternative approaches. I did manage to lean more into lock-free algorithms in the buffer pool for example. Translation probably won’t be finished this year at this pace.Many things are undecided: Haven’t decided on where to draw the interface boundary yet.
+Neither do I have a public git repo for this.
+May still scrap the entire idea as a silly boondoggle.
+We’ll just have to see where it goes.On the off chance this rambling mess gets posted on a link aggregator somewhere, I anticipate two types of people will crawl out of the woodwork. I’ll address their concerns in advance.**“Why not Rust/Zig/Odin/${MY_HOBBY_HORSE_LANGUAGE}? C++ is not memory safe! Haven’t you heard that C++ is bad? Look at this diseased rat comic I found on /r/programming!”**My friend in Christ, I use C++ because I’m experienced with C++, and have built nontrivial stuff with in in the past, I’m familiar with the tooling and also kinda enjoy it. It can not be overstated how technical this code is, it’s more than hard enough in a language I’m familiar with, let alone one I’d have to learn as I go. I don’t need to do it blindfolded using a dance mat in a barrel going down the niagara falls for this to be difficult.**"${FRONTIER_MODEL} could one-shot this in less than ${TIME}!"**Probably true? The source is all pretty well tested, with a reference implementation to boot. Seems like very favorable circumstances for a competent coding model.That said, even without turning over rocks such as “externalities of the datacenter buildout”, “externalities of AI training”, and “legal ownership status of AI-generated code”—I don’t think such angles of attack do much to convince anyone who isn’t already convinced—if AI did the translation I sure as heck couldn’t go on to then maintain that code<sup>[1][2]</sup>.Even in the best case, this is me at the edge of my programming abilities. Performance critical low level programming is hard enough to wrap your head around if you were the one who designed the code, let alone if it was vibe coded. I’d be on the hook for an AI subscription perpetually hoping and praying the token prices wouldn’t ever go up. This is a nonstarter for the same reasons the search engine runs on its own hardware and not in the cloud. You can’t be truly independent if you’re subject to the whims of a landlord.From a project management perspective, I’m not rushing anything to market. Project still has years of runway. I’m not beholden to any investors to deliver profits. Even if I wanted to, I have no employees to replace other than my self. What I would trade away is the very [immersion in the problem domain](https://www.marginalia.nu/log/a_108_feynman_revisited/) that’s allowed me to get as far as I have with this project. What I’m expecting to be getting out of it is improved developer ergonomics and maybe a bit of performance if the aforementioned problem-immersion-thing pans out. That’s not something that brings me money, and something I can do because the project is in a fairly stable and mature state.Thus, regardless of what happens in the future with AI, there isn’t an obvious opportunity cost to holding off.Heck, let’s just consider popular future predictions about AI, where does this leave me?*AI bet pays of and models become exponentially more powerful, much cheaper, and ubiquitous like tap water:* How shortsighted would it be to pay for crappy AI **today** when I could save my money and get exponentially better or more AI for the same dollars in the future? I’d have to really hate having money to do such a thing.*OpenThropic IPOs, vocal shareholders from Ferenginar quite insistently ask where they money at, token prices go up singificantly:* Only a problem if you’re dependent on AI.*AI investment bubble crashes and it’s raining bankers like October 1929:* Bad for everyone, but especially bad if you’re dependent on AI.*Tech prists in SV chant binharic hymns as the Machine God emerges and the chosen of humanity transcends into the cyber rapture:* Kind of orthogonal to whether I build this index port by hand.*Zoomers decide that Kazcinski was right all along and instigate a Butlerian Jihad:* Mostly a problem if you’re dependent on AI.*Rise of the Machines, hydraulic press youtube channel stomping on a human face forever:* Inconvenient regardless of choice of action.[1] Lesser minds would think models outputting unmanitainable code is a sign of the superiority of AI. I’ll refer you to the most problematic prophet, [Terry Davis](https://www.youtube.com/watch?v=k0qmkQGqpM8), for that one.[2] I used an m-dash aside in that paragraph. Anyone reckon mr robot wrote this? Discuss in groups.Don’t know where to put this[This was a neat talk](https://archive.org/download/small_web/11787-48384.mp4).Previous:[Softly now](https://www.marginalia.nu/log/a_140_soft_focus/)2026-10-03

@@ -1,0 +1,92 @@
+I wanted Paperback to be able to open some old WinHelp `.hlp` files I had laying around, so I wrote [libhlp](https://github.com/accessware/libhlp), a pure-Rust reader for them. I had my wisdom teeth out on a Friday morning, spent the rest of that day completely out of it, and then woke up Saturday and did this instead of resting like a normal person. Recovering patients make great decisions.
+
+Microsoft never documented the format, but Manfred Winterhoff did, in [helpfile.txt](https://github.com/pmachapman/helpdeco/blob/master/helpfile.txt), which ships alongside his decompiler, [helpdeco](https://github.com/pmachapman/helpdeco). Between those and poking at real files, I worked out the format, and Claude wrote a lot of the actual Rust.
+
+## A file system in a file
+
+A `.hlp` file starts with the magic number `3F 5F 03 00`, followed by the position of its internal directory. A help file is really an archive, and that directory lists the files inside it. Most of them have names starting with a pipe: `|SYSTEM` holds the title and settings, `|TOPIC` holds the text, `|FONT` holds the fonts, `|CONTEXT` holds the topic names, and pictures live in files like `|bm0`.
+
+The directory is a B+ tree, and so is every other index in the file, all with the same page layout.
+
+## Topics
+
+All the text lives in `|TOPIC`, which is cut into fixed-size blocks. Each block can be LZ77 compressed, and positions in the file count bytes of the decompressed text, not of the file itself. Every block also takes up the same amount of that address space whether it fills it or not. In a typical file, each block gets 16 KB of space and only decompresses to about 4 KB, so reading has to skip the gap to the next block.
+
+Inside the blocks, the text is a linked list of records. Some records start a new topic, and the rest hold its paragraphs, each with a formatting part and a text part. The text part can be compressed a second time, which is where it gets fun.
+
+## Compression, part one: LZ77
+
+WinHelp's LZ77 is about as simple as compression gets. The data comes in groups: one flag byte, then up to eight items. Each bit of the flag byte, lowest first, says whether its item is a literal byte or a back-reference. A back-reference is two bytes, with 12 bits of distance and 4 bits of length:
+
+```
+let pair = u16::from_le_bytes([input[pos], input[pos + 1]]) as usize;
+let len = (pair >> 12) + 3;
+let mut back = cursor.wrapping_sub(pair & 0xfff).wrapping_sub(1);
+```
+
+The length is stored minus 3, since anything shorter isn't worth a back-reference. A distance of 0 means "repeat the byte I just wrote", and since the copy can read bytes it's still writing, `x` followed by a back-reference of length 5 becomes `xxxxxx`.
+
+One fun quirk: some real files have back-references that reach behind the start of the data, where there's nothing to copy yet. helpdeco keeps its 4 KB window in a buffer that starts out full of zeroes, so those references just copy zeroes, and the files come out right that way. libhlp starts its window out zeroed too, instead of treating it as an error or reading off the front of the buffer.
+
+## Compression, part two: phrases
+
+On top of LZ77, a help file can swap its most common phrases for short codes, and there are two versions of this.
+
+WinHelp 3.1 keeps the table in `|Phrases`. In the text, any byte from 1 to 15 starts a two-byte code, and every other byte is just itself:
+
+```
+let code = 256 * (usize::from(ch) - 1) + usize::from(next);
+out.extend_from_slice(self.phrase(code / 2));
+if code % 2 == 1 {
+	out.push(b' ');
+}
+```
+
+The lowest bit of the code says whether a space follows the phrase. Phrases usually end at a word, so that saves a byte most of the time.
+
+The Windows 95 help compiler added a fancier scheme, called Hall compression, with the phrases split across `|PhrIndex` and `|PhrImage`. Here, the lowest bits of each byte say what kind of byte it is. If the lowest bit is clear, the rest of the byte picks one of the first 128 phrases, so the most common ones fit in a single byte. Ending in `01` starts a two-byte code for the rest of the table, `011` starts a run of literal bytes, `0111` means a run of spaces, and `1111` means a run of zero bytes. For the runs, the upper bits hold the length minus one, since a run of nothing would be a wasted byte.
+
+## The bug
+
+`|PhrIndex` doesn't store where each phrase starts. It stores how long each one is, packed into as few bits as it can get away with. Each length is a unary count in steps of some power of two, followed by the remaining low bits to add on top. The step size is set once for the whole file.
+
+My first version always read at least one remainder bit. That works until a file uses a step of one, where there's no remainder to store. Then every length reads one bit too many, and everything after the first phrase is garbage. The fix was a single `bits > 0` check.
+
+## Links are hashes
+
+When a help author wrote a topic, they gave it a context string, a name like `SaveFile`. You'd expect a link to store the position of the topic it points to, but it actually stores a hash of the target's name. To follow a link, you hash its target name the way WinHelp does and look the result up in `|CONTEXT`, which maps hashes to positions.
+
+The hash itself is tiny:
+
+```
+context.bytes().fold(0u32, |acc, b| {
+	let term = i32::from(i8::from_ne_bytes([HASH_TABLE[usize::from(b)]]));
+	acc.wrapping_mul(43).wrapping_add_signed(term)
+})
+```
+
+Each byte goes through a lookup table that gives uppercase and lowercase letters the same values, so links are case insensitive. The table's entries are signed, so anything at or above `0x80` subtracts instead of adding. Get that wrong and almost every hash still comes out right, so it's really easy to miss. Oh, and an empty name hashes to 1, not 0, because that's what WinHelp does.
+
+## Bold is a font
+
+Text doesn't store its own formatting. A paragraph says "switch to font 4", and `|FONT` says font 4 is the bold one. Links are drawn the same way. WinHelp underlines a link by switching to an underlined font, so libhlp has to tell that underline apart from underlining the author actually asked for.
+
+## Text encoding
+
+WinHelp is older than Unicode, so text is stored in whatever Windows code page the author used, which might be a double-byte one for East Asian languages. Sometimes the file's language ID says which one. When it doesn't and the text is mostly non-ASCII, libhlp guesses the code page from the text itself.
+
+## WinHelp 3.0
+
+Then there's WinHelp 3.0, the version from Windows 3.0, which is different enough to almost be its own format. Its topic blocks are 2 KB and never compressed, its records give the distance to the next record instead of its position, its topic headers are 12 bytes instead of 28, and its links point at topic numbers instead of hashes. libhlp reads it, but it took its own commit.
+
+And then there are the files that only share the extension. Borland's help compiler and MS-DOS QuickHelp both made `.hlp` files that have nothing else in common with WinHelp, so libhlp just turns those away.
+
+## Try it
+
+libhlp is on crates.io:
+
+```
+cargo add libhlp
+```
+
+It reads the text, titles, tables, emphasis, links and pictures of every WinHelp version I know of, from 3.0 to the Windows 95 compiler, and it bounds checks everything. Paperback uses it to open `.hlp` files, so if you've got an old one sitting around, now you can read it.

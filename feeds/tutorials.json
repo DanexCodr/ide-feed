@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-26T21:05:13Z",
+  "updated": "2026-11-27T07:16:33Z",
   "items": [
     {
       "id": "devto-5060452",
@@ -299,18 +299,6 @@
       "url": "https://dev.to/therealmrmumba/we-automated-the-software-factory-why-am-i-still-clicking-approve-on-typo-fixes-1fc1",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1y3j4fiouho5v7tcx7rm.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAEA/9oADAMBAAIQAxAAAAHEQopwL//EABYQAQEBAAAAAAAAAAAAAAAAAAERIP/aAAgBAQABBQICJv8A/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAACAh/9oACAEBAAY/AiP/AP/EABgQAQEBAQEAAAAAAAAAAAAAAAEAESBR/9oACAEBAAE/IcBdj9RPP//aAAwDAQACAAMAAAAQPg//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHRABAAICAgMAAAAAAAAAAAAAAQARIVFxkTFB8P/aAAgBAQABPxBbFkzUCXZu2VfmYccRwe+4rt7gp4Zbuf/Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-5078362",
-      "title": "After the Thirty-Six Stratagems: Three Questions",
-      "desc": "By xulingfeng | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-11-20T03:20:03Z",
-      "order": 14,
-      "url": "https://dev.to/xulingfeng/after-the-thirty-six-stratagems-three-questions-gb1",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbmw84sp6eagcem1crlmy.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGhABAQACAwAAAAAAAAAAAAAAAQACEhEhMv/aAAgBAQABBQIC1GcSQ4Mu8J9bJf/EABURAQEAAAAAAAAAAAAAAAAAAAEA/9oACAEDAQE/AVhv/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQIBAT8BCb//xAAZEAACAwEAAAAAAAAAAAAAAAAAIQEgMUH/2gAIAQEABj8C6IZk1//EABoQAQADAQEBAAAAAAAAAAAAAAEAITERQbH/2gAIAQEAAT8hX5AbVxzrpwpiuiDU+SxrUVvJkMn/2gAMAwEAAgADAAAAEIlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGAbf/xAAeEAEBAAICAgMAAAAAAAAAAAABEQAhMUFRgXHR4f/aAAgBAQABPxBXY63JLcLnlbh+4i4TQYs3KxAhm8nUunvDEAK7PrKwCpZ84oXnCdPrP//Z",
       "color": "#3B49DF"
     }
   ]
