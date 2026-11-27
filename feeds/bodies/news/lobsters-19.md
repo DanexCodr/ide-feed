@@ -1,307 +1,277 @@
-I've been playing with CSS mixins recently, and I'm super excited about what this new CSS construct will bring to the way we write CSS. I think the CSS we'll write when CSS mixins are available will look very different from the CSS we write today.
+As I wrote previously, [we have proof automation now](https://www.imperialviolet.org/2026/07/26/zstd-lean.html). Given that fact, I think a very timely question is: how can we use it to improve software quality? The same machines that can write these proofs can also write large amounts of code. So an adjacent question is: how can we use them to improve software *understandability*?
 
-## What's a mixin?
+It would be a mistake to start off afresh on those problems because there have been a *lot* of ideas in programming language design over the decades. The viability of ideas shifts as the underlying cost structures change, so things that didn't take off at the time might suddenly make a lot more sense. Still, language design involves a lot of tradeoffs, and features sometimes interact in surprising ways, so a lot of the work involves mixing some interesting-seeming ingredients together, baking, and asking “what is this? Is this a cake?”.
 
-In its simplest form, a mixin is a named piece of CSS code that you define once and can reuse elsewhere in a style sheet. In that sense, it's very similar to a custom property (also known as a CSS variable) or a CSS function.
+So I wanted to give a taste of some of the ingredients that I'm thinking about at the moment, and of the result.
 
-The big difference is what mixins can hold:
+### Ingredients
 
-- A custom property holds a single value (or part of a value).
-- A CSS function is similar: it can only be used as part of a CSS property value.
-- A mixin, however, holds any number of declarations, including nested rules.
+#### Mutable Value Semantics
 
-So, instead of just returning the value `red`, a mixin can return `background: red; color: white; border-radius: 2px;` all at once.
+Value semantics roughly says that you can't observe mutations to one variable through a different name. Value semantics are great for reasoning locally about code as, without them, you're constantly unsure what non-local effects might be happening.
 
-## Why now?
+When you work in a language, you instinctively know when it's using value semantics and when it's using reference semantics. Take Python:
 
-My team at Microsoft is implementing mixins in the Chromium open source project. They've covered a lot of ground, and we're getting ready to ship this in Chromium-based browsers. Native CSS mixins are getting very close!
+```
+x = [1]
+y = x
+y[0] = 2
+print(x)
+```
 
-I can't wait for other browsers to catch up, so that we can all use mixins in earnest.
+You likely know that that prints <kbd>[2]</kbd>. (Although if you write the same program in C++ with <kbd>std::vector</kbd> it prints <kbd>[1]</kbd>! There's no cross-language norm for this.)
 
-> CSS mixins are experimental. To try the code snippets and demo in this article, use a recent Chromium browser, open `about://flags`, and enable the **Experimental Web Platform features** flag.
+Over the span of four lines of code, this is irrelevant. But as the scope of the sharing increases, so does the mental complexity. If you want to be able to jump into a bit of code and understand what it's doing, knowing that there is no such aliasing is a huge boon.
 
-## Learn to use mixins
+Functional programming resolves this by eliminating mutation: if there's no mutation then you certainly can't observe mutations via a different variable name. But mutation is important for efficiency and a lot of work is then required to get the efficiency back. Lean, for example, will do in-place mutations if there's only a single reference to an object. That's great! But it has the sharp edge that innocent-looking changes can mean that there's now a hidden reference kept somewhere and performance crashes.
 
-You define a mixin with the `@mixin` rule, and you use it with `@apply`. Mixin names start with two dashes, like custom properties.
+Rust claims to fix both issues by restricting references so that you can't ever have both a mutable reference to something, and an active alias to it. (We'll ignore <kbd>Rc<RefCell<T>></kbd> and friends.)
 
-Let's define the `--visually-hidden` mixin:
+Certainly Rust's restrictions help a great deal, but Mutable Value Semantics says that Rust goes too far by making references first-class, i.e. something that you can return and store in structures. First-class references lead to the borrow checker, which has undergone several deep rewrites (original to NLL, next to Polonius) to try and perfect it, and they lead to lifetimes, <kbd>DerefMut</kbd> etc., and much more complexity in the type system in general.
 
-```css
-@mixin --visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+So an MVS system avoids all that by further restricting references and not allowing them in the type system. These ideas started [in Swift](https://forums.swift.org/t/valuesemantic-protocol/41686/58?page=3) and are currently championed in [Hylo](https://hylo-lang.org/). The best introduction I've found is [this talk](https://www.youtube.com/watch?v=op51SyyPJmw).
+
+In an MVS system, functions can *take* three sorts of arguments: immutable, mutable, and owned. Immutable arguments might be a reference or a copy; the semantics are the same. Mutable arguments are conceptually copied in at call time and copied back out when a function returns, but of course that's semantically the same as taking a pointer. Lastly, owned arguments transfer ownership to the function and make it unusable in the caller afterwards.
+
+But there are no references in the type system, so a function can't return or store them. But the inability to return references implies so much copying that MVS systems need to provide an alternative.
+
+Hylo has a very cute system of [scoped coroutines](https://hylo-lang.org/docs/user/language-tour/subscripts/), inspired by Swift. These coroutines yield a value and, at the call site, all their arguments are locked for the duration of that value's span. At the end of the span, the coroutine continues running.
+
+One of the common examples is that a coroutine can return a mutable bool for a vector of bits that have been packed into bytes. Then, when the coroutine continues once the return value is no longer used, it can write the new value of that bool back into the array of bytes. This wouldn't be possible without a coroutine because the function would have to return a pointer to a bool that exists nowhere in memory.
+
+Having just lionised this feature, I should note that in my experiments I haven't actually included it because it makes the semantics more complex and I'm spending a lot of complexity budget on verification instead. Which brings us to another idea that combines with MVS…
+
+#### Reference restrictions sidestep separation logics
+
+If you want to do formal verification on a language like C, then you need to model the heap and you immediately hit the aliasing issues above. Then you end up with a [separation logic](https://en.wikipedia.org/wiki/Separation_logic) which lets you model disjoint areas of the heap (i.e. areas with no aliasing between them). Once you can speak about independent heaps, you can reason about a function that operates on one heap and hold the remainder constant.
+
+This can work. The example that I'm (passingly) familiar with is the [Verified Software Toolchain](https://vst.cs.princeton.edu/) which connects to CompCert's semantics and allows you to state properties about C programs (with a separation logic) and thus verify C code all the way to machine code. But it's complex.
+
+However! If you have restricted references then you can drop a huge amount of complexity from such systems! [Aeneas/Charon](https://github.com/AeneasVerif/aeneas) is the current canonical example of this which can translate a subset of Rust code into Lean (and other languages) where things can then be proved about it. Because of Rust's restrictions, the translation doesn't need a separation logic.
+
+But by being more restrictive than Rust, MVS languages are even more amenable to such translation, and thus to formal verification, without going all the way to being functional languages and banning mutation completely.
+
+#### Design by Contract
+
+[Eiffel](https://www.eiffel.com/values/design-by-contract/introduction/) is the standard reference here. It introduced preconditions, postconditions, and invariants for functions/classes:
+
+```
+class DICTIONARY [ELEMENT]
+feature
+    put (x: ELEMENT; key: STRING) is
+            -- Insert x so that it will be retrievable
+            -- through key.
+        require
+            count <= capacity
+            not key.empty
+        ensure
+            has (x)
+            item (key) = x
+            count = old count + 1
+        end
+
+    ... Interface specifications of other features ...
+
+invariant
+    0 <= count
+    count <= capacity
+end
+```
+
+While you've probably never used Eiffel, these notions are quite widespread now, although in common programming languages they are at best encoded in assertions if simple, comments if not, but mostly remain only in the author's head.
+
+Eiffel did all its checks at run-time. There has been a *lot* of work on the balance between run-time and compile-time for these assertions, and on how to discharge assertions statically. Briefly, some work in this space that I'm aware of:
+
+[Dafny](https://dafny.org/) allows a mixture of run-time and static assertions, and discharges the static ones via SMT solvers. [F*](https://fstar-lang.org/) does everything statically, again using SMT solvers, but with a functional language. [SPARK](https://www.adacore.com/languages/spark) has a mixture of run-time and static checks, using SMT solvers or (albeit very challenging to use) provers via [Why3](https://why3.org/). I've never touched [Verus](https://verus-lang.github.io/verus/guide/) but it's worth a mention because it's the most recent entry in this lineage and is Rust-based.
+
+The problem with these systems is that the compile-time checking is much more powerful, because it can cover all possible values of the arguments, but the proof burden is significant. SMT solvers help a lot, but they can quickly hit (effective) non-termination for non-trivial cases. I did an F* summer school in Paris once, and the experienced people there had developed a sixth sense about what would displease the SMT solver and would instinctively code around it. It was an impressive skill! But not reassuring.
+
+This is the key cost that has changed: SMT solvers were inadequate for more complex cases, and dropping into a proof assistant overwhelmed you with lots of inscrutable proof states. All this can be largely handled by models now.
+
+Also, I claim that there are some interesting synergies between MVS and design-by-contract. In Rust, and more so in an MVS system, you end up using indices into arenas of objects to replace arbitrary pointers. (Which [can be faster](https://drops.dagstuhl.de/storage/01oasics/oasics-vol134-programming2025/OASIcs.Programming.2025.25/OASIcs.Programming.2025.25.pdf) due to cache locality.)
+
+Given that one has all these indices flying around, wouldn't it be nice to have explicit invariants about them? Hopefully proven?
+
+#### Refinement types
+
+When writing code I will fairly often have some structure which has invariants that update as processing progresses. At some early part of the pipeline, the structure may be relatively arbitrary, perhaps freshly parsed from a file, and then as various checks and transforms are applied we know more and more about the value.
+
+But in traditional languages, the structure has one type: its structural type. Even with Eiffel-style Design by Contract, invariants on a type are fixed.
+
+The idea of being able to attach more invariants to a structure without duplicating most of it showed up as [Subtypes](https://lean-lang.org/doc/reference/latest/Basic-Types/Subtypes/) in proof systems, and [refinement types](https://www.cs.cmu.edu/~fp/papers/pldi91.pdf) in ML. You'll also see Rust code do this (mostly at run-time) with checked constructors like <kbd>NonZero</kbd> and <kbd>NonNull</kbd>. But those are run-time checks that the type system carries a certificate of. Similar to the evolution of Eiffel-style conditions, we can hope to make them static checks now, discharged via our new proof automation.
+
+#### Literate programming
+
+[Literate programming](https://en.wikipedia.org/wiki/Literate_programming) was the title of a paper by Knuth in the 80s, and [WEB](https://en.wikipedia.org/wiki/Web_(programming_system)) was the original implementation. The idea is that code should be written to be read and thus that it should be ordered for human, not machine, consumption, and that exposition should be at least as important as the code, and not relegated to comments.
+
+Nearly twenty years ago I wanted to understand critbit trees and so wrote [an implementation](https://github.com/agl/critbit/blob/master/critbit.pdf) using CWEB to explore both ideas.
+
+Relatedly, in my mind code has a graph structure deriving from which functions call which other functions. Source files are groups of strongly connected functions and I generally have little memory for what order functions have in a given source file. With the widespread use of LSPs and thus code indexing, we are edging slowly towards being less file orientated but I still feel that we could do much more.
+
+There was a burst of such ideas in the 80s: Knuth's work, also Smalltalk & Lisp systems which kept code in databases rather than text files. Given the ecosystem of version control that assumes text-based files, code databases might be too awkward now, but I still feel the itch of dissatisfaction here.
+
+### Baking them together
+
+At the top of this post I also set a goal for code to be more understandable and, to that end, the easiest code to understand is the code that you didn't have to read because the contract says all that you need to know about it.
+
+But let's work up to that a little.
+
+Here's a function that looks like Rust (because I don't have better syntax ideas) but which doesn't verify.
+
+```
+fn add(a: u32, b: u32) -> u32 {
+  return a + b;
 }
 ```
 
-And now, let's use it somewhere else in our code:
+When I'm reading code, I'm always trying to track the invariants and think about integer overflows. Sometimes the codebase aims to be overflow-clean and so I'm following bounds precisely. Most of the time I just have to ignore them unless the overflow is especially egregious. Now that we have proof automation, I shouldn't have to do that. So, as in SPARK, Verus, and others, <kbd>+</kbd> must statically not overflow and compiling the above gets you:
 
-```css
-.skip-link {
-  @apply --visually-hidden;
+```
+FAIL (refuted) vc_add_arith_1  arith    test:3  -  [smt z3 6ms, sat]
+countermodel (z3, 6 ms; exact: the VC is false for these values):
+  a = 1
+  b = 4294967295 (2^32-1)
+  goal a + b < 4294967296
+    becomes 1 + 4294967295 < 4294967296
+    1 + 4294967295 = 4294967296 (2^32)
+```
+
+That's the SMT solver giving you a counterexample that overflows. (<kbd>+%</kbd>, as in Zig, exists if you really want wrapping operations.)
+
+If the values are bounded such that overflow can't happen, then obviously everything will be fine, automatically:
+
+```
+fn add(bytes: Vec<u8>) -> Option<u32> {
+  if bytes.len() < 4 {
+    return None;
+  }
+
+  let a = u32::from(bytes[0]) << 8 | u32::from(bytes[1]);
+  let b = u32::from(bytes[2]) << 8 | u32::from(bytes[3]);
+  return Some(a + b);
 }
 ```
 
-That's all you need to do. The browser will apply the mixin's declarations to the element as if they were written directly in the element's style block, so it's exactly as if you had written:
+Casts are similar: <kbd>u32::from</kbd> is safe because it must be widening. For narrowing, <kbd>u32::exact_from</kbd> statically requires that the cast not truncate and, if you really need the machine operation, <kbd>u32::wrap_from</kbd> gives it to you.
 
-```css
-.skip-link {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
+And, of course, all vector indices must be statically valid.
+
+Let me try and convince you of the benefits of contracts in terms of code understandability. For this, we're going to discuss a tiny bit of DER, the most common ASN.1 encoding.
+
+DER is a tag-length-value format. We're just going to talk about the encoding of tags. Firstly, tags are in one of four *classes* which have integer values on the wire:
+
 ```
-
-Except now, you have a nice little reusable mixin that you can apply wherever you need it.
-
-## Mixin parameters
-
-That's not all, a mixin can take parameters, with optional types and default values too. Consider this `--button` mixin:
-
-```css
-@mixin --button(--bg <color>: royalblue, --fg <color>: white) {
-  background: var(--bg);
-  color: var(--fg);
-  padding: .5em 1em;
-
-  &:hover { background: color-mix(in oklch, var(--bg), black 20%); }
-}
-```
-
-It applies some colors and spacing to a button-like element, checking that the supplied colors have the right type and falling back to default values if needed. It even handles hover states automatically.
-
-You can use this mixin either with its default values or by passing your own arguments:
-
-```css
-/* Using the default button styles. */
-.primary { @apply --button; }
-
-/* Overriding one of the default button colors. */
-.danger { @apply --button(crimson); }
-
-/* Overriding both default button colors. */
-.custom { @apply --button(palegreen, black); }
-```
-
-If you pass more arguments than the mixin has parameters, the `@apply` does nothing.
-
-## Conditional mixins
-
-A mixin can also hold conditional rules, such as `@media`, `@supports` and `@container`.
-
-For example, you can create a mixin that applies styles conditionally to the viewport size:
-
-```css
-@mixin --tablet-up {
-  background: lightgray;
-
-  @media (width >= 48rem) {
-    background: darkgray;
+pub ghost fn class_num(c: Class) -> Int {
+  match c {
+    Class::Universal => 0,
+    Class::Application => 1,
+    Class::ContextSpecific => 2,
+    Class::Private => 3,
   }
 }
 ```
 
-This becomes even more powerful when combined with `@contents`. See the next section.
+A DER tag is then a class and a tag number, plus a flag which tells you whether the value contains more DER values nested inside it. In theory, tag numbers are unbounded integers. In practice, everyone limits them; here we'll bound them below 2<sup>28</sup> because, as you'll see, that limits the tags to five bytes and the next byte would exceed 2<sup>32</sup>. The (class, tag number) combination of (Universal, 0) is banned in DER as it's the [BER](https://en.wikipedia.org/wiki/X.690#BER_encoding) end-of-contents value:
 
-## Mixin contents
-
-Arguments are not the only way to customize a mixin. A mixin can also accept an entire block of CSS from the call site. Inside the mixin, `@contents` marks the spot where that block goes.
-
-For example, here's a `--card` mixin that defines a couple of declarations and accepts a block of CSS from where the mixin is used:
-
-```css
-@mixin --card {
-  padding: 1rem;
-  border: 1px solid;
-
-  @contents;
+```
+pub struct Tag {
+  pub(read) class: Class,
+  pub(read) num: u32,
+  pub(read) constructed: bool,
+} pub invariant @no_universal_zero {
+  self.class == Class::Universal ==> self.num != 0
 }
 ```
 
-When calling the mixin, you can pass other declarations inside a block, which will be inserted at the `@contents` location within the mixin:
+A tag can be encoded as one or more bytes. The first byte has two bits of class, one bit for the <kbd>constructed</kbd> flag, and five bits of tag number. If the tag number is ≥ 0x1f (the maximum 5-bit value) then it's encoded as 0x1f and more bytes of tag follow:
 
-```css
-.note {
-  @apply --card {
-    background: lightyellow;
-  }
-}
 ```
-
-Here, `.note` gets the padding and border from the mixin, and then its own background, in the place where `@contents` appears.
-
-`@contents` can have a fallback, which applies when the caller passes no block: `@contents { background: white; }`. If the caller passes an empty block, `@apply --card {}`, the fallback does not apply.
-
-The ability to provide your own block of styles when applying a mixin is very useful, for example when using a mixin as a condition. Consider this mixin:
-
-```css
-@mixin --if-dark-mode {
-  @media (prefers-color-scheme: dark) {
-    @contents;
+pub ghost fn tag_enc(t: Tag) -> Seq<u8> {
+  let id = class_num(t.class) * 0x40 + if t.constructed { 0x20 } else { 0 };
+  if t.num < 0x1f {
+    seq![u8::exact_from(id + t.num)]
+  } else {
+    seq![u8::exact_from(id + 0x1f)] ++ b128_enc(t.num, false)
   }
 }
 ```
 
-You can use it to define styles that only apply in dark mode, while keeping the rest of your CSS unaffected. For example:
+The tag numbers that need more bytes are big-endian, base-128 encoded, with the high bit set each time if another byte follows:
 
-```css
-.header {
-  background: white;
-  color: black;
-
-  @apply --if-dark-mode {
-    background: black;
-    color: white;
-  }
+```
+pub ghost fn b128_enc(v: Int, cont: bool) -> Seq<u8>
+    decreases { v }
+{
+  let last = seq![u8::exact_from(if cont { 0x80 } else { 0 } + v % 0x80)];
+  if v < 0x80 { last } else { b128_enc(v / 0x80, true) ++ last }
 }
 ```
 
-Conditional mixins combined with `@contents` gives us something we've been wanting for a long time: **named breakpoints**:
+Now, here's an encoding function for DER tags:
 
-```css
-@mixin --mobile {
-  @media (width < 40rem) {
-    @contents;
-  }
-}
-
-@mixin --tablet {
-  @media (40rem <= width < 64rem) {
-    @contents;
-  }
-}
-
-@mixin --desktop {
-  @media (width >= 64rem) {
-    @contents;
-  }
+```
+pub fn format_tag(t: Tag, out: mut Vec<u8>)
+  requires @range { t.num < 0x1000_0000 }
+  ensures @encodes { seq_of(out) == seq_of(old(out)) ++ tag_enc(t) }
+{
+  …
 }
 ```
 
-These mixins don't apply any styles of their own, they just conditionally apply styles that are given to them depending on the media query. This is great because we now have a way to give custom names to a series of responsive design breakpoints that can be maintained in one place.
+The body of the function is missing—but you don't need it! The contract requires that it encodes exactly as <kbd>tag_enc</kbd> specifies so you don't need to know more. This isn't saving you too much because the code isn't that complicated. You would have to think about the shifts and masks that it's using for the base-128 encoding (rather than recursion), but that's only a few seconds.
 
-Let's use them here to see how clean our responsive design code can be:
+But here's a more substantial saving:
 
-```css
-.sidebar {
-  @apply --mobile {
-    display: none;
+```
+pub fn parse_tag(reader: mut bytes::Reader, in: [u8]) ->
+        Tag ! (Error | bytes::BytesError)
+  ensures @decodes {
+    result.num < 0x1000_0000
+    && seq_of(in).slice(old(reader).pos, reader.pos) == tag_enc(result)
   }
-
-  @apply --tablet {
-    inline-size: 12rem;
+  ensures_err @no_encoding {
+    forall t: Tag :: t.num < 0x1000_0000
+      && old(reader).pos + tag_enc(t).len() <= old(reader).end
+      ==> seq_of(in).slice(old(reader).pos, old(reader).pos + tag_enc(t).len())
+        != tag_enc(t)
   }
-
-  @apply --desktop {
-    inline-size: 20rem;
-  }
+  …
+{
+  …
 }
 ```
 
-## Private variables
+This is saying that:
 
-Finally, a mixin can keep private variables to itself, by declaring them in an `@private` block. The element that applies the mixin can't see these variables:
+1. If it decodes a value then the given bytes start with the encoding of that value.
+2. If it returns an error then there is no valid Tag value which encodes to the bytes at the beginning of the input.
 
-```css
-@mixin --gradient-text(--from: tomato, --to: gold) {
-  @private {
-    --angle: 90deg;
-  }
-  background: linear-gradient(var(--angle), var(--from), var(--to));
-  background-clip: text;
-  color: transparent;
-}
+This enforces not just the baseline of memory safety, no run-time panics etc., but that the parser is fully strict: it never parses anything other than the canonical encoding of a value, as defined above. This is not a trivial thing to code review, and here you don't have to.
+
+Also you see signs of MVS: a <kbd>Reader</kbd> can't hold a reference to <kbd>in</kbd> because references can't be stored. Thus <kbd>in</kbd> is passed separately (and the indices are proven to be valid). This is part of the tradeoff for local reasoning and strong contracts.
+
+I've not mentioned linear types, views in return values, or Zig-style error unions, and I'll only touch on refinement types in the lightest sense by noting the pleasing definition of the <kbd>String</kbd> type in this experiment:
+
+```
+pub form String of Vec<u8> { utf8::valid_from(self, 0) }
 ```
 
-## An experiment: theming with mixins
+Lastly, nodding towards literate programming, I'll note that this blog post itself is a valid source file for this language: the language consumes Markdown files and only compiles lines in annotated code blocks. The Lean proofs are kept in separate files, not for human consumption. There's already a tool for showing a source file with only the public definitions, and with the bodies of functions elided, and there's still more I want to explore here in terms of viewing source files as a graph.
 
-Mixins are very versatile. You will find many ways to use them, and I don't think there will be one good way and one bad way to use them. Different teams will work out what works for them.
+### Is the cake a lie?
 
-In this section, I explored one way in which mixins might be used. I don't know if it will make sense in a real project yet, but I found it interesting to try.
+It's worth discussing the more bitter flavours in this cake too.
 
-Imagine a white-label website. You own the site and control its markup and default CSS. But you also want your customers to be able to theme the site to match their brand.
+The front end of the compiler emits lots of verification conditions for the code to be correct. Every arithmetic operation emits overflow checks, every indexing operation emits range checks, every invariant and postcondition results in checks, every loop must be shown to be terminating, etc.
 
-Here's the idea:
+The little DER tag example above results in 149 of them. Each is first sent to Z3 and then, if Z3 times out (after a couple of seconds), to cvc5. But the solvers are never trusted. If they believe that a condition holds they output the [unsat core](https://en.wikipedia.org/wiki/Unsatisfiable_core) which is used to trim the hypotheses which are fed into Lean. Lean automation chews on the problem for a while and, if that times out, an LLM comes to write a manual proof in Lean.
 
-1. You write clean, semantic HTML, which contains all of the content.
-2. You write the basic CSS for it. This is your white-label version. It has the basic layout, the headers and the sidebars, but no strong colors, no animations, no design direction.
-3. You apply undefined mixins in all the logical places of your site. For example, you apply a mixin at the overall page level, another one in the header, another one for the sidebar, and so on. These mixins are not defined, so they do nothing, and you continue to see the default look.
-4. You let customers define the mixins. A customer's design is a style sheet that uses the @mixin rule to actually define the mixins which your basic CSS code uses. When that style sheet loads, the definitions apply at every place that uses them.
+There's a cache of proven conditions, of course, and the Lean proofs are saved in a different file. But overall even reasonably simple examples type-check at about 10 lines per second. If you invalidate the cache then medium-sized programs can take multiple hours to recheck on a fast machine. (Not *reprove*, just to check the proofs that already exist!) So modularity of code is important to keep the scaling line flatter.
 
-In your style sheet, you'd apply mixins like this:
+LLM compute is needed too: after I laid out the spec for the DER tag example above, a model took about 30 minutes to get it working. But if you ask a modern model to write the same thing in Go, it will do it in under 10 seconds. (Although the result doesn't hit nearly the same quality bar and the lax parsing would cause security problems in sensitive contexts.)
 
-```css
-body      { @apply --page; }
-header    { @apply --masthead; }
-header h1 { @apply --site-title; }
-```
+Overall, this language was an experiment in how we can convert compute into high-quality and understandable code. I'll claim that it's making interesting steps towards that goal, but you do need a *lot* of compute.
 
-And your customer could define the mixins something like this:
+Also, there is a considerable trusted base involved here. While you don't have to trust the SMT solvers, you do have to trust that the front end is correctly translating the code into verification conditions for Lean, and you have to trust that it is correctly translating it into LLVM IR. I think that's fine: the comparison here is with regular languages like C++ and Rust. This is not an attempt at a minimal TCB language with extremely strong guarantees like [CakeML](https://github.com/CakeML/cakeml).
 
-```css
-@mixin --page {
-  font: 1.2rem/1.6 Georgia, serif;
-  background: lightyellow;
-}
-
-@mixin --masthead {
-  background: darkblue;
-  color: white;
-}
-
-@mixin --site-title {
-  font-size: 2rem;
-  font-weight: bold;
-}
-```
-
-## But why?
-
-You might remember the [CSS Zen Garden](https://csszengarden.com/). It had one HTML page, and anyone could submit a new design by writing a new style sheet for it. It showed the power of clean, semantic HTML, with styles, layouts and animations in a separate file. The designs were wildly different from one another and extremely creative.
-
-But there's a problem when you do this for customers. You expose your entire markup and it becomes a public API. Customers start writing very specific selectors that depend on how your HTML is organized, and you can't change that HTML any more without breaking their customizations. I've done this at a previous job, and I know how painful this can be.
-
-The other option is to expose CSS variables. You keep control of your entire HTML and CSS, and only expose a set of customization variables that are used throughout your code. For example, you define a set of color palette variables, a set of spacing variables, typography variables, etc.
-
-Customers override values only, which is very safe, but can also be limiting. What if they later ask you to have access to the page layout? You now need to expose more variables and make sure they continue working correctly.
-
-Mixins sit somewhere in between. You remain in control of your HTML and can change it whenever you want. You expose logically named mixins that correspond to the various areas and surfaces of your page.
-
-As long as you keep applying the same mixins in the right places, customizations continue to work.
-
-But you can also go much further than variables. Each mixin is an entry point where a customer can add any declarations, pseudo-elements, media queries and animations.
-
-## The Mixin Zen Garden
-
-I built a small demo, heavily inspired by the CSS Zen Garden, to test this: the [Mixin Zen Garden](https://patrickbrosset.com/lab/mixins-zen-garden/) **(this will only work with a browser that supports CSS mixins).**
-
-It's a simple webpage that has static HTML. The HTML never changes, but you can view the page with different designs that all use CSS mixins as described above:
-
-Try the six designs:
-
-(If you write your own design, please share by [opening an issue on my repo](https://github.com/captainbrosset/patrickbrosset.com/issues).)
-
-Here are some things I learned while building it:
-
-- Mixins that do nothing are fine. A design doesn't need to define every mixin. This makes small designs very short.
-- One mixin per logical area of the page is more than enough. A design can put colors, spacing, typography, and decorations in the same mixin.
-- Name mixins by role. Choose a mixin by what the role of the element is, such as `--sidebar-heading`, not by how it should look or what it currently is. Every design can decide what that role looks like, and you can change the HTML structure without changing the mixin names.
-
-But, I also discovered limits:
-
-- Well, I've said this already, but it bears repeating: mixins are experimental. They work in Chromium only, behind a flag.
-- Nested selectors can reach into your markup again. A custom design can define a nested selector in a mixin to reach into the HTML markup. For example: `@mixin --masthead { & h2 { ... }}`. Doing this exposes your HTML markup again, making it part of the API contract, which we wanted to avoid. Now, if this were to become a real customization mechanism, we could validate custom designs to ensure they only use allowed selectors within mixins.
-
-## What's next
-
-Theming is only one use of mixins. Other ideas I want to try:
-
-- More uses of named breakpoints, because they allow breakpoints to be defined once for the whole site and reused consistently.
-- Mixins across shadow DOM boundaries. A document-level mixin applies inside shadow roots and this feels like a great way to style a component's insides from the page.
-- Enforcing accessibility and progressive enhancement best practices in a central place to ensure your team policies are applied consistently. If developers just apply mixins in their style sheets, then you can ensure best practices from within the mixins themselves.
-
-CSS mixins might change the way we write and organize CSS pretty profoundly. I'm looking forward to seeing what you build with them. If you try the demo, or experiment with mixins on your own projects, let me know!
+Still, the language does have significant aspects of delight. Being able to write the spec for DER encoding, and then have the *correct* code for it generated, does make me reflect on the amount of time [and suffering](https://www.imperialviolet.org/2014/09/26/pkcs1.html) that I've put into DER over the years that could now be avoided.

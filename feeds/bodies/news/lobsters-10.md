@@ -1,30 +1,75 @@
-TASK [Gathering Facts] ***********************************************************************
-fatal: [my-server.local]: FAILED! => 
-    msg: 'Timeout (12s) waiting for privilege escalation prompt: '
-```
+Let’s **assume** that LLMs **actually speed up programming** and that the
+EU cannot catch up to AI coding tools from the US and China. If this
+is true, what can we do in the EU to **close the gap** enough that
+efficiency gains from LLMs stay lower than their compute cost?
 
-Apparently Ubuntu's been rewriting system utilities in Rust, and the `sudo-rs` version that ships on Ubuntu 26.04 has some incompatiblities with the `sudo` I've used on servers for 20+ years.
+ *In short: make secure programming easier for people
+again.* 🇪🇺
 
-It prints an extra string before the password prompt, which `sudo` doesn't do, and that can confuse automation tools like Ansible that wait for a specific prompt.
+Improve programming tooling, nurture template libraries, extend and
+integrate documentation, support maintainers, foster standardized
+interfaces, champion responsiveness, de-bloat stacks.
 
-There's a thread in the Ansible project covering the issue: [validate sudo become plugin against sudo-rs](https://github.com/ansible/ansible/issues/85837). The fix landed in Ansible Core 2.22.0, and is being backported into updates in 2.16, 2.18, 2.19, 2.20, and maybe also 2.21 (it's quite disruptive!). It looks like it also broke [pyinfra](https://github.com/pyinfra-dev/pyinfra/pull/1734), and their fix is in the latest release of 3.11.
+## Practical steps for sovereignty
 
-I updated Ansible (`pip install -U ansible`) and now `-K` (`--ask-become-pass`) works again.
+Practical steps at moderate cost:<sup>[1](https://www.draketo.de/software/curb-ai-impact#fn.1)</sup>
 
-Another alternative is to use the traditional version of `sudo` that still ships with Ubuntu 26. For that, the easiest way is to set the `become_exe` inside your hosts file:
+- Enhance copyleft compiler error messages (in gcc?)
+- Improve responsiveness, e.g. reduce keyboard to screen latency. – mlinksva
+- Support Free Software maintainers and foster infrastructure maintenance in the EU. If you know a project by heart, you can fix it much more easily.
+- Package and improve searchable documentation (via texinfo?)[2](https://www.draketo.de/software/curb-ai-impact#fn.2), [3](https://www.draketo.de/software/curb-ai-impact#fn.3) and spread discoverability of documentation akin to IntelliJ for Java and Emacs for elisp, but for most languages, frameworks, and libraries (via texinfo-lookup?).
+- Provide templates for common tasks like infrastructure setup (with proxmox?), adding an API endpoint, writing a report, etc. as executable documentation.
+- Simplify stacks and frameworks, spread common development practices, and strengthen security ergonomics (with BSI Grundschutz?).
+- Work towards more standardized interfaces between software components. Maintain reliable interface generation from specifications for different languages. Build interface contracts as the common denominator between different services, extendable for specifics. – Elias Probst[4](https://www.draketo.de/software/curb-ai-impact#fn.4)
+- Create more linters (reuse SonarQube Rules?).
 
-```fallback
-dell-precision.local ansible_become_exe=sudo.ws
-```
+## Why we need these steps
 
-Or you could even revert `sudo` systemwide on your Ubuntu host:
+These steps make software development more resilient against changes
+due to LLMs.
 
-```fallback
-update-alternatives --config sudo
-```
+> „What if the [worries by The Morpheus hold true](https://www.youtube.com/watch?v=mtNbPExBe_Y&t=1122) and *the EU cannot
+> become competitive in LLM development*, because USA and China
+> monopolized LLM development skill and infrastructure advantages? Which
+> steps can—cheaply—limit the impact of LLMs so our software
+> development stays competitive?“
 
-I'm not sure why Ubuntu sees the need to [rewrite common Linux utils in Rust](https://www.abdallaelmorsi.net/ubuntu-rust-coreutils-migration-what-actually-breaks-in-scripts-and-how-to-fix-it/). I don't mind Rust, but these are foundational tools every Linux system relies on. This isn't a window manager, where experimentation is more acceptable<sup>[1](https://www.jeffgeerling.com/blog/2026/ansible-fails-become-ubuntu2604/#fn:1)</sup>.
+I asked this question [in Mastodon](https://rollenspiel.social/@ArneBab/116827324007470571). To contribute, please answer the
+question there.
 
-If other distros plan on moving to `sudo-rs` that's one thing, but if it's just Ubuntu, maybe I should hop back to Debian for everything, and not just my cloud servers.
+AI may still fail as a bursting bubble and take down large parts of
+the US economy with it (and more), but if it does not, the EU should
+be prepared to curb its impact—best by already having taken steps
+like the ones shown here.
 
-1. Yes, I know this makes me sound like "old man yells at [rust]," but major changes to structural components of Linux *should* take longer, IMO. At least on the Red Hat side, we have Fedora, which is more bleeding edge, then at least a few years' gap before it hits 'production' systems. With Ubuntu, there is no cutting edge upstream where things like this can be fixed or worked around before hitting prod! (And no, I don't consider non-LTS Ubuntu releases the same thing.) [↩︎](https://www.jeffgeerling.com/blog/2026/ansible-fails-become-ubuntu2604/#fnref:1)
+And if the AI bubble does not burst, these steps will still help
+software development in the EU. Money put into them **never goes to
+waste** (it also helps the ones who use LLMs for coding, just not as
+much), so I think that the EU should support these steps with at least
+1% of the overall funding AI companies receive.<sup>[5](https://www.draketo.de/software/curb-ai-impact#fn.5)</sup>
+
+## How to do it?
+
+- Increase funding of the nlnet foundation via EU Horizon 2020 and followups.
+- Increase funding of the Sovereign Tech Agency.
+- Adhere to and require Public Money Public Code.
+- Fund the Free Software Foundation Europe.[6](https://www.draketo.de/software/curb-ai-impact#fn.6)
+
+Also support [empirical programming language research](https://www.draketo.de/software/language-empiric.html). To improve our
+understanding how programming works best for humans.
+
+## Footnotes:
+
+compared to the 1 trillion VC funding for US-based AI companies
+and who knows how much for Chinese ones.
+
+Improve search in documentation and add more examples; collect
+and integrate working examples in primary documentation. Piecing
+together info is where most people give up. – *thanks to
+libewa*.
+
+Package more documentation as texinfo. Write automatic
+convertersions to texinfo for different documentation tools.
+Improve man-page integration. Since I started using local info
+lookup via texinfo for writing Guile Scheme, I wish that were
+available for every tool.

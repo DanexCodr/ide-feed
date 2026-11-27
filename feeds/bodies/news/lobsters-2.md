@@ -1,169 +1,61 @@
-*We are glad to announce the release of Garage v2.6.0 that includes a brand-new
-web administration UI funded by NLnet. We also discuss many other small news:
-Helm chart repository release, Garage v1.x EoL, Garage v3.0.0 beta 1 and an
-outlook on upcoming work on S3 versioning.*
+After Automattic's confirmation that they would switch their `.vibe` application to the replacement string of `.php`<sup>1</sup>, ICANN has started to publish various objections on the Application Comment Forum (ACF) section of their new gTLD program site<sup>2</sup>. They mostly relate to the confusion and security risk posed by a common filetype (especially in web development) becoming a TLD, similar to the outcry over Google's application for `.zip` (which was eventually successfully delegated). The other common theme is the objection to a private company effectively trying to claim what is an open-source project.
 
-The Garage project has been quite active lately, so we thought it would be a
-good time to write a blog post to present new features and give some
-information on what's coming next.
+The first is by PHP developer Larry Garfield who accused the WordPress parent of "Inappropriate Squatting":<sup>3</sup>
 
-## Garage v2.6.0 and the web administration GUI
+> PHP is a widely used programming language. It is managed by the PHP project, an informal project at [www.php.net](http://www.php.net). It is also supported by The PHP Foundation, a non-profit organization managed through OpenCollective.
 
-This is the culmination of almost two years of work by [Tixie
-Salander](https://guerilla.studio/). We started this collaboration in 2024 when it
-was clear that a user interface was one of the most sorely lacking feature of Garage. We
-are very grateful that NLnet has again engaged with us and provided funding to
-make this a reality.
+> No one organization, company, or person owns or controls PHP. Authority within the PHP language and ecosystem is deliberately diffuse.
 
-Here's a minimal example to test 2.6.0 right away:
+> Automattic, the company that has attempted to register .php as a TLD, is the owner/author of the WordPress blogging software. WordPress is itself written in PHP and Javascript. However, Automattic has no ownership or control over the PHP language itself. In fact, Automattic and its employees are conspicuously absent from contribution to the PHP project itself, aside from in recent years becoming a large passive donor to The PHP Foundation.
 
-```
-cat > garage.toml <<'EOF'
-metadata_dir = "/var/lib/garage/meta"
-data_dir = "/var/lib/garage/data"
-db_engine = "lmdb"
-replication_factor = 1
-rpc_bind_addr = "[::]:3901"
-[s3_api]
-s3_region = "garage"
-api_bind_addr = "[::]:3900"
-[admin]
-api_bind_addr = "[::]:3903"
-EOF
+> For Automattic, or any other company that operates in the PHP space, to try and lay claim to .php as a TLD is grossly inappropriate. There are dozens of other companies, projects, and interested parties that have just as much if not more claim to the name. PHP is a far larger ecosystem than just Automattic.
 
-TOKEN=$(openssl rand -base64 32)
-echo "Admin token: $TOKEN"
+> It would be equivalent to Microsoft registering .rust (they use a lot of Rust now, but did not originate the language), or Hashicorp registering .golang, or IBM registering .java. None of those would be reasonable or appropriate, and neither is any one organization owning .php.
 
-docker run --name garage -p 3900:3900 -p 127.0.0.1:3903:3903 \
-  -e GARAGE_RPC_SECRET=$(openssl rand -hex 32) \
-  -e GARAGE_ADMIN_TOKEN="$TOKEN" \
-  -e GARAGE_DEFAULT_BUCKET=testbucket \
-  -e GARAGE_DEFAULT_ACCESS_KEY=GKthisisatestkey \
-  -e GARAGE_DEFAULT_SECRET_KEY=$(openssl rand -hex 32) \
-  -v $PWD/garage.toml:/etc/garage.toml:z -v garage:/var/lib/garage \
-  dxflrs/garage:v2.6.0 /garage server --single-node --default-bucket
-```
+> One company owning .php would be significantly harmful to the PHP ecosystem, as it would give control over a significant branding and marketing channel to one company that is not engaged in the ecosystem, leading to market confusion and an easily exploitable way for that company to claim more authority and ownership than it actually has.
 
-Running 2.6.0 or above, you can access the web interface on the garage admin API port, by default port
-3903, so http://localhost:3903/ if you are running garage on your machine with the example above.
+> The only organization that has any legitimate claim to register .php would be The PHP Foundation, but they have made no such attempt.
 
-Logging in requires a garage admin token. The example above prints it on the command line.
-If you have set the `admin_token` configuration variable
-in your configuration file, you may use that token. Otherwise, you'll need to create a separate token
-from the command line with `garage admin-token create`.
+> The application for .php should be rejected outright as inappropriate "domain squatting." Its approval would be detrimental to a major software ecosystem, and establish a dangerous precedent for one company claiming an entire ecosystem's name without cause.
 
-One world of caution: **administering a remote cluster over plain HTTP is NOT safe**, as
-your admin token is transmitted in plain text with each request. You'll need to setup an HTTPS
-reverse proxy in front of your Garage node to encrypt the connection, or/and access your
-node through a VPN such as Wireguard to make sure no one can eavesdrop the credentials.
+WordPress contributor Jamie VanRaalte objected on the grounds of "Part of a pattern - .php should not go to one company" and also said the `.wordpress` application was a similarly inappropriate power grab of another open-source project:<sup>4</sup>
 
-Once logged in the cluster, you will be greeted by a cluster overview screen that looks like
-the following (this is a live example from our Deuxfleurs cluster):
+> I agree with the comments already made here about .php. [I've been building commercial software in PHP for X years.] PHP is run by the PHP project and supported by The PHP Foundation, and no company owns it.
 
-![Garage web admin overview screen](https://garagehq.deuxfleurs.fr/blog/2026-11-webadmin-release/webadmin-overview.png)
+> I want to add one thing that's easy to miss when this application is looked at on its own. Knock Knock WHOIS There, LLC is a subsidiary of Automattic, and it has also applied for .wordpress. WordPress is an open source project too, and its trademark is held by the WordPress Foundation, not Automattic. So this is one company applying for the names of two open source ecosystems that it takes part in but does not govern.
 
-The web interface follows a similar pattern to the CLI: cluster monitoring,
-layout configuration, bucket and access credential management are all available
-as you expect.  Here are example videos (now included in the Quick Start guide
-as well) showing the setting up of a new cluster from scratch:
+> Automattic does use PHP heavily, but so do millions of other developers and companies. Using a language doesn't give a company any claim to its name. If .php goes to Automattic, it would decide who can register under the name of a language that belongs to everyone who uses it.
 
-From a development standpoint, the web UI currently lives in a [separate Git
-repository](https://git.deuxfleurs.fr/Deuxfleurs/garage-webadmin/) so please
-report any issues there and not in Garage's main issue tracker. Tixie will
-continue being the maintainer of the UI moving forward.
+> If .php should exist at all, it should be held by The PHP Foundation or another neutral body accountable to the PHP community. This application, and the one for .wordpress, should both be rejected.
 
-## Official Helm chart published in our public repository
+Web developer Ryan Maietta highlighted the "File Extension Confusion and Security Risks" of using an established filetype as a TLD and the risk of people confusing websites using this domain as being officially endorsed by the PHP project:<sup>5</sup>
 
-This has also been one of the longstanding requests from our Kubernetes users, and it's
-now done! Starting today you can deploy Garage on Kubernetes easily thanks to our
-self-hosted Helm repository. Both "regular" (tgz+index.yml) helm chart repository as well as OCI artefacts
-are available. Instructions in the documentation
-[have been updated accordingly](https://garagehq.deuxfleurs.fr/documentation/cookbook/kubernetes/).
-Happy Helming!
+> I oppose the proposed .php top-level domain because .php already has a widely recognized meaning as the extension for PHP files.
 
-Thanks to Boris M. and Maximilien for contributing this improvement to Garage,
-along the many contributors that participated in finding the right way to make this work.
+> I work in web development and sometimes use the open-source WordPress software. The .php extension appears throughout websites, source code, documentation, development tools and technical discussions. If .php becomes a top-level domain, the same text could identify either a PHP file or a registered domain name.
 
-The Garage helm chart follows its own version scheme, with the current version being 0.10.7.
+> For example, wp-login.php is the standard WordPress login script. If .php is approved and the name is available for registration, wp-login.php could also be a domain owned by someone with no connection to WordPress. A link shared in a message or technical discussion could appear familiar while sending someone to an unrelated website. Software that automatically turns text into links could make this confusion worse.
 
-## Garage v1.x officially end-of-life
+> The concern extends beyond WordPress. Someone could register domains that resemble PHP scripts or development resources and use them for phishing or impersonation. People may also mistake a .php website for an official resource endorsed by the PHP project. These risks are another reason I oppose the application.
 
-The last release of the 1.x branch was v1.3.1 in January 2026, almost a year ago.
-Many significant bug fixes, including security fixes, are currently only present on the v2.x
-branch. At this point, it would be too much work to backport them to 1.x
-and it didn't seem there was any ask to do so from the community either. So we are
-officially deprecating Garage v1.x and urging all users still on this branch to
-update to v2.x as soon as possible. The release note has been updated accordingly.
+> The applicant is an Automattic company. Automattic has a significant role in the WordPress ecosystem, but PHP is an independent, open-source language used by developers and organizations around the world. The interests of the broader PHP community deserve consideration.
 
-## Garage v3.0.0 beta 1 release
+> I ask ICANN to reject this application. The security risks are my most important concern, and my opposition goes beyond them. I do not believe a single private company should control a top-level domain so closely associated with a language it does not own.
 
-We have published a first beta release of Garage v3.0.0. This release **does
-not yet include S3 versioning** (sorry!). This unfortunately needed to be a major release
-because of a few breaking changes we wanted to release without
-waiting for s3 versioning to come though:
+Forensic analyst Herbert Bärschneider also objected simply on the grounds of confusing the TLD with the filetype:<sup>6</sup>
 
-- anonymous S3 read access to buckets
-- bucket and object tagging
-- replacing the unmaintained node-to-node SSB handshake protocol with the Noise protocol, something we have been able to achieve without any user-facing breaking changes thanks to the close proximity between the two
+> When computer users browse the internet, they have to work with URLs. Such URLS can be complex and even appear cryptic to users.
 
-We are looking for testers for this beta so please give it a try and report any
-findings on our issue tracker!
+> Users often tend to identify patterns and attach trust to those patterns - e. g. websites starting with "https" and "[www](http://www).".
 
-This beta release also marks the first step toward having a reliable Fjall metadata engine
-so please report to us not only problems, but also
-*cases of successfully running a Garage cluster on Fjall with significant
-activity*, so that we can gain confidence that it works well and potentially
-mark it stable soon. This also means we'll take bug report for Fjall issues,
-something that we explicitly disregarded so far for the 2.x experimental implementation.
+> The long use of PHP as a way of creating websites will have lead to patterns which point towards "legitimate websites end with .php". By creating a TLD "php", this will lead to confusion. This confusion can be abused - allowing malicious third-parties to use the inherent trust in php Pages with .php domains.
 
-As per [the release
-notes](https://git.deuxfleurs.fr/Deuxfleurs/garage/releases/tag/v3.0.0-beta1),
-the most important breaking changes for users to be aware of are:
+> As security community, we should shield computer users from such abuse potential by not creating TLDs that mimik well-established meanings on the web.
 
-- To finally align with industry standard, most Prometheus metrics have been slighly renamed, we provide [an updated Grafana dashboard](https://git.deuxfleurs.fr/Deuxfleurs/garage/src/commit/0ed12c39962dd0d8481f5d9152663631cc20f4bb/script/telemetry/grafana-garage-dashboard-prometheus.json)
-- The Fjall major version update breaks compatibility with the Garage 2.x Fjall as data files from older versions are not supported. If you were using Fjall on v2.x, you will need to migrate manually: convert your metadata to another format (LMDB or SQlite) with `garage node convert-db` before upgrading. You can convert back to Fjall once you successfully upgraded to v3.
+And finally, the ICANN-affiliated Mark William Datysgeld described `.php` as being "Not viable from a technical perspective"<sup>7</sup> highlighting that he has already had issues creating the page for it on the PHP-based ICANN Wiki site, causing it to return a 404 error response<sup>8</sup>:
 
-The complete list of breaking changes can be found in the changelog linked above.
-Happy testing!
+> .php" is the standard file extension for PHP, one of the most widely deployed Web languages. Software commonly treats any string ending in ".php" as a script or file path. Delegating .php as a gTLD would make every second-level registration, such as "index.php", both a valid domain name and a valid filename.
 
-## Coming up: S3 versioning
+> This collision is already causing failures as-is. When creating the ICANNWiki article for this gTLD application, the entry was created in the database and appears in search, but it cannot be resolved and returns "Page not found", so even documenting this application will require a technical workaround. I expect the same class of failure in any system that routes or parses ".php" strings, which is to say, many of the Web's systems.
 
-Finally we want to close this post with an update on S3 versionning.
-
-In 2027 we will start a new collaboration with [Armaël](https://isomorphis.me/) to implement what
-is certainly **the** most requested feature in Garage: S3 object versioning.
-
-We understand that there has been growing impatience for this feature to be
-implemented in Garage, and rightfully so as it would enable
-new use-cases such as for long-term archiving where compliance is important, or
-as a backup target that cannot be tampered with.
-
-We thank the community for their patience, and kindly ask them to understand
-why this hasn't been done before: while there have been several attempts by community
-members, this is a deep problem that requires intricate
-understanding of how Garage stores metadata, and implementing it without taking
-this into account leads to code that, while it might appear to work on the
-surface, is in fact incorrect. A correct implementation requires a
-significant rewrite of core parts of Garage, which we believe can currently be
-accomplished only by experienced maintainers. We will also take this rewrite as an
-opportunity to fix some performance problems, such as those arising with
-extremely big objects.
-
-I would like to make an important note on object locking and WORM: we will
-provide an implementation of locking primitives/WORM per the S3 API
-specification, however note that due to Garage's lack of a consensus algorithm,
-*this implementation will not be fully correct*. This means that Garage will
-implement best-effort detection of access requests that would violate locks,
-but will not be able to guarantee that it upholds locks *in all cases*. More
-precisely: using conditional writes (`If-Match`, `If-None-Match`) as a
-substitute for a distributed mutex or to discriminate between concurrent write
-requests will obviously not work, but ensuring that a successfully uploaded
-object cannot be overwritten after the fact should work in most cases. We will
-take care of properly documenting what works and what doesn't, but in practice,
-this means that locking and WORM will be gated behind a feature flag (a
-configuration parameter) that requires cluster administrators to acknowledge
-that they might be running unsafe workloads if they don't understand exactly
-what the feature does.
-
-Thanks for reading, and for your continued support in our journey to a robust
-and resilient distributed storage system.
+> I ask evaluators to consider this in the Safeguard Assessment and to put the following question to the applicant: what measures does it propose to address collisions between .php domain names and PHP file paths in software that routes or parses them? Given the scope of the issue, I also ask evaluators to recommend that this application not proceed.

@@ -1,338 +1,362 @@
-There’s recently been some discussion about the benefits and downsides of lock (mutex) poisoning in Rust, spurred by [a recent proposal](https://github.com/rust-lang/rust/issues/149359) to make the default mutex non-poisoned, i.e. **silently unlock on panic** (see also, [recent discussion on Hacker News](https://news.ycombinator.com/item?id=46036883)). As a passionate defender of lock poisoning, I thought I’d gather and write about my thoughts on this matter.
+It's only been a couple of months since [the last article](https://cetra3.github.io/blog/state-of-allocators-2026-part-2), and I am pleased to see that, after 10 years of limbo, allocators have finally been stabilised! While it *feels* like the never type did steal a bit of thunder, rust `1.100` was nonetheless a [**monumental** release](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/). Congratulations on the team that shepherded this through.
 
-To summarize, I believe:
+So, now we have an MVP of the allocator API, what can we do with it? What does it get us besides closer feature parity with other system languages like C++ & Zig?
 
-- Unexpected cancellations in critical sections cause real harm to system correctness.
-- Lock poisoning is an important part of ensuring the correctness of critical sections in Rust.
-- Poisoning applies more generally than mutexes, and providing an easy way to track that (via e.g. a Poison<T> wrapper) is valuable.
-- While there is conceptual elegance in separating out locking from poisoning on panic, the importance of lock poisoning overrides these concerns.
+In this article I'll step through a few use cases that might be handy to the layman rust programmer, so hopefully you can see the benefit.
 
-## What is poisoning?[#](https://sunshowers.io/posts/on-poisoning/#what-is-poisoning)
+## Allocators can adjust when memory is freed
 
-Rust, like most multithreaded languages, has [mutexes](https://doc.rust-lang.org/std/sync/struct.Mutex.html): a construct to ensure that a particular piece of data can only be accessed by one thread at a time. The way mutexes work in Rust is particularly well-considered:
+This was one of the leading cases for custom allocation. Dropping in rust is not free. There has been prior art in actually moving [memory to a dedicated thread to `Drop`](https://abrams.cc/rust-dropping-things-in-another-thread/) highly nested structures. This is actually only half a solution. You're still paying for the deallocation call costs, just it's not in the hot path anymore.
 
-- Rust uses a single-ownership model, and the notion of shared (&) and exclusive (&mut) references to some data. Most data structures are written such that mutations always require a &mut reference to it.
-- In Rust, the data guarded by a mutex is owned by the mutex. (In many other languages, you have to track the mutex and data separately, and it’s easy to get it wrong.)
-- When you lock a mutex, you start from a shared reference: a &Mutex<T>. Once you have obtained the lock, you get back a `MutexGuard<T>`, which indicates that you now have exclusive access to the guarded data.
-- The MutexGuard can give you a &mut T, so you have exclusive access to it.
-- When the MutexGuard is dropped, the lock is released. The period during which the lock is held is called the critical section (generally, not just in Rust).
+Instead, what if we knew that we would have a period of time in our code, where we're going to allocate a lot of stuff, do something with it, and then free everything? A good example of this is a web request, or a database query.
 
-This is all quite reasonable! Let’s look at an example that processes incoming messages for a set of tracked operations. Let’s assume that multiple threads could be processing messages, so we have to guard the internal state with a mutex. (We’ll discuss alternative approaches to this problem later.)
+A request comes in, fills in some data structures, and then when the request finishes, the memory isn't needed anymore so it's dropped. This sort of "burst" pattern of allocation, where you allocate a lot up front, and then tear things down all at once at the end, is quite common.
 
-A simple implementation:
+For this we can use a bump allocator: reserve a big block of memory, and allocate from that, rather than paying the cost of talking to the system allocator for every allocation. Think of it like the [`BufReader`](https://doc.rust-lang.org/std/io/struct.BufReader.html) and [`BufWriter`](https://doc.rust-lang.org/std/io/struct.BufWriter.html) of std io, rather than make repeated syscalls to fetch data, we can *buffer* that data in a big block, so that we can reduce the overhead considerably.
 
-```rust
-use std::{collections::HashMap, sync::Mutex};
+You want more memory? Just check if the size fits in our block, return that slice, increment our counter (bump!), and we're done. We can add more blocks as well, if we run out. This makes allocations very cheap, we don't need to keep much state around besides from a counter.
 
-struct OperationId(/* ... */);
+The downsides of this approach is when we come to *deallocate* memory. We don't keep track around where individual allocations are made. However, this actually solves our *drop takes a long time* problem, since we can just deallocate everything all at once.
 
-enum OperationState {
-    InProgress { /* ... */ },
-    Completed { /* ... */ },
+Essentially if the impl of the bump allocator is:
+
+```
+const SIZE: usize = 32 * 1024 * 1024;
+const LAYOUT: Layout = Layout::new::<[u8; SIZE]>();
+
+struct Bump {
+    // one big 32MiB block from the global allocator
+    data: NonNull<u8>,
+    // how much of it we've handed out
+    used: Cell<usize>,
 }
 
-impl OperationState {
-    // Here, `process_message` consumes self and returns self. In practice this
-    // is often because the state has some internal data that requires
-    // processing by ownership.
-    fn process_message(self, message: Message) -> Self {
-        match self { /* ... */ }
+impl Bump {
+    fn new() -> Self {
+        let data = Global.allocate(LAYOUT).expect("out of memory").cast::<u8>();
+        Bump { data, used: Cell::new(0) }
     }
 }
 
-struct Operations {
-    ops: Mutex<HashMap<OperationId, OperationState>>,
+impl Drop for Bump {
+    fn drop(&mut self) {
+        // hand the whole block back in one go
+        unsafe { Global.deallocate(self.data, LAYOUT) }
+    }
 }
 
-impl Operations {
-    /// Process a message, updating the internal operation state appropriately.
-    pub fn process(&self, id: &OperationId, message: Message) {
-        // Obtain a lock on the HashMap.
-        let mut lock = self.ops.lock().unwrap();
+unsafe impl Allocator for &Bump {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        // where we are in memory
+        let data = self.data.as_ptr();
 
-        // Once the lock has been acquired, it's guaranteed that no other
-        // threads have any kind of access to the data. So a `&mut` reference
-        // can safely be handed to us.
-        // 
-        // This step is shown for pedagogical reasons. Generally, `ops` is not
-        // obtained explicitly. Instead, lock.remove and lock.insert are used
-        // directly as `lock` dereferences to the underlying HashMap.
-        let ops: &mut HashMap<_, _> = &mut *lock;
+        // how much we've used of `data` already
+        let used = self.used.get();
 
-        // Retrieve the element from the map to process it.
-        let Some(state) = ops.remove(id) else {
-            // (return a not-found error here)
+        // given the requested alignment, how many bytes do we need past `data` + `used`
+        let alignment_padding = data.wrapping_add(used).align_offset(layout.align());
+
+        let start = used + alignment_padding;
+        let end = start + layout.size();
+
+        if end <= SIZE {
+            // bump!
+            self.used.set(end);
+            let ptr = unsafe { NonNull::new_unchecked(data.add(start)) };
+            return Ok(NonNull::slice_from_raw_parts(ptr, layout.size()));
         }
-        let next_state = state.process_message(message);
-        ops.insert(id.clone(), next_state);
 
-        // At this point, lock is dropped, and the mutex is available to other
-        // threads.
+        // an actual bump allocator would grab another block here
+        Err(AllocError)
+    }
+
+    unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
+        // deliberately a no-op!
     }
 }
 ```
 
-This is a very typical use of mutexes: to guard one or more *invariants* or *properties* of some kind. These invariants are upheld while the mutex is unlocked. In this case, the invariant being guarded is that `Operations::ops` has complete and up-to-date tracking of all in-progress and completed operations.
+Then we can use it like so:
 
-Of equal importance is the fact that, while the mutex is held, the invariant is *temporarily violated*. In order to process the message, we have to remove the state from the map, create a new state, then put it back into the map. During this period, `Operations::ops` is missing this one operation, so it no longer tracks all operations. But this temporary violation is okay, because no other threads see this in-between state. Before the mutex is released, this code is responsible for putting the operation back into the map.
-
-Is it always true that the operation is put back into the map? Unfortunately not always, in the presence of what I think of as *unexpected errors*. Many practitioners draw a separation between two different kinds of errors that a system can have. The terms *recoverable* and *unrecoverable* are sometimes used for them, but I tend to prefer the following terms (see also [some discussion by Andrew Gallant](https://burntsushi.net/unwrap/#what-about-recoverable-vs-unrecoverable-errors)):
-
-- An expected error is one that can occur in normal operation. For example, if a user specifies a directory to write a file to, and that directory is not writable, then that’s in the realm of expectations (maybe the user mistyped the directory, for example).
-- An unexpected error is one that cannot occur in normal operation. Andrew presents the example of a fixed string literal that is processed as a regex. A fixed literal baked into the program really ought to be valid as a regex, so any issues are unexpected.
-
-Generally, in Rust, expected errors are handled via the `Result` type, and unexpected errors are handled by [panicking](https://doc.rust-lang.org/book/ch09-01-unrecoverable-errors-with-panic.html). Now, there isn’t a firm requirement that things be this way.
-
-- For example, some high-availability systems may choose to model unexpected errors via a Result-like type (see the `woah` crate as an example).
-- Quick-and-dirty scripts may choose to handle both expected and unexpected errors as panics.
-- Panics can also be used for other purposes, e.g. to cancel in-progress work in synchronous Rust.
-
-But in typical production-grade Rust, expected errors are `Result`s while unexpected errors (and only unexpected errors) are panics. Lock poisoning is built around this assumption.
-
-### What if a panic occurs?[#](https://sunshowers.io/posts/on-poisoning/#what-if-a-panic-occurs)
-
-Consider what happens if a panic occurs in `OperationState::process_message`. This depends in part on the build flags and surrounding code, so let’s look closely at all the possibilities. In Rust, there are two ways to configure build flags on panic:
-
-- The default is to unwind, or to walk up the stack and run cleanup code. With unwinding, panics can also be caught at a higher level: in the same thread with `catch_unwind`, or in another thread via `JoinHandle::join`.
-- The alternative is to abort, which causes the whole process to crash without performing any cleanup.
-
-Some real-world applications (such as most of what we ship at [Oxide](https://oxide.computer)) abort on panic, but most of this post is actually moot for aborts. So in the rest of this post, we’re going to focus on the default unwind behavior.
-
-What do programs do on unwind?
-
-- If a panic is invoked in the context of a [`catch_unwind`](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html), an `Err(E)` is returned, where [the value `E`](https://doc.rust-lang.org/std/thread/type.Result.html) is whatever message or other payload the panic occurred with.
-- If there’s no `catch_unwind`, and the panic occurs on the main thread, then a message is printed out and the program exits with an error.Click to expand exampleConsider this simple program:`use std::{thread, time::Duration}; fn main() { panic!("This is a panic message"); } `This program prints out:`thread 'main' (502586) panicked at src/main.rs:2:5: This is a panic message note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace `and the program exits with a non-success exit code.
-- If there’s no `catch_unwind`, and the panic occurs on a different thread, then a message is printed out, and the panic message is returned as the result of [`JoinHandle::join`](https://doc.rust-lang.org/std/thread/struct.JoinHandle.html#method.join).Click to expand exampleIf you run this slightly more complex program:`use std::thread; fn main() { let join_handle = thread::spawn(|| { panic!("This is a panic message"); }); join_handle.join().expect("child thread succeeded"); } `Then it prints out:`thread '<unnamed>' (517242) panicked at src/main.rs:5:9: This is a panic message note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace thread 'main' (516882) panicked at src/main.rs:7:24: child thread succeeded: Any { .. } `and the program exits with a non-success exit code.An interesting thing to note here is that there were *two* panics: one in the spawned child thread with the `panic!` message, and one in the main thread when the `expect` was called. The panic responsible for producing the non-success exit code was the one that occurred in the main thread, not the child thread.
-- This raises the question: what if a non-main thread panics and the thread is *not* joined? With this program:`use std::{thread, time::Duration}; fn main() { thread::spawn(|| { panic!("This is a panic message"); }); thread::sleep(Duration::from_secs(5)); } `What gets printed out is:`thread '<unnamed>' (543640) panicked at src/main.rs:5:9: This is a panic message note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace `And the program exits with a successful exit code! There’s no indication that a panic occurred other than the message printed out, which can easily be missed.
-
-The upshot of all this is that panics in non-main threads are not magic. In order for the system to make decisions based on whether a panic occurred, it must process that, either with `catch_unwind` or via `JoinHandle::join`, and it’s all too easy to just ignore panics.
-
-Coming back to our `Operations` example above, what does that mean for our mutex’s critical section?
-
-- If the Rust binary is configured to unwind on panic; and
-- if a non-main thread panics in a critical section; and
-- if there’s no catch_unwind to catch the panic; and
-- if the child thread is not explicitly joined on, or a join does happen but the error is ignored—
-- then, the mutex invariant is permanently violated. The data guarded by the mutex is logically corrupted. The in-progress operation is lost!
-
-This might look like a lot of ifs, but they’re more common than you might think: they’re all either the default in Rust or a very common way to write code.
-
-Rust’s designers had the foresight to see this issue, and introduce *lock poisoning* as a detection mechanism for this failure mode. The way poisoning works is that:
-
-- At the time a lock is released, there’s a check for whether the thread is currently panicking. If it is, the mutex is marked poisoned.
-- Then, the next time a lock is acquired, rather than a MutexGuard, a `PoisonError` is returned.
-
-Almost all code immediately panics on seeing a `PoisonError` via `.lock().unwrap()`: this is often called *propagating panics*. But `PoisonError` can be handled more explicitly than that. Note that `PoisonError`, and poisoning more generally, is purely advisory: you can [retrieve the data underneath](https://doc.rust-lang.org/std/sync/struct.PoisonError.html#method.into_inner), and even [clear the poison bit](https://doc.rust-lang.org/std/sync/struct.Mutex.html#method.clear_poison) in Rust 1.77 and above.
-
-The fact is, though, that anything other than `.lock().unwrap()` is rare in practice. This is emphatically *not* a reason to remove poisoning, and in fact is a strong argument to *retain poisoning* while making the ergonomics better ([see below](https://sunshowers.io/posts/on-poisoning/#typing-in-lockunwrap-is-annoying)). What is important is *detection*, not *recovery*.
-
-So, putting it all together: if a child thread panics in a critical section, then it is quite possible that the data is in an inconsistent or logically corrupt state. To indicate this, the mutex is marked poisoned. If the child thread is not waited on by the parent, this might be the *only indication* that a panic previously occurred in a critical section!
-
-It is precisely this confluence of factors that makes lock poisoning such an important feature.
-
-## Unexpected cancellations[#](https://sunshowers.io/posts/on-poisoning/#unexpected-cancellations)
-
-Is the problem of inconsistent mutex-guarded state limited to panic unwinding? I’d argue that it is a property of *unexpected cancellations* more generally: you start executing a critical section thinking that it will be run to completion, but something causes that process to be interrupted.
-
-In Rust, there are two sources of unexpected cancellations, with strong parallels between them:
-
-- Panics, as discussed above.
-- In async Rust, future cancellations at an await point.
-
-As documented in Oxide [RFD 397](https://rfd.shared.oxide.computer/rfd/397#_example_with_mutexes) and [RFD 400](https://rfd.shared.oxide.computer/rfd/400#no_mutex), unexpected future cancellations have resulted in so many mutex invariant violations that we now avoid Tokio mutexes *entirely*<sup>[1](https://sunshowers.io/posts/on-poisoning/#fn:1)</sup>. My perspective here comes from much pain dealing with this issue in async Rust, and wanting very much for this footgun to not make its way to synchronous Rust.
-
-See [the appendix](https://sunshowers.io/posts/on-poisoning/#appendix-mutexes-and-future-cancellations) for more details.
-
-## Do panics in critical sections always cause invariant violations?[#](https://sunshowers.io/posts/on-poisoning/#do-panics-in-critical-sections-always-cause-invariant-violations)
-
-In other words, is poisoning often too conservative? My answer to this is that panics do not always cause invariant violations, but they’re so common, and the downsides of corrupt state so unbounded, that it is still valuable to have lock poisoning as a strong heuristic.
-
-Firstly, if all you’re doing is reading data that just happens to be guarded by a mutex (maybe because some other function writes to that data), a panic in the critical section can’t cause invariant violations. (But also, you may wish to use an [`RwLock`](https://doc.rust-lang.org/std/sync/struct.RwLock.html).)
-
-Secondly, some simple kinds of writes can also avoid causing invariant violations. For example if all you’re doing is updating some counters<sup>[2](https://sunshowers.io/posts/on-poisoning/#fn:2)</sup>:
-
-```rust
-#[derive(Default)]
-struct Counters {
-    read_count: u64,
-    write_count: u64,
+```
+struct Node<'a> {
+    value: u64,
+    parent: Option<&'a Node<'a>>,
 }
 
-let mutex = Mutex::new(Counters::default());
-// On read:
-*mutex.lock().unwrap().read_count += 1;
-// On write:
-*mutex.lock().unwrap().write_count += 1;
+// our bump allocator
+let bump = Bump::new();
+
+// leak here gives us a ref tied to the arena, the memory still goes when we drop our allocator
+let mut leaf: &Node = Box::leak(Box::new_in(Node { value: 0, parent: None }, &bump));
+
+for i in 1..1_000_000 {
+    leaf = Box::leak(Box::new_in(Node { value: i, parent: Some(leaf) }, &bump));
+}
+
+// this takes virtually no time at all!
+drop(bump);
 ```
 
-Finally, it is sometimes possible to carefully architect code to be [unwind safe](https://doc.rust-lang.org/std/panic/trait.UnwindSafe.html), such that if a panic occurs, either:
+There are a few tradeoffs for doing things like this in a bump allocator, and not *every* allocation is going to benefit. Hence why it's important to be able to adjust our allocation strategy locally rather than just globally. However, an astute reader might notice that, if we are bumping large swathes of memory, this is going to possibly cause our memory usage to increase considerably. Well, that brings us to our next section: memory accounting.
 
-- internal invariants are not violated; or
-- the violation can easily be detected (effectively tracking the poison bit internally rather than in the Mutex wrapper).
+## Allocators can let us know how much memory they're using
 
-For example, the standard library’s `HashMap` and `BTreeMap` are architected this way. In our `Operations` example, we could, rather than removing the operation from the map entirely, replace it with an `Invalid` sentinel state.
+The next challenge that can be solved by custom allocators is knowing *how much* memory particular sections of code is being used. I.e, memory accounting. The key here is that, we can use existing allocators, and sprinkle in some extra bookkeeping to keep a pretty accurate ledger.
 
-In these cases, it is true that a panic in a critical section is not harmful, and that the typical `.lock().unwrap()` approach will reduce system availability. But the important thing to keep in mind is that **code changes over time**. One of the things I like about Rust is how resilient it is to changes over time: by encoding properties like mutable access into the type system, Rust makes it that much harder for new team members (or even yourself six months from now) to screw up. However, [like async cancel safety](https://sunshowers.io/posts/cancelling-async-rust/#systematic-solutions), unwind safety is not encoded in Rust’s type system<sup>[3](https://sunshowers.io/posts/on-poisoning/#fn:3)</sup>, so it’s easy for code that’s fine today to be wrong tomorrow.
+There are a number of use cases that accounting can shape the behaviour of code. Say you have a cache of objects, and you want to set a threshold above which, we start evicting entries. Or say you want to do an external sort, but you don't know how big your data structures are at the start, but you want to use up as *much* memory as possible. Or maybe you are wanting to place a limit on a code sandbox, because it's sharing resources with other sandboxes.
 
-The main downside to a `.lock().unwrap()` that misfires is reduced availability and denial of service. But the downsides to an undetected panic are unbounded, and can range from denial of service all the way to “(part of) an HTTP request ending up [sent to a party it should not have been sent to](https://github.com/rust-lang/rust/issues/134645#issuecomment-3584117188),” or in other words personal information leakage.
+What you can do is wrap an allocator, with a custom accounting layer, and use this to drive your decisions. I.e, here is a very trivial example:
 
-A downside that (while [potentially serious](https://blog.cloudflare.com/18-november-2025-outage/)) is bounded, versus the kind of flaw that can kill an organization—I know which default I want.
-
-**What about writing panic-free code?** You can carefully write your critical sections to not have panics. But that is a property that’s especially hard to maintain as code changes over time. Even something as simple as a `println!` can panic. Also, if the critical section can’t panic, then it doesn’t matter whether the mutex poisons or not.
-
-## Where else can panics cause invariant violations?[#](https://sunshowers.io/posts/on-poisoning/#where-else-can-panics-cause-invariant-violations)
-
-A bit of history here: in Rust 1.0, panics could only be detected at thread boundaries via [`JoinHandle::join`](https://doc.rust-lang.org/std/thread/struct.JoinHandle.html#method.join). This meant that back then, the only way for panics to cause invariant violations was for:
-
-- shared data to be guarded by a mutex
-- a thread to panic in the middle of a critical section
-
-Since then, two Rust features were added:
-
-- `catch_unwind` in Rust 1.9.
-- Scoped threads in Rust 1.63.
-
-With both of these, you can operate on arbitrary data (i.e. not just data guarded by a mutex) and leave it in an inconsistent state. To see how, let’s rewrite the `Operations` example above to not have a mutex inside of it, and to require exclusive access to make any modifications to it.
-
-```rust
-#[derive(Default)]
-struct Operations {
-    ops: HashMap<OperationId, OperationState>,
+```
+struct AccountedAllocator<A: Allocator> {
+    inner: A,
+    allocated: AtomicUsize,
 }
 
-impl Operations {
-    /// Process a message, updating the internal operation state appropriately.
-    /// 
-    /// Note: this now requires &mut self, not just &self.
-    pub fn process(&mut self, id: &OperationId, message: Message) {
-        // Retrieve the element from the map to process it.
-        let Some(state) = self.ops.remove(id) else {
-            // (return a not-found error here)
+impl<A: Allocator> AccountedAllocator<A> {
+    fn new(inner: A) -> Self {
+        Self { inner, allocated: AtomicUsize::new(0) }
+    }
+
+    fn allocated(&self) -> usize {
+        self.allocated.load(Ordering::Relaxed)
+    }
+}
+
+unsafe impl<A: Allocator> Allocator for &AccountedAllocator<A> {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        // pass the allocation through, and count it if it succeeded
+        let ptr = self.inner.allocate(layout)?;
+        self.allocated.fetch_add(layout.size(), Ordering::Relaxed);
+        Ok(ptr)
+    }
+
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        unsafe { self.inner.deallocate(ptr, layout) };
+        self.allocated.fetch_sub(layout.size(), Ordering::Relaxed);
+    }
+}
+```
+
+Then we can wrap the global allocator, and see how much our cache is using:
+
+```
+let accounted = AccountedAllocator::new(Global);
+
+let mut cache: Vec<u8, _> = Vec::new_in(&accounted);
+
+cache.extend_from_slice(&[0; 1024]);
+// cache is using 1024 bytes
+println!("cache is using {} bytes", accounted.allocated());
+
+cache.extend_from_slice(&[0; 4096]);
+// cache is using 5120 bytes
+println!("cache is using {} bytes", accounted.allocated());
+
+drop(cache);
+// cache is using 0 bytes
+println!("cache is using {} bytes", accounted.allocated());
+```
+
+### Shameless Plug: the Thresher crate
+
+Now, a single atomic, while is great for an example, does have some perf overhead. So, one of the crates that I have created, while keeping in mind performance, is [`thresher`](https://github.com/cetra3/thresher): an accounting allocator with a callback on threshold. It uses a combined "local" task/thread and "global" counter to avoid atomic contention, feeding back in every 64KiB of allocation.
+
+[`thresher`](https://github.com/cetra3/thresher) gets its name from the *cutest* shark: the [Thresher Shark](https://en.wikipedia.org/wiki/Thresher_shark).
+
+Now, what you can do with [`thresher`](https://github.com/cetra3/thresher) is, use it to trigger callbacks when allocations are hit:
+
+```
+let thresher = Thresher::new();
+thresher.set_callback_threshold(100 * 1024 * 1024);
+thresher.set_callback(|allocation| {
+    println!("Threshold reached! Allocated: {} bytes", allocation);
+});
+
+// This is what we're adding to our vec each loop
+let bytes = vec![0u8; 10 * 1024 * 1024];
+
+// The vec allocates through the handle, so its buffer counts towards the
+// threshold. `bytes` above uses the global allocator and is not counted
+let mut vec = Vec::<u8, _>::new_in(thresher.handle());
+
+for i in 0..10 {
+    println!("Loop {i}, Vec Capacity: {}", vec.capacity());
+    vec.extend(&bytes);
+}
+```
+
+This prints out what you'd expect:
+
+```
+Loop 0, Vec Capacity: 0
+Loop 1, Vec Capacity: 10485760
+Loop 2, Vec Capacity: 20971520
+Loop 3, Vec Capacity: 41943040
+Loop 4, Vec Capacity: 41943040
+Loop 5, Vec Capacity: 83886080
+Loop 6, Vec Capacity: 83886080
+Loop 7, Vec Capacity: 83886080
+Loop 8, Vec Capacity: 83886080
+Threshold reached! Allocated: 167772160 bytes
+Loop 9, Vec Capacity: 167772160
+```
+
+One production use case, is that we're using [`thresher`](https://github.com/cetra3/thresher) on [logfire](https://pydantic.dev/logfire) to provide us heap profiles of our rust services when memory hits a configured threshold. I did a deep dive into heap profiles and why they are extremely useful in an older blog: [a tale of two lengths](https://cetra3.github.io/blog/a-tale-of-two-lengths/). In thresher you can find a [jemalloc example](https://github.com/cetra3/thresher/blob/main/examples/jemalloc.rs) where you can instrument this yourself!
+
+OK so we can control memory when it is dropped, we can use memory accounting to know how much memory we're using, what's left? How about where it goes?
+
+## Allocators can control where memory lives
+
+This is probably the more esoteric of the 3 examples I wanted to give. There are some situations where you actually need to control where the memory lives, and sometimes by doing some allocation tricks you can get better performance out.
+
+### Allocating on the stack
+
+One example would be what [`smallvec`](https://github.com/smallvec/smallvec) and friends do. Instead of going straight to the heap to allocate things, they have a small amount that lives on the stack, and *only* if allocations go above a certain size, then do they write to the heap.
+
+While `smallvec` is more battle tested, here is some example code about how you could do this with the allocator API:
+
+```
+const SIZE: usize = 8192;
+
+struct SmallStack {
+    // store the first 8KiB on the stack
+    data: UnsafeCell<[MaybeUninit<u8>; SIZE]>,
+    // how much we've already allocated on our stack
+    used: Cell<usize>,
+}
+
+impl SmallStack {
+    fn new() -> Self {
+        Self {
+            data: UnsafeCell::new([MaybeUninit::uninit(); SIZE]),
+            used: Cell::new(0),
         }
-        let next_state = state.process_message(message);
-        self.ops.insert(id.clone(), next_state);
+    }
+}
+
+unsafe impl Allocator for &SmallStack {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        // where we are in memory
+        let data = self.data.get().cast::<u8>();
+
+        // how much we've used of `data` already
+        let used = self.used.get();
+
+        // given the requested alignment, how many bytes do we need past `data` + `used`
+        let alignment_padding = data.wrapping_add(used).align_offset(layout.align());
+
+        let start = used + alignment_padding;
+        let end = start + layout.size();
+
+        // if we have enough on our local stack:
+        if end <= SIZE {
+            self.used.set(end);
+            let ptr = unsafe { NonNull::new_unchecked(data.add(start)) };
+            Ok(NonNull::slice_from_raw_parts(ptr, layout.size()))
+        } else {
+            // otherwise allocate on the standard heap
+            Global.allocate(layout)
+        }
+    }
+
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        let data = self.data.get().addr();
+
+        // if this isn't an address in our data
+        if !(data..data + SIZE).contains(&ptr.as_ptr().addr()) {
+            unsafe { Global.deallocate(ptr, layout) };
+        }
     }
 }
 ```
 
-Since there are no mutexes involved any more, this is no longer a critical section in the classical sense. But note that we still have the invariant that `ops` tracks all operations. This invariant *is* temporarily violated, with the idea that it’ll be restored before the function returns. Since `&mut` means nothing else has any kind of access (read or write) to this data, we know that this in-between state is not seen by anybody else.
+Then we can use our toy stack first allocator:
 
-But just like with mutexes, this breaks down with unwinding. With `catch_unwind`, you can do:
+```
+// needs to live longer than our vec
+let stack = SmallStack::new();
 
-```rust
-use std::panic;
+let mut vec: Vec<u32, _> = Vec::new_in(&stack);
 
-let mut operations = Operations::default();
-// ...
+// fits in our stack data buffer
+for i in 0..32 {
+    vec.push(i);
+}
 
-let result = panic::catch_unwind(|| {
-    operations.process(id, message);
-});
+// will eventually spill to the heap
+for i in 32..10_000 {
+    vec.push(i);
+}
 ```
 
-And with scoped threads, you can do:
+Et voila! We have smaller allocations on the stack and then push to the heap as needed. This can give some good performance boosts.
 
-```rust
-use std::thread;
+### Allocating with stronger alignment
 
-let mut operations = Operations::default();
-// ...
+Normally when you align memory allocations, this is based upon the thing that is being allocated for. I.e, is it a `u64`? align to 8 bytes or a `u32`? align to 4. If it's not correctly aligned, this can cause undefined behaviour and all sorts. You notice in both the bump and small stack example I had to do some shenanigans to find the next appropriately aligned address. However, there is *some* scenarios where the alignment of memory is external to what is being allocated.
 
-thread::scope(|s| {
-    let join_handle = s.spawn(|| {
-        operations.process(id, message);
-    });
-});
+In linux, when you read anything from disk via standard syscalls, you are *usually* reading from the kernel's page cache. I.e, the spare memory the kernel has around to make things transparently fast. Most of the time that is fine, but there are some times when you want to bypass it.
+
+I.e, there is a [**long** standing bug in kubernetes](https://github.com/kubernetes/kubernetes/issues/43916) that can cause pod eviction if you are using the page cache. Or: if you are doing your own caching layer, sometimes it doesn't make sense to double up on memory devoted to caching files.
+
+So, there is a bailout provided, in the guise of `O_DIRECT` that allows you to *directly* access files from the file system. However: one of the requirements of using this flag is that you are reading or writing into memory that is aligned to the device's logical block size. This is *usually* a multiple of 512, but can be less or more depending on the hardware.
+
+The implementation of a block aligned allocator is pretty simple, here's one where we just hardset it to `4096`:
+
+```
+#[derive(Clone, Copy)]
+struct BlockAligned;
+
+// hard set here, but we could make this derived from the device itself!
+const BLOCK_SIZE: usize = 4096;
+
+unsafe impl Allocator for BlockAligned {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let layout = layout.align_to(BLOCK_SIZE).map_err(|_| AllocError)?;
+        Global.allocate(layout)
+    }
+
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        let layout = layout.align_to(BLOCK_SIZE).expect("layout must come from BlockAligned");
+        unsafe { Global.deallocate(ptr, layout) }
+    }
+}
 ```
 
-If a panic occurs in `process_message`, `Operations` is logically corrupted. This failure mode has resulted in a proposal to have a `Poison<T>` wrapper that poisons on panicking. That *absolutely* makes sense and is worth pursuing.
+With this, we can now write simple code to read directly using `O_DIRECT`:
 
-## Separating mutexes from poisoning?[#](https://sunshowers.io/posts/on-poisoning/#separating-mutexes-from-poisoning)
+```
+let mut buf: Vec<u8, BlockAligned> = Vec::new_in(BlockAligned);
+buf.resize(BLOCK_SIZE, 0);
 
-But, along with the `Poison<T>` wrapper, there are [some suggestions](https://github.com/rust-lang/rust/issues/134645#issuecomment-3590942770) to go further and suggest that the current `std::sync::Mutex` type should be changed in the next Rust edition to, instead of poisoning on panic, **silently unlock**. (And also, as a followup, that the current `Mutex<T>` should instead become `Mutex<Poison<T>>`.)
+let mut file = OpenOptions::new()
+    .read(true)
+    .custom_flags(libc::O_DIRECT)
+    .open(path)?;
 
-(It’s worth noting that there’s another non-poisoning option: the mutex stays locked forever, as C programmers might expect. This option is somewhat appealing because it is safe by default, in a sense. But once a thread is stuck waiting on the mutex, there’s [no easy way to recover](https://sunshowers.io/posts/nextest-process-per-test/#appendix). So it’s not panics that propagate, it’s stuck threads. This seems strictly worse than a poisoning mutex to me, so I’ll assume the proposal means silent unlocking.)
+file.read_exact(&mut buf)?;
+```
 
-I first want to give credit to this proposal: it is quite beautiful.
+Here, the `read_exact` call *can* fail on some devices if we're not using block size aligned allocations.
 
-- It’s more composable. The Poison wrapper can be used with arbitrary mutexes, so you can use it with mutexes such as `parking_lot` that silently unlock on panic today. Single-threaded mutex equivalents like `RefCell` can also benefit from poisoning.
-- With Rust’s philosophy of zero-cost abstractions, only users who need poisoning pay for it.
-- As observed above, not all mutexes need poisoning, and poisoning is useful without mutexes, so the two are seemingly independent of each other.
+Like with the stack first allocation, there are libraries that allow you do this already, such as the [`aligned-vec`](https://github.com/sarah-quinones/aligned-vec) crate, with their own data types to work nicely.
 
-While all of these are true, I keep coming back to how unbounded the downside of an undetected panic is, and how easy it is to get wedged in this state. Mutexes and poisoning have value separate from each other, but I don’t think they are as independent as they seem at first. My understanding from writing Rust code over many years is that almost all uses of mutexes benefit from poisoning, and almost all instances of poisoning one needs to care about are with mutex-guarded data.
+But here's the rub: say you had an application where you wanted to blend and mix in different allocation strategies: some vecs you want to be block aligned, some you want allocated on the stack, but you want to be able to use shared methods for both. Do we *want* to use `smallvec` and `aligned-vec` in order to deal with a data structure that is essentially the same thing, just *allocated* differently?
 
-**Why are mutexes special?** As we’ve established above, poisoning can make sense in non-mutex contexts too. What makes mutexes a particularly valuable place to have it? The reason has to do with what I like to call the [*cancellation blast radius*](https://rfd.shared.oxide.computer/rfd/0400#_cancel_correctness). Corrupted data only matters if it is shared mutable state: changed in a way that resulted in an invariant violation, and visible outside of where the failure occurred. If a typical `&mut` reference panics in the middle of an operation, it’s likely that the data it is referring to will also be torn down, in which case those invariant violations don’t matter<sup>[4](https://sunshowers.io/posts/on-poisoning/#fn:4)</sup>. But the whole *point* of mutexes is that they’re shared across threads! So data corruption is almost certain to be externally visible.
+std allocators allows you to be *generic* over the collections, regardless of allocator used:
 
-There are some use cases that would benefit from non-poisoning mutexes, like metrics and best-effort logging, but those cases shouldn’t drive the *default*.
+```
+fn do_something<A: Allocator>(my_vec: &mut Vec<u32, A>) {}
+```
 
-More specifically, I am worried that a common complaint about lock poisoning ([see below](https://sunshowers.io/posts/on-poisoning/#typing-in-lockunwrap-is-annoying)) is that it has too much friction. Having to use `Mutex<Poison<T>>` instead of `Mutex<T>` *adds even more friction*, so people are going to opt for non-poisoning mutexes more of the time. This is going to lead to grave mistakes in production.
+And I think that's pretty powerful.
 
-This is a spot where zero-cost abstractions and safety by default are seemingly at odds with each other. I would like to see performance numbers to quantify this better, but if I may hazard a guess, the incremental cost of checking the poison flag (a single [atomic load](https://github.com/rust-lang/rust/blob/1d60f9e070c1039b263e0f035c0f03dfcc610d0f/library/std/src/sync/poison.rs#L141) with relaxed ordering) is minimal compared to the cost of acquiring the lock in the first place.
+## Conclusion and wrapping up
 
-## What about `parking_lot` mutexes?[#](https://sunshowers.io/posts/on-poisoning/#what-about-parking_lot-mutexes)
+It's going to take a bit of time for the ecosystem to catch up to custom allocators. A lot of popular crates have an MSRV policy that precludes them from using even new standard features, and some existing crates, which I would think are a shoe in for the new allocator API, as of writing do not yet have support.
 
-I mentioned earlier that `parking_lot`’s mutexes silently unlock on panic. A large chunk of the Rust ecosystem uses `parking_lot` today, often for performance reasons. Does that mean that code using `parking_lot` has these unbounded downsides?
+The libs team isn't done yet. This is the MVP of allocators, and, like I mentiond in the [the last article](https://cetra3.github.io/blog/state-of-allocators-2026-part-2), this is the *beginning* of custom allocator support. There is still work to go to support other collection types like maps etc.. so much to be done. I think that what we have is useful enough to start using it now, and also to start adapting and allowing library consumers the ability to provide their own allocators with their API.
 
-The answer depends on a bunch of things, but in general (and especially in library code) that is indeed what I’m suggesting. For instance, [this critical section in `parity-db`](https://github.com/paritytech/parity-db/blob/a9c0e8517868ed513a50754940cd0ebc40a4a34d/src/db.rs#L679-L732) is quite large. Reasoning about whether it’s unwind-safe seems very difficult to me; this is exactly the kind of code that mutex poisoning does well to guard against.
-
-In this case, the binary [is configured](https://github.com/paritytech/parity-db/blob/a9c0e8517868ed513a50754940cd0ebc40a4a34d/Cargo.toml#L42-L43) to abort on panic, so it’s fine. But reusable Rust libraries *cannot* require `panic = 'abort'`, and if this code were in a library on `crates.io`, it would be a real cause for concern.
-
-## Just ship with `panic = 'abort'`?[#](https://sunshowers.io/posts/on-poisoning/#just-ship-with-panic--abort)
-
-A common response to this class of issue is to not bother with any of this unwinding stuff, and always abort on panic. This comes back to the idea of the cancellation blast radius described above: aborting the process on panic guarantees that in-memory state is torn down.
-
-I have a lot of sympathy for this idea! This is what we do at Oxide. (Why am I writing this post if it doesn’t affect my workplace? Well, first, I care about the health of Rust more generally. Second, libraries must work with unwinds. But most importantly, we *have* seen the pain of unexpected async cancellations at Oxide, so we *know* how bad it can be.)
-
-But also, that works *fine* with the current approach: `.lock().unwrap()` always succeeds. Whether mutexes poison or not only matters with `panic = 'unwind'`.
-
-This leads to what I think is driving a lot of discussion here:
-
-## Typing in `.lock().unwrap()` is annoying[#](https://sunshowers.io/posts/on-poisoning/#typing-in-lockunwrap-is-annoying)
-
-I get this complaint. I really do. Having to write `.lock().unwrap()` everywhere sucks. It’s extra characters in a language already filled with syntax noise. It can cause `rustfmt` to format your line of code across multiple lines.
-
-These are all valid points. But there is a much better solution for them, one that doesn’t give up the very important benefits of poisoning: in the next Rust edition, make `lock()` automatically panic if the mutex is poisoned! (And add a `lock_or_poison` method for the current behavior<sup>[5](https://sunshowers.io/posts/on-poisoning/#fn:5)</sup>).
-
-It’s worth comparing the different options here:
-
-| Aspect | `lock().unwrap()` | Auto-panic | Removing poison |
-| --- | --- | --- | --- |
-| **Syntax noise** | Medium: `.unwrap()` everywhere | Low: just `lock()` | Low by default, high with `Poison<T>` |
-| **Safety by default** | ✅ Panics propagate | ✅ Panics propagate | ❌ Silent corruption possible |
-| **Opt-out available** | ✅ `lock().unwrap_or_else()` | ✅ `lock_or_poison()` | ❌ Must opt *in* via `Poison<T>` |
-| **Works with `panic = 'abort'`** | ✅ | ✅ | ✅ |
-| **Ergonomics** | Poor | Good | Good without poison, poor with |
-| **Backwards compatibility** | Current behavior | Requires new edition | Requires new edition |
-
-Based on this table, I believe the answer is clear: if a breaking change is going to happen, it’s much better to make `lock` automatically panic than to make panics silently unlock.
-
-## Conclusion[#](https://sunshowers.io/posts/on-poisoning/#conclusion)
-
-Concurrent programming is very difficult. Rust makes it easier than most other languages, and lock poisoning is an important part of the story. Let’s avoid introducing any regressions here.
-
-Providing a `Poison<T>` wrapper makes a lot of sense. Making the default `std::sync::Mutex` silently unlock on panic would, however, be a mistake.
-
-Should Rust’s standard library even provide non-poisoning mutexes? That’s a harder question. I’m worried that their mere presence in the standard library will lower the barrier to people doing the wrong thing, particularly in libraries where `panic = 'abort'` cannot be assumed. But I think non-poisoning mutexes have some legitimate uses, so I don’t object too strenuously if the tradeoffs are carefully documented.
-
-Writing all this out was very helpful to me in getting my thoughts straight, and I hope it’s helpful to you too.
-
-*Cover photo by [Karen Rustad Tolva](https://wandering.shop/@aldeka/109301243634789356), used with permission. Thanks to [Fiona](https://infosec.exchange/@munin) and several of my colleagues at Oxide for reviewing drafts of this post. Any errors in it are my own.*
-
-*Discuss on [Hacker News](https://news.ycombinator.com/item?id=46125903), [Lobsters](https://lobste.rs/s/vkyrtf/defense_lock_poisoning_rust), and [/r/rust](https://www.reddit.com/r/rust/comments/1pck69k/in_defense_of_lock_poisoning_in_rust_by_sunshowers/).*
-
-*Updated 2025-12-06: Added a section to* [Separating mutexes from poisoning](https://sunshowers.io/posts/on-poisoning/#separating-mutexes-from-poisoning) *on what makes poisoning particularly valuable for mutexes, more than in other contexts.*
-
-## Appendix: Mutexes and future cancellations[#](https://sunshowers.io/posts/on-poisoning/#appendix-mutexes-and-future-cancellations)
-
-Unlike panics, the standard library’s mutex does not poison on future cancellations. (I believe it’s not possible to poison on future cancellations with the RAII pattern.)
-
-- There is a saving grace here: most people use the Tokio executor, which typically requires spawned tasks to be `Send`: transferable between OS threads while suspended at an await point.
-- The standard library’s MutexGuard is not transferable between OS threads, which prevents await points in a critical section.
-
-But wait! Tokio provides its own [`Mutex` type](https://docs.rs/tokio/1/tokio/sync/struct.Mutex.html), which *is* sendable to another thread. This means that it *is* possible to put an await point in a critical section, and so the issue of unexpected cancellations within a critical section rears its ugly head with Tokio mutexes.
-
-1. Tokio mutexes also do not poison if the critical section panics. At Oxide we abort on panic so this matters less as a reason to avoid them, but is yet another asterisk that pushes me away from them. [↩︎](https://sunshowers.io/posts/on-poisoning/#fnref:1)
-2. A more typical way to manage simple counters is with [an atomic](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU64.html), but if the data is more complex than just an integer, a mutex may be necessary. [↩︎](https://sunshowers.io/posts/on-poisoning/#fnref:2)
-3. Rust does have some [rudimentary support for unwind safety](https://doc.rust-lang.org/std/panic/trait.UnwindSafe.html) in the type system, but it is more of a suggestion that most users [ignore](https://doc.rust-lang.org/std/panic/struct.AssertUnwindSafe.html), and because of that there’s [a proposal](https://github.com/rust-lang/rfcs/pull/3260) to remove it from Rust. [↩︎](https://sunshowers.io/posts/on-poisoning/#fnref:3)
-4. The exception is `Drop` implementations, which may have to be written robustly to guard against temporary invariant violations. [↩︎](https://sunshowers.io/posts/on-poisoning/#fnref:4)
-5. The more obvious `try_lock` is [already taken](https://doc.rust-lang.org/std/sync/struct.Mutex.html#method.try_lock). [↩︎](https://sunshowers.io/posts/on-poisoning/#fnref:5)
+I'm excited to see what people build, and what other use cases are unlocked with it!
