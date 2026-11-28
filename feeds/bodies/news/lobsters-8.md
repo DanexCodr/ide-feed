@@ -1,220 +1,72 @@
-It took months, but here we are: **the whole Pimalaya CLI family is released at once**, at the top of the first stable version of the [pimdir](https://github.com/pimalaya/pimdir) standard. Here the list:
+*The fourth in a five-part series on European-funded open source projects in hardware and software.*
 
-- Himalaya `v3.0.0`, the CLI to manage mails.
-- Neverest `v1.0.0`, the CLI to synchronize mails, contacts and calendars.
-- Cardamum `v1.0.0`, the CLI to manage contacts.
-- Calendula `v1.0.0`, the CLI to manage calendars.
-- Carillon `v1.0.0`, the CLI to watch mailboxes, address books and calendars, and fire hooks.
-- Ortie `v3.0.0`, the CLI to manage OAuth tokens (released 5 days earlier).
-- Comodoro `v3.0.0`, the CLI to manage timers (released 5 days earlier as well).
-- pimdir storage `v1.0.0`, sync `v1.0.0` and search `v1.0.0`, plus its Rust implementation io-pimdir `v1.0.0`.
+#### Three Homes, No Data Center
 
-Most of them are majors, and they all break something for somebody. This post explains why, how, and where it goes from here. It is long, feel free to jump to the tool you care about.
+Deuxfleurs, a French nonprofit, keeps its servers in members' homes in Lille, Nantes, and Massy: two or three second-hand Lenovo ThinkCentre mini PCs each, with a copy of the same data so its websites stay up when one of them loses power or fiber line. Quentin Dufour, one of the founders, says some major French websites already serve their pages from this setup. Next, the collective wants its email to work the same way.
 
-## Why everything at once
+The software for self-hosting email in this manner is called Aerogramme, and it isn't finished. Deuxfleurs still runs its own mail on Dovecot, a long-established open source mail server, and plans to move to Aerogramme around January 2027.
 
-In [Another year with NLnet](https://blog.pimalaya.org/another-year-with-nlnet/) I said this year was about consolidation and about a standard for PIM on disk. This release is the result of both.
+The collective is heading the opposite way from almost everyone else. According to the independent daily DNS measurements published by RIPE Labs, email for the million busiest domains on the web has consolidated dramatically: In 2016, 44.6 percent of these domains used small or self-hosted servers, and that share halved to 22.4 percent by July 2026. Small regional hosting companies and independents are losing accounts to corporate providers like Google and Microsoft, who together handled 38.6 percent of these busy domains.
 
-The thing is, every piece is now connected:
+Email is older than the Internet itself, and it still runs on open standards anyone can implement. Any server can deliver to any other, and any standards-compliant client can read any mailbox. It’s the hosting that has concentrated into a very few hands, eroding autonomy and giving hosting providers power over the data that travels through digital correspondence.
 
-- All the CLIs sit on the same libs (IMAP, SMTP, JMAP, DAV, the Google and Microsoft APIs, OAuth, HTTP, TLS).
-- All the CLIs share the same kit: the same configuration loader, the same output contract, the same exit codes, the same REPL and the same MCP server.
-- Neverest syncs every account into one pimdir store, and Himalaya, Cardamum, Calendula and Carillon read it, search it and queue their writes into it.
+Two cases illustrate how this can limit operational independence. In May 2025, staff at the International Criminal Court (ICC) told the Associated Press that the court's chief prosecutor lost access to his Microsoft email account after he was named in US sanctions; Microsoft denies suspending services but hasn’t explained what happened to his account. In February 2026, the Dutch government told its parliament that the tax administration was moving about 40,000 workplaces to Microsoft 365 for lack of a short-term alternative, while acknowledging that Microsoft could be forced under state pressure to stop delivering services.
 
-Releasing them one by one meant releasing tools that disagree with each other: one version of the store here, another version of the output there. So I decided to bring every tool to release level first, then to release them all together. It took way longer than I wanted, but this way what you install today is one coherent family.
+The Dutch government reversed course in October: The tax administration, customs, and the benefits agency will run mail and calendar on their own servers from 2027, with European open source tools for storage and collaboration to follow. The question now: How are developers working to decentralize email hosting on a wider scale? Each obstacle pushing organizations off of small or self-hosted email servers has open source projects working on a solution. Three of them show how the pieces fit; all of them supported by NGI Zero, the EU-funded programs that enable open source research and development.
 
-The other reason is the contract. The CLIs are not only used by humans anymore: they are used by scripts, by frontends (the Vim plugin, the TUI, the Android app), and by AI agents through MCP. All of them need a **stable, versioned contract**: the same JSON shapes, the same error codes, the same exit codes. Majors are the right moment to fix it, and from now on it should not move anymore without a new major.
+#### How Email Got Away from Us
 
-## How it was done
+In the 1990s, running your own mail server was ordinary. Universities and small companies did it, and so did Mauro De Gennaro. In 1993, as a teenager, he fetched mail for users of his bulletin board over UUCP: the dial-up protocol Unix machines used to exchange mail. He has worked on mail software for most of the three decades since. When he looked at the open source stack again about six years ago, he saw "it's the same software that companies and servers have been using for over 20 years."
 
-Few things made this release possible.
+He counts 12 separate programs to run a conventional self-hosted setup. Each has its own configuration format and logs, written by different people in different styles. The software works well, he says, but was "designed and documented for other developers." Bundles such as Mailcow and Mail-in-a-Box install the whole set at once: “They abstract the complexity," De Gennaro says, "but they do not remove it." Since all of it was designed for a single machine, running it as a cluster server is possible in the same way it's possible to take a Fiat Cinquecento and turn it electric: "It was not designed for that." Google launched Gmail into that friction in 2004, with a gigabyte of free storage, and let companies run their own domain's mail on it. "Then they started billing," De Gennaro says. The users were captive, and moving email is disruptive enough that few of them left.
 
-**Specs before code.** Every repository has a cairn/ folder holding its living spec, its change proposals and a dated log. Every behaviour change goes through a proposal, then gets folded into the spec. This way the truth is written somewhere, and not only in my head.
+Ben Bucksch joined the Mozilla mail team in the late 1990s, where his first contribution made email links clickable; he also served in leadership for the Thunderbird Council and invented AutoConfig, which lets a mail client set up an account from nothing but an email address. In his telling, the lock-in started within the client.
 
-**One shared kit.** The [pimalaya-cli](https://github.com/pimalaya/cli) and [pimalaya-config](https://github.com/pimalaya/config) libs hold everything the CLIs have in common: the output contract, the error codes, the REPL, the MCP server, the configuration loading. In fact most of the work of this release was moving code from the CLIs into this kit, and deleting the copies.
+IT departments think about email as servers; “what users want is to keep their workflow," Bucksch says. Microsoft shaped those workflows with Outlook's calendar and corporate features: Outlook works properly only with Microsoft Exchange, and Microsoft is pushing Exchange customers into its cloud. By some estimates, about 75 percent of professional mailboxes are on Office 365. "If we want to free the lock-in," he says, "we need to start with the client."
 
-**One unified API, as a union.** Before, the commands shared by every backend were the *intersection* of what the backends could do: if one backend could not do it, nobody could. Now it is the *union*: each backend registers the capabilities it really serves, with the same observable result as the others, and a command an account cannot serve fails before even connecting, with a clear `capability-missing` code.
+Dufour and Armaël Guéneau of Deuxfleurs locate the problem in operations. IMAP is the protocol most clients use to read mail. An IMAP server has to serve webmail that queries the server for every view, desktop clients such as Thunderbird that synchronize whole mailboxes, and phones that do some of each. Implementing it is hard; the reliability people expect is harder. When the tax office sends you an email, Dufour says, "it must work." The expertise to run mail at that level, Guéneau says, "tends to be captured by hyperscalers."
 
-**Measured gates for pimdir.** Audits always find something, so "no new finding" never ends. Instead, I built a test generator that produces stores, remote states and an oracle from a seed, and ran campaigns of 4,180 jobs against io-pimdir: crashes injected at every step, the search index checked against a full rebuild after each event, the sync engine replayed against scripted servers. The rule was simple: 2 campaigns in a row without any spec break, then freeze. Campaign 1 found one, campaigns 2 and 3 were clean, a late fix restarted the count, then campaigns 4 and 5 were clean. Freeze.
+As Dufour tells it, Google didn't adapt existing mail software; it built Gmail on top of its distributed storage. Open source mail software was designed for one machine first, so adding distribution later, he says, requires "really huge trade-offs."
 
-**Live tests on real providers.** Every CLI was tested against real accounts: Google, Microsoft, Fastmail and iCloud, plus few Chinese providers for Himalaya (QQ, 163, 139). A last "live night" just before the release found few bugs that went straight into the libs.
+Reclaiming email is more complex than deciding to run your own server and navigating the software. Your service has to fluently speak with the large providers and support migration without disrupting service. And, of course, it needs sustainable funding.
 
-**Libs first, apps after.** The libs were released between the 13th and the 25th of November, the apps then moved to them without any patch or git pin. Everything you install comes from crates.io.
+Today, publicly funded teams are working on solving each of those three problems.
 
-## pimdir `v1`, the foundation
+#### Rebuilding Server, Client, and Storage
 
-pimdir is a local-first standard for personal information: mails, contacts, calendars, tasks and files in **one portable store**, kept as a replica of every source, and searchable with one query language. A store is one SQLite file plus a content-addressed blob directory, the same on every OS and architecture. I already explained why such a standard is needed in [Another year with NLnet](https://blog.pimalaya.org/another-year-with-nlnet/), and how the Android app became its first full implementation in [Pimalaya for Android enters closed alpha](https://blog.pimalaya.org/pimalaya-android-closed-alpha/).
+Stalwart, the server from De Gennaro’s team, focuses on streamlining the software to replace 12 programs with one: Installation takes two commands and a six-screen web wizard. It speaks every common mail and collaboration protocol: SMTP for sending, IMAP and POP3 for reading, JMAP for web-based mail, and CalDAV and CardDAV for calendars and contacts. Spam filtering, sender authentication, and TLS encryption are built in. Give it a token for a DNS provider such as Cloudflare or Route 53, and the server publishes its own mail records. Behind the wizard are nearly 3,000 settings across 176 screens, which most operators never touch. De Gennaro calls Stalwart "the software at the other end of your email client or calendar client."
 
-It comes in 3 parts, versioned separately:
+Stalwart 1.0 was released in October 2026 after five and a half years of development. NGI Zero funded the project with two grants: one for the mail server, and one for calendars, contacts, and file storage.
 
-- Storage: the store itself (schema, blobs, summaries, change feed, retention, action queue).
-- Sync: how sources are reconciled through the store (merge rules, the connector seam).
-- Search: the derived index and the query language.
+For users who can’t leave Outlook features behind, there’s Parula. Keeping the application logic strictly separate from a thin interface layer, and a well thought-out common logic, so a new protocol takes “just a few thousand lines of code,” Bucksch and his team at Beonex GmbH built an Outlook-like interface alongside a modern interface, a chat-style view and a classic three-pane view. It runs on a JMAP server or any other mail server and offers shared team mailboxes, delegated access so an assistant can run a manager’s calendar, and free/busy lookups for team meetings. It speaks IMAP, JMAP, and POP3, plus four from Microsoft: Exchange Web Services (EWS), Exchange ActiveSync, Microsoft Graph, and Outlook Web Access.
 
-They are released together because a store holds sync state that follows the sync part, and the query language binds every program that offers search.
+Partially funded by NGI Zero, Parula also removes a dependence most people never notice. Multi-factor login typically runs through Google's or Microsoft's identity services; an AutoConfig extension allows a client to discover and log in directly to an organization's own identity server. Bucksch says that Parula is the first desktop client that does this.
 
-What `v1` means: *schema version 1 never changes*, every schema change is a migration, and a minor version only adds test cases. You can implement it in any language that speaks SQLite, use the I/O-free core of io-pimdir (like the Android app does, on the platform SQLite), or use its std client.
+Aerogramme, an IMAP server that doesn't keep any state of its own, answers the operations problem in the storage. It doesn’t send or receive mail, so it needs a separate mail transfer agent such as Postfix; then it encrypts each mailbox on Garage, compatible with Amazon’s S3 interface. Garage replicates every piece of data in three locations, so users can still read and write their mail if a site goes offline. This design for power cuts and residential Internet connections gave up perfect synchronization, but it spreads maintenance work among five to ten members rather than requiring one big server host to give up all his weekends.
 
-Few days before the freeze, I compared it with [notmuch](https://notmuchmail.org/), which is the reference in this area. They do not do the same job (notmuch indexes mail files it does not own, pimdir owns the bodies, syncs them and holds other domains), but the search can be compared. On a store of 1 million messages from the Enron corpus, pimdir was ahead of notmuch on 50 of the 51 query measures and tied the last one, imported the million faster, and used a third of the memory. Stemming, regex and per-thread queries are still missing, they are on the list.
+The research problem, Dufour says, is mapping the mail, calendar, and contact protocols cleanly onto object storage. Aerogramme is still on the way, with internal deployment planned for January 2027 and a public beta a few months later. To get there, a second grant funded through NGI Zero is supporting a hunt for edge cases where a network delay or a failure halfway through writing could lose a message.
 
-One warning for the early adopters: **a store written by a draft version is refused**, never migrated. Sync it till nothing is pending with the last draft binary, move its directory aside, then let a release create and sync a new one.
+The three projects already interoperate with each other and with other email programs on the NLnet list funded by NGI Zero. Parula lists Stalwart as a supported server; Stalwart can keep its messages in Garage. Bucksch and De Gennaro both name Mox as another server built as a single package. Different teams, working separately, have split the email problem and built solutions that fit back together.
 
-Useful links:
+###### Subscribe to our [Linux Newsletters](https://us2.list-manage.com/subscribe?u=1c76cb37f73773b4962ae429b&id=15836edcb2)  
 
-- pimdir repository, with STORAGE.md, SYNC.md, SEARCH.md and the informative OVERVIEW.md
-- pimdir changelog
-- io-pimdir repository, release notes and API documentation
+Find [Linux and Open Source Jobs](https://opensourcejobhub.com/)  
 
-## Where did the wizard go?
+Subscribe to our [ADMIN Newsletters](https://us2.list-manage.com/subscribe?u=1c76cb37f73773b4962ae429b&id=6820c9c211)
 
-This is the change many of you will not like, so let me explain it properly.
+# Support Our Work
 
-Every CLI had a configuration wizard: you typed your email address, it discovered the servers, asked for the password, stored it in your keyring, and wrote the TOML for you. It is gone, from every CLI.
+*Linux Magazine* content is made possible with support from readers like you. Please consider contributing when you’ve found an article to be beneficial.
 
-**Why.** Few reasons, piled up:
+## News
 
-- It was already broken. For Gmail, Microsoft and JMAP, the Himalaya wizard handed the sign-in to ortie configure, which Ortie v3 removed. The path it proposed first for the most common providers simply failed.
-- It cost a lot. The Himalaya wizard alone was 14 files and about 4,000 lines, and 1.90 MB of a 20.3 MB binary. Same story in each CLI: server discovery, a keyring dialogue, a review screen and a TOML writer, inside tools whose job is to manage mails, contacts or calendars.
-- It served 2 audiences badly. Power users write their config from the sample anyway. People who need a guided setup are better served by an app than by a prompt in a terminal.
-- The CLIs moved to plain text and JSON, with no terminal handling at all. A wizard is exactly the kind of interactive layer that does not fit anymore.
-
-**What replaces it.**
-
-- A first-run welcome. Run a CLI without configuration, and it names the missing file and the sample to start from. At a terminal, it even prints the exact commands to copy the sample in place, then the first command to run.
-- A tested config.sample.toml, shipped in the packages and the release archives under share/doc. The samples are parsed by the test suites, so they cannot silently rot anymore.
-- Ortie for OAuth, with ready-made Google, Microsoft and Fastmail accounts to paste from its README, using Pimalaya's own clients.
-- [pim-discovery](https://github.com/pimalaya/io-pim-discovery), for the discovery part of the wizard. It is the CLI of io-pim-discovery, the lib the wizards used (and the Android app still uses): pim-discovery all user@fastmail.com finds the IMAP, SMTP, JMAP, CalDAV and CardDAV servers of an address, and tells you what vouches for each answer. It is not officially released yet, but you can install it with cargo install io-pim-discovery --locked --features cli.
-- Guided setup in frontends. The Android app keeps its onboarding (you type your email address, it finds the rest), and Himalaya TUI has a draft to bring the same flow to the terminal.
-
-**The direction.** The CLIs are now *low-level* tools: plain text to glance at, JSON for scripts, frontends and agents. Comfort (tables, colours, relative dates, guided setups, rich composition) belongs to frontends. In fact this is not new: it is the same split that started the whole project, back when the logic left the Vim plugin. The CLI was always supposed to be the backend a frontend needs. This release just goes all the way.
-
-I know some of you used the wizard to get started, and that copying a sample feels like a step back. If the welcome or the samples are not clear enough, it is a bug: please open an issue, I would rather fix the docs than bring back a second setup system per CLI.
-
-## Himalaya `v3`
-
-Himalaya is now a low-level CLI over a **unified mail API**: the same commands on every backend, the protocol-specific ones next to them, plain text for a glance and `--json` for the rest.
-
-Backends: IMAP, SMTP, ManageSieve, JMAP, the Gmail API, Microsoft Graph, Maildir (with a new `maildir++` layout for Dovecot and Courier stores), mbox, and pimdir. The README has recipes for Proton Mail (through Bridge), Fastmail, Gmail, Outlook, Posteo and iCloud.
-
-What is new:
-
-- himalaya repl, one command per line, with clients connected once for the whole session.
-- himalaya mcp, an MCP server over stdio. Writes are refused unless you pass --allow-write, and sending is behind its own --allow-send.
-- The pimdir query language for envelope search on every backend (from:alice date:2d).
-- vacation get|set on JMAP and Gmail, message reply --all, mutual TLS, an account-level tls table.
-- A stable code on every failure, an errors list per item, and a JSON Schema for every command.
-
-What is gone: the wizard, the m2dir backend (superseded by pimdir), the table and colour options, `HIMALAYA_CONFIG`. Unknown configuration keys are now refused, JSON keys are camelCase, and the v2 search syntax needs to be rewritten. The [migration guide](https://github.com/pimalaya/himalaya/blob/master/MIGRATION.md) lists everything, with a full table for the queries.
-
-Useful links:
-
-## Neverest `v1`
-
-Neverest is rebuilt around the pimdir store: **every account syncs into one shared store**, which the other CLIs read, search and queue their writes into. It syncs mails, contacts and calendars over IMAP, Gmail, Microsoft Graph, Google Calendar, Google People, CalDAV and CardDAV.
-
-Highlights:
-
-- Two-way, one-way or migration syncs.
-- Three-way merge of cards and events: a real conflict is parked for you to decide, never lost.
-- Retention: a remote deletion never removes the local copy, only an explicit purge does.
-- Writes queued by Himalaya, Cardamum and Calendula are applied offline, sending included.
-- Paged, newest-first listings that resume after an interruption, back-off on throttling, and a clean stop on Ctrl-C.
-
-JMAP sources are not supported yet (it is a draft), so Fastmail syncs over IMAP, CardDAV and CalDAV for now. Coming from `v0.x`? Your configuration and state are not carried over: start from the config.sample.toml, then run `neverest sync --init`.
-
-Useful links:
-
-- Repository
-- Release notes
-- Changelog
-- Sample configuration
-
-## Cardamum `v1`
-
-The first stable release of Cardamum: a low-level CLI over a **unified contacts API**, with the same commands on CardDAV, JMAP, Microsoft Graph, Google People, vdir and pimdir.
-
-`card search` speaks the pimdir query language on every backend, `account capability` shows what an account serves without connecting, and you get the REPL and the MCP server like the others. Editing a card is left to a composer such as [tcard](https://github.com/pimalaya/tcard). The wizard and the `discover` route are gone.
-
-Useful links:
-
-- Repository
-- Release notes
-- Changelog
-- Sample configuration
-- tcard, to compose cards
-
-## Calendula `v1`
-
-Same story for calendars: the same commands on CalDAV, JMAP (new), Google Calendar, Microsoft Graph, vdir and pimdir.
-
-New: `event search`, recurrence expansion, attendees and alarms, online meetings (`--online-meeting`), invitation replies through pimdir, and an agenda that draws a month or a year like cal(1) does. Editing an event is left to a composer such as [tcal](https://github.com/pimalaya/tcal). The wizard, the tables and colours, and the `todo` and `journal` commands are gone: tasks and journals will move to dedicated tools (Unfog and Journal), not released yet.
-
-Useful links:
-
-- Repository
-- Release notes
-- Changelog
-- Sample configuration
-- tcal, to compose events
-
-## Carillon `v1`
-
-Carillon is a local watcher that **fires hooks on what changes** in your mailboxes, address books and calendars, over IMAP, JMAP, Maildir, CalDAV, CardDAV, Microsoft Graph, the Google APIs and the pimdir store. It uses push where the server offers it (IMAP IDLE, the JMAP event stream) and polls elsewhere. A hook runs a command, shows a desktop notification, or both.
-
-New in `v1`: a pimdir backend, `on-alarm-trigger` for the alarms of events and tasks, `on-birthday-trigger` for birthdays and anniversaries, a per-hook timeout, and a report of what moved while an IMAP or Gmail session was lost. Hooks now take the same shape as Comodoro's.
-
-Useful links:
-
-- Repository
-- Release notes
-- Changelog
-- Sample configuration
-
-## Ortie `v3`
-
-Ortie manages OAuth tokens for the other tools. `v3` aligns it on the rest of the family: ready-made Google, Microsoft and Fastmail accounts to paste, token revocation, an `auth listen` to catch a redirection handed off from another machine, account checks, a REPL, and an MCP server that **never hands the token to the agent**. The wizard and the hooks are gone (the storage write command does what a hook did).
-
-Useful links:
-
-## Comodoro `v3`
-
-Comodoro manages timers: one server owns a timer, any number of clients drive it, over a local socket or TCP. `v3` joins the same standard: `comodoro watch` feeds a status bar without polling, hooks get the cycle name and duration, plus the welcome, account checks, a REPL and an MCP server. Comodoro is now a binary only: the library is gone, and the open JSON-RPC protocol is the contract for third parties.
-
-Useful links:
-
-## The libs
-
-None of the above would exist without the libs below, all released in November on crates.io:
-
-- The shared kit: pimalaya-cli v0.8, pimalaya-config v0.6, pimalaya-stream v0.4.
-- The content models: mime-rs v0.2, vcard-rs v0.6, ical-rs v0.7.
-- The protocols: io-imap v0.12, io-smtp v0.10, io-sasl v0.3, io-http v0.9, io-jmap v0.11, io-webdav v0.14, io-managesieve v0.6, io-oauth v0.8, io-proxy v0.3, io-pim-discovery v0.15.
-- The provider APIs: io-gmail v0.10, io-msgraph v0.11, io-gcal v0.6, io-gpeople v0.9, io-gtasks v0.3.
-- The local formats: io-maildir v0.5, io-mbox v0.2, io-vdir v0.3, and io-pimdir v1.0.
-
-They are all I/O-free, as usual: feel free to build your own tools at the top of them.
-
-## Installing and upgrading
-
-Each README lists the ways to install: prebuilt binaries from the GitHub releases (or the install.sh script), `cargo install --locked`, Nix, and the APT, DNF and Homebrew repositories at [pkg.pimalaya.org](https://pkg.pimalaya.org). The packages are landing there over the coming days, and the nixpkgs and home-manager updates are on their way.
-
-About upgrading:
-
-- Himalaya, Ortie and Comodoro have a MIGRATION.md, follow it.
-- Neverest, Cardamum, Calendula and Carillon come from v0.x: there is no migration guide, start from the config.sample.toml.
-- pimdir stores written by a draft are refused, see the procedure above.
-
-## What comes next
-
-- Neverest `v1.0.1`, with few fixes already on their way, then JMAP sources.
-- Himalaya TUI, with the onboarding of the Android app.
-- The Android app, already moved to pimdir sync v1 and io-pimdir v1.0.
-- pimdir search: stemming, regex, per-thread queries, local labels and properties.
-- Tasks and journals, through Unfog and Journal.
-- Packaging: nixpkgs, home-manager and pkg.pimalaya.org for every tool.
-
-## Thank you
-
-Special thanks to the [NLnet foundation](https://nlnet.nl/) and the European Commission's [NGI](https://www.ngi.eu/) initiative, for the financial support through [NGI Zero Core](https://nlnet.nl/project/Pimalaya-PIM/) and now the [NGI Zero Commons Fund](https://nlnet.nl/project/Pimalaya-pimdir/). This kind of slow, deep work is only possible thanks to them.
-
-And thank you to everyone who reported bugs, tested betas, or simply waited patiently while everything was being rebuilt. Any feedback is welcomed, on [GitHub](https://github.com/pimalaya), on [Matrix](https://matrix.to/#/#pimalaya:matrix.org) or on [Mastodon](https://fosstodon.org/@pimalaya). Let me know how it goes!
+- [System76 Announces the New Thelio Prime Desktop](http://www.linux-magazine.com/Online/News/System76-Announces-the-New-Thelio-Prime-Desktop) [Hardware](http://www.linux-magazine.com/tags/view/Hardware) , [Linux](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux) , [Thelio](http://www.linux-magazine.com/tags/view/Desktop/Thelio) The makers of the Thelio desktop line and Pop!_OS have released a powerful small form factor PC.
+- [A Must See KDE Documentary](http://www.linux-magazine.com/Online/News/A-Must-See-KDE-Documentary) [Community](http://www.linux-magazine.com/tags/view/Community) , [KDE](http://www.linux-magazine.com/tags/view/Desktop/KDE) It doesn't matter what desktop environment you prefer, this KDE documentary should top your list of things to watch.
+- [New KORA Linux Distro to Harness the Power of Local AI](http://www.linux-magazine.com/Online/News/New-KORA-Linux-Distro-to-Harness-the-Power-of-Local-AI) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Operating Systems](http://www.linux-magazine.com/tags/view/Operating+Systems) The development team behind CyanogenMod, Android, and Playtron unveils KORA, a Linux distribution built specifically for AI nerds.
+- [Epic Games Targets Linux for New Launcher](http://www.linux-magazine.com/Online/News/Epic-Games-Targets-Linux-for-New-Launcher) [Steam](http://www.linux-magazine.com/tags/view/Games/Steam) , [SteamOS](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux/SteamOS) The Epic Games new launcher is still in preview, but it looks to land on several Linux distributions.
+- [Fedora 45 Now Available](http://www.linux-magazine.com/Online/News/Fedora-45-Now-Available) [Fedora](http://www.linux-magazine.com/tags/view/Operating+Systems/Linux/Fedora) , [Operating Systems](http://www.linux-magazine.com/tags/view/Operating+Systems) The latest iteration of Fedora has arrived with Gnome 51 and KDE Plasma 6.8.
+- [Linux 7.4 is "Much Healthier" Thanks to AI](http://www.linux-magazine.com/Online/News/Linux-7.4-is-Much-Healthier-Thanks-to-AI) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) At nearly 42 million lines, Linux 7.4 is the largest merge in the kernel’s history.
+- [Working Exploit for a Linux Kernel Flaw Made Public](http://www.linux-magazine.com/Online/News/Working-Exploit-for-a-Linux-Kernel-Flaw-Made-Public) [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) , [Security](http://www.linux-magazine.com/tags/view/Security) , [vulnerability](http://www.linux-magazine.com/tags/view/Security/vulnerability) Even before a bug received its CVE identifier or an upstream fix, the local privilege escalation vulnerability exploit found its way into the wild.
+- [r/opensource Bans AI-Assisted and AI-Related Projects](http://www.linux-magazine.com/Online/News/r-opensource-Bans-AI-Assisted-and-AI-Related-Projects) [Artificial Inte...](http://www.linux-magazine.com/tags/view/HPC/Artificial+Intelligence) , [Community](http://www.linux-magazine.com/tags/view/Community) , [projects](http://www.linux-magazine.com/tags/view/Community/projects) The de facto subreddit for all things open source has not only banned AI-related projects but also users who "don't speak English."
+- [Bottlenecks Discovered by Meta Engineers Lead to Scalability Improvements](http://www.linux-magazine.com/Online/News/Bottlenecks-Discovered-by-Meta-Engineers-Lead-to-Scalability-Improvements) [Kernel](http://www.linux-magazine.com/tags/view/Programming/Kernel) , [Performance](http://www.linux-magazine.com/tags/view/HPC/Performance) Thanks to a small group of engineers at Meta, the Linux kernel module kernfs has been improved, which has led to some serious gains.
+- [PwnEscape Poses VM Vulnerability](http://www.linux-magazine.com/Online/News/PwnEscape-Poses-VM-Vulnerability) [cyberattack](http://www.linux-magazine.com/tags/view/Security/cyberattack) , [KVM](http://www.linux-magazine.com/tags/view/Virtualization/KVM) , [vulnerability](http://www.linux-magazine.com/tags/view/Security/vulnerability) A guest-to-host escape flaw in Linux KVM, named PwnEscape, might be yet another means of attacking Linux.

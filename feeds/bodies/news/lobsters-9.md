@@ -1,832 +1,1147 @@
-Good exception handling is difficult in any language, but all the more so in
-Haskell, where asynchronous exceptions mean that code can be interrupted at
-almost any point. In this blog post we will discuss a series of recommendations,
-focusing on three goals:
-
-1. Ensure that allocated resources will be deallocated (avoid leaks)
-2. Ensure that code can always make progress (avoid getting stuck)
-3. Ensure that failures reach the code that can deal with them (don’t catch what you can’t handle)
-
-As we will see, satisfying all three of these goals together can be tricky, and
-sometimes they are in direct tension.
-
-> This is part one of our series on exceptions.
->
-> **Part 1: Exception best practices (this blog post)**
->
-> Part 2: “When an `interruptible` call isn’t interruptible”, which will be
-> published soon, discusses interruptible foreign calls: how they are meant to
-> work, why they do not always work, and how to address that.
->
-> Part 3: “(Some) Exceptions in Haskell are resumable”, also to be published
-> soon, discusses asynchronous exceptions in pure code, resulting in resumable
-> exceptions, and how we might generalize that to IO code.
->
-> We’re also still planning two further parts: one on composing masking
-> operations, and one exploring how the problems discussed in part 3 can be
-> resolved.
-
-## Baseline
-
-In this first section we recap the most important concepts that we will need
-to understand before we can discuss best practices.
-
-### Throwing and catching exceptions
-
-An exception is thrown with [`throwIO`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:throwIO) and caught with
-[`catch`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:catch); in both cases the type of the value that is thrown must be
-an instance of the `Exception` class:
-
-```
-data MyException = MyException
-  deriving stock (Show)
-  deriving anyclass (Exception)
-
-baseline :: IO ()
-baseline = action `catch` handler
-  where
-    action :: IO ()
-    action = throwIO MyException
-
-    handler :: MyException -> IO ()
-    handler = print
-```
-
-It is often more convenient to use [`handle`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:handle), which is just
-`catch` with its arguments flipped:
-
-```
-baseline :: IO ()
-baseline = handle handler $ action
-```
-
-Before `throwIO` can throw the exception, it must first wrap it in the
-`SomeException` envelope, which carries dynamic typing information and
-[exception annotations](https://www.well-typed.com/blog/2026/05/lay-annotation-land/):
-
-```
-data SomeException = forall e. (..) => SomeException e
-```
-
-This dynamic typing information is used by `catch` to ensure that only
-exceptions of the desired type are caught (that is, determined by the type of
-the exception handler).
-
-### Asynchronous exceptions
-
-*Synchronous* exceptions are exceptions that are raised as a direct consequence
-of executing the program itself. Haskell also supports *asynchronous*
-exceptions, which instead can occur at any point during execution[<sup>1</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn1). Consider the following example:
-
-```
-asyncExample :: IO ()
-asyncExample = action `catch` handler
-  where
-    action :: IO ()
-    action = threadDelay 10_000_000
-
-    handler :: MyException -> IO ()
-    handler = print
-```
-
-It might seem that the handler should never run, but that is not necessarily
-the case:
-
-```
-main :: IO ()
-main = do
-    me <- myThreadId
-    _  <- forkIO $ do
-      threadDelay 5_000_000
-      throwTo me MyException
-    asyncExample
-```
-
-If `throwIO` is the prototypical way to throw a synchronous exception,
-[`throwTo`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:throwTo) is its asynchronous sibling, and throws an exception
-to an arbitrary thread, although in practice it is rarely called directly;
-instead, it is a building block for other abstractions:
-
-- `timeout` throws a `Timeout` exception to the thread when the time is up
-- `killThread` throws `ThreadKilled`
-- Pressing CTRL-C results in a `UserInterrupt` exception in the main thread
-- The async library uses throwTo to cancel threads whose result is no longer needed (for example, the losing thread in a `race`)
-
-Without asynchronous exceptions, none of this would be possible in general: the
-code being cancelled would have to check, at regular intervals, whether it
-should stop.
-
-### Async exception safety
-
-Consider this code that attempts to read the first line of a file; it tries to
-make sure that the file handle is closed again if an exception is raised during
-reading:
-
-```
-readFirstLineBROKEN :: IO String
-readFirstLineBROKEN = do
-    h <- openFile "example.txt" ReadMode
-    {- what if an exception is raised here? -}
-    action h `catch` handler h
-  where
-    action :: Handle -> IO String
-    action h = do
-        line <- hGetLine h
-        hClose h
-        return line
-
-    handler :: Handle -> SomeException -> IO a
-    handler h e = do
-        hClose h
-        throwIO e
-```
-
-The problem in this code is *in between the lines*; specifically, after the
-`openFile` and before the `catch`. The solution is to temporarily prevent
-asynchronous exceptions from being raised using [`mask`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:mask), and only
-enable them again once we are safely in the scope of an exception handler:
-
-```
-readFirstLineLOWLEVEL :: IO String
-readFirstLineLOWLEVEL =
-    mask $ \unmask -> do
-      h <- openFile "example.txt" ReadMode
-      unmask (action h) `catch` handler h
-```
-
-## Catching exceptions
-
-### Bracket
-
-The pattern in `readFirstLineLOWLEVEL` is so common in Haskell that it has its
-own combinator, called [`bracket`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:bracket); it takes three arguments,
-one to acquire a resource, one to release it again, and then the body that
-uses the resource. This means that the recommended, and idiomatic, way to
-write `readFirstLine` is
-
-```
-readFirstLine :: IO String
-readFirstLine =
-    bracket (openFile "example.txt" ReadMode) hClose $ \h ->
-      hGetLine h
-```
-
-One downside of this idiom is that the exception handler no longer gets access
-to the exception. For example, if we wanted to log any exceptions that occurred
-while we were reading the file, along with the position in the file when the
-exception was thrown, we would not be able to do so with the standard `bracket`.
-It is of course always possible to drop back down to the low-level `mask`
-combinator, but in most cases it is probably better to instead use
-[`generalBracket`](https://hackage-content.haskell.org/package/exceptions-0.10.12/docs/Control-Monad-Catch.html#v:generalBracket) from the
-[exceptions](https://hackage.haskell.org/package/exceptions) package. When using `generalBracket`, the
-handler is told how the body terminated, and can also produce a result of its
-own (returned only on successful termination[<sup>2</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn2)).
-
-```
-readFirstLineLOGGING :: IO String
-readFirstLineLOGGING = fmap fst $
-    Exceptions.generalBracket (openFile "example.txt" ReadMode) handler $ \h -> do
-      hGetLine h
-  where
-    handler :: Handle -> Exceptions.ExitCase String -> IO ()
-    handler h exitCase = do
-        case exitCase of
-          Exceptions.ExitCaseException e -> do
-            pos <- hTell h
-            putStrLn $ "Exception at position " ++ show pos
-                    ++ ": " ++ displayException e
-          _otherwise ->
-            return ()
-        hClose h
-```
-
-(The reason for the `fmap` is that `generalBracket` allows the deallocation
-callback to return an additional value; here we just ignore it.)
-
-### Catching “all” exceptions
-
-Consider this version of `readFirstLine` that tries again when an exception
-happens; perhaps the file we’re trying to read might be locked by another
-process, and we just want to keep trying until we succeed:
-
-```
-keepTryingBAD :: IO String
-keepTryingBAD = do
-    mLine <- (Just <$> readFirstLine) `catch` handler
-    case mLine of
-      Just line -> return line
-      Nothing   -> keepTryingBAD
-  where
-    handler :: SomeException -> IO (Maybe String)
-    handler e = do
-        putStrLn $ "Got " ++ displayException e ++ " while reading. Trying again"
-        threadDelay 10_000
-        return Nothing
-```
-
-Code like this with a blanket exception handler that catches *all* exceptions
-(by catching exceptions of type `SomeException`) is problematic. The obvious
-problem is that while some synchronous exceptions might be transient (“file
-locked”), others might not (“invalid path”); you probably don’t want to retry on
-the latter. The less obvious problem is that you almost certainly don’t want to
-retry on asynchronous exceptions at all: exceptions such as a
-[Timeout](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/System-Timeout.html#t:Timeout) or [`UserInterrupt`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:AsyncException)
-(CTRL-C) should almost certainly be honoured.
-
-My advice therefore is as follows:
-
-1. In general, do not catch all exceptions (SomeException) unless you are doing so for the purposes of resource reclamation, and you will rethrow the exception after (in which case you’d typically use bracket and friends).
-2. Prefer to catch specific exceptions; that is, exceptions of a specific type (see `catches` to catch exceptions of multiple types), or preferably even specific values (see `catchJust`).
-3. If you must catch exceptions of unknown type, carefully consider whether you want to catch asynchronous exceptions also.
-
-### Avoid unbounded handler nesting
-
-Consider this variation of `keepTrying`; unlike in the previous section, we’re
-now specifically only re-trying if the file is
-[locked](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/System-IO-Error.html#v:isAlreadyInUseError), but we have a different error:
-
-```
-keepTryingALSOBAD :: IO String
-keepTryingALSOBAD = do
-    readFirstLine `catch` \e ->
-      if isAlreadyInUseError e then do
-        putStrLn $ "Got " ++ displayException e ++ " while reading. Trying again"
-        threadDelay 10_000
-        keepTryingALSOBAD
-      else
-        throwIO e
-```
-
-The problem with this version is that since the recursion happens *inside of*
-the exception handler, we might end up with an unbounded number of handlers,
-each next recursive call running under all of the exception handlers installed
-so far. In the previous section `keepTryingBAD` did get this aspect right:
-return a value that indicates whether or not we should retry, so that we can
-retry outside the scope of the exception handler.
-
-### Distinguishing sync and async exceptions
-
-Consider the following code, which spawns an auxiliary thread which catches all
-exceptions, and then shows that exception using
-[`anythingToString`](https://hackage-content.haskell.org/package/recover-rtti-0.6.1/docs/Debug-RecoverRTTI.html#v:anythingToString) from my
-[`recover-rtti`](https://hackage-content.haskell.org/package/recover-rtti) package, which bypasses any kind of
-`Show` instance (indeed, any type class instance at all) and shows the exact
-structure of the exception:
-
-When we run this, we see (slightly cleaned up for readability, and some details
-omitted):
-
-```
-SomeException (C:Exception (TrTyCon ..) ..) (ExceptionContext []) (
-    SomeAsyncException (C:Exception (TrTyCon ..) ..) (
-       ThreadKilled
-     )
-  )
-```
-
-The outermost wrapper is `SomeException`, with the dynamic typing information
-`(TrTyCon ..)` and the (empty) list of exception annotations `(ExceptionContext [])`, which we already mentioned [above](https://www.well-typed.com/blog/2026/11/exception-best-practices/#baseline), and the innermost
-constructor [`ThreadKilled`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:AsyncException) is the exception itself.
-However, we additionally have *another* wrapper in between:
-[`SomeAsyncException`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:SomeAsyncException).
-
-This wrapper serves as a marker for async exceptions. It is *not* an indication
-of how the exception was delivered (synchronously or asynchronously), and this
-is as it should be: the marker indicates *intent* (“this exception was raised
-because of external circumstances, rather than the code itself”). Asynchronous
-exceptions are often caught and then rethrown synchronously (for example, see
-the [section about `bracket`](https://www.well-typed.com/blog/2026/11/exception-best-practices/#bracket)), which changes the delivery mechanism
-but not the intent.[<sup>3</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn3)
-
-This does however mean that this intent must be stated explicitly. For example,
-in our [first example of asynchronous exceptions](https://www.well-typed.com/blog/2026/11/exception-best-practices/#asynchronous-exceptions) we
-asynchronously threw `MyException` to another thread, without ever wrapping
-`MyException` in `SomeAsyncException`. If `MyException` was *intended* to be
-used asynchronously, we should use a custom `Exception` instance:[<sup>4</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn4)
-
-```
-instance Exception MyException where
-  toException   = asyncExceptionToException
-  fromException = asyncExceptionFromException
-```
-
-Conversely, we can *test* if something is an async exception by checking for
-the wrapper:
-
-```
-case fromException e of
-  Just (SomeAsyncException e') -> putStrLn $ "Async: " ++ displayException e'
-  Nothing -> putStrLn $ "Not an async exception"
-```
-
-## Cancellation
-
-In general, it is good practice to ensure that code that might wait for an
-unbounded amount of time, such as when acquiring a lock, can always be
-*cancelled*, for example through a [`timeout`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/System-Timeout.html#v:timeout) or through
-CTRL-C ([`UserInterrupt`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:AsyncException)). I’m intentionally using
-cancellability instead of “interruptibility”, since the latter has a very
-specific technical meaning in Haskell, as we shall discuss now.
-
-*Note*. Foreign calls in Haskell (`safe` or `unsafe`) are not cancellable.
-Alongside `safe` and `unsafe` there are also `interruptible` foreign calls,
-which we will discuss in part 2 of this blog post series on exceptions. The term
-`interruptible`, when applied to foreign calls, is related to, but not the same
-as, the “interruptible operations” we discuss here.
-
-### Interruptibility
-
-When we discussed [`bracket`](https://www.well-typed.com/blog/2026/11/exception-best-practices/#bracket), we glossed over one detail: it does not
-unmask exceptions when it invokes the `acquire` callback to acquire the resource,
-nor when it invokes the `release` callback to release it again. This is a thorny
-subject that we have written about before ([Dealing with Asynchronous Exceptions
-during Resource Acquisition](https://www.well-typed.com/blog/97/)); here we highlight the
-two most important concepts only.
-
-First, even with async exceptions masked, *interruptible* operations can still
-receive exceptions; paraphrasing [the paper](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/07/asynch-exns.pdf) slightly: “Any
-operation which may need to wait indefinitely for a resource may receive
-asynchronous exceptions even within an enclosing `mask`, but only while the
-resource is unavailable”. The canonical example is `takeMVar`, which can receive
-exceptions as long as it hasn’t managed to take the `MVar` yet, making a
-pattern such as this safe:
-
-```
-withLock :: MVar () -> IO a -> IO a
-withLock mvar criticalSection =
-    bracket (takeMVar mvar) (putMVar mvar) $ \() ->
-      criticalSection
-```
-
-For example, the `timeout` in
-
-will still be able to interrupt the `takeMVar`. Unfortunately, interruptibility
-is not visible from a function’s type, and is typically not even documented; for
-example, `putStrLn` is interruptible (because deep down its bowels it calls
-`takeMVar` somewhere on the `MVar` buried inside a `Handle`), which means that
-this variation on `withLock` is broken:
-
-```
-withLockBROKEN :: MVar () -> IO a -> IO a
-withLockBROKEN mvar criticalSection =
-    bracket (takeMVar mvar >> putStrLn "Acquired!") (putMVar mvar) $ \() ->
-      criticalSection
-```
-
-The presence of `putStrLn` essentially pokes a hole in the careful masked state
-that `bracket` provides: if an asynchronous exception arrives after the
-`takeMVar` succeeds but before the `putStrLn`, the exception *can* be thrown (if
-there is contention for that handle `MVar`), and the `putMVar` will never run,
-leaving the lock forever unusable. A good intuition is to keep `acquire` and
-`release` as simple as possible; in the next few sections we will study some more
-involved cases.
-
-### Acquiring multiple resources
-
-When acquiring multiple resources, it is important that we either acquire all of
-them or none of them (atomicity). This means we need to worry about previously
-acquired resources when we get (synchronous or asynchronous) exceptions while
-acquiring more. The easiest option is to nest `bracket`:
-
-```
-withMVars :: MVar a -> MVar b -> (a -> b -> IO c) -> IO c
-withMVars ma mb k =
-    bracket (takeMVar ma) (putMVar ma) $ \a ->
-    bracket (takeMVar mb) (putMVar mb) $ \b ->
-      k a b
-```
-
-Sometimes however the specific way that resources must be acquired and released
-does not allow for simple lexical scoping like this; or perhaps only offering a
-“with” (`bracket`) style API is too limiting at call sites. If you need to
-provide an API that *acquires* multiple resources, you have to think about how
-to deal with the presence of interruptible operations; for example, you might do
-something like
-
-```
--- | Take both MVars
---
--- Intended to be run with async exceptions masked.
-takeMVars :: MVar a -> MVar b -> IO (a, b)
-takeMVars ma mb = do
-    a <- takeMVar ma
-    b <- takeMVar mb `onException` putMVar ma a
-    return (a, b)
-```
-
-There is no point calling `mask` *inside of* `takeMVars`, because if the
-enclosing context does not have exceptions masked, then leaving the scope of
-that inner `mask` could result in an async exception being delivered at that
-point.
-
-In general this can be quite tricky to get right, and it is often better to try
-and avoid solving this problem at all. For the case of `MVar`-like resources,
-the obvious alternative is to use `TMVar`s instead, and just take both `TMVar`s
-inside a single transaction.
-
-### Releasing multiple resources
-
-If you must release multiple resources, you should ensure that if one
-resource fails to release cleanly and throws an exception, you still release
-the remainder; one option is to chain using `finally`:
-
-```
-releaseA `finally` releaseB `finally` ..
-```
-
-In the standard `bracket acquire release body` pattern, if `release` fails with
-an exception, but it itself was invoked because of an exception in `body`, it’s
-debatable which exception should be propagated. For current GHC versions the
-exception from `release` is propagated, but starting with GHC 10.0, the choice
-is dissolved entirely: the exception from `release` [will be propagated with a
-`WhileHandling` annotation of the original exception](https://www.well-typed.com/blog/2026/05/lay-annotation-land/#ghc-10.0).
-
-We will consider [*async* exceptions during
-`release`](https://www.well-typed.com/blog/2026/11/exception-best-practices/#async-exceptions-during-release) a bit further down.
-
-### Non-interruptible operations
-
-It is also possible to mask exceptions so that even interruptible operations can
-no longer receive exceptions by using
-[`uninterruptibleMask`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:uninterruptibleMask) instead of `mask`:
-
-```
-uninterruptibleMask $ \unmask -> do
-    a <- takeMVar ma
-    b <- takeMVar mb
-    ..
-```
-
-This is safer in the sense that the `takeMVar mb` cannot throw an exception, but
-*less safe* because this code is now no longer cancellable: timeouts,
-user-interrupts (CTRL-C) etc. will not have any effect. To solve that you’d have
-to *poll:* explicitly check whether any async exceptions are waiting to be
-delivered, for example using [`unsafeUnmask`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/GHC-IO.html#v:unsafeUnmask)
-([`allowInterrupt`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#v:allowInterrupt), which does exactly this under `mask`,
-has no effect under `uninterruptibleMask`).
-
-Another, possibly simpler, option to create an uninterruptible operation is to
-fork an auxiliary thread to do the resource acquisition. Since this thread is
-private, it is essentially immune to async exceptions.[<sup>5</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn5)
-However, this will then still require some kind of communication protocol that
-allows the child thread to clean up when it realizes the parent is no longer
-interested; see also the discussion of [Threads](https://www.well-typed.com/blog/2026/11/exception-best-practices/#threads), below.
-
-### Async exceptions during `release`
-
-The ability to cancel code is often more important during resource acquisition
-than it is during release; acquiring a lock can take an unbounded amount of
-time, but releasing the lock does not. However, sometimes releasing a resource
-can take an unbounded amount of time also. Perhaps releasing the resource
-literally *is* acquiring a lock, perhaps to modify some kind of worker pool:
-
-```
-releaseWorker :: Pool -> Worker -> IO ()
-releaseWorker pool _ = withLock pool.lock $ ..
-```
-
-Or perhaps the resource is a connection to a server and disconnecting requires
-some kind of closing handshake to ensure an orderly closure
-(e.g. [TLS uses closure alerts to avoid truncation attacks](https://www.rfc-editor.org/info/rfc9846/#section-6)):
-
-```
-bracket (connectToServer ..) (closeConnection ..) $ \conn -> ..
-```
-
-In this case, all the same considerations apply as during resource acquisition:
-the release callback is invoked with async exceptions masked, but interruptible
-operations can still receive exceptions.
-
-In some cases you may want to vary what the resource release function does,
-depending on whether or not the body terminated with an exception, and depending
-on the nature of that exception (see also [discussion of
-`generalBracket`](https://www.well-typed.com/blog/2026/11/exception-best-practices/#bracket)). For example, you may (or may not) opt for an
-[abortive closure of a TLS connection](https://www.rfc-editor.org/info/rfc9846/#section-6) after a timeout; or you may
-(or may not) opt to close a file handle without flushing the buffer. Such
-decisions are of course highly application specific; a timeout may simply mean
-that the main action should be terminated, but the resource should still be
-closed cleanly!
-
-## Threads
-
-Threads are a microcosm of the three goals that we set up at the start of this
-blog post: we must avoid leaking threads, communication between threads can get
-stuck, and exceptions thrown in threads often need to be dealt with outside of
-those threads.
-
-### Exception handler
-
-New threads run with an exception handler that [silently
-swallows](https://hackage-content.haskell.org/package/ghc-internal-9.1401.0/docs/src/GHC.Internal.Conc.Sync.html#real_handler) the asynchronous
-[`ThreadKilled`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:AsyncException), as well as synchronous
-[`BlockedIndefinitelyOnMVar`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:BlockedIndefinitelyOnMVar) and
-[`BlockedIndefinitelyOnSTM`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:BlockedIndefinitelyOnSTM), which we will
-revisit shortly. Any other exception is handled by the uncaught
-exception handler, which [by default](https://hackage-content.haskell.org/package/ghc-internal-9.1401.0/docs/src/GHC.Internal.Conc.Sync.html#uncaughtExceptionHandler) simply
-prints it (though [this can be changed](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/GHC-Conc.html#v:setUncaughtExceptionHandler)).
-
-In general it is good practice to ensure no exception is ever uncaught.[<sup>6</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn6) In almost all cases you should therefore install an exception
-handler in the new thread; what this handler should do will be application
-specific, but we will consider one important class of problems in the next
-section.
-
-### Buffered interfaces
-
-Consider a producer and consumer thread that communicate through a buffered
-interface such as an `MVar`:
-
-```
-producer, consumer :: MVar Chunk -> IO ()
-```
-
-The `MVar` provides back-pressure, which is good: the producer can’t race ahead
-and produce an unbounded number of chunks if the consumer is not consuming them.
-However, if the producer aborts with an exception, the consumer will be left
-waiting for the next chunk which will never arrive.
-
-There are a number of ways to deal with this. Probably my favourite is to record
-the exception in the buffer *itself*; this means that the consumer is forced to
-consider what to do when the producer fails:
-
-```
-producer :: MVar (Either SomeException Chunk) -> IO ()
-producer buffer = .. `catch` (putMVar buffer . Left)
-```
-
-Note that catching *all* exceptions here is correct: the consumer wants to know
-if the producer disappeared, even if that was because of an async exception.
-
-Another option, arguably more compositional, is to use STM, and record the
-health of the producer separately from the consumer:
-
-```
-data Interface = Interface{
-      health :: TVar (Maybe SomeException)
-    , buffer :: TMVar Chunk
-    }
-
-producer :: Interface -> IO ()
-producer iface = .. `catch` (atomically . writeTVar iface.health . Just)
-
-getChunk :: Interface -> IO Chunk
-getChunk iface = atomically $ do
-    hasFailed <- readTVar iface.health
-    case hasFailed of
-      Nothing -> takeTMVar iface.buffer
-      Just e  -> throwSTM e
-```
-
-If you choose this route, it is important to read both variables in a *single*
-`atomically` block, to ensure that when the transaction is blocked waiting for
-a chunk, it will be retried *either* when a new chunk becomes available *or*
-when the health of the producer changes.
-
-If you don’t signal failure in the producer in any way to the consumer, the
-consumer *may* fail with a “blocked indefinitely on MVar” or “blocked
-indefinitely on STM” exception. You should regard this strictly as a debugging
-tool only, in the same category as [`Debug.Trace`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Debug-Trace.html). Do **not**
-rely on it for your program logic: false negatives are common (where the
-exception is not raised even though code might be blocked indefinitely), and
-*if* you ever catch it, then [false positives are possible](https://well-typed.com/blog/2024/01/when-blocked-indefinitely-is-not-indefinite/)
-(where code is *not* blocked indefinitely and yet the exception is raised).
-
-### Masking state is inherited
-
-New threads are spawned with [`forkIO`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent.html#v:forkIO), and inherit the masking
-state from their parent. We can take advantage of this fact to start a thread
-which *starts* with exceptions already masked.
-
-Consider the [`producer` thread example](https://www.well-typed.com/blog/2026/11/exception-best-practices/#buffered-interfaces) we saw earlier.
-A naive attempt to spawn a new producer might look like this:
-
-```
-newProducerBROKEN :: IO (Interface, ThreadId)
-newProducerBROKEN = do
-    iface    <- Interface <$> newTVarIO Nothing <*> newEmptyTMVarIO
-    producer <- forkIO $ do
-                  {- what if an exception is raised here? -}
-                  (..) `catch` (atomically . writeTVar iface.health . Just)
-    return (iface, producer)
-```
-
-If the producer is spawned in this manner, but is killed before it installs the
-exception handler, the consumer will be left waiting forever. For example, the
-caller of `newProducerBROKEN` is given the `ThreadId`, so it may kill the
-producer before the forked thread is ever scheduled. Masking asynchronous
-exceptions from within the thread cannot help here: the exception might arrive
-before we get a chance to call `mask`. Instead we must fork the thread *with
-exceptions already masked*, by masking them in the *parent* thread.
-
-However, we cannot use the normal `mask` function; the `restore` function that
-it gives us will restore the masking state to what it was prior to the call to
-`mask`; we instead want to ensure that the new thread really runs with
-exceptions unmasked, independent of what the masking state in the parent was.
-Function [`forkIOWithUnmask`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent.html#v:forkIOWithUnmask) gives us precisely this:
-
-```
-newProducer :: IO (Interface, ThreadId)
-newProducer = do
-    iface    <- Interface <$> newTVarIO Nothing <*> newEmptyTMVarIO
-    producer <- mask_ $ forkIOWithUnmask $ \unmask ->
-                  unmask (..) `catch` (atomically . writeTVar iface.health . Just)
-    return (iface, producer)
-```
-
-Note that there is a function in `base` that captures *nearly* this pattern:
-[`forkFinally`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent.html#v:forkFinally). However, `forkFinally` does not use
-`forkIOWithUnmask`, but uses a regular `mask`, making it more sensitive to the
-masking state of the thread in which it is invoked; in particular, you almost
-certainly don’t want to call `forkFinally` inside the `acquire` callback of
-`bracket` (see also [Bracketing thread creation](https://www.well-typed.com/blog/2026/11/exception-best-practices/#bracketing-thread-creation)
-below).
-
-### `throwTo` is synchronous
-
-To kill a thread, you use `throwTo` to throw a
-[`ThreadKilled`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Exception.html#t:AsyncException) to the target thread; this is such a
-common idiom, `base` provides [`killThread`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/Control-Concurrent.html#v:killThread) that does exactly
-this.
-
-An important aspect of `throwTo` is that it is *synchronous*: it does not return
-until the exception has been raised in the target thread. This can be convenient;
-for example, consider a networking context in which we want to send a timeout
-message after a certain period:
-
-```
-let sendTimeout :: IO ()
-    sendTimeout = do
-      threadDelay 10_000_000
-      (..)
-timer <- forkIO sendTimeout
-
-(..)
-killThread timer -- timeout no longer needed
-(..)
-```
-
-The parent thread is guaranteed that the child thread won’t send the
-notification anymore after the `killThread`, without the need for any explicit
-synchronization with the child thread. It also has some downsides, however, as
-we shall see in the next section.
-
-### Bracketing thread creation
-
-Threads are a resource like any other, and we should ensure that they get
-cleaned up. It is tempting to write
-
-```
-bracket (forkIO ..) killThread $ \tid -> .. -- WRONG x 2
-```
-
-Both the `acquire` and the `release` of this example are wrong. First, as we saw
-above, when we fork a new thread [it inherits the masking state from its
-parent](https://www.well-typed.com/blog/2026/11/exception-best-practices/#masking-state-is-inherited). Since `bracket` runs the `acquire`
-callback with exceptions masked, this means that the new thread will now run
-with async exceptions masked at all times (modulo
-[`unsafeUnmask`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/GHC-IO.html#v:unsafeUnmask)). However, even if we fix this by using
-`forkIOWithUnmask` instead, there is still a problem:
-
-```
-bracket (forkIOWithUnmask $ \unmask -> ..) killThread $ \tid -> .. -- STILL WRONG
-```
-
-We saw above that [`throwTo` is synchronous](https://www.well-typed.com/blog/2026/11/exception-best-practices/#throwto-is-synchronous): it waits
-until the exception is delivered to the child thread, which means it must wait
-until the child thread can receive async exceptions. Because it might have to
-wait, it is *interruptible*; and unlike `takeMVar`, which is interruptible only
-if the `MVar` is not available, `throwTo` is *always* interruptible. This means
-that if this `bracket` *itself* is executed by a thread that is killed, we might
-not clean up the auxiliary thread. This is therefore an example of where the use
-of `uninterruptibleMask_` is really justified:
-
-```
-bracket (forkIOWithUnmask ..) (uninterruptibleMask_ . killThread) $ \tid -> ..
-```
-
-This does mean that the parent thread (the one running this `bracket`) will be
-cancellable only if the child thread is too; an *unjustified* use of
-`uninterruptibleMask_` in the child thread (the [orderly closure
-example](https://www.well-typed.com/blog/2026/11/exception-best-practices/#async-exceptions-during-release) we discussed above), resulting in
-uncancellable child threads, propagates and results in uncancellable parent
-threads.
-
-## Library ecosystem
-
-In this blog post we focused mostly on principles, not the larger ecosystem. We
-cannot possibly give an exhaustive overview here, but there are a few packages
-that we should briefly discuss. Two I can unreservedly recommend: `exceptions`
-and `async`. The third, `safe-exceptions`, takes an opinionated stance on async
-exceptions which you may or may not want to adopt; here we will only point out
-some aspects to be aware of.
-
-### `exceptions`
-
-The `exceptions` package provides polymorphic versions of the standard exception
-handling functions through a stack of type classes: `MonadThrow` for monads in
-which we can throw exceptions, `MonadCatch` in which we can catch them, and
-finally `MonadMask` in which we have `bracket` available. It’s mostly a
-straight-forward generalization of the functions in `base`, with the exception
-of `generalBracket`, [which we discussed already](https://www.well-typed.com/blog/2026/11/exception-best-practices/#bracket).
-
-### `async`
-
-As we saw [when we discussed threads](https://www.well-typed.com/blog/2026/11/exception-best-practices/#threads), dealing correctly with threads
-is non-trivial, and `async` aims to make this better. It takes care of the
-following things:
-
-- It provides essentially a simplified form of the buffered interface we discussed above, albeit for threads that produce a single result; `wait` or `waitCatch` provide a way for the “consumer” to wait for the thread result.
-- `withAsync` takes care of spawning new threads, ensuring that exceptions are masked when the new thread starts, and that the cancellation is uninterruptible.
-
-Be aware, however, that cancelling a thread (implicitly through leaving the
-scope of `withAsync`, or explicitly through [`cancel`](https://hackage-content.haskell.org/package/async-2.2.6/docs/Control-Concurrent-Async.html#v:cancel)),
-doesn’t just kill the child thread, but waits for it to terminate. That can be
-important: if the parent and the child thread shared any resources, the parent
-can be sure that the child will not need them anymore. However, there are also
-cases where the parent does not need to, or perhaps even *should* not, wait for
-the child.
-
-If you don’t want to use `withAsync`, some of the old problems come back:
-
-- If you use async inside bracket, it creates a thread that will run with exceptions forever masked; use `asyncWithUnmask` instead.
-- Similarly, you may need to use uninterruptibleCancel; see Bracketing thread creation.
-- If you never wait on the new async at all, and it throws an exception, it won’t be handled at all, not even by the default exception handler (that is, it won’t even be printed). One option here is to use `link`, which will re-raise most exceptions thrown by the child in the parent thread, albeit wrapped in `ExceptionInLinkedThread`, which may be problematic for exception handlers on specific types.
-
-### `safe-exceptions`
-
-As mentioned, [`safe-exceptions`](https://hackage.haskell.org/package/safe-exceptions) takes an opinionated
-stance on async exceptions, which is provided through a series of alternative
-implementations of standard `base` functions: `catch`, `bracket`, `throwTo` and
-others all behave subtly differently in `safe-exceptions` than they do
-elsewhere. As such, *if* you choose to use this package, my strong
-recommendation is to import the package qualified, so that use sites
-(`Safe.catch`) are clearly distinguished from the standard functions.
-
-The use of `safe-exceptions` should be a deliberate choice: **it is not a
-drop-in replacement**. Refactoring existing code to import from
-`Control.Exception.Safe` instead of `Control.Exception`, without making
-additional changes, is unlikely to be correct.
-
-The first important difference is that
-[`Safe.catch`](https://hackage.haskell.org/package/safe-exceptions-0.1.7.4/docs/Control-Exception-Safe.html#v:catch) and related functions do not allow
-you to catch async exceptions at all. This means that you don’t have to worry
-about catching async exceptions in handlers that catch “all” exceptions, though
-[you probably should not do that anyway](https://www.well-typed.com/blog/2026/11/exception-best-practices/#catching-all-exceptions). If you *do*
-try to catch an async exception, the code will compile just fine, but the
-handler will never run.
-
-In the section on distinguishing sync and async exceptions, we discussed that
-the difference is about [intent, not delivery
-mechanism](https://www.well-typed.com/blog/2026/11/exception-best-practices/#distinguishing-sync-and-async-exceptions). We implied, though did
-not spell it out, that this intent is stated statically, through the `Exception`
-instance. However, in the implementation of `throwTo` in `safe-exceptions` this
-intent is stated *dynamically:* `throwTo` will add an `AsyncExceptionWrapper`
-around the exception being thrown if `toException` does not already add the
-`SomeAsyncException` wrapper. This gives a catcher the ability to still see that
-it was “intended to be asynchronous”, but it also means that even if that
-catcher is defined using standard `catch`, and it has a handler for that exact
-exception, it *won’t be able to catch it anymore* because the type match will
-fail.[<sup>7</sup>](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fn7)
-
-The behaviour of `Safe.bracket` is also subtly different from standard
-`bracket`. The most important difference is that it wraps the release callback
-in `uninterruptibleMask_`. This means that the release callback does not need to
-worry about async exceptions, but as we saw in the section on [async exceptions
-during `release`](https://www.well-typed.com/blog/2026/11/exception-best-practices/#async-exceptions-during-release), this may not always be
-safer: in the network example, `uninterruptibleMask_` around an orderly closure
-could mean that the code will wait indefinitely for the network peer to respond,
-and cannot be timed out or interrupted with CTRL-C.
-
-The other difference in `bracket` is what happens when the release callback was
-called because of an exception in the `body`: depending on the exact nature of
-the two exceptions (sync or async), exceptions thrown by the release may be
-silently swallowed, making it all the more important to [be careful if you’re
-releasing multiple resources](https://www.well-typed.com/blog/2026/11/exception-best-practices/#releasing-multiple-resources).
-
-## Conclusions
-
-Writing code that does the right thing even when things go wrong can be quite
-difficult; this is inherent, not accidental, complexity. Asynchronous exceptions
-make this significantly more difficult still, but of course also come with a lot
-of benefits; for example, without asynchronous exceptions a general combinator
-such as `timeout` would not be possible. Exceptions also tend to be
-non-deterministic, so leaked resources, stuck code, or unhandled failures may
-not be noticed during testing. Nonetheless, with some good code hygiene many
-problems can be avoided; hopefully the guidelines in this blog post can assist.
-
-There are a few topics that we have not covered in this blog post:
-
-- We have ignored pure exceptions. The (slightly but not entirely tongue-in-cheek) TL;DR is: avoid pure exceptions, but we will come back to this in much more detail in part 3 of this series.
-- We have not discussed exception annotations at all, or how to preserve them; we covered this in detail in a previous blog post Exception Annotations: Lay of the Land, as well as in Unfolder episode 29: exceptions, annotations and backtraces.
-- We have not discussed finalizers (for example on a ForeignPtr, or using System.Mem.Weak). Finalizers run at some point after an object has become unreachable, but there is no guarantee of when, or indeed whether, they run; they are therefore no substitute for bracket for resources that must be released promptly, such as locks or file handles.
-- We have not discussed `ResourceT`, which is useful when resource lifetimes do not nest lexically: resources are registered with an enclosing scope, and released when that scope is exited.
-
-Many thanks to [Anduril](https://www.anduril.com/) for sponsoring this
-work.
-
-1. The main reference here is [Asynchronous Exceptions in Haskell](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/07/asynch-exns.pdf) by Marlow et al.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref1)
-2. In addition to successful termination and abnormal termination with an exception, `generalBracket` also has a case for abnormal termination in monad stacks such as `ExceptT`. Since these are not strictly speaking exceptions, we will not discuss this any further in this blog post.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref2)
-3. There are reasons to avoid synchronously rethrowing asynchronous exceptions; see GHC [#2558](https://gitlab.haskell.org/ghc/ghc/-/work_items/2558), [#24189](https://gitlab.haskell.org/ghc/ghc/-/work_items/24189) and [#26368](https://gitlab.haskell.org/ghc/ghc/-/work_items/26368); however, those reasons are mostly orthogonal to our discussion here.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref3)
-4. For the general mechanism at work here, see [An Extensible Dynamically-Typed Hierarchy of Exceptions](https://simonmar.github.io/bib/papers/ext-exceptions.pdf).[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref4)
-5. It would not be immune to async exceptions such as heap overflow, of course, but they are generally irrecoverable anyway. Strictly speaking it is not truly private either, as [`listThreads`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/GHC-Conc.html#v:listThreads) can be used to enumerate all threads.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref5)
-6. The only technical exception to this is [`exitFailure`](https://hackage-content.haskell.org/package/base-4.22.0.0/docs/System-Exit.html#v:exitFailure), which should only be called from the main thread, and will throw an `ExitCode` exception.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref6)
-7. Arguably, asynchronously throwing an exception with an `Exception` instance that does not use `asyncExceptionToException` and `asyncExceptionFromException` is a bug, but it’s probably a common one: simply `deriving Exception` is an easy mistake to make.[↩︎](https://www.well-typed.com/blog/2026/11/exception-best-practices/#fnref7)
+|  | # source:http://geocities.com/SiliconValley/heights/7052/opcode.txt |
+| --- | --- |
+|  | From: mark@omnifest.uwm.edu (Mark Hopkins) |
+|  | Newsgroups: alt.lang.asm |
+|  | Subject: A Summary of the 80486 Opcodes and Instructions |
+|  |  |
+|  | (1) The 80x86 is an Octal Machine |
+|  | This is a follow-up and revision of an article posted in alt.lang.asm on |
+|  | 7-5-92 concerning the 80x86 instruction encoding. |
+|  |  |
+|  | The only proper way to understand 80x86 coding is to realize that ALL 80x86 |
+|  | OPCODES ARE CODED IN OCTAL. A byte has 3 octal digits, ranging from 000 to |
+|  | 377. In fact, each octal group (000-077, 100-177, etc.) tends to encode a |
+|  | specific variety of operation. All of these are features inherited from the |
+|  | 8080/8085/Z80. |
+|  | For some reason absolutely everybody misses all of this, even the Intel |
+|  | people who wrote the reference on the 8086 (and even the 8080). The opcode |
+|  | scheme outlined briefly below is expanded starting in the 80386, but |
+|  | consistently with the overall scheme here. |
+|  |  |
+|  | As an example to see how this works, the mov instructions in octal are: |
+|  |  |
+|  | 210 xrm mov Eb, Rb |
+|  | 211 xrm mov Ew, Rw |
+|  | 212 xrm mov Rb, Eb |
+|  | 213 xrm mov Rw, Ew |
+|  | 214 xsm mov Ew, SR |
+|  | 216 xsm mov SR, Ew |
+|  |  |
+|  | The meanings of the octal digits (x, m, r, s) and their correspondence to the |
+|  | operands (Eb, Ew, Rb, Rw, SR) are the following: |
+|  |  |
+|  | The digit r (0-7) encodes the register operand as follows: |
+|  | REGISTER (r): 0 1 2 3 4 5 6 7 |
+|  | Rb = Byte-sized register AL CL DL BL AH CH DL BH |
+|  | Rw = Word-sized register AX CX DX BX SP BP SI DI |
+|  |  |
+|  | The segment register digit s (0-7) encodes the segment register as follows: |
+|  | SEGMENT REGISTER (s): 0 1 2 3 4 5 6 7 |
+|  | SR = Segment register ES CS SS DS <Reserved> |
+|  |  |
+|  | The digits x (0-3), and m (0-7) encode the address mode according to |
+|  | the following scheme. One or more bytes (labeled: Disp) may immediately |
+|  | follow xrm as described below. |
+|  |  |
+|  | TABLE 1: 16-BIT ADDRESSING MODE (x, m): |
+|  | Eb = Address of byte-sized object in memory or register |
+|  | Ew = Address of word-sized object in memory or register |
+|  | Dw = Unsigned word |
+|  | Dc = Signed byte ("character"), range: -128 to +127 (decimal). |
+|  | Db = Unsigned byte |
+|  |  |
+|  | x m Disp Eb Ew |
+|  | ------------------ |
+|  | 3 r Rb Rw |
+|  | 0 6 Dw DS:[Dw] |
+|  | 0 m Base:[0] (except for xm = 06). |
+|  | 1 m Dc Base:[Dc] |
+|  | 2 m Dw Base:[Dw] |
+|  |  |
+|  | x 0 Disp DS:[BX + SI + Disp] |
+|  | x 1 Disp DS:[BX + DI + Disp] |
+|  | x 2 Disp SS:[BP + SI + Disp] |
+|  | x 3 Disp SS:[BP + DI + Disp] |
+|  | x 4 Disp DS:[SI + Disp] |
+|  | x 5 Disp SS:[DI + Disp] |
+|  | x 6 Disp DS:[BP + Disp] (except for xm = 06) |
+|  | x 7 Disp DS:[BX + Disp] |
+|  |  |
+|  | This expands into the following table: |
+|  |  |
+|  | TABLE 1a: 16-BIT ADDRESSING MODE (x, m) for the expansion impaired. :) |
+|  | xm Eb/Ew xm Eb/Ew xm Eb/Ew xm Eb/Ew |
+|  | 00 DS:[BX + SI] 10 Dc DS:[BX + SI + Dc] 20 Dw DS:[BX + SI + Dw] 30 AL/AX |
+|  | 01 DS:[BX + DI] 11 Dc DS:[BX + BI + Dc] 21 Dw DS:[BX + DI + Dw] 31 CL/CX |
+|  | 02 SS:[BX + SI] 12 Dc SS:[BP + SI + Dc] 22 Dw SS:[BP + SI + Dw] 32 DL/DX |
+|  | 03 SS:[BX + DI] 13 Dc SS:[BP + DI + Dc] 23 Dw SS:[BP + DI + Dw] 33 BL/BX |
+|  | 04 DS:[SI] 14 Dc DS:[SI + Dc] 24 Dw DS:[SI + Dw] 34 AH/SP |
+|  | 05 DS:[DI] 15 Dc DS:[DI + Dc] 25 Dw DS:[DI + Dw] 35 CH/BP |
+|  | 06 Dw DS:[Dw] 16 Dc SS:[BP + Dc] 26 Dw SS:[BP + Dw] 36 DH/SI |
+|  | 07 DS:[BX] 17 Dc DS:[BX + Dc] 27 Dw DS:[BX + Dw] 37 BH/DI |
+|  |  |
+|  | Operands where x is 0, 1, or 2 are all pointers. If the instruction is a WORD |
+|  | instruction (211, 213, 214, 216 are), then this pointer addresses a |
+|  | word-sized object. The format of the object at the indicated address will |
+|  | always be low-order byte first, and high-order byte second. Otherwise the |
+|  | instruction is a BYTE instruction (210, 212) and the pointer addresses |
+|  | byte-sized object at the indicated address. |
+|  |  |
+|  | The default segments (DS:, SS:) can be overridden with a segment prefix. In |
+|  | all cases it's understood that everything has the default segment DS, except |
+|  | for the two stack/frame pointers (BP and SP) whose default segment is SS. |
+|  | That will be explained below. |
+|  |  |
+|  | Modes where x = 1, or 2 will require displacement bytes (Dc or Dw) to follow |
+|  | the opcode as explained above. |
+|  |  |
+|  | When x = 3, WORD sized instructions address the word registers (AX, CX, ...) |
+|  | and the BYTE size instructions the byte registers (AL, CL, ...). |
+|  |  |
+|  | EXAMPLE 1: The instruction opcode: 210 135 375 |
+|  | Here, xm = 15, and r = 3, so the operands are: |
+|  |  |
+|  | mov Eb, Rb |
+|  | => |
+|  | mov byte ptr DS:[DI + Dc], BL |
+|  |  |
+|  | The displacement, Dc, is 375 (or fd in hexadecimal), which is the signed byte |
+|  | -3. So the instruction reads: |
+|  |  |
+|  | mov byte ptr DS:[DI - 3], BL |
+|  |  |
+|  | or just: |
+|  | mov [DI - 3], BL |
+|  |  |
+|  | In C-like notation, the meaning of this operation would be: |
+|  |  |
+|  | ((byte *)DS) [DI - 3] = BL; |
+|  |  |
+|  | EXAMPLE 2: The instruction opcode: 216 332 |
+|  | Here, xm = 32, and s = 3, so the operands are: |
+|  |  |
+|  | mov SR, Ew |
+|  | => |
+|  | mov DS, DX |
+|  |  |
+|  | A move to CS is not possible (because the far jump instruction already does |
+|  | that) so that the opcode sequence: |
+|  |  |
+|  | 216 x2m |
+|  |  |
+|  | is free to be used for encoding something else. |
+|  |  |
+|  | EXAMPLE 3: As an illustration of why it's better to think in octal, just look |
+|  | at the opcodes for the binary arithmetic instructions: |
+|  |  |
+|  | 0P0 xrm Op Eb, Rb |
+|  | 0P1 xrm Op Ew, Rw |
+|  | 0P2 xrm Op Rb, Eb |
+|  | 0P3 xrm Op Rw, Ew |
+|  | 0P4 Db Op AL, Db |
+|  | 0P5 Dw Op AX, Dw |
+|  |  |
+|  | They all have the same form, with a single digit encoding the operator as |
+|  | follows: |
+|  | P Op P Op |
+|  | 0 add 1 or |
+|  | 2 adc 3 sbb |
+|  | 4 and 5 sub |
+|  | 6 xor 7 cmp |
+|  |  |
+|  | That's a good fraction of your reference table right there. |
+|  |  |
+|  | EXAMPLE 4: The same mapping is used in the immediate to memory/register form |
+|  | of these operations: |
+|  |  |
+|  | 200 xPm Db Op Eb, Db |
+|  | 201 xPm Dw Op Ew, Dw |
+|  | 203 xPm Dc Op Ew, Dc |
+|  |  |
+|  | (2) An Outline of 80x86 Instructions and Encoding |
+|  | The authors of 8080 and 8086 references (including Intel's own references) |
+|  | are apparently not aware of the octal nature of their own machines, and the |
+|  | result is an almost grotesque complication and bungling up in the presentation |
+|  | of something that is actually fairly simple. Thus, people claim that it's |
+|  | almost impossible to know 8086 binary by heart, whereas in fact I know most of |
+|  | it by memory. I'll straighten out the mess for you here. |
+|  |  |
+|  | As alluded to above, instructions are encoded as follows: |
+|  |  |
+|  | op xrm Const |
+|  |  |
+|  | where * op is a 1 or 2 byte opcode, |
+|  | * xrm (if present) constitutes 3 octal digits whose normal uses are: |
+|  | r = Register operand, xm = Memory or Register operand. |
+|  | It may be followed immediately by a "displacement" byte or word, |
+|  | depending solely on the digits x and m. |
+|  | * Const (if present) denotes a byte or word value whose presence and |
+|  | format depends solely on what op (and sometimes xrm) is. |
+|  |  |
+|  | In some cases, the opcode itself may be separated out into octal digits, e.g. |
+|  |  |
+|  | 0s6 = push (Segment Register #s). |
+|  |  |
+|  | The one major exception to the coding scheme are all the conditional code |
+|  | operations. Since there are 16 distinct conditional codes, they are |
+|  | represented as a hexadecimal digit. The conditional jump in octal ranges |
+|  | from 160 to 177, which is 7x in hexadecimal, where x is a hex digit encoding |
+|  | the jump's condition. I'll represent them by the format: 160+CC. |
+|  |  |
+|  | The register and address encoding was described above. The '386 expands on |
+|  | this a little with the addition of two segment registers: |
+|  |  |
+|  | SEGMENT REGISTER (s): 0 1 2 3 4 5 6 7 |
+|  | SR = Segment register ES CS SS DS FS GS <Reserved> |
+|  |  |
+|  | In TABLE 1, note that the addresses encoded on modes 0m, 1m, 2m are the same |
+|  | regardless of whether you're referring to Eb or Ew. What distinguishes them |
+|  | is the size of the object being pointed to and this can be explicitly |
+|  | indicated in traditional '86 assemblers like the following examples: |
+|  |  |
+|  | byte ptr [BP] |
+|  | word ptr [BX + DI] |
+|  |  |
+|  | As explained before, all addresses, except those involving BP refer to the |
+|  | data segment, DS. All the BP's refer to the stack segment, SS. This |
+|  | is about to be explained. |
+|  |  |
+|  | (3) Segmentation and Registers |
+|  | The 80x86 was designed with more or less specific uses for its registers. |
+|  | In fact, the names are supposed to reflect their main uses: |
+|  |  |
+|  | AX (AH:AL) = Accumulator |
+|  | BX (BH:BL) = Base Register |
+|  | CX (CH:CL) = Counting Register |
+|  | DX (DH:DL) = Data Register |
+|  |  |
+|  | CS = Code Segment -- where constants and programs lie. |
+|  | DS = Data Segment -- where static variables lie. |
+|  | SS = Stack Segment -- where auto variables and function parameters lie. |
+|  | SP, BP = Stack and Frame Pointers, used to segment out the |
+|  | local variables and function parameters. |
+|  | ES = Extra Segment -- used in combination with the index registers for |
+|  | string operations as follows: |
+|  | DS:[SI] -- points to the Source of the string operation. |
+|  | ES:[DI] -- points to the Destinction of the string operation. |
+|  |  |
+|  | The typical setup for the stack is as follows: |
+|  |  |
+|  | High Addresses FUNCTION DEFINITION: FUNCTION CALL: |
+|  | ... mov BP, SP push Parameters |
+|  | Parameters push BP call Function |
+|  | Return Address sub SP, Locals |
+|  | BP -> Old BP ... function ... |
+|  | Local Variables mov SP, BP |
+|  | SP -> ... pop BP |
+|  | Low Addresses ret Parameters |
+|  |  |
+|  | this dictates a certain protocol in calling functions with parameters and |
+|  | returning from them, as shown above. In fact, this is so much so that the |
+|  | opening and closing sequences above have all been defined as single operations |
+|  | starting with the 80286 so that the function definition above can be rewritten |
+|  | as: |
+|  | FUNCTION DEFINITION: |
+|  | enter Locals, 0 |
+|  | ... function ... |
+|  | leave |
+|  | ret Parameters |
+|  |  |
+|  | (4) Word and Address Size on the 80386 and Above |
+|  | Starting with the 80386, operations can be done with not just 16-bit words |
+|  | but also 32 bit words. Generally the same operation is defined for both sets |
+|  | and context is used to determine which is which in the following two ways: |
+|  |  |
+|  | * Which mode the machine is running in |
+|  | Protected mode -- both word sizes and address sizes are 32-bits |
+|  | Real & Virtual modes -- 16-bits. |
+|  | * The presence of certain prefixes to override either the default |
+|  | word size, address size or both on an instruction-by-instruction |
+|  | basis. |
+|  |  |
+|  | (a) Word Size |
+|  | When the word size for the current operation is 32-bits, everything listed |
+|  | above as "word" is interpreted as 32-bits, including registers. The register |
+|  | numbering corresponding to this word size is: |
+|  |  |
+|  | REGISTER (r): 0 1 2 3 4 5 6 7 |
+|  | Rb = Byte-sized register AL CL DL BL AH CH DL BH |
+|  | Rd = Dword-sized register EAX ECX EDX EBX ESP EBP ESI EDI |
+|  |  |
+|  | (b) Address Size |
+|  | When the address size is switched to 32-bits, the address scheme listed in |
+|  | TABLE 1 is altered in its entirety. |
+|  |  |
+|  | TABLE 2: 32-BIT ADDRESSING MODE (x, m): Encoding of scaled index SI: |
+|  | x m Disp Eb Ew si SI |
+|  | -------------------- --------------- |
+|  | 0 6 Dw DS:[Dw] s0 EAX * 2^s |
+|  | 0 4 sir [Rd + SI + 0] s1 ECX * 2^s |
+|  | 1 4 sir Dc [Rd + SI + Dc] s2 EDX * 2^s |
+|  | 2 4 sir Dw [Rd + SI + Dw] s3 EBX * 2^s |
+|  | 0 r [Rd + 0] (except r = 4, 6) 04 0 |
+|  | 1 r Dc [Rd + Dc] (except r = 4) s5 EBP * 2^s |
+|  | 2 r Dw [Rd + Dw] (except r = 4) s6 ESI * 2^s |
+|  | 3 r Rb Rw s7 EDI * 2^s |
+|  |  |
+|  | The encodings si = 14, 24 and 34 remain undefined. |
+|  |  |
+|  | This alteration is INDEPENDENT of the word size setting. That means that |
+|  | even the "Dw"'s, "Rw"'s in the chart above will vary in interpretation as |
+|  | 16-bit or 32-bit objects depending on the word size setting. That leads to |
+|  | 4 possible combinations, not just 2. |
+|  |  |
+|  | EXAMPLE 5: The opcode sequence 211 135 375 |
+|  | This is the operation |
+|  | mov Ew, Rw |
+|  | where xm = 15, r = 3 and Disp = -3. The 4 combinations are: |
+|  |  |
+|  | Addr-Size Word-Size Operation |
+|  | 16 16 mov word ptr [DI - 3], BX |
+|  | 16 32 mov dword ptr [DI - 3], EBX |
+|  | 32 16 mov word ptr [EBP - 3], BX |
+|  | 32 32 mov dword ptr [EBP - 3], EBX |
+|  |  |
+|  | EXAMPLE 6: The opcode sequence 211 134 302 375 with 32-bit addressing. |
+|  | This is the move instruction where xm = 14 and r = 3. |
+|  |  |
+|  | mov Ew, [E]BX ([E]BX since r = 3) |
+|  |  |
+|  | It uses the indexed register addressing. The address, Ew, may be derived |
+|  | as follows: |
+|  | x m sir Disp Ew Comments |
+|  | 1 4 sir Dc [EDX + SI + Dc] |
+|  | 1 4 si2 375 [EDX + SI - 3] (Rd = EDX for r = 2) |
+|  | 1 4 302 375 [EDX + 8*EAX - 3] (SI = 8*EAX for si = 30) |
+|  |  |
+|  | Therefore, this instruction represents one of the following: |
+|  |  |
+|  | Word-Size Operation: 211 134 302 375 |
+|  | 16 mov word ptr [EDX + 8*EAX - 3], BX |
+|  | 32 mov dword ptr [EDX + 8*EAX - 3], EBX |
+|  |  |
+|  | (5) The Opcode Summary |
+|  | The chart below summarises all the machine instructions. The following |
+|  | abbreviations are used: |
+|  |  |
+|  | Registers: Immediate Data Constant: |
+|  | Rb (byte sized) Db (byte sized) |
+|  | Rw (word sized) Dw (word sized) |
+|  | Rd (dword sized) Dc (signed byte) |
+|  |  |
+|  | Register/Memory Address: Relative Code Address: |
+|  | Eb (byte sized) Cb (byte sized) |
+|  | Ew (word sized) Cw (word sized) |
+|  |  |
+|  | Memory Address: Code Address: |
+|  | Es (16 bit selector) Af (32/48 bit absolute far code address) |
+|  | En (near 16/32 bit pointer) |
+|  | Ef (far i32/48 bit pointer) |
+|  | Ep (pointer to 6-byte object) |
+|  | Ea (generic address) |
+|  |  |
+|  | Processor Extensions: |
+|  | * = 80186 extension |
+|  | $ = 80286 extension |
+|  | # = 80386 extension |
+|  | @ = 80486 extension |
+|  |  |
+|  | The switch between 16 and 32 bit word size affects all operands labeled |
+|  | Rw, Ew, Dw, Cw, En and even Af and Ef. The latter two objects refer to |
+|  | far code addresses which are 4 bytes when the word size is 16 bits, and |
+|  | 6 bytes else. |
+|  |  |
+|  | The only such operands not actually affected by the word-size switch are |
+|  | those whose size a consequence of the operation's meaning. These include |
+|  | the following: RET, BOUND, ARPL, SMSW, LMSW, LAR and LSL. |
+|  |  |
+|  | The switch between 16 and 32 bit address size affects all the operands |
+|  | labeled Eb, Ew, Es, En, Ef, Ep, and Ea. Each of these is interpreted |
+|  | according to the xm digts in the opcode according to either the 16-bit |
+|  | addres table described near the start of the article or the 32-bit address |
+|  | table just described above. |
+|  |  |
+|  | NOTE: In the following presentation everything is in octal. |
+|  |  |
+|  | ARITHMETIC & LOGIC |
+|  | ------------------ |
+|  | Comments: |
+|  | * All of these operations affect all 6 arithmetic flags, except NOT (which |
+|  | affects no flags), and INC and DEC (which don't affect CF). |
+|  | * IMUL and MUL only affect CF and OF predictably. |
+|  | * IDIV and DIV affect no flags predictably. |
+|  | * AND, OR, XOR, and TEST all set CF and OF to 0 and alter AF unpredictably. |
+|  | * CMP and TEST have no affect on any operands. They're used for setting |
+|  | flags. CMP is used for doing relational operators (< > <= >= == !=), and |
+|  | TEST for doing bit-testing. |
+|  | * CMP and TEST can have their operands listed in either order. |
+|  | P Op Description |
+|  | 0 ADD L, E L += E |
+|  | 2 ADC L, E L += E + CF |
+|  | 5 SUB L, E L -= E |
+|  | 3 SBB L, E L -= E + CF |
+|  | 7 CMP L, E (void)(L - E) |
+|  | 1 OR L, E L \|= E |
+|  | 4 AND L, E L &= E |
+|  | 6 XOR L, E L ^= E |
+|  | 0P0 xrm Op Eb, Rb |
+|  | 0P1 xrm Op Ew, Rw |
+|  | 0P2 xrm Op Rb, Eb |
+|  | 0P3 xrm Op Rw, Ew |
+|  | 0P4 Db Op AL, Db |
+|  | 0P5 Dw Op AX, Dw |
+|  | 200 xPm Db Op Eb, Db |
+|  | 201 xPm Dw Op Ew, Dw |
+|  | 203 xPm Dc Op Ew, Dc |
+|  |  |
+|  | NOT L L = ~L |
+|  | 366 x2m not Eb |
+|  | 367 x2m not Ew |
+|  | NEG L L = -L |
+|  | 366 x3m neg Eb |
+|  | 367 x3m neg Ew |
+|  |  |
+|  | INC L L++ |
+|  | 10r inc Rw |
+|  | 376 x0m inc Eb |
+|  | 377 x0m inc Ew |
+|  | DEC L L-- |
+|  | 11r dec Rw |
+|  | 376 x1m dec Eb |
+|  | 377 x1m dec Ew |
+|  |  |
+|  | TEST L, E (void)(L&E) |
+|  | 204 xrm test Rb, Eb |
+|  | 205 xrm test Rw, Ew |
+|  | 250 Db test AL, Db |
+|  | 251 Dw test AX, Dw |
+|  | 366 x0m Db test Eb, Db |
+|  | 367 x0m Dw test Ew, Dw |
+|  |  |
+|  | IMUL L, E, D L = (signed)E*D |
+|  | IMUL L, E L = (signed)L*E |
+|  | # 017 257 xrm Dw imul Rw, Ew |
+|  | * 151 xrm Dw imul Rw, Ew, Dw |
+|  | * 153 xrm Db imul Rw, Ew, Dc |
+|  |  |
+|  | In the following operations: |
+|  | Operand Size ACC' ACC |
+|  | 1 AX AL |
+|  | 2 DX:AX AX |
+|  | 4 EDX:EAX EAX |
+|  | P Op Description |
+|  | 4 MUL E ACC' = (unsigned) ACC*E |
+|  | 5 IMUL E ACC' = (signed) ACC*E |
+|  | 6 DIV E ACC' = (unsigned) ACC%E : ACC/E |
+|  | 7 IDIV E ACC' = (signed) ACC%E : ACC/E |
+|  | 366 xPm Op Eb |
+|  | 367 xPm Op Ew |
+|  |  |
+|  | SHIFTS & ROTATIONS |
+|  | ------------------ |
+|  | Comments: |
+|  | * Where applicable, N is masked off by 0x1f. |
+|  | * For Rxx and Sxx, OF is predictably affected only when N is 1. |
+|  | * SHLD and SHRD affect all 6 arithmetic flags, but OF and AF unpredictably. |
+|  | * RxL: OF = (CF != high order bit of L) before shift |
+|  | * RxR: OF = (high order bit of L != next high order bit of L) before shift |
+|  | * SxL: OF = (CF != sign bit of L) after shift |
+|  | * SxR: OF = (sign bit of L) after shift |
+|  | P Op Description |
+|  | 0 ROL CF <- [<-<-<-] <- high order bit Rotate |
+|  | 1 ROR low order bit -> [->->->] -> CF |
+|  | 2 RCL CF <- [<-<-<-] <- CF Rotate Through CF |
+|  | 3 RCR CF -> [->->->] -> CF |
+|  | 4 SHL CF <- [<-<-<-] <- 0 Shift (unsigned) |
+|  | 5 SHR 0 -> [->->->] -> CF |
+|  | 4 SAL CF <- [<-<-<-] <- 0 Shift (signed) |
+|  | 7 SAR sign bit -> [->->->] -> CF |
+|  | * 300 xPm Db Op Eb, Db |
+|  | * 301 xPm Db Op Ew, Db |
+|  | 320 xPm Op Eb, 1 |
+|  | 321 xPm Op Ew, 1 |
+|  | 322 xPm Op Eb, CL |
+|  | 323 xPm Op Ew, CL |
+|  |  |
+|  | SHLD L, E, N CF:L = L:E << N |
+|  | SHRD L, E, N L:CF = E:L >> N |
+|  | # 017 244 Db shld Ew, Rw, Db |
+|  | # 017 245 shld Ew, Rw, CL |
+|  | # 017 254 Db shrd Ew, Rw, Db |
+|  | # 017 255 shrd Ew, Rw, CL |
+|  |  |
+|  | TYPE CONVERSIONS |
+|  | ---------------- |
+|  | [] Decimal Conversions |
+|  | Comments: |
+|  | * DAA and DAS are used for adjusting the results of addition and subtraction |
+|  | respectively back to packed BCD format. They will alter all 6 of the |
+|  | arithmetic flags, OF unpredictably. |
+|  | * AAA, AAS, AAD, and AAM are used for adjusting the results of the four |
+|  | basic arithmetic operations back to unpacked BCD format or ASCII format. |
+|  | However, AAD is used *before* a divide operation. They too affect all |
+|  | 6 of the arithmetic flags, but only AF and CF predictably (for AAA and |
+|  | AAS) or SF, ZF and PF (for AAD and AAM). |
+|  | * In the following, A0 stands for the lower 4 bits of AL and A1 the upper |
+|  | 4 bits of AL. |
+|  | * The binary codes for AAM and AAD each consist of an opcode followed by |
+|  | a constant 10 (012 in octal). It has been said that this "10" is |
+|  | actually a hidden parameter to a more general AAD and AAM operator, |
+|  | which can actually be used for any base other than 10. Some processors |
+|  | will not allow AAD to be generalized in this way, however. The reason it |
+|  | was left out in the open like this was supposedly because the original |
+|  | 8086 design literally ran out of space to pack in the opcode. |
+|  | DAA if (A0 > 9) AF = 1; if (AF) AL += (0x10 - 10); |
+|  | if (A1 > 9) CF = 1; if (CF) AL += (0x10 - 10)*0x10; |
+|  | DAS if (A0 > 9) AF = 1; if (AF) AL -= (0x10 - 10); |
+|  | if (A1 > 9) CF = 1; if (CF) AL += (0x10 - 10)*0x10; |
+|  | AAA if (A0 > 9) AF = 1; CF = AF; if (CF) A0 += (0x10 - 10), AH++; |
+|  | AAS if (A0 > 9) AF = 1; CF = AF; if (CF) A0 -= (0x10 - 10), AH--; |
+|  | AAM AX = AL/10 : AL%10 |
+|  | AAD AX = (10*AH + AL)%0x10 |
+|  | 047 daa |
+|  | 057 das |
+|  | 067 aaa |
+|  | 077 aas |
+|  | 324 012 aam |
+|  | 325 012 aad |
+|  |  |
+|  | [] Sign Conversions |
+|  | Comments: |
+|  | * In converting from a shorter to longer operand size, sign conversion |
+|  | involves either taking the leading (sign) bit and replicating it leftward |
+|  | (conversion to signed), or placing zero's on the left (for conversion |
+|  | to unsigned). |
+|  | MOVSX L, E L = (signed)E |
+|  | MOVZX L, E L = (unsigned)E |
+|  | # 017 266 xrm movsx Rw, Eb |
+|  | # 017 267 xrm movsx Rw, Ew |
+|  | # 017 266 xrm movzx Ew, Rb |
+|  | # 017 277 xrm movzx Ew, Rw |
+|  |  |
+|  | CBW AX = (signed)AL |
+|  | CWDE EAX = (signed)AX |
+|  | CWD DX:AX = (signed)AX |
+|  | CDQ EDX:EAX = (signed)EAX |
+|  | 230 cbw / (#) cwde |
+|  | 231 cwd / (#) cdq |
+|  |  |
+|  | [] Byte Ordering |
+|  | * Used to convert between "little Endian" (Intel byte ordering) and "big |
+|  | Endian" (Motorola byte ordering). Typical use: networking applications. |
+|  | BSWAP L L[0]:L[1]:L[2]:L[3] = L[3]:L[2]:L[1]:L[0] |
+|  | @ 017 31r bswap Rd |
+|  |  |
+|  | [] Table Lookup |
+|  | XLATB AL = [BX + AL] |
+|  | 327 xlatb |
+|  |  |
+|  | SEMAPHORES & SYNCHRONIZATION |
+|  | ---------------------------- |
+|  | Comments: |
+|  | * All these operations affect all 6 arithmetic flags. BT, BTS, BTR, BTC |
+|  | affect only CF predictably; and BSF and BSR affect only ZF predictably. |
+|  | * ACC is either AL, AX or EAX in CMPXCHG, depending on the operand size. |
+|  | * WAIT is used in the '486 to force a pending unmasked interrupt from the |
+|  | internal floating point processing unit. |
+|  | * LOCK is a prefix used in multi-CPU contexts to assure exclusive access to |
+|  | memory for the following two-step read & modify operations: |
+|  | (INC, DEC, NEG, NOT) Mem (ADD, ADC, SUB, SBB) Mem, Src |
+|  | (BT, BTS, BTR, BTC) Mem, Src (AND, XOR, OR) Mem, Src |
+|  | XCHG Reg, Mem XCHG Mem, Reg |
+|  | But XCHG automatically does its own LOCK so does not need to be prefixed. |
+|  | P Op Description |
+|  | 4 BT L, N CF = L.N; |
+|  | 5 BTS L, N CF = L.N; L.N = 1; |
+|  | 6 BTR L, N CF = L.N; L.N = 0; |
+|  | 7 BTC L, N CF = L.N; L.N = !L.N; |
+|  | # 017 2P3 xrm Op Ew, Rw |
+|  | # 017 272 xPm Db Op Ew, Db |
+|  |  |
+|  | BSF L, E ZF = !E; if (ZF) L = First 1-bit position in E; else L = ??? |
+|  | BSR L, E ZF = !E; if (ZF) L = Last 1-bit position in E; else L = ??? |
+|  | # 017 274 xrm bsf Rw, Ew |
+|  | # 017 275 xrm bsr Rw, Ew |
+|  |  |
+|  | CMPXCHG L, E ZF = (ACC == L); if (ZF) L = E; else ACC = L; |
+|  | @ 017 246 xrm cmpxchg Eb, Rb |
+|  | @ 017 247 xrm cmpxchg Ew, Rw |
+|  | XADD L, L' <L, L'> = <L + L', L> |
+|  | @ 017 300 xrm xadd Eb, Rb |
+|  | @ 017 301 xrm xadd Ew, Rw |
+|  |  |
+|  | NOP Delay 1 cycle. |
+|  | WAIT Wait for coprocessor unit. |
+|  | LOCK Hardware memory bus semaphore. |
+|  | HLT Wait for a reset or interrupt. |
+|  | 220 nop |
+|  | 233 wait |
+|  | 360 lock |
+|  | 364 hlt |
+|  |  |
+|  | INT N push [E]FLAGS, CS, [E]IP; TF = 0; |
+|  | if (the Nth entry in the IDT is a Interrupt Gate) IF = 0; |
+|  | jmp to the far address listed under the Nth entry in the IDT |
+|  | INTO if (OF) INT 4 |
+|  | IRET if (NT) return to task listed under TSS.BackLink; |
+|  | else pop [E]IP, CS, [E]FLAGS; |
+|  | 314 int 3 |
+|  | 315 Db int Db |
+|  | 316 into |
+|  | 317 iret |
+|  |  |
+|  | FLAGS |
+|  | ----- |
+|  | Comments: |
+|  | * No flags are affected except the explicit moves to the FLAGS register: |
+|  | POPF[D] and SAHF, but SAHF only sets the arithmetic flags (except OF). |
+|  | POPF pop FLAGS |
+|  | POPFD pop EFLAGS |
+|  | PUSHF push FLAGS |
+|  | PUSHFD push EFLAGS |
+|  | SAHF FLAGS \|= (AH & 0xd5) |
+|  | LAHF AH = FLAGS; |
+|  | 234 pushf / (#) pushfd |
+|  | 235 popf / (#) popfd |
+|  | 236 sahf |
+|  | 237 lahf |
+|  | CMC CF = !CF |
+|  | CLC CF = 0 |
+|  | STC CF = 1 |
+|  | CLI IF = 0 (Interrupts off) |
+|  | STI IF = 1 (Interrupts on) |
+|  | CLD DF = 0 (Set string ops to increment) |
+|  | STD DF = 1 (Set string ops to decrement) |
+|  | 365 cmc |
+|  | 370 clc |
+|  | 371 stc |
+|  | 372 cli |
+|  | 373 sti |
+|  | 374 cld |
+|  | 375 std |
+|  |  |
+|  | CONDITIONAL OPERATIONS |
+|  | ---------------------- |
+|  | (NOTE: The values listed for CC are in octal). |
+|  |  |
+|  | CC Condition(s) Definition Descriptions |
+|  | 07 A NBE !CF && !ZF x > y x > 0 (unsigned) |
+|  | 03 AE NB !CF x >= y x >= 0 (unsigned) |
+|  | 02 B NAE CF x < y x < 0 (unsigned) |
+|  | 06 BE NA CF \|\| ZF x <= y x <= 0 (unsigned) |
+|  | 17 G NLE SF == OF && !ZF x > y x > 0 (signed) |
+|  | 15 GE NL SF == OF x >= y x >= 0 (signed) |
+|  | 14 L NGE SF != OF x < y x < 0 (signed) |
+|  | 16 LE NG SF != OF \|\| ZF x <= y x <= 0 (signed) |
+|  | 04 E Z ZF x == y x == 0 |
+|  | 05 NE NZ !ZF x != y x != 0 |
+|  | 00 O OF Overflow (signed overflow) |
+|  | 01 NO !OF No overflow (signed overflow) |
+|  | 02 C CF Carry (unsigned overflow) |
+|  | 03 NC !CF No carry (unsigned overflow) |
+|  | 10 S SF (Negative) sign |
+|  | 11 NS !SF No (negative) sign |
+|  | 12 P PE PF Parity [even] |
+|  | 13 NP PO !PF No parity (parity odd) |
+|  | CC cc Cond. |
+|  |  |
+|  | Jcc Rel if (Cond) EIP += Rel; |
+|  | SETcc L L = (Cond)? 1: 0; |
+|  | # 017 200+CC Cw jcc Cw '=&h80+cc |
+|  | # 017 220+CC x0m setcc Rb '=&h90+cc |
+|  | 160+CC jcc Cb '=&h70+cc |
+|  |  |
+|  | STACK OPERATIONS |
+|  | ---------------- |
+|  | Comments: |
+|  | * PUSHA[D] uses the value SP had before the operation started. |
+|  | * POPA[D] doesn't actually affect [E]SP, which is why it's bracketed out. |
+|  | * POP CS is not allowed because it's already subsumed by the RET (far) |
+|  | operation. Instead, 017 is used as a 2-byte operation prefix. |
+|  | * POP SS inhibits interrupts in order to allow [E]SP to be altered in the |
+|  | following operation -- for what should be obvious reasons. |
+|  | PUSH E SP -= sizeof E; SS:[SP] = E; |
+|  | PUSHA push AX, CX, DX, BX, SP, BP, SI, DI |
+|  | PUSHAD push EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI |
+|  | # 017 240 push FS |
+|  | # 017 250 push GS |
+|  | 0s6 push SR (s = 0-3) |
+|  | 12r push Rw |
+|  | * 140 pusha / (#) pushad |
+|  | 150 Dw push Dw |
+|  | 152 Dc push Dc |
+|  | 377 x6m push Ew |
+|  | POP L L = SS:[SP]; SP += sizeof L; |
+|  | POPA pop DI, SI, BP, (SP), BX, DX, CX, AX |
+|  | POPAD pop EDI, ESI, EBP, (ESP), EBX, EDX, ECX, EAX |
+|  | # 017 241 pop FS |
+|  | # 017 251 pop GS |
+|  | 0s7 pop SR (s = 0, 2-3) |
+|  | 13r pop Rw |
+|  | * 141 popa / (#) popad |
+|  | 217 x0m pop Ew |
+|  |  |
+|  | TRANSFER OPERATIONS |
+|  | ------------------- |
+|  | Comments: |
+|  | * XCHG can have its operands listed in either order. |
+|  | * MOV CS, ... is not allowed, since this is already subsumed by JMPs. |
+|  | * LCS ... is not allowed either for the same reason. |
+|  | * XCHG AX, AX is one and the same as NOP. |
+|  | XCHG L, E <L, E> = <E, L> |
+|  | 206 xrm xchg Rb, Eb |
+|  | 207 xrm xchg Rw, Ew |
+|  | 22r xchg AX, Rw (r != 0) |
+|  | MOV L, E L = E; |
+|  | 210 xrm mov Eb, Rb |
+|  | 211 xrm mov Ew, Rw |
+|  | 212 xrm mov Rb, Eb |
+|  | 213 xrm mov Rw, Ew |
+|  | 214 xsm mov Es, SR (s = 0-3, (#) 4-5) |
+|  | 216 xsm mov SR, Es (s = 0,2-3, (#) 4-5) |
+|  | 240 Dw mov AL, [Dw] |
+|  | 241 Dw mov AX, [Dw] |
+|  | 242 Dw mov [Dw], AL |
+|  | 243 Dw mov [Dw], AX |
+|  | 26r Db mov Rb, Db |
+|  | 27r Dw mov Rw, Dw |
+|  | 306 x0m Db mov Eb, Db |
+|  | 307 x0m Dw mov Ew, Dw |
+|  | LEA L, An L = &An; |
+|  | 215 xrm lea Rw, En (x != 3) |
+|  | LSeg L, Af Seg:L = &Af; |
+|  | # 017 262 xrm lss Rw, Ef (x != 3) |
+|  | # 017 264 xrm lfs Rw, Ef (x != 3) |
+|  | # 017 265 xrm lgs Rw, Ef (x != 3) |
+|  | 304 xrm les Rw, Ef (x != 3) |
+|  | 305 xrm lds Rw, Ef (x != 3) |
+|  |  |
+|  | ADDRESSING |
+|  | ---------- |
+|  | Comments: |
+|  | * The current mode of the machine determines its default mode (16 or 32 |
+|  | bits). |
+|  | * RAND: and ADDR: (not an standard name, since Intel has none) are |
+|  | prefixes that alter the default for the next instruction only. |
+|  | * RAND: changes the word size between 16 and 32 bits. |
+|  | * ADDR: changes the address size between 16 and 32 bits. |
+|  | * seg: cannot override the implied ES:[DI] operand in any string op, |
+|  | but can override the DS in the implied DS:[SI] operands there. |
+|  | seg: Segment override prefix |
+|  | ADDR: Address size toggle |
+|  | RAND: Operand size toggle |
+|  | 305 xrm lds Rw, Ef (x != 3) |
+|  | 046 ES: |
+|  | 056 CS: |
+|  | 066 SS: |
+|  | 076 DS: |
+|  | # 144 FS: |
+|  | # 145 GS: |
+|  | # 146 RAND: |
+|  | # 147 ADDR: |
+|  |  |
+|  | PORT I/O |
+|  | -------- |
+|  | Comments: |
+|  | * In protected mode the user of these operations must pass the I/O |
+|  | Privilege Level (IOPL) else they are blocked by an interrupt. |
+|  | This allows the Operating System to spool I/O devices in a |
+|  | multitasking system (since the OS handles interrupts) to avoid having |
+|  | processes all trying to use the same device at once. |
+|  | IN ACC, Port ACC = IO[Port] |
+|  | 344 Db in AL, Db |
+|  | 345 Db in AX, Db |
+|  | 354 in AL, DX |
+|  | 355 in AX, DX |
+|  | OUT Port, ACC IO[Port] = ACC |
+|  | 346 Db out Db, AL |
+|  | 347 Db out Db, AX |
+|  | 356 out DX, AL |
+|  | 357 out DX, AX |
+|  |  |
+|  | STRING OPERATIONS |
+|  | ----------------- |
+|  | Comments: |
+|  | * In all these operations below, Src denotes DS;[ESI] and Dest ES:[EDI]. |
+|  | * Dest cannot be overridden by a segment prefix, only Src. |
+|  | * The pointes (ESI, EDI) are bumped up (DF = 0) or down (DF = 1) after |
+|  | the operation by sizeof Operand. |
+|  | * ACC is either AL, AX or EAX depending on the operand size. |
+|  | * The flags altered are exactly those altered by the corresponding |
+|  | MOV, IN, OUT, or CMP operation (namely: only SCAS and CMPS alter the |
+|  | flags and in the same way as CMP) and these are therefore the only ones |
+|  | that can be prefixed by REP[N]E/REP[N]Z. |
+|  | * REP with all string ops, but REP LODS doesn't do anything sensible. |
+|  | INS in Dest, DX |
+|  | OUTS out DX, Src |
+|  | MOVS mov Dest, Src |
+|  | CMPS cmp Dest, Src |
+|  | STOS mov Dest, ACC |
+|  | LODS mov ACC, Src |
+|  | SCAS cmp ACC, Dest |
+|  | * 154 insb |
+|  | * 155 insw / (#) insd |
+|  | * 156 outsb |
+|  | * 157 outsw / (#) outsd |
+|  | 244 movsb |
+|  | 245 movsw / (#) movsd |
+|  | 246 cmpsb |
+|  | 247 cmpsw / (#) cmpsd |
+|  | 252 stosb |
+|  | 253 stosw / (#) stosd |
+|  | 254 lodsb |
+|  | 255 lodsw / (#) lodsd |
+|  | 256 scasb |
+|  | 257 scasw / (#) scasd |
+|  | REP Op while (CX-- > 0) Op |
+|  | REPE /REPZ Op while (CX-- > 0 && ZF) Op |
+|  | REPNE/REPNZ Op while (CX-- > 0 && !ZF) Op |
+|  | 362 repne / repnz / rep |
+|  | 363 repe / repz |
+|  |  |
+|  | CONTROL FLOW |
+|  | ------------ |
+|  | Comments: |
+|  | * The distinction between near and far jumps/calls/returns is built right |
+|  | into the 8086 language, which pretty much forces you to explicitly |
+|  | declare a routine as "near" or "far" and be consistent about it. The |
+|  | intended usage runs pretty much like C's static vs. global functions, |
+|  | with each C file being analogous to an 8086 segment. |
+|  | * The 8086 was specifically designed to be a Pascal (and PL/I) machine, |
+|  | though. Intel wrongly assumed that one of these languages would become |
+|  | like C is now. So the ENTER and LEAVE operators were added (and BOUND |
+|  | to do array bounds-checking). The segmentation structure was intended |
+|  | to support these types of languages. |
+|  | JCXZ Rel if (!CX) IP += Rel; |
+|  | JECXZ Rel if (!ECX) IP += Rel; |
+|  | LOOPcc Rel if (!--CX && cc) IP += Rel; |
+|  | 340 Cb loopnz Cb / loopne Cb |
+|  | 341 Cb loopz Cb / loope Cb |
+|  | 342 Cb loop Cb |
+|  | 343 Cb jcxz Cb / (#) jecxz Cb |
+|  | JMP Rel IP += Rel; |
+|  | JMP FAR Af CS:IP = Af; |
+|  | CALL Rel push IP; IP += Rel; |
+|  | CALL FAR Af push CS, IP; IP = Af; |
+|  | 232 Af call Af |
+|  | 350 Cw call Cw |
+|  | 351 Cw jmp Cw |
+|  | 352 Af jmp far Af |
+|  | 353 Cb jmp Cb |
+|  | 377 x2m call En |
+|  | 377 x3m call far Ef |
+|  | 377 x4m jmp En |
+|  | 377 x5m jmp far Ef |
+|  | RET Params pop IP; SP += Params (default: Params = 0) |
+|  | RET FAR Params pop IP, CS; SP += Params (default: Params = 0) |
+|  | 302 Dw ret Dw |
+|  | 303 ret |
+|  | 312 Dw ret far Dw |
+|  | 313 ret far |
+|  | ENTER Locs, N push EBP; |
+|  | (sub EBP, 4; push [EBP]) N-1 times, if N > 0 |
+|  | mov EBP, ESP |
+|  | (add EBP, 4*(N-1); push EBP), if N > 0 |
+|  | sub ESP, Locs |
+|  | LEAVE mov ESP, EBP; pop EBP |
+|  | * 310 Dw Db enter Dw, Db |
+|  | * 311 leave |
+|  |  |
+|  | SYSTEM CONTROL & MEMORY PROTECTION |
+|  | ---------------------------------- |
+|  | BOUND A, AA if (A not in range AA[0]..AA[1]) INT 5 |
+|  | ARPL L, E ZF = (L.RPL < E.RPL); |
+|  | if (ZF) L.RPL = E.RPL; |
+|  | * 142 xrm bound Rw, Ed |
+|  | $ 143 xrm arpl Es, Rw |
+|  |  |
+|  | SLDT Sel Sel = LDTR |
+|  | STR Sel Sel = TR |
+|  | LLDT Sel LDTR = Sel |
+|  | LTR Sel TR = Sel |
+|  | VERR Sel ZF = (Sel is accessible and has read-access) |
+|  | VERW Sel ZF = (Sel is accessible and has write-access) |
+|  | LAR L, Sel ZF = (Sel is accessible); |
+|  | if (ZF) L = the access rights of Sel's descriptor. |
+|  | LSL L, Sel ZF = (Sel is accessible); |
+|  | if (ZF) L = the segment limit of Sel's descriptor. |
+|  | $ 017 000 x0m sldt Ew |
+|  | $ 017 000 x1m str Ew |
+|  | $ 017 000 x2m lldt Ew |
+|  | $ 017 000 x3m ltr Ew |
+|  | $ 017 000 x4m verr Ew |
+|  | $ 017 000 x5m verw Ew |
+|  | $ 017 002 xrm lar Rw, Ew |
+|  | $ 017 003 xrm lsl Rw, Ew |
+|  |  |
+|  | SGDT Desc Desc = GDTR |
+|  | SIDT Desc Desc = IDTR |
+|  | LGDT Desc GDTR = Desc |
+|  | LIDT Desc IDTR = Desc |
+|  | $ 017 001 x0m sgdt Ep |
+|  | $ 017 001 x1m sidt Ep |
+|  | $ 017 001 x2m lgdt Ep |
+|  | $ 017 001 x3m lidt Ep |
+|  |  |
+|  | SMSW L L = MSW ... note that MSW is CR0 bits 0-15. |
+|  | LMSW E MSW = E |
+|  | CLTS MSW.3 = 0 ... clears the Task Switched flag. |
+|  | $ 017 001 x4m smsw Ew |
+|  | $ 017 001 x6m lmsw Ew |
+|  | $ 017 006 clts |
+|  |  |
+|  | INVD Invalidate internal cache. |
+|  | WBINVD Invalidate internal cache, after writing it back. |
+|  | INVLPD Ea Invalidate Ea's page. |
+|  | @ 017 010 invd |
+|  | @ 017 011 wbinvd |
+|  | @ 017 020 x7m invlpg Ea |
+|  |  |
+|  | MOV Reg, SysReg |
+|  | MOV SysReg, Reg |
+|  | # 017 040 3nr mov Rd, CRn (n = 0-3) |
+|  | # 017 041 3nr mov Rd, DRn (n = 0-3, 6-7) |
+|  | # 017 042 3nr mov CRn, Rd (n = 0, 2-3) |
+|  | # 017 043 3nr mov DRn, Rd (n = 0-3, 6-7) |
+|  | # 017 044 3nr mov Rd, TRn (n = 6-7) |
+|  | # 017 046 3nr mov TRn, Rd (n = 6-7) |
+|  |  |
+|  | CO-PROCESSOR ESCAPE SEQUENCE |
+|  | ---------------------------- |
+|  | Comments: |
+|  | * This escape sequence is intended to be used with an external co-processor |
+|  | with the most common application being the 80x87 floating point unit. |
+|  | * Starting in the 80486, the floating point unit was made internal to the |
+|  | processor. |
+|  |  |
+|  | ESC TL, Ea Escape, operation TL, address mode Ea. |
+|  | 33T xLm esc TL Ea |
+|  |  |
+|  | (6) Floating Point Operations |
+|  | The Floating Point unit consists of 8 internal registers arranged in a |
+|  | circular stack, and the Control Word (CW), Status Word (SW) and Tag Word (TW) |
+|  | registers. The floating point stack registers all store data in Real80 |
+|  | format (described below). |
+|  | Operations are carried out on data in the following formats (low-order bits |
+|  | on right): |
+|  |  |
+|  | INTEGER: 16/32/64 bits (Int16, Int32, Int64) |
+|  | BCD: (BCD80) |
+|  | S 0000000 D D D D D D D D D D D D D D D D D D |
+|  | S = 1-bit sign (1 = negative, 0 = positive) |
+|  | D = 4-bit digit (encodes digits 0-9). |
+|  | FLOATING POINT: 32/64/80 bits (Real32, Real64, Real80) |
+|  | S Exponent Mantissa |
+|  | S = 1-bit sign (1 = negative, 0 = positive) |
+|  | Exponent = 8/11/15 bit biased exponent |
+|  | Mantissa = 23/52/64 bit decimal fraction. |
+|  | The values of floating point numbers in each format are as follows: |
+|  | Real32: (-1)^S (1 + Mantissa)/2^23 x 2^(Exponent - 127) |
+|  | Real64: (-1)^S (1 + Mantissa)/2^52 x 2^(Exponent - 1023) |
+|  | Real80: (-1)^S Mantissa/2^63 x 2^(Exponent - 16383) |
+|  |  |
+|  | The floatng point formats do not cover all the logical combination of binary |
+|  | 0's and 1's, and the remaining combinations are defined for special purposes: |
+|  |  |
+|  | Sign Exponent Mantissa Meaning |
+|  | S 0 0 0 ... 0 0 0 0 ... 0 0 |
+|  | S 0 0 0 ... 0 ... 1 ... DENORMAL (Infinitesimal) |
+|  | S 1 1 1 ... 1 0 0 0 ... 0 INFINITY |
+|  | S 1 1 1 ... 1 0 ... 1 ... Signalling NaN (Not a Number) |
+|  | S 1 1 1 ... 1 1 ... Quiet NaN |
+|  |  |
+|  | This is all IEEE standard format. Quiet NaN's are set by the FP Unit to |
+|  | indicate invalid operations. |
+|  |  |
+|  | Notation: |
+|  | ST(n) -- the nth item below the stack top. |
+|  | ST ----- ST(0), the stack top. |
+|  | Int*, BCD*, Real* -- described above. |
+|  |  |
+|  | All Int*, BCD*, and Real* operands are stored in memory and are encoded in |
+|  | the 80x86's current addressing mode (16 or 32 bit). All opcodes are |
+|  | listed in the format: |
+|  |  |
+|  | T L xm for 8086 escape code 33T xLm |
+|  |  |
+|  | Since only memory addresses are used in the operations, that frees up all |
+|  | the combinations xm where x = 3. These are generally used to encode the |
+|  | operations that do not involve memory addresses. In the following |
+|  | presentation where "xm" is listed generally, it is understood that x is not 3. |
+|  |  |
+|  | The operations FENI, FDISI are specific to the 8887; FSETPM to the 80287 |
+|  | and FUCOM*, FPREM1, and the trig. operations FSIN, FCOS, FSINCOS are all |
+|  | present only in the 80387 and after. |
+|  |  |
+|  | DATA TRANSFER |
+|  | ------------- |
+|  | Comments: |
+|  | * The followng table is used: |
+|  | P 0 2 3 |
+|  | F-OP fld fst fstp |
+|  | I-OP fild fist fistp |
+|  | FLD Arg ST = (Real80)Arg |
+|  | FST Arg Arg = (typeof Arg)ST |
+|  | FSTP Arg Arg = (typeof Arg)ST; pop(); |
+|  | FXCH Arg Arg <--> ST, with appropriate type conversions. |
+|  | 1 P xm F-OP Real32 |
+|  | 3 P xm I-OP Int32 |
+|  | 5 P xm F-OP Real64 |
+|  | 7 P xm I-OP Int16 |
+|  | 3 5 xm fld Real80 |
+|  | 3 7 xm fstp Real80 |
+|  | 7 4 xm fbld BCD80 |
+|  | 7 5 xm fild Int64 |
+|  | 7 6 xm fbstp BCD80 |
+|  | 7 7 xm fistp Int64 |
+|  | 1 0 3m fld ST(m) |
+|  | 1 1 3m fxch ST(m) |
+|  | 5 2 3m fst ST(m) |
+|  | 5 3 3m fstp ST(m) |
+|  |  |
+|  | COMPARISON |
+|  | ---------- |
+|  | Comments: |
+|  | * The followng table is used: |
+|  | P 2 3 |
+|  | F-OP fcom fcomp |
+|  | I-OP ficom ficomp |
+|  | FCOM Arg cmp ST, Arg |
+|  | FCOMP Arg cmp ST, Arg; pop(); |
+|  | 0 P xm F-OP Real32 |
+|  | 2 P xm I-OP Int32 |
+|  | 4 P xm F-OP Real64 |
+|  | 6 P xm I-OP Int16 |
+|  | 0 P 3m F-OP ST(m) |
+|  | FCOMPP cmp ST, ST(1); pop(); pop(); |
+|  | 6 3 31 fcompp |
+|  | FTST cmp ST, 0.0 |
+|  | 1 4 34 ftst |
+|  | FXAM examine ST |
+|  | 1 4 35 fxam |
+|  | FUCOM Arg unordered compare ST, Arg |
+|  | FUCOMP Arg unordered compare ST, Arg; pop(); |
+|  | FUCOMPP Arg unordered compare ST, ST(1); pop(); pop(); |
+|  | 5 4 3m fucom ST(m) |
+|  | 5 5 3m fucomp ST(m) |
+|  | 2 5 31 fucompp |
+|  |  |
+|  | ARITHMETIC OPERATIONS |
+|  | --------------------- |
+|  | Comments: |
+|  | * The followng table is used: |
+|  | P 0 1 4 5 6 7 |
+|  | F-OP fadd fmul fsub fsubr fdiv fdivr |
+|  | I-OP fiadd fimul fisub fisubr fidiv fidivr |
+|  | P-OP faddp fmulp fsubp fsubrp fdivp fdivrp |
+|  | * Dest is ST and Src the listed operand except where noted below. |
+|  | FADD Arg Dest += Src |
+|  | FSUB Arg Dest += Src |
+|  | FSUBR Arg Dest = Src - Dest |
+|  | FMUL Arg Dest *= Src |
+|  | FDIV Arg Dest /= Src |
+|  | FDIVR Arg Dest = Src/Dest |
+|  | 0 P xm F-OP Real32 |
+|  | 2 P xm I-OP Int32 |
+|  | 4 P xm F-OP Real64 |
+|  | 6 P xm I-OP Int16 |
+|  | 0 P 3m F-OP ST(m) |
+|  | 4 P 3m F-OP ST(m) (Dest = ST(m), Src = ST) |
+|  | 6 P 3m P-OP ST(m) (Dest = ST(m), Src = ST) |
+|  |  |
+|  | CONSTANTS |
+|  | --------- |
+|  | FLD1 ST = 1.0 |
+|  | FLDL2T ST = log_2(10) |
+|  | FLDL2E ST = log_2(e) |
+|  | FLDPI ST = pi |
+|  | FLDLG2 ST = log_10(2) |
+|  | FLDLN2 ST = ln(2) |
+|  | FLDZ ST = 0.0 |
+|  | 1 5 30 fld1 |
+|  | 1 5 31 fldl2t |
+|  | 1 5 32 fldl2e |
+|  | 1 5 33 fldpi |
+|  | 1 5 34 fldlg2 |
+|  | 1 5 35 fldln2 |
+|  | 1 5 36 fldz |
+|  |  |
+|  | BUILT-IN FUNCTIONS |
+|  | ------------------ |
+|  | Comments: |
+|  | * The stack replacements entail pop()'s. |
+|  | FCHS ST = -ST |
+|  | FABS ST = \|ST\| |
+|  | F2XM1 ST = 2^ST - 1 |
+|  | FYL2X Replace the stack: ST(1), ST -> ST(1)*log_2(ST) |
+|  | FPTAN Replace the stack: ST -> tan(ST), 1.0 |
+|  | FPATAN Replace the stack: ST(1), ST -> atan(ST(1)/ST) |
+|  | FXTRACT Replace the stack: ST -> exponent(ST), mantissa(ST) |
+|  | FPREM1 ST = remainder(ST/ST(1)), IEEE consistent |
+|  | FPREM ST = remainder(ST/ST(1)) |
+|  | FYL2XPI Replace the stack: ST(1), ST -> ST(1)*log_2(ST + 1) |
+|  | FSQRT ST = sqrt(ST) |
+|  | FSINCOS Replace the stack: ST -> sin(ST), cos(ST) |
+|  | FRNDINT ST = round(ST) |
+|  | FSCALE ST *= 2^(int)ST(1) |
+|  | FSIN ST = sin(ST) |
+|  | FCOS ST = cos(ST) |
+|  | 1 4 30 fchs |
+|  | 1 4 31 fabs |
+|  | 1 6 30 f2xm1 |
+|  | 1 6 31 fyl2x |
+|  | 1 6 32 fptan |
+|  | 1 6 33 fpatan |
+|  | 1 6 34 fxtract |
+|  | 1 6 35 fprem1 |
+|  | 1 7 30 fprem |
+|  | 1 7 31 fyl2xpi |
+|  | 1 7 32 fsqrt |
+|  | 1 7 33 fsincos |
+|  | 1 7 34 frndint |
+|  | 1 7 35 fscale |
+|  | 1 7 36 fsin |
+|  | 1 7 37 fcos |
+|  |  |
+|  | CONTROL |
+|  | ------- |
+|  | Comments: |
+|  | * The save and load operations for the environment and state are used |
+|  | primarily for multitasking applications where 2 or more processes are |
+|  | using the FP unit concurrently. |
+|  | FNOP Delay 1 cycle. |
+|  | FLDENV Arg Load FP environment from [Arg] |
+|  | FLDCW Arg CW = Arg |
+|  | FSTENV Arg Save FP environment to [Arg] |
+|  | FSTCW Arg Arg = CW |
+|  | FDECSTP TOP = (TOP - 1) mod 8 |
+|  | FINCSTP TOP = (TOP + 1) mod 8 |
+|  | FENI Enable interrupts (8087 only) |
+|  | FDISI Disable interrupts (8087 only) |
+|  | FCLEX Clear out FP exception flags |
+|  | FINIT Initialize FP registers |
+|  | FSETPM Enter Protected Mode (80287 only) |
+|  | FFREE ST(m) Mark register m as unused. |
+|  | FRSTOR Arg Restore FP state from [Arg] |
+|  | FSAVE Arg Save FP state to [Arg] |
+|  | FSTSW Arg Arg = SW |
+|  | 1 2 30 fnop |
+|  | 1 4 xm fldenv Ea |
+|  | 1 5 xm fldcw Ea |
+|  | 1 6 xm fstenv Ea |
+|  | 1 7 xm fstcw Ea |
+|  | 1 6 36 fdecstp |
+|  | 1 6 37 fincstp |
+|  | 3 4 30 feni |
+|  | 3 4 31 fdisi |
+|  | 3 4 32 fclex |
+|  | 3 4 33 finit |
+|  | 3 4 34 fsetpm |
+|  | 5 0 3m ffree ST(m) |
+|  | 5 4 xm frstor Ea |
+|  | 5 6 xm fsave Ea |
+|  | 5 7 xm fstsw Ea |
+|  | 7 4 30 fstsw AX |
+|  |  |
+
+In table 1a, should xm 02, 03 be `SS:BP + ...` instead of the `SS:[BX + ...` listed above?

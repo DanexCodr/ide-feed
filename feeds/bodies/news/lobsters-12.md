@@ -1,1147 +1,220 @@
-|  | # source:http://geocities.com/SiliconValley/heights/7052/opcode.txt |
-| --- | --- |
-|  | From: mark@omnifest.uwm.edu (Mark Hopkins) |
-|  | Newsgroups: alt.lang.asm |
-|  | Subject: A Summary of the 80486 Opcodes and Instructions |
-|  |  |
-|  | (1) The 80x86 is an Octal Machine |
-|  | This is a follow-up and revision of an article posted in alt.lang.asm on |
-|  | 7-5-92 concerning the 80x86 instruction encoding. |
-|  |  |
-|  | The only proper way to understand 80x86 coding is to realize that ALL 80x86 |
-|  | OPCODES ARE CODED IN OCTAL. A byte has 3 octal digits, ranging from 000 to |
-|  | 377. In fact, each octal group (000-077, 100-177, etc.) tends to encode a |
-|  | specific variety of operation. All of these are features inherited from the |
-|  | 8080/8085/Z80. |
-|  | For some reason absolutely everybody misses all of this, even the Intel |
-|  | people who wrote the reference on the 8086 (and even the 8080). The opcode |
-|  | scheme outlined briefly below is expanded starting in the 80386, but |
-|  | consistently with the overall scheme here. |
-|  |  |
-|  | As an example to see how this works, the mov instructions in octal are: |
-|  |  |
-|  | 210 xrm mov Eb, Rb |
-|  | 211 xrm mov Ew, Rw |
-|  | 212 xrm mov Rb, Eb |
-|  | 213 xrm mov Rw, Ew |
-|  | 214 xsm mov Ew, SR |
-|  | 216 xsm mov SR, Ew |
-|  |  |
-|  | The meanings of the octal digits (x, m, r, s) and their correspondence to the |
-|  | operands (Eb, Ew, Rb, Rw, SR) are the following: |
-|  |  |
-|  | The digit r (0-7) encodes the register operand as follows: |
-|  | REGISTER (r): 0 1 2 3 4 5 6 7 |
-|  | Rb = Byte-sized register AL CL DL BL AH CH DL BH |
-|  | Rw = Word-sized register AX CX DX BX SP BP SI DI |
-|  |  |
-|  | The segment register digit s (0-7) encodes the segment register as follows: |
-|  | SEGMENT REGISTER (s): 0 1 2 3 4 5 6 7 |
-|  | SR = Segment register ES CS SS DS <Reserved> |
-|  |  |
-|  | The digits x (0-3), and m (0-7) encode the address mode according to |
-|  | the following scheme. One or more bytes (labeled: Disp) may immediately |
-|  | follow xrm as described below. |
-|  |  |
-|  | TABLE 1: 16-BIT ADDRESSING MODE (x, m): |
-|  | Eb = Address of byte-sized object in memory or register |
-|  | Ew = Address of word-sized object in memory or register |
-|  | Dw = Unsigned word |
-|  | Dc = Signed byte ("character"), range: -128 to +127 (decimal). |
-|  | Db = Unsigned byte |
-|  |  |
-|  | x m Disp Eb Ew |
-|  | ------------------ |
-|  | 3 r Rb Rw |
-|  | 0 6 Dw DS:[Dw] |
-|  | 0 m Base:[0] (except for xm = 06). |
-|  | 1 m Dc Base:[Dc] |
-|  | 2 m Dw Base:[Dw] |
-|  |  |
-|  | x 0 Disp DS:[BX + SI + Disp] |
-|  | x 1 Disp DS:[BX + DI + Disp] |
-|  | x 2 Disp SS:[BP + SI + Disp] |
-|  | x 3 Disp SS:[BP + DI + Disp] |
-|  | x 4 Disp DS:[SI + Disp] |
-|  | x 5 Disp SS:[DI + Disp] |
-|  | x 6 Disp DS:[BP + Disp] (except for xm = 06) |
-|  | x 7 Disp DS:[BX + Disp] |
-|  |  |
-|  | This expands into the following table: |
-|  |  |
-|  | TABLE 1a: 16-BIT ADDRESSING MODE (x, m) for the expansion impaired. :) |
-|  | xm Eb/Ew xm Eb/Ew xm Eb/Ew xm Eb/Ew |
-|  | 00 DS:[BX + SI] 10 Dc DS:[BX + SI + Dc] 20 Dw DS:[BX + SI + Dw] 30 AL/AX |
-|  | 01 DS:[BX + DI] 11 Dc DS:[BX + BI + Dc] 21 Dw DS:[BX + DI + Dw] 31 CL/CX |
-|  | 02 SS:[BX + SI] 12 Dc SS:[BP + SI + Dc] 22 Dw SS:[BP + SI + Dw] 32 DL/DX |
-|  | 03 SS:[BX + DI] 13 Dc SS:[BP + DI + Dc] 23 Dw SS:[BP + DI + Dw] 33 BL/BX |
-|  | 04 DS:[SI] 14 Dc DS:[SI + Dc] 24 Dw DS:[SI + Dw] 34 AH/SP |
-|  | 05 DS:[DI] 15 Dc DS:[DI + Dc] 25 Dw DS:[DI + Dw] 35 CH/BP |
-|  | 06 Dw DS:[Dw] 16 Dc SS:[BP + Dc] 26 Dw SS:[BP + Dw] 36 DH/SI |
-|  | 07 DS:[BX] 17 Dc DS:[BX + Dc] 27 Dw DS:[BX + Dw] 37 BH/DI |
-|  |  |
-|  | Operands where x is 0, 1, or 2 are all pointers. If the instruction is a WORD |
-|  | instruction (211, 213, 214, 216 are), then this pointer addresses a |
-|  | word-sized object. The format of the object at the indicated address will |
-|  | always be low-order byte first, and high-order byte second. Otherwise the |
-|  | instruction is a BYTE instruction (210, 212) and the pointer addresses |
-|  | byte-sized object at the indicated address. |
-|  |  |
-|  | The default segments (DS:, SS:) can be overridden with a segment prefix. In |
-|  | all cases it's understood that everything has the default segment DS, except |
-|  | for the two stack/frame pointers (BP and SP) whose default segment is SS. |
-|  | That will be explained below. |
-|  |  |
-|  | Modes where x = 1, or 2 will require displacement bytes (Dc or Dw) to follow |
-|  | the opcode as explained above. |
-|  |  |
-|  | When x = 3, WORD sized instructions address the word registers (AX, CX, ...) |
-|  | and the BYTE size instructions the byte registers (AL, CL, ...). |
-|  |  |
-|  | EXAMPLE 1: The instruction opcode: 210 135 375 |
-|  | Here, xm = 15, and r = 3, so the operands are: |
-|  |  |
-|  | mov Eb, Rb |
-|  | => |
-|  | mov byte ptr DS:[DI + Dc], BL |
-|  |  |
-|  | The displacement, Dc, is 375 (or fd in hexadecimal), which is the signed byte |
-|  | -3. So the instruction reads: |
-|  |  |
-|  | mov byte ptr DS:[DI - 3], BL |
-|  |  |
-|  | or just: |
-|  | mov [DI - 3], BL |
-|  |  |
-|  | In C-like notation, the meaning of this operation would be: |
-|  |  |
-|  | ((byte *)DS) [DI - 3] = BL; |
-|  |  |
-|  | EXAMPLE 2: The instruction opcode: 216 332 |
-|  | Here, xm = 32, and s = 3, so the operands are: |
-|  |  |
-|  | mov SR, Ew |
-|  | => |
-|  | mov DS, DX |
-|  |  |
-|  | A move to CS is not possible (because the far jump instruction already does |
-|  | that) so that the opcode sequence: |
-|  |  |
-|  | 216 x2m |
-|  |  |
-|  | is free to be used for encoding something else. |
-|  |  |
-|  | EXAMPLE 3: As an illustration of why it's better to think in octal, just look |
-|  | at the opcodes for the binary arithmetic instructions: |
-|  |  |
-|  | 0P0 xrm Op Eb, Rb |
-|  | 0P1 xrm Op Ew, Rw |
-|  | 0P2 xrm Op Rb, Eb |
-|  | 0P3 xrm Op Rw, Ew |
-|  | 0P4 Db Op AL, Db |
-|  | 0P5 Dw Op AX, Dw |
-|  |  |
-|  | They all have the same form, with a single digit encoding the operator as |
-|  | follows: |
-|  | P Op P Op |
-|  | 0 add 1 or |
-|  | 2 adc 3 sbb |
-|  | 4 and 5 sub |
-|  | 6 xor 7 cmp |
-|  |  |
-|  | That's a good fraction of your reference table right there. |
-|  |  |
-|  | EXAMPLE 4: The same mapping is used in the immediate to memory/register form |
-|  | of these operations: |
-|  |  |
-|  | 200 xPm Db Op Eb, Db |
-|  | 201 xPm Dw Op Ew, Dw |
-|  | 203 xPm Dc Op Ew, Dc |
-|  |  |
-|  | (2) An Outline of 80x86 Instructions and Encoding |
-|  | The authors of 8080 and 8086 references (including Intel's own references) |
-|  | are apparently not aware of the octal nature of their own machines, and the |
-|  | result is an almost grotesque complication and bungling up in the presentation |
-|  | of something that is actually fairly simple. Thus, people claim that it's |
-|  | almost impossible to know 8086 binary by heart, whereas in fact I know most of |
-|  | it by memory. I'll straighten out the mess for you here. |
-|  |  |
-|  | As alluded to above, instructions are encoded as follows: |
-|  |  |
-|  | op xrm Const |
-|  |  |
-|  | where * op is a 1 or 2 byte opcode, |
-|  | * xrm (if present) constitutes 3 octal digits whose normal uses are: |
-|  | r = Register operand, xm = Memory or Register operand. |
-|  | It may be followed immediately by a "displacement" byte or word, |
-|  | depending solely on the digits x and m. |
-|  | * Const (if present) denotes a byte or word value whose presence and |
-|  | format depends solely on what op (and sometimes xrm) is. |
-|  |  |
-|  | In some cases, the opcode itself may be separated out into octal digits, e.g. |
-|  |  |
-|  | 0s6 = push (Segment Register #s). |
-|  |  |
-|  | The one major exception to the coding scheme are all the conditional code |
-|  | operations. Since there are 16 distinct conditional codes, they are |
-|  | represented as a hexadecimal digit. The conditional jump in octal ranges |
-|  | from 160 to 177, which is 7x in hexadecimal, where x is a hex digit encoding |
-|  | the jump's condition. I'll represent them by the format: 160+CC. |
-|  |  |
-|  | The register and address encoding was described above. The '386 expands on |
-|  | this a little with the addition of two segment registers: |
-|  |  |
-|  | SEGMENT REGISTER (s): 0 1 2 3 4 5 6 7 |
-|  | SR = Segment register ES CS SS DS FS GS <Reserved> |
-|  |  |
-|  | In TABLE 1, note that the addresses encoded on modes 0m, 1m, 2m are the same |
-|  | regardless of whether you're referring to Eb or Ew. What distinguishes them |
-|  | is the size of the object being pointed to and this can be explicitly |
-|  | indicated in traditional '86 assemblers like the following examples: |
-|  |  |
-|  | byte ptr [BP] |
-|  | word ptr [BX + DI] |
-|  |  |
-|  | As explained before, all addresses, except those involving BP refer to the |
-|  | data segment, DS. All the BP's refer to the stack segment, SS. This |
-|  | is about to be explained. |
-|  |  |
-|  | (3) Segmentation and Registers |
-|  | The 80x86 was designed with more or less specific uses for its registers. |
-|  | In fact, the names are supposed to reflect their main uses: |
-|  |  |
-|  | AX (AH:AL) = Accumulator |
-|  | BX (BH:BL) = Base Register |
-|  | CX (CH:CL) = Counting Register |
-|  | DX (DH:DL) = Data Register |
-|  |  |
-|  | CS = Code Segment -- where constants and programs lie. |
-|  | DS = Data Segment -- where static variables lie. |
-|  | SS = Stack Segment -- where auto variables and function parameters lie. |
-|  | SP, BP = Stack and Frame Pointers, used to segment out the |
-|  | local variables and function parameters. |
-|  | ES = Extra Segment -- used in combination with the index registers for |
-|  | string operations as follows: |
-|  | DS:[SI] -- points to the Source of the string operation. |
-|  | ES:[DI] -- points to the Destinction of the string operation. |
-|  |  |
-|  | The typical setup for the stack is as follows: |
-|  |  |
-|  | High Addresses FUNCTION DEFINITION: FUNCTION CALL: |
-|  | ... mov BP, SP push Parameters |
-|  | Parameters push BP call Function |
-|  | Return Address sub SP, Locals |
-|  | BP -> Old BP ... function ... |
-|  | Local Variables mov SP, BP |
-|  | SP -> ... pop BP |
-|  | Low Addresses ret Parameters |
-|  |  |
-|  | this dictates a certain protocol in calling functions with parameters and |
-|  | returning from them, as shown above. In fact, this is so much so that the |
-|  | opening and closing sequences above have all been defined as single operations |
-|  | starting with the 80286 so that the function definition above can be rewritten |
-|  | as: |
-|  | FUNCTION DEFINITION: |
-|  | enter Locals, 0 |
-|  | ... function ... |
-|  | leave |
-|  | ret Parameters |
-|  |  |
-|  | (4) Word and Address Size on the 80386 and Above |
-|  | Starting with the 80386, operations can be done with not just 16-bit words |
-|  | but also 32 bit words. Generally the same operation is defined for both sets |
-|  | and context is used to determine which is which in the following two ways: |
-|  |  |
-|  | * Which mode the machine is running in |
-|  | Protected mode -- both word sizes and address sizes are 32-bits |
-|  | Real & Virtual modes -- 16-bits. |
-|  | * The presence of certain prefixes to override either the default |
-|  | word size, address size or both on an instruction-by-instruction |
-|  | basis. |
-|  |  |
-|  | (a) Word Size |
-|  | When the word size for the current operation is 32-bits, everything listed |
-|  | above as "word" is interpreted as 32-bits, including registers. The register |
-|  | numbering corresponding to this word size is: |
-|  |  |
-|  | REGISTER (r): 0 1 2 3 4 5 6 7 |
-|  | Rb = Byte-sized register AL CL DL BL AH CH DL BH |
-|  | Rd = Dword-sized register EAX ECX EDX EBX ESP EBP ESI EDI |
-|  |  |
-|  | (b) Address Size |
-|  | When the address size is switched to 32-bits, the address scheme listed in |
-|  | TABLE 1 is altered in its entirety. |
-|  |  |
-|  | TABLE 2: 32-BIT ADDRESSING MODE (x, m): Encoding of scaled index SI: |
-|  | x m Disp Eb Ew si SI |
-|  | -------------------- --------------- |
-|  | 0 6 Dw DS:[Dw] s0 EAX * 2^s |
-|  | 0 4 sir [Rd + SI + 0] s1 ECX * 2^s |
-|  | 1 4 sir Dc [Rd + SI + Dc] s2 EDX * 2^s |
-|  | 2 4 sir Dw [Rd + SI + Dw] s3 EBX * 2^s |
-|  | 0 r [Rd + 0] (except r = 4, 6) 04 0 |
-|  | 1 r Dc [Rd + Dc] (except r = 4) s5 EBP * 2^s |
-|  | 2 r Dw [Rd + Dw] (except r = 4) s6 ESI * 2^s |
-|  | 3 r Rb Rw s7 EDI * 2^s |
-|  |  |
-|  | The encodings si = 14, 24 and 34 remain undefined. |
-|  |  |
-|  | This alteration is INDEPENDENT of the word size setting. That means that |
-|  | even the "Dw"'s, "Rw"'s in the chart above will vary in interpretation as |
-|  | 16-bit or 32-bit objects depending on the word size setting. That leads to |
-|  | 4 possible combinations, not just 2. |
-|  |  |
-|  | EXAMPLE 5: The opcode sequence 211 135 375 |
-|  | This is the operation |
-|  | mov Ew, Rw |
-|  | where xm = 15, r = 3 and Disp = -3. The 4 combinations are: |
-|  |  |
-|  | Addr-Size Word-Size Operation |
-|  | 16 16 mov word ptr [DI - 3], BX |
-|  | 16 32 mov dword ptr [DI - 3], EBX |
-|  | 32 16 mov word ptr [EBP - 3], BX |
-|  | 32 32 mov dword ptr [EBP - 3], EBX |
-|  |  |
-|  | EXAMPLE 6: The opcode sequence 211 134 302 375 with 32-bit addressing. |
-|  | This is the move instruction where xm = 14 and r = 3. |
-|  |  |
-|  | mov Ew, [E]BX ([E]BX since r = 3) |
-|  |  |
-|  | It uses the indexed register addressing. The address, Ew, may be derived |
-|  | as follows: |
-|  | x m sir Disp Ew Comments |
-|  | 1 4 sir Dc [EDX + SI + Dc] |
-|  | 1 4 si2 375 [EDX + SI - 3] (Rd = EDX for r = 2) |
-|  | 1 4 302 375 [EDX + 8*EAX - 3] (SI = 8*EAX for si = 30) |
-|  |  |
-|  | Therefore, this instruction represents one of the following: |
-|  |  |
-|  | Word-Size Operation: 211 134 302 375 |
-|  | 16 mov word ptr [EDX + 8*EAX - 3], BX |
-|  | 32 mov dword ptr [EDX + 8*EAX - 3], EBX |
-|  |  |
-|  | (5) The Opcode Summary |
-|  | The chart below summarises all the machine instructions. The following |
-|  | abbreviations are used: |
-|  |  |
-|  | Registers: Immediate Data Constant: |
-|  | Rb (byte sized) Db (byte sized) |
-|  | Rw (word sized) Dw (word sized) |
-|  | Rd (dword sized) Dc (signed byte) |
-|  |  |
-|  | Register/Memory Address: Relative Code Address: |
-|  | Eb (byte sized) Cb (byte sized) |
-|  | Ew (word sized) Cw (word sized) |
-|  |  |
-|  | Memory Address: Code Address: |
-|  | Es (16 bit selector) Af (32/48 bit absolute far code address) |
-|  | En (near 16/32 bit pointer) |
-|  | Ef (far i32/48 bit pointer) |
-|  | Ep (pointer to 6-byte object) |
-|  | Ea (generic address) |
-|  |  |
-|  | Processor Extensions: |
-|  | * = 80186 extension |
-|  | $ = 80286 extension |
-|  | # = 80386 extension |
-|  | @ = 80486 extension |
-|  |  |
-|  | The switch between 16 and 32 bit word size affects all operands labeled |
-|  | Rw, Ew, Dw, Cw, En and even Af and Ef. The latter two objects refer to |
-|  | far code addresses which are 4 bytes when the word size is 16 bits, and |
-|  | 6 bytes else. |
-|  |  |
-|  | The only such operands not actually affected by the word-size switch are |
-|  | those whose size a consequence of the operation's meaning. These include |
-|  | the following: RET, BOUND, ARPL, SMSW, LMSW, LAR and LSL. |
-|  |  |
-|  | The switch between 16 and 32 bit address size affects all the operands |
-|  | labeled Eb, Ew, Es, En, Ef, Ep, and Ea. Each of these is interpreted |
-|  | according to the xm digts in the opcode according to either the 16-bit |
-|  | addres table described near the start of the article or the 32-bit address |
-|  | table just described above. |
-|  |  |
-|  | NOTE: In the following presentation everything is in octal. |
-|  |  |
-|  | ARITHMETIC & LOGIC |
-|  | ------------------ |
-|  | Comments: |
-|  | * All of these operations affect all 6 arithmetic flags, except NOT (which |
-|  | affects no flags), and INC and DEC (which don't affect CF). |
-|  | * IMUL and MUL only affect CF and OF predictably. |
-|  | * IDIV and DIV affect no flags predictably. |
-|  | * AND, OR, XOR, and TEST all set CF and OF to 0 and alter AF unpredictably. |
-|  | * CMP and TEST have no affect on any operands. They're used for setting |
-|  | flags. CMP is used for doing relational operators (< > <= >= == !=), and |
-|  | TEST for doing bit-testing. |
-|  | * CMP and TEST can have their operands listed in either order. |
-|  | P Op Description |
-|  | 0 ADD L, E L += E |
-|  | 2 ADC L, E L += E + CF |
-|  | 5 SUB L, E L -= E |
-|  | 3 SBB L, E L -= E + CF |
-|  | 7 CMP L, E (void)(L - E) |
-|  | 1 OR L, E L \|= E |
-|  | 4 AND L, E L &= E |
-|  | 6 XOR L, E L ^= E |
-|  | 0P0 xrm Op Eb, Rb |
-|  | 0P1 xrm Op Ew, Rw |
-|  | 0P2 xrm Op Rb, Eb |
-|  | 0P3 xrm Op Rw, Ew |
-|  | 0P4 Db Op AL, Db |
-|  | 0P5 Dw Op AX, Dw |
-|  | 200 xPm Db Op Eb, Db |
-|  | 201 xPm Dw Op Ew, Dw |
-|  | 203 xPm Dc Op Ew, Dc |
-|  |  |
-|  | NOT L L = ~L |
-|  | 366 x2m not Eb |
-|  | 367 x2m not Ew |
-|  | NEG L L = -L |
-|  | 366 x3m neg Eb |
-|  | 367 x3m neg Ew |
-|  |  |
-|  | INC L L++ |
-|  | 10r inc Rw |
-|  | 376 x0m inc Eb |
-|  | 377 x0m inc Ew |
-|  | DEC L L-- |
-|  | 11r dec Rw |
-|  | 376 x1m dec Eb |
-|  | 377 x1m dec Ew |
-|  |  |
-|  | TEST L, E (void)(L&E) |
-|  | 204 xrm test Rb, Eb |
-|  | 205 xrm test Rw, Ew |
-|  | 250 Db test AL, Db |
-|  | 251 Dw test AX, Dw |
-|  | 366 x0m Db test Eb, Db |
-|  | 367 x0m Dw test Ew, Dw |
-|  |  |
-|  | IMUL L, E, D L = (signed)E*D |
-|  | IMUL L, E L = (signed)L*E |
-|  | # 017 257 xrm Dw imul Rw, Ew |
-|  | * 151 xrm Dw imul Rw, Ew, Dw |
-|  | * 153 xrm Db imul Rw, Ew, Dc |
-|  |  |
-|  | In the following operations: |
-|  | Operand Size ACC' ACC |
-|  | 1 AX AL |
-|  | 2 DX:AX AX |
-|  | 4 EDX:EAX EAX |
-|  | P Op Description |
-|  | 4 MUL E ACC' = (unsigned) ACC*E |
-|  | 5 IMUL E ACC' = (signed) ACC*E |
-|  | 6 DIV E ACC' = (unsigned) ACC%E : ACC/E |
-|  | 7 IDIV E ACC' = (signed) ACC%E : ACC/E |
-|  | 366 xPm Op Eb |
-|  | 367 xPm Op Ew |
-|  |  |
-|  | SHIFTS & ROTATIONS |
-|  | ------------------ |
-|  | Comments: |
-|  | * Where applicable, N is masked off by 0x1f. |
-|  | * For Rxx and Sxx, OF is predictably affected only when N is 1. |
-|  | * SHLD and SHRD affect all 6 arithmetic flags, but OF and AF unpredictably. |
-|  | * RxL: OF = (CF != high order bit of L) before shift |
-|  | * RxR: OF = (high order bit of L != next high order bit of L) before shift |
-|  | * SxL: OF = (CF != sign bit of L) after shift |
-|  | * SxR: OF = (sign bit of L) after shift |
-|  | P Op Description |
-|  | 0 ROL CF <- [<-<-<-] <- high order bit Rotate |
-|  | 1 ROR low order bit -> [->->->] -> CF |
-|  | 2 RCL CF <- [<-<-<-] <- CF Rotate Through CF |
-|  | 3 RCR CF -> [->->->] -> CF |
-|  | 4 SHL CF <- [<-<-<-] <- 0 Shift (unsigned) |
-|  | 5 SHR 0 -> [->->->] -> CF |
-|  | 4 SAL CF <- [<-<-<-] <- 0 Shift (signed) |
-|  | 7 SAR sign bit -> [->->->] -> CF |
-|  | * 300 xPm Db Op Eb, Db |
-|  | * 301 xPm Db Op Ew, Db |
-|  | 320 xPm Op Eb, 1 |
-|  | 321 xPm Op Ew, 1 |
-|  | 322 xPm Op Eb, CL |
-|  | 323 xPm Op Ew, CL |
-|  |  |
-|  | SHLD L, E, N CF:L = L:E << N |
-|  | SHRD L, E, N L:CF = E:L >> N |
-|  | # 017 244 Db shld Ew, Rw, Db |
-|  | # 017 245 shld Ew, Rw, CL |
-|  | # 017 254 Db shrd Ew, Rw, Db |
-|  | # 017 255 shrd Ew, Rw, CL |
-|  |  |
-|  | TYPE CONVERSIONS |
-|  | ---------------- |
-|  | [] Decimal Conversions |
-|  | Comments: |
-|  | * DAA and DAS are used for adjusting the results of addition and subtraction |
-|  | respectively back to packed BCD format. They will alter all 6 of the |
-|  | arithmetic flags, OF unpredictably. |
-|  | * AAA, AAS, AAD, and AAM are used for adjusting the results of the four |
-|  | basic arithmetic operations back to unpacked BCD format or ASCII format. |
-|  | However, AAD is used *before* a divide operation. They too affect all |
-|  | 6 of the arithmetic flags, but only AF and CF predictably (for AAA and |
-|  | AAS) or SF, ZF and PF (for AAD and AAM). |
-|  | * In the following, A0 stands for the lower 4 bits of AL and A1 the upper |
-|  | 4 bits of AL. |
-|  | * The binary codes for AAM and AAD each consist of an opcode followed by |
-|  | a constant 10 (012 in octal). It has been said that this "10" is |
-|  | actually a hidden parameter to a more general AAD and AAM operator, |
-|  | which can actually be used for any base other than 10. Some processors |
-|  | will not allow AAD to be generalized in this way, however. The reason it |
-|  | was left out in the open like this was supposedly because the original |
-|  | 8086 design literally ran out of space to pack in the opcode. |
-|  | DAA if (A0 > 9) AF = 1; if (AF) AL += (0x10 - 10); |
-|  | if (A1 > 9) CF = 1; if (CF) AL += (0x10 - 10)*0x10; |
-|  | DAS if (A0 > 9) AF = 1; if (AF) AL -= (0x10 - 10); |
-|  | if (A1 > 9) CF = 1; if (CF) AL += (0x10 - 10)*0x10; |
-|  | AAA if (A0 > 9) AF = 1; CF = AF; if (CF) A0 += (0x10 - 10), AH++; |
-|  | AAS if (A0 > 9) AF = 1; CF = AF; if (CF) A0 -= (0x10 - 10), AH--; |
-|  | AAM AX = AL/10 : AL%10 |
-|  | AAD AX = (10*AH + AL)%0x10 |
-|  | 047 daa |
-|  | 057 das |
-|  | 067 aaa |
-|  | 077 aas |
-|  | 324 012 aam |
-|  | 325 012 aad |
-|  |  |
-|  | [] Sign Conversions |
-|  | Comments: |
-|  | * In converting from a shorter to longer operand size, sign conversion |
-|  | involves either taking the leading (sign) bit and replicating it leftward |
-|  | (conversion to signed), or placing zero's on the left (for conversion |
-|  | to unsigned). |
-|  | MOVSX L, E L = (signed)E |
-|  | MOVZX L, E L = (unsigned)E |
-|  | # 017 266 xrm movsx Rw, Eb |
-|  | # 017 267 xrm movsx Rw, Ew |
-|  | # 017 266 xrm movzx Ew, Rb |
-|  | # 017 277 xrm movzx Ew, Rw |
-|  |  |
-|  | CBW AX = (signed)AL |
-|  | CWDE EAX = (signed)AX |
-|  | CWD DX:AX = (signed)AX |
-|  | CDQ EDX:EAX = (signed)EAX |
-|  | 230 cbw / (#) cwde |
-|  | 231 cwd / (#) cdq |
-|  |  |
-|  | [] Byte Ordering |
-|  | * Used to convert between "little Endian" (Intel byte ordering) and "big |
-|  | Endian" (Motorola byte ordering). Typical use: networking applications. |
-|  | BSWAP L L[0]:L[1]:L[2]:L[3] = L[3]:L[2]:L[1]:L[0] |
-|  | @ 017 31r bswap Rd |
-|  |  |
-|  | [] Table Lookup |
-|  | XLATB AL = [BX + AL] |
-|  | 327 xlatb |
-|  |  |
-|  | SEMAPHORES & SYNCHRONIZATION |
-|  | ---------------------------- |
-|  | Comments: |
-|  | * All these operations affect all 6 arithmetic flags. BT, BTS, BTR, BTC |
-|  | affect only CF predictably; and BSF and BSR affect only ZF predictably. |
-|  | * ACC is either AL, AX or EAX in CMPXCHG, depending on the operand size. |
-|  | * WAIT is used in the '486 to force a pending unmasked interrupt from the |
-|  | internal floating point processing unit. |
-|  | * LOCK is a prefix used in multi-CPU contexts to assure exclusive access to |
-|  | memory for the following two-step read & modify operations: |
-|  | (INC, DEC, NEG, NOT) Mem (ADD, ADC, SUB, SBB) Mem, Src |
-|  | (BT, BTS, BTR, BTC) Mem, Src (AND, XOR, OR) Mem, Src |
-|  | XCHG Reg, Mem XCHG Mem, Reg |
-|  | But XCHG automatically does its own LOCK so does not need to be prefixed. |
-|  | P Op Description |
-|  | 4 BT L, N CF = L.N; |
-|  | 5 BTS L, N CF = L.N; L.N = 1; |
-|  | 6 BTR L, N CF = L.N; L.N = 0; |
-|  | 7 BTC L, N CF = L.N; L.N = !L.N; |
-|  | # 017 2P3 xrm Op Ew, Rw |
-|  | # 017 272 xPm Db Op Ew, Db |
-|  |  |
-|  | BSF L, E ZF = !E; if (ZF) L = First 1-bit position in E; else L = ??? |
-|  | BSR L, E ZF = !E; if (ZF) L = Last 1-bit position in E; else L = ??? |
-|  | # 017 274 xrm bsf Rw, Ew |
-|  | # 017 275 xrm bsr Rw, Ew |
-|  |  |
-|  | CMPXCHG L, E ZF = (ACC == L); if (ZF) L = E; else ACC = L; |
-|  | @ 017 246 xrm cmpxchg Eb, Rb |
-|  | @ 017 247 xrm cmpxchg Ew, Rw |
-|  | XADD L, L' <L, L'> = <L + L', L> |
-|  | @ 017 300 xrm xadd Eb, Rb |
-|  | @ 017 301 xrm xadd Ew, Rw |
-|  |  |
-|  | NOP Delay 1 cycle. |
-|  | WAIT Wait for coprocessor unit. |
-|  | LOCK Hardware memory bus semaphore. |
-|  | HLT Wait for a reset or interrupt. |
-|  | 220 nop |
-|  | 233 wait |
-|  | 360 lock |
-|  | 364 hlt |
-|  |  |
-|  | INT N push [E]FLAGS, CS, [E]IP; TF = 0; |
-|  | if (the Nth entry in the IDT is a Interrupt Gate) IF = 0; |
-|  | jmp to the far address listed under the Nth entry in the IDT |
-|  | INTO if (OF) INT 4 |
-|  | IRET if (NT) return to task listed under TSS.BackLink; |
-|  | else pop [E]IP, CS, [E]FLAGS; |
-|  | 314 int 3 |
-|  | 315 Db int Db |
-|  | 316 into |
-|  | 317 iret |
-|  |  |
-|  | FLAGS |
-|  | ----- |
-|  | Comments: |
-|  | * No flags are affected except the explicit moves to the FLAGS register: |
-|  | POPF[D] and SAHF, but SAHF only sets the arithmetic flags (except OF). |
-|  | POPF pop FLAGS |
-|  | POPFD pop EFLAGS |
-|  | PUSHF push FLAGS |
-|  | PUSHFD push EFLAGS |
-|  | SAHF FLAGS \|= (AH & 0xd5) |
-|  | LAHF AH = FLAGS; |
-|  | 234 pushf / (#) pushfd |
-|  | 235 popf / (#) popfd |
-|  | 236 sahf |
-|  | 237 lahf |
-|  | CMC CF = !CF |
-|  | CLC CF = 0 |
-|  | STC CF = 1 |
-|  | CLI IF = 0 (Interrupts off) |
-|  | STI IF = 1 (Interrupts on) |
-|  | CLD DF = 0 (Set string ops to increment) |
-|  | STD DF = 1 (Set string ops to decrement) |
-|  | 365 cmc |
-|  | 370 clc |
-|  | 371 stc |
-|  | 372 cli |
-|  | 373 sti |
-|  | 374 cld |
-|  | 375 std |
-|  |  |
-|  | CONDITIONAL OPERATIONS |
-|  | ---------------------- |
-|  | (NOTE: The values listed for CC are in octal). |
-|  |  |
-|  | CC Condition(s) Definition Descriptions |
-|  | 07 A NBE !CF && !ZF x > y x > 0 (unsigned) |
-|  | 03 AE NB !CF x >= y x >= 0 (unsigned) |
-|  | 02 B NAE CF x < y x < 0 (unsigned) |
-|  | 06 BE NA CF \|\| ZF x <= y x <= 0 (unsigned) |
-|  | 17 G NLE SF == OF && !ZF x > y x > 0 (signed) |
-|  | 15 GE NL SF == OF x >= y x >= 0 (signed) |
-|  | 14 L NGE SF != OF x < y x < 0 (signed) |
-|  | 16 LE NG SF != OF \|\| ZF x <= y x <= 0 (signed) |
-|  | 04 E Z ZF x == y x == 0 |
-|  | 05 NE NZ !ZF x != y x != 0 |
-|  | 00 O OF Overflow (signed overflow) |
-|  | 01 NO !OF No overflow (signed overflow) |
-|  | 02 C CF Carry (unsigned overflow) |
-|  | 03 NC !CF No carry (unsigned overflow) |
-|  | 10 S SF (Negative) sign |
-|  | 11 NS !SF No (negative) sign |
-|  | 12 P PE PF Parity [even] |
-|  | 13 NP PO !PF No parity (parity odd) |
-|  | CC cc Cond. |
-|  |  |
-|  | Jcc Rel if (Cond) EIP += Rel; |
-|  | SETcc L L = (Cond)? 1: 0; |
-|  | # 017 200+CC Cw jcc Cw '=&h80+cc |
-|  | # 017 220+CC x0m setcc Rb '=&h90+cc |
-|  | 160+CC jcc Cb '=&h70+cc |
-|  |  |
-|  | STACK OPERATIONS |
-|  | ---------------- |
-|  | Comments: |
-|  | * PUSHA[D] uses the value SP had before the operation started. |
-|  | * POPA[D] doesn't actually affect [E]SP, which is why it's bracketed out. |
-|  | * POP CS is not allowed because it's already subsumed by the RET (far) |
-|  | operation. Instead, 017 is used as a 2-byte operation prefix. |
-|  | * POP SS inhibits interrupts in order to allow [E]SP to be altered in the |
-|  | following operation -- for what should be obvious reasons. |
-|  | PUSH E SP -= sizeof E; SS:[SP] = E; |
-|  | PUSHA push AX, CX, DX, BX, SP, BP, SI, DI |
-|  | PUSHAD push EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI |
-|  | # 017 240 push FS |
-|  | # 017 250 push GS |
-|  | 0s6 push SR (s = 0-3) |
-|  | 12r push Rw |
-|  | * 140 pusha / (#) pushad |
-|  | 150 Dw push Dw |
-|  | 152 Dc push Dc |
-|  | 377 x6m push Ew |
-|  | POP L L = SS:[SP]; SP += sizeof L; |
-|  | POPA pop DI, SI, BP, (SP), BX, DX, CX, AX |
-|  | POPAD pop EDI, ESI, EBP, (ESP), EBX, EDX, ECX, EAX |
-|  | # 017 241 pop FS |
-|  | # 017 251 pop GS |
-|  | 0s7 pop SR (s = 0, 2-3) |
-|  | 13r pop Rw |
-|  | * 141 popa / (#) popad |
-|  | 217 x0m pop Ew |
-|  |  |
-|  | TRANSFER OPERATIONS |
-|  | ------------------- |
-|  | Comments: |
-|  | * XCHG can have its operands listed in either order. |
-|  | * MOV CS, ... is not allowed, since this is already subsumed by JMPs. |
-|  | * LCS ... is not allowed either for the same reason. |
-|  | * XCHG AX, AX is one and the same as NOP. |
-|  | XCHG L, E <L, E> = <E, L> |
-|  | 206 xrm xchg Rb, Eb |
-|  | 207 xrm xchg Rw, Ew |
-|  | 22r xchg AX, Rw (r != 0) |
-|  | MOV L, E L = E; |
-|  | 210 xrm mov Eb, Rb |
-|  | 211 xrm mov Ew, Rw |
-|  | 212 xrm mov Rb, Eb |
-|  | 213 xrm mov Rw, Ew |
-|  | 214 xsm mov Es, SR (s = 0-3, (#) 4-5) |
-|  | 216 xsm mov SR, Es (s = 0,2-3, (#) 4-5) |
-|  | 240 Dw mov AL, [Dw] |
-|  | 241 Dw mov AX, [Dw] |
-|  | 242 Dw mov [Dw], AL |
-|  | 243 Dw mov [Dw], AX |
-|  | 26r Db mov Rb, Db |
-|  | 27r Dw mov Rw, Dw |
-|  | 306 x0m Db mov Eb, Db |
-|  | 307 x0m Dw mov Ew, Dw |
-|  | LEA L, An L = &An; |
-|  | 215 xrm lea Rw, En (x != 3) |
-|  | LSeg L, Af Seg:L = &Af; |
-|  | # 017 262 xrm lss Rw, Ef (x != 3) |
-|  | # 017 264 xrm lfs Rw, Ef (x != 3) |
-|  | # 017 265 xrm lgs Rw, Ef (x != 3) |
-|  | 304 xrm les Rw, Ef (x != 3) |
-|  | 305 xrm lds Rw, Ef (x != 3) |
-|  |  |
-|  | ADDRESSING |
-|  | ---------- |
-|  | Comments: |
-|  | * The current mode of the machine determines its default mode (16 or 32 |
-|  | bits). |
-|  | * RAND: and ADDR: (not an standard name, since Intel has none) are |
-|  | prefixes that alter the default for the next instruction only. |
-|  | * RAND: changes the word size between 16 and 32 bits. |
-|  | * ADDR: changes the address size between 16 and 32 bits. |
-|  | * seg: cannot override the implied ES:[DI] operand in any string op, |
-|  | but can override the DS in the implied DS:[SI] operands there. |
-|  | seg: Segment override prefix |
-|  | ADDR: Address size toggle |
-|  | RAND: Operand size toggle |
-|  | 305 xrm lds Rw, Ef (x != 3) |
-|  | 046 ES: |
-|  | 056 CS: |
-|  | 066 SS: |
-|  | 076 DS: |
-|  | # 144 FS: |
-|  | # 145 GS: |
-|  | # 146 RAND: |
-|  | # 147 ADDR: |
-|  |  |
-|  | PORT I/O |
-|  | -------- |
-|  | Comments: |
-|  | * In protected mode the user of these operations must pass the I/O |
-|  | Privilege Level (IOPL) else they are blocked by an interrupt. |
-|  | This allows the Operating System to spool I/O devices in a |
-|  | multitasking system (since the OS handles interrupts) to avoid having |
-|  | processes all trying to use the same device at once. |
-|  | IN ACC, Port ACC = IO[Port] |
-|  | 344 Db in AL, Db |
-|  | 345 Db in AX, Db |
-|  | 354 in AL, DX |
-|  | 355 in AX, DX |
-|  | OUT Port, ACC IO[Port] = ACC |
-|  | 346 Db out Db, AL |
-|  | 347 Db out Db, AX |
-|  | 356 out DX, AL |
-|  | 357 out DX, AX |
-|  |  |
-|  | STRING OPERATIONS |
-|  | ----------------- |
-|  | Comments: |
-|  | * In all these operations below, Src denotes DS;[ESI] and Dest ES:[EDI]. |
-|  | * Dest cannot be overridden by a segment prefix, only Src. |
-|  | * The pointes (ESI, EDI) are bumped up (DF = 0) or down (DF = 1) after |
-|  | the operation by sizeof Operand. |
-|  | * ACC is either AL, AX or EAX depending on the operand size. |
-|  | * The flags altered are exactly those altered by the corresponding |
-|  | MOV, IN, OUT, or CMP operation (namely: only SCAS and CMPS alter the |
-|  | flags and in the same way as CMP) and these are therefore the only ones |
-|  | that can be prefixed by REP[N]E/REP[N]Z. |
-|  | * REP with all string ops, but REP LODS doesn't do anything sensible. |
-|  | INS in Dest, DX |
-|  | OUTS out DX, Src |
-|  | MOVS mov Dest, Src |
-|  | CMPS cmp Dest, Src |
-|  | STOS mov Dest, ACC |
-|  | LODS mov ACC, Src |
-|  | SCAS cmp ACC, Dest |
-|  | * 154 insb |
-|  | * 155 insw / (#) insd |
-|  | * 156 outsb |
-|  | * 157 outsw / (#) outsd |
-|  | 244 movsb |
-|  | 245 movsw / (#) movsd |
-|  | 246 cmpsb |
-|  | 247 cmpsw / (#) cmpsd |
-|  | 252 stosb |
-|  | 253 stosw / (#) stosd |
-|  | 254 lodsb |
-|  | 255 lodsw / (#) lodsd |
-|  | 256 scasb |
-|  | 257 scasw / (#) scasd |
-|  | REP Op while (CX-- > 0) Op |
-|  | REPE /REPZ Op while (CX-- > 0 && ZF) Op |
-|  | REPNE/REPNZ Op while (CX-- > 0 && !ZF) Op |
-|  | 362 repne / repnz / rep |
-|  | 363 repe / repz |
-|  |  |
-|  | CONTROL FLOW |
-|  | ------------ |
-|  | Comments: |
-|  | * The distinction between near and far jumps/calls/returns is built right |
-|  | into the 8086 language, which pretty much forces you to explicitly |
-|  | declare a routine as "near" or "far" and be consistent about it. The |
-|  | intended usage runs pretty much like C's static vs. global functions, |
-|  | with each C file being analogous to an 8086 segment. |
-|  | * The 8086 was specifically designed to be a Pascal (and PL/I) machine, |
-|  | though. Intel wrongly assumed that one of these languages would become |
-|  | like C is now. So the ENTER and LEAVE operators were added (and BOUND |
-|  | to do array bounds-checking). The segmentation structure was intended |
-|  | to support these types of languages. |
-|  | JCXZ Rel if (!CX) IP += Rel; |
-|  | JECXZ Rel if (!ECX) IP += Rel; |
-|  | LOOPcc Rel if (!--CX && cc) IP += Rel; |
-|  | 340 Cb loopnz Cb / loopne Cb |
-|  | 341 Cb loopz Cb / loope Cb |
-|  | 342 Cb loop Cb |
-|  | 343 Cb jcxz Cb / (#) jecxz Cb |
-|  | JMP Rel IP += Rel; |
-|  | JMP FAR Af CS:IP = Af; |
-|  | CALL Rel push IP; IP += Rel; |
-|  | CALL FAR Af push CS, IP; IP = Af; |
-|  | 232 Af call Af |
-|  | 350 Cw call Cw |
-|  | 351 Cw jmp Cw |
-|  | 352 Af jmp far Af |
-|  | 353 Cb jmp Cb |
-|  | 377 x2m call En |
-|  | 377 x3m call far Ef |
-|  | 377 x4m jmp En |
-|  | 377 x5m jmp far Ef |
-|  | RET Params pop IP; SP += Params (default: Params = 0) |
-|  | RET FAR Params pop IP, CS; SP += Params (default: Params = 0) |
-|  | 302 Dw ret Dw |
-|  | 303 ret |
-|  | 312 Dw ret far Dw |
-|  | 313 ret far |
-|  | ENTER Locs, N push EBP; |
-|  | (sub EBP, 4; push [EBP]) N-1 times, if N > 0 |
-|  | mov EBP, ESP |
-|  | (add EBP, 4*(N-1); push EBP), if N > 0 |
-|  | sub ESP, Locs |
-|  | LEAVE mov ESP, EBP; pop EBP |
-|  | * 310 Dw Db enter Dw, Db |
-|  | * 311 leave |
-|  |  |
-|  | SYSTEM CONTROL & MEMORY PROTECTION |
-|  | ---------------------------------- |
-|  | BOUND A, AA if (A not in range AA[0]..AA[1]) INT 5 |
-|  | ARPL L, E ZF = (L.RPL < E.RPL); |
-|  | if (ZF) L.RPL = E.RPL; |
-|  | * 142 xrm bound Rw, Ed |
-|  | $ 143 xrm arpl Es, Rw |
-|  |  |
-|  | SLDT Sel Sel = LDTR |
-|  | STR Sel Sel = TR |
-|  | LLDT Sel LDTR = Sel |
-|  | LTR Sel TR = Sel |
-|  | VERR Sel ZF = (Sel is accessible and has read-access) |
-|  | VERW Sel ZF = (Sel is accessible and has write-access) |
-|  | LAR L, Sel ZF = (Sel is accessible); |
-|  | if (ZF) L = the access rights of Sel's descriptor. |
-|  | LSL L, Sel ZF = (Sel is accessible); |
-|  | if (ZF) L = the segment limit of Sel's descriptor. |
-|  | $ 017 000 x0m sldt Ew |
-|  | $ 017 000 x1m str Ew |
-|  | $ 017 000 x2m lldt Ew |
-|  | $ 017 000 x3m ltr Ew |
-|  | $ 017 000 x4m verr Ew |
-|  | $ 017 000 x5m verw Ew |
-|  | $ 017 002 xrm lar Rw, Ew |
-|  | $ 017 003 xrm lsl Rw, Ew |
-|  |  |
-|  | SGDT Desc Desc = GDTR |
-|  | SIDT Desc Desc = IDTR |
-|  | LGDT Desc GDTR = Desc |
-|  | LIDT Desc IDTR = Desc |
-|  | $ 017 001 x0m sgdt Ep |
-|  | $ 017 001 x1m sidt Ep |
-|  | $ 017 001 x2m lgdt Ep |
-|  | $ 017 001 x3m lidt Ep |
-|  |  |
-|  | SMSW L L = MSW ... note that MSW is CR0 bits 0-15. |
-|  | LMSW E MSW = E |
-|  | CLTS MSW.3 = 0 ... clears the Task Switched flag. |
-|  | $ 017 001 x4m smsw Ew |
-|  | $ 017 001 x6m lmsw Ew |
-|  | $ 017 006 clts |
-|  |  |
-|  | INVD Invalidate internal cache. |
-|  | WBINVD Invalidate internal cache, after writing it back. |
-|  | INVLPD Ea Invalidate Ea's page. |
-|  | @ 017 010 invd |
-|  | @ 017 011 wbinvd |
-|  | @ 017 020 x7m invlpg Ea |
-|  |  |
-|  | MOV Reg, SysReg |
-|  | MOV SysReg, Reg |
-|  | # 017 040 3nr mov Rd, CRn (n = 0-3) |
-|  | # 017 041 3nr mov Rd, DRn (n = 0-3, 6-7) |
-|  | # 017 042 3nr mov CRn, Rd (n = 0, 2-3) |
-|  | # 017 043 3nr mov DRn, Rd (n = 0-3, 6-7) |
-|  | # 017 044 3nr mov Rd, TRn (n = 6-7) |
-|  | # 017 046 3nr mov TRn, Rd (n = 6-7) |
-|  |  |
-|  | CO-PROCESSOR ESCAPE SEQUENCE |
-|  | ---------------------------- |
-|  | Comments: |
-|  | * This escape sequence is intended to be used with an external co-processor |
-|  | with the most common application being the 80x87 floating point unit. |
-|  | * Starting in the 80486, the floating point unit was made internal to the |
-|  | processor. |
-|  |  |
-|  | ESC TL, Ea Escape, operation TL, address mode Ea. |
-|  | 33T xLm esc TL Ea |
-|  |  |
-|  | (6) Floating Point Operations |
-|  | The Floating Point unit consists of 8 internal registers arranged in a |
-|  | circular stack, and the Control Word (CW), Status Word (SW) and Tag Word (TW) |
-|  | registers. The floating point stack registers all store data in Real80 |
-|  | format (described below). |
-|  | Operations are carried out on data in the following formats (low-order bits |
-|  | on right): |
-|  |  |
-|  | INTEGER: 16/32/64 bits (Int16, Int32, Int64) |
-|  | BCD: (BCD80) |
-|  | S 0000000 D D D D D D D D D D D D D D D D D D |
-|  | S = 1-bit sign (1 = negative, 0 = positive) |
-|  | D = 4-bit digit (encodes digits 0-9). |
-|  | FLOATING POINT: 32/64/80 bits (Real32, Real64, Real80) |
-|  | S Exponent Mantissa |
-|  | S = 1-bit sign (1 = negative, 0 = positive) |
-|  | Exponent = 8/11/15 bit biased exponent |
-|  | Mantissa = 23/52/64 bit decimal fraction. |
-|  | The values of floating point numbers in each format are as follows: |
-|  | Real32: (-1)^S (1 + Mantissa)/2^23 x 2^(Exponent - 127) |
-|  | Real64: (-1)^S (1 + Mantissa)/2^52 x 2^(Exponent - 1023) |
-|  | Real80: (-1)^S Mantissa/2^63 x 2^(Exponent - 16383) |
-|  |  |
-|  | The floatng point formats do not cover all the logical combination of binary |
-|  | 0's and 1's, and the remaining combinations are defined for special purposes: |
-|  |  |
-|  | Sign Exponent Mantissa Meaning |
-|  | S 0 0 0 ... 0 0 0 0 ... 0 0 |
-|  | S 0 0 0 ... 0 ... 1 ... DENORMAL (Infinitesimal) |
-|  | S 1 1 1 ... 1 0 0 0 ... 0 INFINITY |
-|  | S 1 1 1 ... 1 0 ... 1 ... Signalling NaN (Not a Number) |
-|  | S 1 1 1 ... 1 1 ... Quiet NaN |
-|  |  |
-|  | This is all IEEE standard format. Quiet NaN's are set by the FP Unit to |
-|  | indicate invalid operations. |
-|  |  |
-|  | Notation: |
-|  | ST(n) -- the nth item below the stack top. |
-|  | ST ----- ST(0), the stack top. |
-|  | Int*, BCD*, Real* -- described above. |
-|  |  |
-|  | All Int*, BCD*, and Real* operands are stored in memory and are encoded in |
-|  | the 80x86's current addressing mode (16 or 32 bit). All opcodes are |
-|  | listed in the format: |
-|  |  |
-|  | T L xm for 8086 escape code 33T xLm |
-|  |  |
-|  | Since only memory addresses are used in the operations, that frees up all |
-|  | the combinations xm where x = 3. These are generally used to encode the |
-|  | operations that do not involve memory addresses. In the following |
-|  | presentation where "xm" is listed generally, it is understood that x is not 3. |
-|  |  |
-|  | The operations FENI, FDISI are specific to the 8887; FSETPM to the 80287 |
-|  | and FUCOM*, FPREM1, and the trig. operations FSIN, FCOS, FSINCOS are all |
-|  | present only in the 80387 and after. |
-|  |  |
-|  | DATA TRANSFER |
-|  | ------------- |
-|  | Comments: |
-|  | * The followng table is used: |
-|  | P 0 2 3 |
-|  | F-OP fld fst fstp |
-|  | I-OP fild fist fistp |
-|  | FLD Arg ST = (Real80)Arg |
-|  | FST Arg Arg = (typeof Arg)ST |
-|  | FSTP Arg Arg = (typeof Arg)ST; pop(); |
-|  | FXCH Arg Arg <--> ST, with appropriate type conversions. |
-|  | 1 P xm F-OP Real32 |
-|  | 3 P xm I-OP Int32 |
-|  | 5 P xm F-OP Real64 |
-|  | 7 P xm I-OP Int16 |
-|  | 3 5 xm fld Real80 |
-|  | 3 7 xm fstp Real80 |
-|  | 7 4 xm fbld BCD80 |
-|  | 7 5 xm fild Int64 |
-|  | 7 6 xm fbstp BCD80 |
-|  | 7 7 xm fistp Int64 |
-|  | 1 0 3m fld ST(m) |
-|  | 1 1 3m fxch ST(m) |
-|  | 5 2 3m fst ST(m) |
-|  | 5 3 3m fstp ST(m) |
-|  |  |
-|  | COMPARISON |
-|  | ---------- |
-|  | Comments: |
-|  | * The followng table is used: |
-|  | P 2 3 |
-|  | F-OP fcom fcomp |
-|  | I-OP ficom ficomp |
-|  | FCOM Arg cmp ST, Arg |
-|  | FCOMP Arg cmp ST, Arg; pop(); |
-|  | 0 P xm F-OP Real32 |
-|  | 2 P xm I-OP Int32 |
-|  | 4 P xm F-OP Real64 |
-|  | 6 P xm I-OP Int16 |
-|  | 0 P 3m F-OP ST(m) |
-|  | FCOMPP cmp ST, ST(1); pop(); pop(); |
-|  | 6 3 31 fcompp |
-|  | FTST cmp ST, 0.0 |
-|  | 1 4 34 ftst |
-|  | FXAM examine ST |
-|  | 1 4 35 fxam |
-|  | FUCOM Arg unordered compare ST, Arg |
-|  | FUCOMP Arg unordered compare ST, Arg; pop(); |
-|  | FUCOMPP Arg unordered compare ST, ST(1); pop(); pop(); |
-|  | 5 4 3m fucom ST(m) |
-|  | 5 5 3m fucomp ST(m) |
-|  | 2 5 31 fucompp |
-|  |  |
-|  | ARITHMETIC OPERATIONS |
-|  | --------------------- |
-|  | Comments: |
-|  | * The followng table is used: |
-|  | P 0 1 4 5 6 7 |
-|  | F-OP fadd fmul fsub fsubr fdiv fdivr |
-|  | I-OP fiadd fimul fisub fisubr fidiv fidivr |
-|  | P-OP faddp fmulp fsubp fsubrp fdivp fdivrp |
-|  | * Dest is ST and Src the listed operand except where noted below. |
-|  | FADD Arg Dest += Src |
-|  | FSUB Arg Dest += Src |
-|  | FSUBR Arg Dest = Src - Dest |
-|  | FMUL Arg Dest *= Src |
-|  | FDIV Arg Dest /= Src |
-|  | FDIVR Arg Dest = Src/Dest |
-|  | 0 P xm F-OP Real32 |
-|  | 2 P xm I-OP Int32 |
-|  | 4 P xm F-OP Real64 |
-|  | 6 P xm I-OP Int16 |
-|  | 0 P 3m F-OP ST(m) |
-|  | 4 P 3m F-OP ST(m) (Dest = ST(m), Src = ST) |
-|  | 6 P 3m P-OP ST(m) (Dest = ST(m), Src = ST) |
-|  |  |
-|  | CONSTANTS |
-|  | --------- |
-|  | FLD1 ST = 1.0 |
-|  | FLDL2T ST = log_2(10) |
-|  | FLDL2E ST = log_2(e) |
-|  | FLDPI ST = pi |
-|  | FLDLG2 ST = log_10(2) |
-|  | FLDLN2 ST = ln(2) |
-|  | FLDZ ST = 0.0 |
-|  | 1 5 30 fld1 |
-|  | 1 5 31 fldl2t |
-|  | 1 5 32 fldl2e |
-|  | 1 5 33 fldpi |
-|  | 1 5 34 fldlg2 |
-|  | 1 5 35 fldln2 |
-|  | 1 5 36 fldz |
-|  |  |
-|  | BUILT-IN FUNCTIONS |
-|  | ------------------ |
-|  | Comments: |
-|  | * The stack replacements entail pop()'s. |
-|  | FCHS ST = -ST |
-|  | FABS ST = \|ST\| |
-|  | F2XM1 ST = 2^ST - 1 |
-|  | FYL2X Replace the stack: ST(1), ST -> ST(1)*log_2(ST) |
-|  | FPTAN Replace the stack: ST -> tan(ST), 1.0 |
-|  | FPATAN Replace the stack: ST(1), ST -> atan(ST(1)/ST) |
-|  | FXTRACT Replace the stack: ST -> exponent(ST), mantissa(ST) |
-|  | FPREM1 ST = remainder(ST/ST(1)), IEEE consistent |
-|  | FPREM ST = remainder(ST/ST(1)) |
-|  | FYL2XPI Replace the stack: ST(1), ST -> ST(1)*log_2(ST + 1) |
-|  | FSQRT ST = sqrt(ST) |
-|  | FSINCOS Replace the stack: ST -> sin(ST), cos(ST) |
-|  | FRNDINT ST = round(ST) |
-|  | FSCALE ST *= 2^(int)ST(1) |
-|  | FSIN ST = sin(ST) |
-|  | FCOS ST = cos(ST) |
-|  | 1 4 30 fchs |
-|  | 1 4 31 fabs |
-|  | 1 6 30 f2xm1 |
-|  | 1 6 31 fyl2x |
-|  | 1 6 32 fptan |
-|  | 1 6 33 fpatan |
-|  | 1 6 34 fxtract |
-|  | 1 6 35 fprem1 |
-|  | 1 7 30 fprem |
-|  | 1 7 31 fyl2xpi |
-|  | 1 7 32 fsqrt |
-|  | 1 7 33 fsincos |
-|  | 1 7 34 frndint |
-|  | 1 7 35 fscale |
-|  | 1 7 36 fsin |
-|  | 1 7 37 fcos |
-|  |  |
-|  | CONTROL |
-|  | ------- |
-|  | Comments: |
-|  | * The save and load operations for the environment and state are used |
-|  | primarily for multitasking applications where 2 or more processes are |
-|  | using the FP unit concurrently. |
-|  | FNOP Delay 1 cycle. |
-|  | FLDENV Arg Load FP environment from [Arg] |
-|  | FLDCW Arg CW = Arg |
-|  | FSTENV Arg Save FP environment to [Arg] |
-|  | FSTCW Arg Arg = CW |
-|  | FDECSTP TOP = (TOP - 1) mod 8 |
-|  | FINCSTP TOP = (TOP + 1) mod 8 |
-|  | FENI Enable interrupts (8087 only) |
-|  | FDISI Disable interrupts (8087 only) |
-|  | FCLEX Clear out FP exception flags |
-|  | FINIT Initialize FP registers |
-|  | FSETPM Enter Protected Mode (80287 only) |
-|  | FFREE ST(m) Mark register m as unused. |
-|  | FRSTOR Arg Restore FP state from [Arg] |
-|  | FSAVE Arg Save FP state to [Arg] |
-|  | FSTSW Arg Arg = SW |
-|  | 1 2 30 fnop |
-|  | 1 4 xm fldenv Ea |
-|  | 1 5 xm fldcw Ea |
-|  | 1 6 xm fstenv Ea |
-|  | 1 7 xm fstcw Ea |
-|  | 1 6 36 fdecstp |
-|  | 1 6 37 fincstp |
-|  | 3 4 30 feni |
-|  | 3 4 31 fdisi |
-|  | 3 4 32 fclex |
-|  | 3 4 33 finit |
-|  | 3 4 34 fsetpm |
-|  | 5 0 3m ffree ST(m) |
-|  | 5 4 xm frstor Ea |
-|  | 5 6 xm fsave Ea |
-|  | 5 7 xm fstsw Ea |
-|  | 7 4 30 fstsw AX |
-|  |  |
+It took months, but here we are: **the whole Pimalaya CLI family is released at once**, at the top of the first stable version of the [pimdir](https://github.com/pimalaya/pimdir) standard. Here the list:
 
-In table 1a, should xm 02, 03 be `SS:BP + ...` instead of the `SS:[BX + ...` listed above?
+- Himalaya `v3.0.0`, the CLI to manage mails.
+- Neverest `v1.0.0`, the CLI to synchronize mails, contacts and calendars.
+- Cardamum `v1.0.0`, the CLI to manage contacts.
+- Calendula `v1.0.0`, the CLI to manage calendars.
+- Carillon `v1.0.0`, the CLI to watch mailboxes, address books and calendars, and fire hooks.
+- Ortie `v3.0.0`, the CLI to manage OAuth tokens (released 5 days earlier).
+- Comodoro `v3.0.0`, the CLI to manage timers (released 5 days earlier as well).
+- pimdir storage `v1.0.0`, sync `v1.0.0` and search `v1.0.0`, plus its Rust implementation io-pimdir `v1.0.0`.
+
+Most of them are majors, and they all break something for somebody. This post explains why, how, and where it goes from here. It is long, feel free to jump to the tool you care about.
+
+## Why everything at once
+
+In [Another year with NLnet](https://blog.pimalaya.org/another-year-with-nlnet/) I said this year was about consolidation and about a standard for PIM on disk. This release is the result of both.
+
+The thing is, every piece is now connected:
+
+- All the CLIs sit on the same libs (IMAP, SMTP, JMAP, DAV, the Google and Microsoft APIs, OAuth, HTTP, TLS).
+- All the CLIs share the same kit: the same configuration loader, the same output contract, the same exit codes, the same REPL and the same MCP server.
+- Neverest syncs every account into one pimdir store, and Himalaya, Cardamum, Calendula and Carillon read it, search it and queue their writes into it.
+
+Releasing them one by one meant releasing tools that disagree with each other: one version of the store here, another version of the output there. So I decided to bring every tool to release level first, then to release them all together. It took way longer than I wanted, but this way what you install today is one coherent family.
+
+The other reason is the contract. The CLIs are not only used by humans anymore: they are used by scripts, by frontends (the Vim plugin, the TUI, the Android app), and by AI agents through MCP. All of them need a **stable, versioned contract**: the same JSON shapes, the same error codes, the same exit codes. Majors are the right moment to fix it, and from now on it should not move anymore without a new major.
+
+## How it was done
+
+Few things made this release possible.
+
+**Specs before code.** Every repository has a cairn/ folder holding its living spec, its change proposals and a dated log. Every behaviour change goes through a proposal, then gets folded into the spec. This way the truth is written somewhere, and not only in my head.
+
+**One shared kit.** The [pimalaya-cli](https://github.com/pimalaya/cli) and [pimalaya-config](https://github.com/pimalaya/config) libs hold everything the CLIs have in common: the output contract, the error codes, the REPL, the MCP server, the configuration loading. In fact most of the work of this release was moving code from the CLIs into this kit, and deleting the copies.
+
+**One unified API, as a union.** Before, the commands shared by every backend were the *intersection* of what the backends could do: if one backend could not do it, nobody could. Now it is the *union*: each backend registers the capabilities it really serves, with the same observable result as the others, and a command an account cannot serve fails before even connecting, with a clear `capability-missing` code.
+
+**Measured gates for pimdir.** Audits always find something, so "no new finding" never ends. Instead, I built a test generator that produces stores, remote states and an oracle from a seed, and ran campaigns of 4,180 jobs against io-pimdir: crashes injected at every step, the search index checked against a full rebuild after each event, the sync engine replayed against scripted servers. The rule was simple: 2 campaigns in a row without any spec break, then freeze. Campaign 1 found one, campaigns 2 and 3 were clean, a late fix restarted the count, then campaigns 4 and 5 were clean. Freeze.
+
+**Live tests on real providers.** Every CLI was tested against real accounts: Google, Microsoft, Fastmail and iCloud, plus few Chinese providers for Himalaya (QQ, 163, 139). A last "live night" just before the release found few bugs that went straight into the libs.
+
+**Libs first, apps after.** The libs were released between the 13th and the 25th of November, the apps then moved to them without any patch or git pin. Everything you install comes from crates.io.
+
+## pimdir `v1`, the foundation
+
+pimdir is a local-first standard for personal information: mails, contacts, calendars, tasks and files in **one portable store**, kept as a replica of every source, and searchable with one query language. A store is one SQLite file plus a content-addressed blob directory, the same on every OS and architecture. I already explained why such a standard is needed in [Another year with NLnet](https://blog.pimalaya.org/another-year-with-nlnet/), and how the Android app became its first full implementation in [Pimalaya for Android enters closed alpha](https://blog.pimalaya.org/pimalaya-android-closed-alpha/).
+
+It comes in 3 parts, versioned separately:
+
+- Storage: the store itself (schema, blobs, summaries, change feed, retention, action queue).
+- Sync: how sources are reconciled through the store (merge rules, the connector seam).
+- Search: the derived index and the query language.
+
+They are released together because a store holds sync state that follows the sync part, and the query language binds every program that offers search.
+
+What `v1` means: *schema version 1 never changes*, every schema change is a migration, and a minor version only adds test cases. You can implement it in any language that speaks SQLite, use the I/O-free core of io-pimdir (like the Android app does, on the platform SQLite), or use its std client.
+
+Few days before the freeze, I compared it with [notmuch](https://notmuchmail.org/), which is the reference in this area. They do not do the same job (notmuch indexes mail files it does not own, pimdir owns the bodies, syncs them and holds other domains), but the search can be compared. On a store of 1 million messages from the Enron corpus, pimdir was ahead of notmuch on 50 of the 51 query measures and tied the last one, imported the million faster, and used a third of the memory. Stemming, regex and per-thread queries are still missing, they are on the list.
+
+One warning for the early adopters: **a store written by a draft version is refused**, never migrated. Sync it till nothing is pending with the last draft binary, move its directory aside, then let a release create and sync a new one.
+
+Useful links:
+
+- pimdir repository, with STORAGE.md, SYNC.md, SEARCH.md and the informative OVERVIEW.md
+- pimdir changelog
+- io-pimdir repository, release notes and API documentation
+
+## Where did the wizard go?
+
+This is the change many of you will not like, so let me explain it properly.
+
+Every CLI had a configuration wizard: you typed your email address, it discovered the servers, asked for the password, stored it in your keyring, and wrote the TOML for you. It is gone, from every CLI.
+
+**Why.** Few reasons, piled up:
+
+- It was already broken. For Gmail, Microsoft and JMAP, the Himalaya wizard handed the sign-in to ortie configure, which Ortie v3 removed. The path it proposed first for the most common providers simply failed.
+- It cost a lot. The Himalaya wizard alone was 14 files and about 4,000 lines, and 1.90 MB of a 20.3 MB binary. Same story in each CLI: server discovery, a keyring dialogue, a review screen and a TOML writer, inside tools whose job is to manage mails, contacts or calendars.
+- It served 2 audiences badly. Power users write their config from the sample anyway. People who need a guided setup are better served by an app than by a prompt in a terminal.
+- The CLIs moved to plain text and JSON, with no terminal handling at all. A wizard is exactly the kind of interactive layer that does not fit anymore.
+
+**What replaces it.**
+
+- A first-run welcome. Run a CLI without configuration, and it names the missing file and the sample to start from. At a terminal, it even prints the exact commands to copy the sample in place, then the first command to run.
+- A tested config.sample.toml, shipped in the packages and the release archives under share/doc. The samples are parsed by the test suites, so they cannot silently rot anymore.
+- Ortie for OAuth, with ready-made Google, Microsoft and Fastmail accounts to paste from its README, using Pimalaya's own clients.
+- [pim-discovery](https://github.com/pimalaya/io-pim-discovery), for the discovery part of the wizard. It is the CLI of io-pim-discovery, the lib the wizards used (and the Android app still uses): pim-discovery all user@fastmail.com finds the IMAP, SMTP, JMAP, CalDAV and CardDAV servers of an address, and tells you what vouches for each answer. It is not officially released yet, but you can install it with cargo install io-pim-discovery --locked --features cli.
+- Guided setup in frontends. The Android app keeps its onboarding (you type your email address, it finds the rest), and Himalaya TUI has a draft to bring the same flow to the terminal.
+
+**The direction.** The CLIs are now *low-level* tools: plain text to glance at, JSON for scripts, frontends and agents. Comfort (tables, colours, relative dates, guided setups, rich composition) belongs to frontends. In fact this is not new: it is the same split that started the whole project, back when the logic left the Vim plugin. The CLI was always supposed to be the backend a frontend needs. This release just goes all the way.
+
+I know some of you used the wizard to get started, and that copying a sample feels like a step back. If the welcome or the samples are not clear enough, it is a bug: please open an issue, I would rather fix the docs than bring back a second setup system per CLI.
+
+## Himalaya `v3`
+
+Himalaya is now a low-level CLI over a **unified mail API**: the same commands on every backend, the protocol-specific ones next to them, plain text for a glance and `--json` for the rest.
+
+Backends: IMAP, SMTP, ManageSieve, JMAP, the Gmail API, Microsoft Graph, Maildir (with a new `maildir++` layout for Dovecot and Courier stores), mbox, and pimdir. The README has recipes for Proton Mail (through Bridge), Fastmail, Gmail, Outlook, Posteo and iCloud.
+
+What is new:
+
+- himalaya repl, one command per line, with clients connected once for the whole session.
+- himalaya mcp, an MCP server over stdio. Writes are refused unless you pass --allow-write, and sending is behind its own --allow-send.
+- The pimdir query language for envelope search on every backend (from:alice date:2d).
+- vacation get|set on JMAP and Gmail, message reply --all, mutual TLS, an account-level tls table.
+- A stable code on every failure, an errors list per item, and a JSON Schema for every command.
+
+What is gone: the wizard, the m2dir backend (superseded by pimdir), the table and colour options, `HIMALAYA_CONFIG`. Unknown configuration keys are now refused, JSON keys are camelCase, and the v2 search syntax needs to be rewritten. The [migration guide](https://github.com/pimalaya/himalaya/blob/master/MIGRATION.md) lists everything, with a full table for the queries.
+
+Useful links:
+
+## Neverest `v1`
+
+Neverest is rebuilt around the pimdir store: **every account syncs into one shared store**, which the other CLIs read, search and queue their writes into. It syncs mails, contacts and calendars over IMAP, Gmail, Microsoft Graph, Google Calendar, Google People, CalDAV and CardDAV.
+
+Highlights:
+
+- Two-way, one-way or migration syncs.
+- Three-way merge of cards and events: a real conflict is parked for you to decide, never lost.
+- Retention: a remote deletion never removes the local copy, only an explicit purge does.
+- Writes queued by Himalaya, Cardamum and Calendula are applied offline, sending included.
+- Paged, newest-first listings that resume after an interruption, back-off on throttling, and a clean stop on Ctrl-C.
+
+JMAP sources are not supported yet (it is a draft), so Fastmail syncs over IMAP, CardDAV and CalDAV for now. Coming from `v0.x`? Your configuration and state are not carried over: start from the config.sample.toml, then run `neverest sync --init`.
+
+Useful links:
+
+- Repository
+- Release notes
+- Changelog
+- Sample configuration
+
+## Cardamum `v1`
+
+The first stable release of Cardamum: a low-level CLI over a **unified contacts API**, with the same commands on CardDAV, JMAP, Microsoft Graph, Google People, vdir and pimdir.
+
+`card search` speaks the pimdir query language on every backend, `account capability` shows what an account serves without connecting, and you get the REPL and the MCP server like the others. Editing a card is left to a composer such as [tcard](https://github.com/pimalaya/tcard). The wizard and the `discover` route are gone.
+
+Useful links:
+
+- Repository
+- Release notes
+- Changelog
+- Sample configuration
+- tcard, to compose cards
+
+## Calendula `v1`
+
+Same story for calendars: the same commands on CalDAV, JMAP (new), Google Calendar, Microsoft Graph, vdir and pimdir.
+
+New: `event search`, recurrence expansion, attendees and alarms, online meetings (`--online-meeting`), invitation replies through pimdir, and an agenda that draws a month or a year like cal(1) does. Editing an event is left to a composer such as [tcal](https://github.com/pimalaya/tcal). The wizard, the tables and colours, and the `todo` and `journal` commands are gone: tasks and journals will move to dedicated tools (Unfog and Journal), not released yet.
+
+Useful links:
+
+- Repository
+- Release notes
+- Changelog
+- Sample configuration
+- tcal, to compose events
+
+## Carillon `v1`
+
+Carillon is a local watcher that **fires hooks on what changes** in your mailboxes, address books and calendars, over IMAP, JMAP, Maildir, CalDAV, CardDAV, Microsoft Graph, the Google APIs and the pimdir store. It uses push where the server offers it (IMAP IDLE, the JMAP event stream) and polls elsewhere. A hook runs a command, shows a desktop notification, or both.
+
+New in `v1`: a pimdir backend, `on-alarm-trigger` for the alarms of events and tasks, `on-birthday-trigger` for birthdays and anniversaries, a per-hook timeout, and a report of what moved while an IMAP or Gmail session was lost. Hooks now take the same shape as Comodoro's.
+
+Useful links:
+
+- Repository
+- Release notes
+- Changelog
+- Sample configuration
+
+## Ortie `v3`
+
+Ortie manages OAuth tokens for the other tools. `v3` aligns it on the rest of the family: ready-made Google, Microsoft and Fastmail accounts to paste, token revocation, an `auth listen` to catch a redirection handed off from another machine, account checks, a REPL, and an MCP server that **never hands the token to the agent**. The wizard and the hooks are gone (the storage write command does what a hook did).
+
+Useful links:
+
+## Comodoro `v3`
+
+Comodoro manages timers: one server owns a timer, any number of clients drive it, over a local socket or TCP. `v3` joins the same standard: `comodoro watch` feeds a status bar without polling, hooks get the cycle name and duration, plus the welcome, account checks, a REPL and an MCP server. Comodoro is now a binary only: the library is gone, and the open JSON-RPC protocol is the contract for third parties.
+
+Useful links:
+
+## The libs
+
+None of the above would exist without the libs below, all released in November on crates.io:
+
+- The shared kit: pimalaya-cli v0.8, pimalaya-config v0.6, pimalaya-stream v0.4.
+- The content models: mime-rs v0.2, vcard-rs v0.6, ical-rs v0.7.
+- The protocols: io-imap v0.12, io-smtp v0.10, io-sasl v0.3, io-http v0.9, io-jmap v0.11, io-webdav v0.14, io-managesieve v0.6, io-oauth v0.8, io-proxy v0.3, io-pim-discovery v0.15.
+- The provider APIs: io-gmail v0.10, io-msgraph v0.11, io-gcal v0.6, io-gpeople v0.9, io-gtasks v0.3.
+- The local formats: io-maildir v0.5, io-mbox v0.2, io-vdir v0.3, and io-pimdir v1.0.
+
+They are all I/O-free, as usual: feel free to build your own tools at the top of them.
+
+## Installing and upgrading
+
+Each README lists the ways to install: prebuilt binaries from the GitHub releases (or the install.sh script), `cargo install --locked`, Nix, and the APT, DNF and Homebrew repositories at [pkg.pimalaya.org](https://pkg.pimalaya.org). The packages are landing there over the coming days, and the nixpkgs and home-manager updates are on their way.
+
+About upgrading:
+
+- Himalaya, Ortie and Comodoro have a MIGRATION.md, follow it.
+- Neverest, Cardamum, Calendula and Carillon come from v0.x: there is no migration guide, start from the config.sample.toml.
+- pimdir stores written by a draft are refused, see the procedure above.
+
+## What comes next
+
+- Neverest `v1.0.1`, with few fixes already on their way, then JMAP sources.
+- Himalaya TUI, with the onboarding of the Android app.
+- The Android app, already moved to pimdir sync v1 and io-pimdir v1.0.
+- pimdir search: stemming, regex, per-thread queries, local labels and properties.
+- Tasks and journals, through Unfog and Journal.
+- Packaging: nixpkgs, home-manager and pkg.pimalaya.org for every tool.
+
+## Thank you
+
+Special thanks to the [NLnet foundation](https://nlnet.nl/) and the European Commission's [NGI](https://www.ngi.eu/) initiative, for the financial support through [NGI Zero Core](https://nlnet.nl/project/Pimalaya-PIM/) and now the [NGI Zero Commons Fund](https://nlnet.nl/project/Pimalaya-pimdir/). This kind of slow, deep work is only possible thanks to them.
+
+And thank you to everyone who reported bugs, tested betas, or simply waited patiently while everything was being rebuilt. Any feedback is welcomed, on [GitHub](https://github.com/pimalaya), on [Matrix](https://matrix.to/#/#pimalaya:matrix.org) or on [Mastodon](https://fosstodon.org/@pimalaya). Let me know how it goes!

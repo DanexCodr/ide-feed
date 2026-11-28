@@ -1,61 +1,61 @@
-![A row of WD EasyStore drives on a cluttered workbench.](https://pub-430e0c9ecb66464fa6999cd23a749d13.r2.dev/content/images/size/w1000/2026/11/black-friday-hard-drive-prices-are-messed-up/row-of-easystore-drives-on-a-cluttered-workbench.webp)
+After Automattic's confirmation that they would switch their `.vibe` application to the replacement string of `.php`<sup>1</sup>, ICANN has started to publish various objections on the Application Comment Forum (ACF) section of their new gTLD program site<sup>2</sup>. They mostly relate to the confusion and security risk posed by a common filetype (especially in web development) becoming a TLD, similar to the outcry over Google's application for `.zip` (which was eventually successfully delegated). The other common theme is the objection to a private company effectively trying to claim what is an open-source project.
 
-For years now, I’ve made it an annual tradition to replace one or two hard drives on Black Friday. I typically run around ten physical disks, and swapping a couple out each year means I almost never have a drive older than five years in my systems. I’ve even previously made videos about [shucking disks around this time of year](https://www.youtube.com/watch?v=c2mvIbY9n28).
+The first is by PHP developer Larry Garfield who accused the WordPress parent of "Inappropriate Squatting":<sup>3</sup>
 
-But current hardware pricing is totally screwed. So what is a lifelong self-hoster to do in times like these? With disk capacities increasing massively over the last 10 years I can now fit 20TB per slot. This means I could realistically go from ten spinners to five, and not really feel it too acutely. This will mean redoing my zpool layouts, which in turn means shuffling some data around as ZFS doesn’t like changes to the layout of existing pools. But, at these prices, I’m starting to think the hassle might be worth it.
+> PHP is a widely used programming language. It is managed by the PHP project, an informal project at [www.php.net](http://www.php.net). It is also supported by The PHP Foundation, a non-profit organization managed through OpenCollective.
 
-Let’s take a look at disk prices over the past 8 years in today’s post.
+> No one organization, company, or person owns or controls PHP. Authority within the PHP language and ecosystem is deliberately diffuse.
 
-The 20TB WD EasyStore I bought for **$249.99** in November 2024 is, today, on sale, **$549.99** this Black Friday. $300 more than 2 years ago for the same product, from the same store. It shows just how bad hard drive pricing has gotten ([BestBuy 20TB listing](https://www.bestbuy.com/product/wd-easystore-20tb-external-usb-3-0-hard-drive-black/6500985)).
+> Automattic, the company that has attempted to register .php as a TLD, is the owner/author of the WordPress blogging software. WordPress is itself written in PHP and Javascript. However, Automattic has no ownership or control over the PHP language itself. In fact, Automattic and its employees are conspicuously absent from contribution to the PHP project itself, aside from in recent years becoming a large passive donor to The PHP Foundation.
 
-Shucking is homelab speak for taking a perfectly good external drive out of its USB enclosure and sticking the SATA drive in your server. At $12.50/TB it was a fantastically affordable way to get massive amounts of storage. At $27.50/TB, absolutely not.
+> For Automattic, or any other company that operates in the PHP space, to try and lay claim to .php as a TLD is grossly inappropriate. There are dozens of other companies, projects, and interested parties that have just as much if not more claim to the name. PHP is a far larger ecosystem than just Automattic.
 
-## I dug through my receipts
+> It would be equivalent to Microsoft registering .rust (they use a lot of Rust now, but did not originate the language), or Hashicorp registering .golang, or IBM registering .java. None of those would be reasonable or appropriate, and neither is any one organization owning .php.
 
-In November 2018 I bought five 10TB EasyStores for $179.99 each. At the time I wrote about doing the rounds of my local Best Buys to pickup more drives on Black Friday as quantities were limited at each location ([My 2018 server build log](https://blog.ktz.me/new-server-build-log/)).
+> One company owning .php would be significantly harmful to the PHP ecosystem, as it would give control over a significant branding and marketing channel to one company that is not engaged in the ecosystem, leading to market confusion and an easily exploitable way for that company to claim more authority and ownership than it actually has.
 
-| Order date | Drives | Each | $/TB |
-| --- | --- | --- | --- |
-| Nov 8, 2018 | 5 × 10TB | $179.99 | $18.00 |
-| Oct 13, 2020 | 2 × 12TB | $174.99 | $14.58 |
-| Nov 1, 2021 | 2 × 14TB | $199.99 | $14.29 |
-| May 11, 2022 | 1 × 14TB | $249.99 | $17.86 |
-| Aug 29, 2022 | 1 × 14TB | $239.99 | $17.14 |
-| Oct 28, 2023 | 3 × 18TB | $199.99 | **$11.11** |
-| Nov 21, 2024 | 1 × 20TB | $249.99 | $12.50 |
-| May 5, 2025 | 1 × 20TB | $279.99 | $14.00 |
+> The only organization that has any legitimate claim to register .php would be The PHP Foundation, but they have made no such attempt.
 
-October 2023 was my best haul on a per-TB basis. Three 18TB drives put 54TB in my hands for $599.97. This year’s “deal” is fifty bucks shy of that *entire order*. Best Buy was still advertising those 18TB drives for $199.99 in November 2023. [November 2023 deal archive](https://slickdeals.net/f/17069239-18tb-wd-easystore-usb-3-0-external-hard-drive-200-free-store-pickup)
+> The application for .php should be rejected outright as inappropriate "domain squatting." Its approval would be detrimental to a major software ecosystem, and establish a dangerous precedent for one company claiming an entire ecosystem's name without cause.
 
-## What about ServerPartDeals?
+WordPress contributor Jamie VanRaalte objected on the grounds of "Part of a pattern - .php should not go to one company" and also said the `.wordpress` application was a similarly inappropriate power grab of another open-source project:<sup>4</sup>
 
-Buying refurbished or recertified enterprise drives used to be an easy way to bring the cost down. In August 2024 I bought four recertified 14TB Ultrastars from ServerPartDeals for **$529.96 before tax**. That was 56TB at **$9.46/TB**, even cheaper than the EasyStores and no shucking to do.
+> I agree with the comments already made here about .php. [I've been building commercial software in PHP for X years.] PHP is run by the PHP project and supported by The PHP Foundation, and no company owns it.
 
-| Drive | 2024 price per drive | Nov 26, 2026 listing | Change per TB |
-| --- | --- | --- | --- |
-| WD Ultrastar HC530 14TB 4Kn, recertified (`WUH721414ALN604`) | $129.99 · $9.29/TB | $204.99 · $14.64/TB · [Sold out](https://serverpartdeals.com/products/western-digital-ultrastar-dc-hc530-wuh721414aln604-0f31102-14tb-7-2k-rpm-sata-6gb-s-4kn-3-5-recertified-hard-drive) | +58% |
-| WD Ultrastar HC530 14TB 512e, recertified (`WUH721414ALE6L4`) | $134.99 · $9.64/TB | $429.00 · $30.64/TB · [Sold out](https://serverpartdeals.com/collections/western-digital-recertified-all-caps/products/western-digital-ultrastar-dc-hc530-wuh721414ale6l4-0f31284-14tb-7-2k-rpm-sata-6gb-s-512e-512mb-3-5-se-manufacturer-recertified-hdd) | +218% |
-| Seagate Exos X20 20TB, refurbished (`ST20000NM007D`) | $235.94 · $11.80/TB | $589.00 · $29.45/TB · [In stock](https://serverpartdeals.com/collections/sata/products/seagate-exos-x20-st20000nm007d-20tb-7-2k-rpm-sata-6gb-s-3-5-refurbished-hdd) | +150% |
-| Seagate Exos X22 20TB, recertified (`ST20000NM004E`) | $224.99 · $11.25/TB · later refunded | $649.00 · $32.45/TB · [Sold out](https://serverpartdeals.com/collections/20tb-to-30tb-hard-drives) | +188% |
+> I want to add one thing that's easy to miss when this application is looked at on its own. Knock Knock WHOIS There, LLC is a subsidiary of Automattic, and it has also applied for .wordpress. WordPress is an open source project too, and its trademark is held by the WordPress Foundation, not Automattic. So this is one company applying for the names of two open source ecosystems that it takes part in but does not govern.
 
-The sad truth is that across the board prices are up a minimum of 58%, and sometimes as much as 218% in just a year or two.
+> Automattic does use PHP heavily, but so do millions of other developers and companies. Using a language doesn't give a company any claim to its name. If .php goes to Automattic, it would decide who can register under the name of a language that belongs to everyone who uses it.
 
-## How we got down to three HDD makers
+> If .php should exist at all, it should be held by The PHP Foundation or another neutral body accountable to the PHP community. This application, and the one for .wordpress, should both be rejected.
 
-When the EasyStore is that bad, my first instinct is to shop around. Maybe I should try another retailer (to be clear I’m not blaming BestBuy for any of this), buy an enterprise drive, see what’s available recertified. But follow those listings back to the companies that actually make the drives and the choices narrow pretty quickly. There are three big HDD makers left. How did we end up with so few?
+Web developer Ryan Maietta highlighted the "File Extension Confusion and Security Risks" of using an established filetype as a TLD and the risk of people confusing websites using this domain as being officially endorsed by the PHP project:<sup>5</sup>
 
-Maxtor bought Quantum’s hard drive business in 2001, then Seagate bought Maxtor in 2006. Hitachi combined IBM’s disk business with its own to form HGST in 2003, and Toshiba bought Fujitsu’s HDD business in 2009. Seagate bought Samsung’s HDD business in December 2011, and Western Digital bought HGST in March 2012. The FTC required WD to sell desktop-drive manufacturing assets to Toshiba to keep a third supplier in that market. That left Seagate, Western Digital and Toshiba.
+> I oppose the proposed .php top-level domain because .php already has a widely recognized meaning as the extension for PHP files.
 
-The 2011 Thailand floods hit while those last two deals were underway. WD halted production at all its Thai plants, and its average hard drive selling price went from $45 in fiscal 2011 to $62 in fiscal 2012. There was also a price-fixing case further up the supply chain. NHK Spring pleaded guilty in 2019 to fixing prices for the suspension assemblies that hold the read/write heads, and the court approved a $28.5 million fine. [WD’s 2012 annual report](https://www.sec.gov/Archives/edgar/data/106040/000119312512361018/d356205d10k.htm) · [Ninth Circuit opinion](https://cdn.ca9.uscourts.gov/datastore/opinions/2026/01/08/24-4470.pdf)
+> I work in web development and sometimes use the open-source WordPress software. The .php extension appears throughout websites, source code, documentation, development tools and technical discussions. If .php becomes a top-level domain, the same text could identify either a PHP file or a registered domain name.
 
-## Market collusion and cartel pricing
+> For example, wp-login.php is the standard WordPress login script. If .php is approved and the name is available for registration, wp-login.php could also be a domain owned by someone with no connection to WordPress. A link shared in a message or technical discussion could appear familiar while sending someone to an unrelated website. Software that automatically turns text into links could make this confusion worse.
 
-It’s hard to have anything positive to say in this post. The HDD manufacturing market is so consolidated nowadays - just like the memory market which is equally screwed - that it’s hard to see this as anything but mass market collusion by the HDD manufacturing cartel.
+> The concern extends beyond WordPress. Someone could register domains that resemble PHP scripts or development resources and use them for phishing or impersonation. People may also mistake a .php website for an official resource endorsed by the PHP project. These risks are another reason I oppose the application.
 
-Three companies is an awfully short list when you need to buy a hard drive. And with 89% of WD’s revenue coming from its cloud business in fiscal 2026, I don’t reckon those of us buying a couple of drives for a home server have much impact here. Just like with Nvidia and Micron, consumer markets just aren’t valuable enough so we have to make do with the crumbs instead.
+> The applicant is an Automattic company. Automattic has a significant role in the WordPress ecosystem, but PHP is an independent, open-source language used by developers and organizations around the world. The interests of the broader PHP community deserve consideration.
 
-As of November 26, 2026, the 20TB is **2.2×** what I paid for the exact same SKU in 2024. It’s also $270 more than I paid for it in May 2025. And if you’re thinking you’ll just buy a smaller one, Best Buy’s 8TB Black Friday special is $299.99. That’s $37.50/TB and fifty bucks more than my 20TB cost two years ago. [Best Buy’s EasyStore listings](https://www.bestbuy.com/site/searchpage.jsp?id=pcat17071&st=easystore)
+> I ask ICANN to reject this application. The security risks are my most important concern, and my opposition goes beyond them. I do not believe a single private company should control a top-level domain so closely associated with a language it does not own.
 
-The jump gets sillier when you price a whole NAS. Four of those 20TB drives would have been $999.96 at my 2024 price. This week they’d be $2,199.96. That’s another $1,200 before you’ve bought a case, a board or a single stick of RAM. And the price per *usable* terabyte only gets worse once you set aside a drive for parity.
+Forensic analyst Herbert Bärschneider also objected simply on the grounds of confusing the TLD with the filetype:<sup>6</sup>
 
-If I can wish for one thing in 2027, it would be for hardware pricing to return to reasonable levels. I fear it may take a lot longer than that, though. So making do with less is going to be the new normal for a while. And in that creative constraint, maybe we’ll have some fun along the way instead.
+> When computer users browse the internet, they have to work with URLs. Such URLS can be complex and even appear cryptic to users.
+
+> Users often tend to identify patterns and attach trust to those patterns - e. g. websites starting with "https" and "[www](http://www).".
+
+> The long use of PHP as a way of creating websites will have lead to patterns which point towards "legitimate websites end with .php". By creating a TLD "php", this will lead to confusion. This confusion can be abused - allowing malicious third-parties to use the inherent trust in php Pages with .php domains.
+
+> As security community, we should shield computer users from such abuse potential by not creating TLDs that mimik well-established meanings on the web.
+
+And finally, the ICANN-affiliated Mark William Datysgeld described `.php` as being "Not viable from a technical perspective"<sup>7</sup> highlighting that he has already had issues creating the page for it on the PHP-based ICANN Wiki site, causing it to return a 404 error response<sup>8</sup>:
+
+> .php" is the standard file extension for PHP, one of the most widely deployed Web languages. Software commonly treats any string ending in ".php" as a script or file path. Delegating .php as a gTLD would make every second-level registration, such as "index.php", both a valid domain name and a valid filename.
+
+> This collision is already causing failures as-is. When creating the ICANNWiki article for this gTLD application, the entry was created in the database and appears in search, but it cannot be resolved and returns "Page not found", so even documenting this application will require a technical workaround. I expect the same class of failure in any system that routes or parses ".php" strings, which is to say, many of the Web's systems.
+
+> I ask evaluators to consider this in the Safeguard Assessment and to put the following question to the applicant: what measures does it propose to address collisions between .php domain names and PHP file paths in software that routes or parses them? Given the scope of the issue, I also ask evaluators to recommend that this application not proceed.

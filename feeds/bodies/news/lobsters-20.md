@@ -1,39 +1,52 @@
-![The thread on X. Ben, @ben_codez: Sounds like you're making the terminology up! Makes sense though. No self respecting dev would show the user a booking had succeeded before server verification. We're probably agreeing and arguing semantics. Ben: To be clear, I was talking about stuff like "liking a post" or displaying the users's post before the server has come back and said "ok". (It can retry silently). Andy Gayton, @cablelounger: this is corrosive. Ben: What is corrosive?](https://datastar-instant-intent.ndyg.cross.stream/static/thread.png?v=9b706ca3)
+Lately, I'm observing that Ubuntu's response to severe security flaws
+is concerning.
 
-I was having an X [conversation](https://x.com/ben_codez/status/2126084141187846347) with [@ben_codez](https://x.com/ben_codez), and
-they asked: why is showing an update as succeeded, before the underlying
-operation has actually succeeded, corrosive?
+On November 16th, details about a remote memory corruption called
+NoisyTCP (CVE-2026-99288) in the Linux kernel's TCP stack were
+published: https://www.openwall.com/lists/oss-security/2026/11/15/2
+Today, nine days later, Ubuntu still has not published a fix yet:
+https://ubuntu.com/security/CVE-2026-99288
+Other distros had a fix already available when the details were
+published.
 
-It's corrosive because it normalizes software that is plainly broken and
-doesn't respect our users. If a user flips a switch, and sees it flip, and then
-comes back, and the switch is unflipped, the software is broken. How can you
-operate software that doesn't do what you request it to do? It erodes trust.
+Likewise, a KVM host escape (CVE-2026-99312) affecting AMD
+virtualization published on Nov 18th has no fix yet either [3]:
+https://ubuntu.com/security/CVE-2026-99312
 
-## Ben's position
+Ubuntu has been slow in patching another remote TCP corruption
+(CVE-2026-98432) lately, where it took multiple weeks until a fix was
+available. See also: https://chalmovsky.com/posts/wtf-ubuntu
+Recent news indicates that this is might be exploited in the wild:
+https://www.greynoise.io/blog/check-point-security-management-servers-intrusion-campaign
 
-I made a chart of what I understand to be Ben's position on communicating with
-their users.
+I think everyone understands that these times aren't easy for security
+teams. Nevertheless, remote corruption vulnerabilities in the Linux
+kernel are the kind of thing where I expect updates to be available
+within hours, not days or weeks.
 
-1. **"Booking confirmed"** shown before the server checks the seat **No self respect** Ben: "No self respecting dev would show the user a booking had succeeded before server verification."
-2. Ben's line **Your like shows as done** before the server says "ok" Ben: "liking a post", "(It can retry silently)." If the user closes the tab before the server has it, their like is lost and the user is never told.
-3. Instant intent show only what is known to be true **Your post shows greyed out** until the server says "ok" Ben: "Right!", to a post shown "greyed out maybe, to indicate it wasn't committed".
+On a recent Ubuntu LTS system, the kernel version is 7.0.0-44. This
+seems to indicate that Ubuntu is not relying on longterm supported
+kernels from kernel.org, but is instead backporting patches to an old
+kernel version. On a Debian stable system, the kernel version is
+6.12.118+deb13, indicating that it's based on a very recent longterm
+kernel from kernel.org. I would consider the backporting strategy for
+the kernel to be hardly viable and probably everyone should base their
+Linux kernels on longterm releases supported by the Linux kernel
+developers.
 
-## Demo
+-- 
+Hanno Böck - Independent security researcher
+https://itsec.hboeck.de/
+https://badkeys.info/
+```
 
-But in addition to that, it's actually *easier* to make software that doesn't
-lie to your users. You can skip all the reconciliation machinery that's required
-to create UI that communicates to users that the change they thought had gone
-through had indeed not gone through.
+[Powered by blists](https://www.openwall.com/blists/) - [more mailing lists](https://lists.openwall.net)
 
-Here's a quick demo of using instant intent to communicate the state toggling a switch e.g. a like button.
+Please check out the
+[Open Source Software Security Wiki](https://oss-security.openwall.org/wiki/), which is counterpart to this
+[mailing list](https://oss-security.openwall.org/wiki/mailing-lists/oss-security).
 
-### Client-side affordances
-
-When you click the switch, the client shows the button as pressed straight away and sends the click to
-the server. The switch takes no more clicks while it's pressed, and if there's
-no answer within half a second, it starts to blink. The client then won't update until the server answers with the reconciled HTML view, which Datastar morphs in place.
-
-Experiment with different latencies and taking it offline, to see how the interaction feels under different scenarios.
-
-The pressed and blinking look is the same CSS the seats use, on the
-[main page](https://datastar-instant-intent.ndyg.cross.stream/).
+Confused about [mailing lists](https://www.openwall.com/lists/) and their use?
+[Read about mailing lists on Wikipedia](https://en.wikipedia.org/wiki/Electronic_mailing_list)
+and check out these
+[guidelines on proper formatting of your messages](https://www.complang.tuwien.ac.at/anton/mail-news-errors.html).

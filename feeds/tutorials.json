@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-27T20:49:31Z",
+  "updated": "2026-11-28T06:49:41Z",
   "items": [
     {
       "id": "devto-5060452",
@@ -254,12 +254,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-5126732",
+      "title": "Before You Trust the Canary, Plant a Bug",
+      "desc": "By Don Johnson | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-11-26T18:02:26Z",
+      "order": 22,
+      "url": "https://dev.to/copyleftdev/before-you-trust-the-canary-plant-a-bug-1k5a",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=500,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.ytimg.com%2Fvi%2Frmre7WVyYr4%2Fmaxresdefault.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcCNspRP/8QAGBABAQADAAAAAAAAAAAAAAAAAQAQESD/2gAIAQEAAQUCgk43j//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABkQAAIDAQAAAAAAAAAAAAAAAAERABBBcf/aAAgBAQABPyGM0DsRoPLdv//aAAwDAQACAAMAAAAQEA//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAEBAAEFAAAAAAAAAAAAAAABABEhMXGRwf/aAAgBAQABPxAgaexEwM3pMNm521uBN//Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-5090341",
       "title": "Programming at 53: Code Has No Age",
       "desc": "By Antonio  | 3 min read",
       "tag": "tutorial",
       "published": "2026-11-21T20:31:32Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/antonioprosperi2svg/programming-at-53-code-has-no-age-3k5f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fljqu8se4esna6k5sfj2i.gif",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgMEAf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGVs710TVH/xAAaEAEBAQADAQAAAAAAAAAAAAABAAIREiJC/9oACAEBAAEFAgs57OC+BSy8z5L/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwFn/8QAGBAAAgMAAAAAAAAAAAAAAAAAABAgIYH/2gAIAQEABj8CVmx//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERIUFRYYH/2gAIAQEAAT8hU3lwfP0q5jdw3SlQicFj6EdbWPCbP//aAAwDAQACAAMAAAAQAZ//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQMBAT8QjH//xAAWEQEBAQAAAAAAAAAAAAAAAAAAMQH/2gAIAQIBAT8Q1Ff/xAAbEAEAAwADAQAAAAAAAAAAAAABABEhMUFRsf/aAAgBAQABPxC1Hm/e+JUKGKK6vIZsG+ggdRDUNr1JSx11N4IjEfIhDo5QphOeRfk//9k=",
@@ -271,7 +283,7 @@
       "desc": "By EffessDev | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-21T11:49:40Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/effessdev/a-vs-code-extension-to-turn-any-free-chatbot-website-into-an-ai-agent-kind-of-1n21",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fd1di2l8z24jfwbgdwm6b.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABwkBT/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAgMBAAAAAAAAAAAAAAAAEBEAAWEh/9oACAEBAAE/IQ9HDVN5P//aAAwDAQACAAMAAAAQIw//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAgEFAQAAAAAAAAAAAAABABEhEDFBUXGB/9oACAEBAAE/EMcxTuCHCJ9uJQoR91qK9lz/2Q==",
@@ -283,22 +295,10 @@
       "desc": "By Gulajava Ministudio | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-16T06:52:07Z",
-      "order": 24,
+      "order": 25,
       "url": "https://dev.to/gulajavaministudio/introducing-sawala-mono-an-ergonomic-coding-font-built-for-code-reviews-and-terminal-workflows-2ie4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffz1lyg7bha3jj0qrxsk2.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwQAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAHPIkVSZcH/xAAYEAADAQEAAAAAAAAAAAAAAAAAAQIRIf/aAAgBAQABBQKHgqnXhVJS6edEWz//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwFH/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAQUAAAAAAAAAAAAAAAAAABARICEx/9oACAEBAAY/AioajH//xAAbEAADAQADAQAAAAAAAAAAAAAAARExEEFxYf/aAAgBAQABPyHI5G+jQMb3B6WJkCQSRqa+cZRlfT//2gAMAwEAAgADAAAAEAuv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAFRcf/aAAgBAwEBPxDBtT//xAAXEQADAQAAAAAAAAAAAAAAAAAAATFh/9oACAECAQE/ENYqf//EABkQAQEBAQEBAAAAAAAAAAAAAAERIQAxQf/aAAgBAQABPxA8mAq85YEfBrycjGUfnM0cNdeNmD6S2cSRFPGch2NWLezBfirO/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-5126732",
-      "title": "Before You Trust the Canary, Plant a Bug",
-      "desc": "By Don Johnson | 10 min read",
-      "tag": "tutorial",
-      "published": "2026-11-26T18:02:26Z",
-      "order": 25,
-      "url": "https://dev.to/copyleftdev/before-you-trust-the-canary-plant-a-bug-1k5a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=500,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.ytimg.com%2Fvi%2Frmre7WVyYr4%2Fmaxresdefault.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcCNspRP/8QAGBABAQADAAAAAAAAAAAAAAAAAQAQESD/2gAIAQEAAQUCgk43j//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABkQAAIDAQAAAAAAAAAAAAAAAAERABBBcf/aAAgBAQABPyGM0DsRoPLdv//aAAwDAQACAAMAAAAQEA//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAEBAAEFAAAAAAAAAAAAAAABABEhMXGRwf/aAAgBAQABPxAgaexEwM3pMNm521uBN//Z",
       "color": "#3B49DF"
     },
     {
